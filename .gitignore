@@ -1,0 +1,24 @@
+# Rust
+core/target/
+# Build outputs
+dist/
+ios/build/
+ios/DerivedData/
+ios/Frameworks/*.xcframework
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/keystore.properties
+android/*.jks
+android/*.keystore
+android/app/src/main/jniLibs/
+extension/shared/core/*.wasm
+extension/shared/core/*.js
+web/node_modules/
+# OS / editors
+.DS_Store
+*.swp
+xcuserdata/
+*.xcuserstate
+.idea/

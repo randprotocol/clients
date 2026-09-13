@@ -1,0 +1,585 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		032203A43C3EB86266C74714 /* NoteStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F435046A1ED71DE0910C5DE8 /* NoteStoreTests.swift */; };
+		051B9E3EA5EAB3611E37A328 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0EE01B221B5970997D744292 /* Assets.xcassets */; };
+		0EC3D5DBC6C8237CEAE39E80 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA51C5F8034D8DD473D82DDA /* Theme.swift */; };
+		171AB24E5694426439FC099D /* ActivityDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BDD584B1202C111C8EAB6BE /* ActivityDetailView.swift */; };
+		21698A3770AC81F8D6A5AC04 /* Amount.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE7B6AB7687B725C159B84EF /* Amount.swift */; };
+		22071A30C7AE0DB38093A94F /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60F34ABC176D8FF75D6013F8 /* Components.swift */; };
+		25CA49B8860133B80AB64F0D /* LockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60F2C0B701563C8D31F051A /* LockView.swift */; };
+		31CF8C9FD95F271ED9BB6AEE /* RandWalletApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D2DD8768BEDCFD16439F3C8 /* RandWalletApp.swift */; };
+		3565A1CB00F34196A7E73AE8 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4480C53C422CBF97386A8CCC /* Settings.swift */; };
+		3DA25B42D56E3D8712FA4EDF /* ReceiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 579B488EB09271EADE817752 /* ReceiveView.swift */; };
+		43D785D5C212AE422FE8BEE8 /* CoreSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9FD71335C8D0B8513015FE /* CoreSmokeTests.swift */; };
+		64554089BC7AAD37655A0162 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8548109BF97F5DB7DB99F6CE /* HomeView.swift */; };
+		73DE625E5E18560ECF227095 /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 183284CD1DA185232100F09D /* NoteStore.swift */; };
+		746BF8D8C153106BFEF2336F /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA40E259F05440DD2DAE0A55 /* Models.swift */; };
+		7F51FCBEB896DBFE88FAC922 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 422B13542A6961C4E86C6C77 /* QRScannerView.swift */; };
+		8F6C36B95B6DDDCD64E799C2 /* SendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356ED987BBE644E0AA7E6C60 /* SendView.swift */; };
+		923296960E607F866AEE2A14 /* RpcClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 600C46C8B2B89650FE98BDFC /* RpcClient.swift */; };
+		9DF5E2575A60628DFE3C965C /* ShruggCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148A83BC220B2030E35B052B /* ShruggCore.swift */; };
+		C18FDEE41B6F72074A2D800D /* ShruggWalletCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67A9953A0114B490BF725B39 /* ShruggWalletCore.xcframework */; };
+		CC2E8838F78355A6E1C149F7 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11EDD0B6F2E0ABC54D4BFED /* AuthService.swift */; };
+		CC5B54F04757CD85EAEDF97B /* WalletService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9480BB9E9D8F9C3D2AD31509 /* WalletService.swift */; };
+		E016AEDBB976EB8AD8BE1CBE /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 976224CCD1E531D92268C700 /* Keychain.swift */; };
+		E321477FFFA89C2983DF71DF /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A2685E3F5D2750E9DE3FA018 /* PrivacyInfo.xcprivacy */; };
+		EF4A61C6A533C34F8AE93363 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB8569A9BA22F2E98649199 /* WelcomeView.swift */; };
+		F0220DB33F7840E59DB47343 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 676FE17810EFAC969314E1CB /* RootView.swift */; };
+		FE817779952D1666D69915AE /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F81980ED99AC808A372C7D3 /* SettingsView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		5970C4118A9355D6078C9917 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F985BE97384DC1EEED1AD4AC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4CFC53E5EEDAA4BA61293090;
+			remoteInfo = RandWallet;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0EE01B221B5970997D744292 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		148A83BC220B2030E35B052B /* ShruggCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShruggCore.swift; sourceTree = "<group>"; };
+		183284CD1DA185232100F09D /* NoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStore.swift; sourceTree = "<group>"; };
+		2D2DD8768BEDCFD16439F3C8 /* RandWalletApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandWalletApp.swift; sourceTree = "<group>"; };
+		356ED987BBE644E0AA7E6C60 /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
+		3E9FD71335C8D0B8513015FE /* CoreSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreSmokeTests.swift; sourceTree = "<group>"; };
+		422B13542A6961C4E86C6C77 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
+		4480C53C422CBF97386A8CCC /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
+		579B488EB09271EADE817752 /* ReceiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiveView.swift; sourceTree = "<group>"; };
+		5BDD584B1202C111C8EAB6BE /* ActivityDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityDetailView.swift; sourceTree = "<group>"; };
+		600C46C8B2B89650FE98BDFC /* RpcClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RpcClient.swift; sourceTree = "<group>"; };
+		60F34ABC176D8FF75D6013F8 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		676FE17810EFAC969314E1CB /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		67A9953A0114B490BF725B39 /* ShruggWalletCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = ShruggWalletCore.xcframework; path = Frameworks/ShruggWalletCore.xcframework; sourceTree = "<group>"; };
+		6F81980ED99AC808A372C7D3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		8548109BF97F5DB7DB99F6CE /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		859D1BB14A8B8B0751915C9E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9480BB9E9D8F9C3D2AD31509 /* WalletService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletService.swift; sourceTree = "<group>"; };
+		976224CCD1E531D92268C700 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
+		9FB8569A9BA22F2E98649199 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		A11EDD0B6F2E0ABC54D4BFED /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		A2685E3F5D2750E9DE3FA018 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A60F2C0B701563C8D31F051A /* LockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockView.swift; sourceTree = "<group>"; };
+		BA40E259F05440DD2DAE0A55 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		BA51C5F8034D8DD473D82DDA /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		CA6DD6FD8AAEBC3E7484D380 /* RandWalletTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RandWalletTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D383A140E56010E9A65AA0C2 /* RandWallet.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RandWallet.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE7B6AB7687B725C159B84EF /* Amount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Amount.swift; sourceTree = "<group>"; };
+		F435046A1ED71DE0910C5DE8 /* NoteStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStoreTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8C52B52CF64CB59FB512E6DC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C18FDEE41B6F72074A2D800D /* ShruggWalletCore.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		02561A443EC549A5F22F2988 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A11EDD0B6F2E0ABC54D4BFED /* AuthService.swift */,
+				9480BB9E9D8F9C3D2AD31509 /* WalletService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		0D32D6AE062EE328BBF9B746 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				DE7B6AB7687B725C159B84EF /* Amount.swift */,
+				BA40E259F05440DD2DAE0A55 /* Models.swift */,
+				148A83BC220B2030E35B052B /* ShruggCore.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		4FCA7FE309CA00D6AD54D270 /* RandWallet */ = {
+			isa = PBXGroup;
+			children = (
+				0EE01B221B5970997D744292 /* Assets.xcassets */,
+				859D1BB14A8B8B0751915C9E /* Info.plist */,
+				A2685E3F5D2750E9DE3FA018 /* PrivacyInfo.xcprivacy */,
+				2D2DD8768BEDCFD16439F3C8 /* RandWalletApp.swift */,
+				0D32D6AE062EE328BBF9B746 /* Core */,
+				5FA869D89B43AB97AC5F204E /* Network */,
+				02561A443EC549A5F22F2988 /* Services */,
+				64801DE6C1F80321C6D692F8 /* Storage */,
+				EC53020B12E96E2B4193F2A9 /* UI */,
+			);
+			path = RandWallet;
+			sourceTree = "<group>";
+		};
+		5FA869D89B43AB97AC5F204E /* Network */ = {
+			isa = PBXGroup;
+			children = (
+				600C46C8B2B89650FE98BDFC /* RpcClient.swift */,
+			);
+			path = Network;
+			sourceTree = "<group>";
+		};
+		64801DE6C1F80321C6D692F8 /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				976224CCD1E531D92268C700 /* Keychain.swift */,
+				183284CD1DA185232100F09D /* NoteStore.swift */,
+				4480C53C422CBF97386A8CCC /* Settings.swift */,
+			);
+			path = Storage;
+			sourceTree = "<group>";
+		};
+		B55B89E759D89F59F7A38E2D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				67A9953A0114B490BF725B39 /* ShruggWalletCore.xcframework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		CBBCC067DFAD651E498C43C4 /* RandWalletTests */ = {
+			isa = PBXGroup;
+			children = (
+				3E9FD71335C8D0B8513015FE /* CoreSmokeTests.swift */,
+				F435046A1ED71DE0910C5DE8 /* NoteStoreTests.swift */,
+			);
+			path = RandWalletTests;
+			sourceTree = "<group>";
+		};
+		E151B23A84486190545F87A9 = {
+			isa = PBXGroup;
+			children = (
+				4FCA7FE309CA00D6AD54D270 /* RandWallet */,
+				CBBCC067DFAD651E498C43C4 /* RandWalletTests */,
+				B55B89E759D89F59F7A38E2D /* Frameworks */,
+				E980DC0D5F9F3167868A1214 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E980DC0D5F9F3167868A1214 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D383A140E56010E9A65AA0C2 /* RandWallet.app */,
+				CA6DD6FD8AAEBC3E7484D380 /* RandWalletTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EC53020B12E96E2B4193F2A9 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				5BDD584B1202C111C8EAB6BE /* ActivityDetailView.swift */,
+				60F34ABC176D8FF75D6013F8 /* Components.swift */,
+				8548109BF97F5DB7DB99F6CE /* HomeView.swift */,
+				A60F2C0B701563C8D31F051A /* LockView.swift */,
+				422B13542A6961C4E86C6C77 /* QRScannerView.swift */,
+				579B488EB09271EADE817752 /* ReceiveView.swift */,
+				676FE17810EFAC969314E1CB /* RootView.swift */,
+				356ED987BBE644E0AA7E6C60 /* SendView.swift */,
+				6F81980ED99AC808A372C7D3 /* SettingsView.swift */,
+				BA51C5F8034D8DD473D82DDA /* Theme.swift */,
+				9FB8569A9BA22F2E98649199 /* WelcomeView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4CFC53E5EEDAA4BA61293090 /* RandWallet */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 111153FF5CC31D56409FE6B1 /* Build configuration list for PBXNativeTarget "RandWallet" */;
+			buildPhases = (
+				72AE84784314C511E4201421 /* Sources */,
+				1D2E38CE964364500D3AD980 /* Resources */,
+				8C52B52CF64CB59FB512E6DC /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RandWallet;
+			packageProductDependencies = (
+			);
+			productName = RandWallet;
+			productReference = D383A140E56010E9A65AA0C2 /* RandWallet.app */;
+			productType = "com.apple.product-type.application";
+		};
+		4E99C8BA2480981C693C72A9 /* RandWalletTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AD20F2AF22F906AAFAA376DB /* Build configuration list for PBXNativeTarget "RandWalletTests" */;
+			buildPhases = (
+				82066BAA3ABB5E9D95DE3A61 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				50BA9C24AD5B20CF319218CA /* PBXTargetDependency */,
+			);
+			name = RandWalletTests;
+			packageProductDependencies = (
+			);
+			productName = RandWalletTests;
+			productReference = CA6DD6FD8AAEBC3E7484D380 /* RandWalletTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F985BE97384DC1EEED1AD4AC /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					4CFC53E5EEDAA4BA61293090 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					4E99C8BA2480981C693C72A9 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = D3FBD39365D2D695239BFD1F /* Build configuration list for PBXProject "RandWallet" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = E151B23A84486190545F87A9;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E980DC0D5F9F3167868A1214 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4CFC53E5EEDAA4BA61293090 /* RandWallet */,
+				4E99C8BA2480981C693C72A9 /* RandWalletTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1D2E38CE964364500D3AD980 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				051B9E3EA5EAB3611E37A328 /* Assets.xcassets in Resources */,
+				E321477FFFA89C2983DF71DF /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		72AE84784314C511E4201421 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				171AB24E5694426439FC099D /* ActivityDetailView.swift in Sources */,
+				21698A3770AC81F8D6A5AC04 /* Amount.swift in Sources */,
+				CC2E8838F78355A6E1C149F7 /* AuthService.swift in Sources */,
+				22071A30C7AE0DB38093A94F /* Components.swift in Sources */,
+				64554089BC7AAD37655A0162 /* HomeView.swift in Sources */,
+				E016AEDBB976EB8AD8BE1CBE /* Keychain.swift in Sources */,
+				25CA49B8860133B80AB64F0D /* LockView.swift in Sources */,
+				746BF8D8C153106BFEF2336F /* Models.swift in Sources */,
+				73DE625E5E18560ECF227095 /* NoteStore.swift in Sources */,
+				7F51FCBEB896DBFE88FAC922 /* QRScannerView.swift in Sources */,
+				31CF8C9FD95F271ED9BB6AEE /* RandWalletApp.swift in Sources */,
+				3DA25B42D56E3D8712FA4EDF /* ReceiveView.swift in Sources */,
+				F0220DB33F7840E59DB47343 /* RootView.swift in Sources */,
+				923296960E607F866AEE2A14 /* RpcClient.swift in Sources */,
+				8F6C36B95B6DDDCD64E799C2 /* SendView.swift in Sources */,
+				3565A1CB00F34196A7E73AE8 /* Settings.swift in Sources */,
+				FE817779952D1666D69915AE /* SettingsView.swift in Sources */,
+				9DF5E2575A60628DFE3C965C /* ShruggCore.swift in Sources */,
+				0EC3D5DBC6C8237CEAE39E80 /* Theme.swift in Sources */,
+				CC5B54F04757CD85EAEDF97B /* WalletService.swift in Sources */,
+				EF4A61C6A533C34F8AE93363 /* WelcomeView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		82066BAA3ABB5E9D95DE3A61 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				43D785D5C212AE422FE8BEE8 /* CoreSmokeTests.swift in Sources */,
+				032203A43C3EB86266C74714 /* NoteStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		50BA9C24AD5B20CF319218CA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4CFC53E5EEDAA4BA61293090 /* RandWallet */;
+			targetProxy = 5970C4118A9355D6078C9917 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		09BD9B6863C3BA8047E5F409 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Frameworks\"",
+				);
+				INFOPLIST_FILE = RandWallet/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.randprotocol.wallet;
+				PRODUCT_MODULE_NAME = RandWallet;
+				PRODUCT_NAME = RandWallet;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		0CFDBE6D62CE6D42341050BD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.randprotocol.wallet.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RandWallet.app/RandWallet";
+			};
+			name = Release;
+		};
+		1161CA75E5104C186726EF35 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.randprotocol.wallet.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RandWallet.app/RandWallet";
+			};
+			name = Debug;
+		};
+		4C70733F79BB030DF9E0B36D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"Frameworks\"",
+				);
+				INFOPLIST_FILE = RandWallet/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.randprotocol.wallet;
+				PRODUCT_MODULE_NAME = RandWallet;
+				PRODUCT_NAME = RandWallet;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		80DDC0DF6DF7A05D09B4F702 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		EDD030C74D9659B9EC30D4B7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		111153FF5CC31D56409FE6B1 /* Build configuration list for PBXNativeTarget "RandWallet" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				09BD9B6863C3BA8047E5F409 /* Debug */,
+				4C70733F79BB030DF9E0B36D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AD20F2AF22F906AAFAA376DB /* Build configuration list for PBXNativeTarget "RandWalletTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1161CA75E5104C186726EF35 /* Debug */,
+				0CFDBE6D62CE6D42341050BD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D3FBD39365D2D695239BFD1F /* Build configuration list for PBXProject "RandWallet" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EDD030C74D9659B9EC30D4B7 /* Debug */,
+				80DDC0DF6DF7A05D09B4F702 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = F985BE97384DC1EEED1AD4AC /* Project object */;
+}

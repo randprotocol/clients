@@ -1,0 +1,63 @@
+# xcodegen spec. `xcodegen generate` rewrites RandWallet.xcodeproj; the generated project is
+# committed so a checkout builds without xcodegen.
+name: RandWallet
+options:
+  bundleIdPrefix: org.randprotocol
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # Set your Apple Developer team id here (or pass DEVELOPMENT_TEAM=… to xcodebuild).
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+    SWIFT_STRICT_CONCURRENCY: minimal
+targets:
+  RandWallet:
+    type: application
+    platform: iOS
+    sources:
+      - path: RandWallet
+        excludes:
+          - "**/.DS_Store"
+    dependencies:
+      - framework: Frameworks/ShruggWalletCore.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.randprotocol.wallet
+        PRODUCT_NAME: RandWallet
+        INFOPLIST_FILE: RandWallet/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: "NO"
+        PRODUCT_MODULE_NAME: RandWallet
+  RandWalletTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [RandWalletTests]
+    dependencies:
+      - target: RandWallet
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.randprotocol.wallet.tests
+        GENERATE_INFOPLIST_FILE: "YES"
+schemes:
+  RandWallet:
+    build:
+      targets:
+        RandWallet: all
+        RandWalletTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [RandWalletTests]
+    archive:
+      config: Release
