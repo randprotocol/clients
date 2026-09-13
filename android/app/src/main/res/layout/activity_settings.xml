@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" android:layout_width="match_parent" android:layout_height="match_parent">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Title" android:text="@string/settings_title" />
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="24dp" style="@style/Text.Section" android:text="@string/settings_network" />
+    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:hint="@string/settings_rpc">
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/rpc" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textUri" android:typeface="monospace" android:textSize="13sp" />
+    </com.google.android.material.textfield.TextInputLayout>
+    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="@string/settings_chain">
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/chain" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" />
+    </com.google.android.material.textfield.TextInputLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+        <com.google.android.material.button.MaterialButton android:id="@+id/save_network" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/settings_save" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/test" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="@string/settings_test" />
+    </LinearLayout>
+    <TextView android:id="@+id/test_result" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Caption" />
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/settings_keys" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textStyle="bold" android:textColor="@color/text" android:text="@string/settings_viewing" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" style="@style/Text.Body" android:text="@string/settings_viewing_body" />
+    <TextView android:id="@+id/viewing_key" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:padding="12dp" android:background="@drawable/bg_surface_card" style="@style/Text.Mono" android:textSize="12sp" android:textIsSelectable="true" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/copy_viewing" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/settings_copy_viewing" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/open_history" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/settings_open_history" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/export_file" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_export_file" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/export_spend" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/settings_export_spend" />
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/settings_security" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" style="@style/Text.Caption" android:text="@string/settings_autolock" />
+    <Spinner android:id="@+id/autolock" android:layout_width="match_parent" android:layout_height="48dp" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" style="@style/Text.Caption" android:text="@string/settings_theme" />
+    <Spinner android:id="@+id/theme" android:layout_width="match_parent" android:layout_height="48dp" />
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/settings_wallet" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Body" android:text="@string/settings_rescan_body" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/rescan" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/settings_rescan" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/remove" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="@color/negative" android:text="@string/settings_remove" />
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/settings_about" />
+    <TextView android:id="@+id/about" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Caption" />
+</LinearLayout>
+</ScrollView>

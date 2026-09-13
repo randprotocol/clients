@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
+    <TextView android:id="@+id/kind" android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Section" />
+    <TextView android:id="@+id/amount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" style="@style/Text.Amount" android:textSize="34sp" />
+    <LinearLayout android:id="@+id/rows" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="20dp" android:padding="16dp" android:background="@drawable/bg_surface_card" />
+    <TextView android:id="@+id/disclose_note" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" style="@style/Text.Body" android:text="@string/detail_disclose_note" android:visibility="gone" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/disclose" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="@string/detail_disclose" android:visibility="gone" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/explorer" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="@string/detail_open_explorer" android:visibility="gone" />
+</LinearLayout>
+</ScrollView>

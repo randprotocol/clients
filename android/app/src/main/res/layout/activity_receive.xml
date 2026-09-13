@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp" android:gravity="center_horizontal">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Title" android:text="@string/receive_title" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center" style="@style/Text.Body" android:text="@string/receive_body" />
+    <ImageView android:id="@+id/qr" android:layout_width="300dp" android:layout_height="300dp" android:layout_marginTop="20dp" android:padding="12dp" android:background="@color/white" android:contentDescription="@string/receive_title" />
+    <TextView android:id="@+id/address" android:layout_width="match_parent" android:layout_height="160dp" android:layout_marginTop="20dp" android:padding="14dp" android:background="@drawable/bg_surface_card" style="@style/Text.Mono" android:textSize="11sp" android:scrollbars="vertical" android:textIsSelectable="true" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/copy" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/receive_copy" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/share" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="@string/receive_share" />
+</LinearLayout>
+</ScrollView>

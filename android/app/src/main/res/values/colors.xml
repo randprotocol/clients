@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Light theme tokens (design/tokens.json). values-night overrides them for dark, the default. -->
+<resources>
+    <color name="bg">#F5F6FB</color>
+    <color name="bg_soft">#EDEFF7</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_2">#F2F3F9</color>
+    <color name="border">#DCDFEC</color>
+    <color name="border_soft">#E8EAF3</color>
+    <color name="text">#141A2E</color>
+    <color name="text_soft">#4A5270</color>
+    <color name="text_mute">#7B8299</color>
+    <color name="text_strong">#0A0F1F</color>
+    <color name="accent">#4F5FE8</color>
+    <color name="accent_2">#8457E6</color>
+    <color name="on_accent">#FFFFFF</color>
+    <color name="positive">#1BA97A</color>
+    <color name="negative">#D94F4F</color>
+    <color name="warning">#D98A1E</color>
+    <color name="gradient_from">#5B7CFF</color>
+    <color name="gradient_to">#9B6BFF</color>
+    <color name="white">#FFFFFF</color>
+    <color name="ripple">#1F4F5FE8</color>
+</resources>

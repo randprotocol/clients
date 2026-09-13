@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.swiperefreshlayout.widget.SwipeRefreshLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/refresh" android:layout_width="match_parent" android:layout_height="match_parent">
+<androidx.core.widget.NestedScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:fillViewport="true">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingHorizontal="20dp" android:paddingTop="12dp" android:paddingBottom="24dp">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <LinearLayout android:id="@+id/address_chip" android:layout_width="wrap_content" android:layout_height="40dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="14dp" android:background="@drawable/bg_chip" android:clickable="true" android:focusable="true">
+            <TextView android:id="@+id/address_short" android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Mono" android:textSize="13sp" />
+        </LinearLayout>
+        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+        <ImageButton android:id="@+id/qr" android:layout_width="44dp" android:layout_height="44dp" android:background="?attr/selectableItemBackgroundBorderless" android:src="@drawable/ic_qr" android:contentDescription="@string/home_receive" />
+        <ImageButton android:id="@+id/settings" android:layout_width="44dp" android:layout_height="44dp" android:background="?attr/selectableItemBackgroundBorderless" android:src="@drawable/ic_settings" android:contentDescription="@string/home_settings" />
+    </LinearLayout>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:orientation="vertical" android:padding="22dp" android:background="@drawable/bg_balance_card">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/home_balance_label" android:textColor="#D9FFFFFF" android:textSize="13sp" android:letterSpacing="0.04" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="bottom" android:layout_marginTop="6dp">
+            <TextView android:id="@+id/balance" android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Balance" android:text="0" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_marginBottom="8dp" android:text="@string/symbol" android:textColor="#D9FFFFFF" android:textSize="15sp" android:textStyle="bold" />
+        </LinearLayout>
+        <TextView android:id="@+id/pending" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#D9FFFFFF" android:textSize="13sp" android:visibility="gone" />
+        <TextView android:id="@+id/sync" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="#BFFFFFFF" android:textSize="12sp" android:text="@string/home_not_synced" />
+    </LinearLayout>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:orientation="horizontal" android:gravity="center">
+        <include android:id="@+id/action_receive" layout="@layout/view_action" />
+        <include android:id="@+id/action_send" layout="@layout/view_action" />
+        <include android:id="@+id/action_faucet" layout="@layout/view_action" />
+    </LinearLayout>
+
+    <TextView android:id="@+id/error" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:padding="12dp" android:background="@drawable/bg_surface_card" android:textColor="@color/negative" android:textSize="13sp" android:visibility="gone" />
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/home_activity" />
+    <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" style="@style/Text.Body" android:text="@string/home_empty" />
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/list" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:nestedScrollingEnabled="false" />
+</LinearLayout>
+</androidx.core.widget.NestedScrollView>
+</androidx.swiperefreshlayout.widget.SwipeRefreshLayout>

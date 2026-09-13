@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Title" android:text="@string/create_title" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" style="@style/Text.Body" android:text="@string/create_body" />
+    <TextView android:id="@+id/spend_key" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:padding="16dp" android:background="@drawable/bg_surface_card" style="@style/Text.Mono" android:textIsSelectable="true" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/copy" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="@string/create_copy" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" style="@style/Text.Section" android:text="@string/receive_title" />
+    <TextView android:id="@+id/address" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" style="@style/Text.Mono" android:textColor="@color/text_soft" android:maxLines="3" android:ellipsize="end" />
+    <com.google.android.material.checkbox.MaterialCheckBox android:id="@+id/saved" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:text="@string/create_saved" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/next" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:enabled="false" android:text="@string/create_continue" />
+</LinearLayout>
+</ScrollView>
