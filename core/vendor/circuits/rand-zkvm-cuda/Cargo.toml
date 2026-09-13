@@ -1,0 +1,13 @@
+# Stub. The fullnode's shrugg-zkvm crate declares an *optional* path dependency on the GPU
+# backend at ../../../circuits/rand-zkvm-cuda; cargo needs the manifest to exist to resolve the
+# workspace even though no client build enables the `cuda` features. Nothing here is ever
+# compiled.
+[package]
+name = "rand-zkvm-cuda"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[features]
+cuda = []
+mock-driver = []

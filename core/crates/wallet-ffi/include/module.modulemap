@@ -1,0 +1,4 @@
+module ShruggWalletCore {
+    header "shrugg_wallet.h"
+    export *
+}

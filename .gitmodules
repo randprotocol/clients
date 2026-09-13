@@ -1,0 +1,3 @@
+[submodule "core/vendor/fullnode"]
+	path = core/vendor/fullnode
+	url = git@github.com:randprotocol/fullnode.git

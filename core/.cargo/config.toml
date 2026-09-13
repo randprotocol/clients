@@ -1,0 +1,10 @@
+[target.wasm32-unknown-unknown]
+# rand 0.10 / getrandom 0.4 pick the browser backend by cfg, not by feature.
+# The prover keeps large arrays on the stack; the 1 MiB wasm default is not enough.
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"', '-C', 'link-arg=-zstack-size=33554432']
+
+[target.aarch64-linux-android]
+# 16 KiB page alignment is required by Play for targetSdk 35+.
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
