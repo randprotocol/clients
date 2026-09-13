@@ -22,3 +22,6 @@ web/node_modules/
 xcuserdata/
 *.xcuserstate
 .idea/
+# Desktop
+desktop/target/
+desktop/dist/

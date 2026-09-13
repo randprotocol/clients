@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Rand Wallet
+Comment=A shielded wallet for SHRUGG
+Exec=rand-wallet
+Icon=rand-wallet
+Terminal=false
+Categories=Finance;Network;
