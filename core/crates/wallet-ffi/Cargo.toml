@@ -7,7 +7,7 @@ authors.workspace = true
 description = "C ABI (iOS) and JNI (Android) bindings of wallet-core"
 
 [lib]
-name = "shrugg_wallet"
+name = "rand_wallet"
 # staticlib for the iOS XCFramework, cdylib for the Android .so.
 crate-type = ["staticlib", "cdylib"]
 

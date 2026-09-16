@@ -30,7 +30,7 @@ import java.util.concurrent.Executors;
 
 /**
  * The wallet: the note store plus the scan, send and faucet flows of the design spec §3.2,
- * mirroring {@code shrugg_client::wallet}. All chain work runs on one background executor so
+ * mirroring {@code randprotocol_client::wallet}. All chain work runs on one background executor so
  * two scans never interleave; the UI observes {@link #snapshot()}.
  *
  * <p>The spend key is read from the {@link KeyVault} for each operation and dropped afterwards.
@@ -485,7 +485,7 @@ public final class WalletService {
 
     // ------------------------------------------------------------------ faucet
 
-    /** Ask a validator to mint 100 SHRUGG to this wallet, wait for the commit, rescan. Blocking. */
+    /** Ask a validator to mint 100 RAND to this wallet, wait for the commit, rescan. Blocking. */
     public String faucet() throws RpcException, CoreException, JSONException, InterruptedException {
         RpcClient rpc = rpc();
         String hash = rpc.mint(address());

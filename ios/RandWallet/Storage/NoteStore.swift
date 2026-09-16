@@ -13,7 +13,7 @@ struct NoteStore: Codable, Equatable {
     var sent: [SentRow] = []
     var submissions: [Submission] = []
 
-    /// Spendable SHRUGG (asset 0), in units.
+    /// Spendable RAND (asset 0), in units.
     var balance: UInt64 {
         notes.filter { $0.isSpendable && $0.asset == 0 }.reduce(0) { $0 + $1.units }
     }

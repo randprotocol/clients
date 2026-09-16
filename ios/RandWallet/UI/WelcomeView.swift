@@ -14,7 +14,7 @@ struct WelcomeView: View {
                     Image(systemName: "shield.lefthalf.filled").font(.system(size: 44, weight: .semibold)).foregroundColor(.white)
                 }
                 Text("Rand Wallet").font(.system(size: 30, weight: .bold)).foregroundColor(Theme.textStrong).padding(.top, 24)
-                Text("A shielded wallet for SHRUGG.\nYour balance and payments are private; the chain sees only proofs.")
+                Text("A shielded wallet for RAND.\nYour balance and payments are private; the chain sees only proofs.")
                     .font(.body15).foregroundColor(Theme.textSoft).multilineTextAlignment(.center).padding(.top, 8).padding(.horizontal, 32)
                 Spacer()
                 VStack(spacing: 12) {
@@ -43,7 +43,7 @@ struct CreateWalletView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Your secret key").font(.title).foregroundColor(Theme.textStrong)
-                Text("This 64-character spend key is the only copy of your wallet. Anyone who has it can spend your SHRUGG; anyone who loses it loses the wallet. Write it down and keep it offline.")
+                Text("This 64-character spend key is the only copy of your wallet. Anyone who has it can spend your RAND; anyone who loses it loses the wallet. Write it down and keep it offline.")
                     .font(.body15).foregroundColor(Theme.textSoft)
                 if let info {
                     Card {
@@ -91,7 +91,7 @@ struct ImportWalletView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Import a wallet").font(.title).foregroundColor(Theme.textStrong)
-                Text("Paste your 64-character spend key, or the contents of a wallet.key.json from the shrugg command-line wallet.")
+                Text("Paste your 64-character spend key, or the contents of a wallet.key.json from the rand command-line wallet.")
                     .font(.body15).foregroundColor(Theme.textSoft)
                 TextEditor(text: $input)
                     .font(.mono).frame(minHeight: 120)

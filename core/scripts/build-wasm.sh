@@ -2,7 +2,7 @@
 # Build the wasm core for the browser extensions into extension/shared/core/.
 #
 # Uses the `wasm` cargo profile (core/Cargo.toml) rather than wasm-pack's --release: LLVM's wasm
-# backend never finishes shrugg-zkvm at opt-level 3, so that crate is built at a lower level.
+# backend never finishes randprotocol-zkvm at opt-level 3, so that crate is built at a lower level.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 OUT="${1:-../extension/shared/core}"
@@ -13,10 +13,10 @@ fi
 rustup target add wasm32-unknown-unknown >/dev/null
 cargo build --profile wasm --target wasm32-unknown-unknown -p wallet-wasm
 mkdir -p "$OUT"
-wasm-bindgen --target web --no-typescript --out-dir "$OUT" --out-name shrugg_wallet \
+wasm-bindgen --target web --no-typescript --out-dir "$OUT" --out-name rand_wallet \
   target/wasm32-unknown-unknown/wasm/wallet_wasm.wasm
 # wasm-opt shrinks the binary further when binaryen is installed; optional.
 if command -v wasm-opt >/dev/null; then
-  wasm-opt -O2 -o "$OUT/shrugg_wallet_bg.wasm" "$OUT/shrugg_wallet_bg.wasm"
+  wasm-opt -O2 -o "$OUT/rand_wallet_bg.wasm" "$OUT/rand_wallet_bg.wasm"
 fi
 ls -la "$OUT"

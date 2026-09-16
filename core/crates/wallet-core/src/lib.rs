@@ -7,34 +7,34 @@
 //! into this crate through one JSON entry point, [`call`], so the four clients share exactly one
 //! implementation of every cryptographic rule the chain enforces.
 //!
-//! Nothing here performs I/O. A client pages `shrugg_getCommitments` and hands the rows to
+//! Nothing here performs I/O. A client pages `rand_getCommitments` and hands the rows to
 //! [`scan_page`]; it fetches the anchor and the witnesses and hands them to [`prove_transfer`],
 //! which returns the encoded transaction to submit. Spend keys enter as parameters and are
 //! never stored.
 //!
 //! Wire conventions match `docs/rpc.md` of the fullnode: `Word8` values (keys, commitments,
 //! nullifiers, roots, witness levels) are 64 lowercase hex characters, little-endian word by
-//! word; amounts are decimal strings of units (1 SHRUGG = 10^9 units); addresses are
-//! `shrugg1` + base58.
+//! word; amounts are decimal strings of units (1 RAND = 10^9 units); addresses are
+//! `rand1` + base58.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use shrugg_core::gas;
-use shrugg_core::ledger::TIME_WINDOW;
-use shrugg_core::notes::{word8_from_hex, word8_to_hex, Bundle, Envelope, ShieldedAddress, Word8, DEPTH};
-use shrugg_core::{format_amount, parse_amount, Action, Transaction, FAUCET_MAX_UNITS, UNITS_PER_SHRUGG};
-use shrugg_zkvm::address::{address_of, envelope_from_core, seal_note};
-use shrugg_zkvm::executor::prove_bundle;
-use shrugg_zkvm::machine::{Backend, FriProfile};
-use shrugg_zkvm::notes::{bundle_inputs, expected_bundle_outputs, Note, SpendKey, ViewingKey};
-use shrugg_zkvm::viewing::TxKey;
+use randprotocol_core::gas;
+use randprotocol_core::ledger::TIME_WINDOW;
+use randprotocol_core::notes::{word8_from_hex, word8_to_hex, Bundle, Envelope, ShieldedAddress, Word8, DEPTH};
+use randprotocol_core::{format_amount, parse_amount, Action, Transaction, FAUCET_MAX_UNITS, UNITS_PER_RAND};
+use randprotocol_zkvm::address::{address_of, envelope_from_core, seal_note};
+use randprotocol_zkvm::executor::prove_bundle;
+use randprotocol_zkvm::machine::{Backend, FriProfile};
+use randprotocol_zkvm::notes::{bundle_inputs, expected_bundle_outputs, Note, SpendKey, ViewingKey};
+use randprotocol_zkvm::viewing::TxKey;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode).
-pub const CHAIN_BUILD: &str = "03c9fb9";
-/// The chain the defaults below describe: chain 8, the shielded pool with staking and the
-/// bridge (phases S1+S2+S3), zkVM constraint set 5, production FRI profile.
-pub const DEFAULT_CHAIN_ID: u64 = 8;
+pub const CHAIN_BUILD: &str = "a00c88c";
+/// The chain the defaults below describe: chain 10, the shielded pool with staking and the
+/// bridge (phases S1+S2+S3), zkVM constraint set 6, production FRI profile.
+pub const DEFAULT_CHAIN_ID: u64 = 10;
 pub const DEFAULT_RPC_URL: &str = "https://rpc.randprotocol.org";
 pub const EXPLORER_URL: &str = "https://randscan.org";
 /// Peak resident memory of one bundle proof, measured on this crate's own fixture
@@ -85,7 +85,7 @@ impl Wallet {
         word8_to_hex(&self.vk.nk)
     }
 
-    /// The `wallet.key.json` the `shrugg` CLI reads (version 2), for export.
+    /// The `wallet.key.json` the `rand` CLI reads (version 2), for export.
     pub fn key_file_json(&self) -> String {
         json!({ "version": 2, "spend_key": self.spend_key_hex() }).to_string()
     }
@@ -210,7 +210,7 @@ fn owned_note(w: &Wallet, index: u64, height: u64, cm: Word8, note: Note) -> Own
 
 // ------------------------------------------------------------------ scanning
 
-/// One row of `shrugg_getCommitments`, as the node serves it.
+/// One row of `rand_getCommitments`, as the node serves it.
 #[derive(Deserialize)]
 pub struct CommitmentRow {
     pub index: u64,
@@ -239,7 +239,7 @@ impl EnvelopeHex {
     }
 }
 
-/// What one leaf turned out to be for this wallet. Mirrors `shrugg_client::wallet::classify`:
+/// What one leaf turned out to be for this wallet. Mirrors `randprotocol_client::wallet::classify`:
 /// an envelope that opens is not proof of ownership (anyone can seal to a public address), so a
 /// received note is only kept when its `pk` is this wallet's.
 pub enum Found {
@@ -296,7 +296,7 @@ pub fn scan_page(w: &Wallet, rows: &[CommitmentRow]) -> Result<ScanResult> {
 }
 
 /// The deposit note a committed `bridge_attest` appended for this wallet, rebuilt from the public
-/// fields `shrugg_getTransaction` renders (a hostile relayer can publish a garbage envelope; the
+/// fields `rand_getTransaction` renders (a hostile relayer can publish a garbage envelope; the
 /// chain's own rendering of the note cannot lie). `None` unless the action is a deposit to this
 /// wallet whose commitment matches.
 pub fn rebuilt_deposit(w: &Wallet, action: &Value) -> Option<OwnedNote> {
@@ -344,14 +344,14 @@ pub struct Selection {
 }
 
 /// Largest-first, at most two notes of one asset (a bundle spends exactly two inputs). Mirrors
-/// `shrugg_client::wallet::select_inputs`, including its two errors.
+/// `randprotocol_client::wallet::select_inputs`, including its two errors.
 pub fn select_inputs(notes: &[OwnedNote], asset: u32, need: u64) -> Result<Selection> {
     let mut sorted: Vec<&OwnedNote> = notes.iter().filter(|n| n.is_spendable() && n.asset == asset).collect();
     sorted.sort_by(|a, b| b.units().cmp(&a.units()));
     let have: u64 = sorted.iter().map(|n| n.units()).sum();
     if have < need {
         return bad(format!(
-            "insufficient balance: have {} SHRUGG, need {} SHRUGG",
+            "insufficient balance: have {} RAND, need {} RAND",
             format_amount(have),
             format_amount(need)
         ));
@@ -367,7 +367,7 @@ pub fn select_inputs(notes: &[OwnedNote], asset: u32, need: u64) -> Result<Selec
     }
     if sum < need {
         return bad(format!(
-            "need more than two notes; the largest two hold {} SHRUGG — consolidate first by sending to your own address",
+            "need more than two notes; the largest two hold {} RAND — consolidate first by sending to your own address",
             format_amount(sum)
         ));
     }
@@ -377,7 +377,7 @@ pub fn select_inputs(notes: &[OwnedNote], asset: u32, need: u64) -> Result<Selec
 // ------------------------------------------------------------------ proving a transfer
 
 /// One input of a bundle as the client hands it over: an owned note plus the witness
-/// `shrugg_getWitness` returned for its leaf (32 sibling levels, leaf first).
+/// `rand_getWitness` returned for its leaf (32 sibling levels, leaf first).
 #[derive(Deserialize)]
 pub struct ProveInput {
     pub note: OwnedNote,
@@ -388,18 +388,18 @@ pub struct ProveInput {
 pub struct ProveRequest {
     pub spend_key: String,
     pub chain_id: u64,
-    /// Recipient `shrugg1…` address.
+    /// Recipient `rand1…` address.
     pub to: String,
     /// Units, decimal string.
     pub amount: String,
     /// Units, decimal string. The floor for a transfer is `gas::BUNDLE_BASE`.
     pub fee: String,
-    /// The head anchor: `shrugg_getAnchor` with no height.
+    /// The head anchor: `rand_getAnchor` with no height.
     pub anchor_height: u64,
     pub anchor_root: String,
     /// One or two inputs; the witness roots must equal `anchor_root`.
     pub inputs: Vec<ProveInput>,
-    /// `"production"` (chain 8) or `"test"`.
+    /// `"production"` (chain 10) or `"test"`.
     #[serde(default = "default_profile")]
     pub profile: String,
 }
@@ -410,7 +410,7 @@ fn default_profile() -> String {
 
 #[derive(Serialize)]
 pub struct ProveResult {
-    /// `bincode(Transaction)` as hex — the parameter of `shrugg_sendTransaction`.
+    /// `bincode(Transaction)` as hex — the parameter of `rand_sendTransaction`.
     pub tx_hex: String,
     /// The transaction hash the node will report.
     pub hash: String,
@@ -485,7 +485,7 @@ pub fn prove_transfer(req: &ProveRequest) -> Result<ProveResult> {
             return bad(format!("note at leaf {} is not owned by this wallet", input.note.index));
         }
         if note.asset != 0 {
-            return bad("a transfer spends SHRUGG notes only (asset 0)");
+            return bad("a transfer spends RAND notes only (asset 0)");
         }
         if note.amount == 0 {
             return bad(format!("note at leaf {} is worth nothing", input.note.index));
@@ -497,7 +497,7 @@ pub fn prove_transfer(req: &ProveRequest) -> Result<ProveResult> {
     }
     if in_sum < need {
         return bad(format!(
-            "inputs hold {} SHRUGG, but amount + fee is {} SHRUGG",
+            "inputs hold {} RAND, but amount + fee is {} RAND",
             format_amount(in_sum),
             format_amount(need)
         ));
@@ -574,16 +574,16 @@ pub fn open_with_tx_key(cm_hex: &str, envelope: &EnvelopeHex, tx_key_hex: &str) 
 // ------------------------------------------------------------------ a fixture for client smoke tests
 
 /// A complete, valid `prove_transfer` request against a two-leaf tree built in memory: a fresh
-/// sender holding 3 SHRUGG paying 1 SHRUGG to a fresh recipient. Lets every client exercise the
+/// sender holding 3 RAND paying 1 RAND to a fresh recipient. Lets every client exercise the
 /// whole proving path (and time it on its own hardware) without a node. Never used for a real
 /// transfer: the anchor exists on no chain.
 pub fn fixture_prove_request(profile: &str) -> Result<Value> {
-    use shrugg_core::notes::FullTree;
+    use randprotocol_core::notes::FullTree;
     profile_from_str(profile)?;
     let sender = Wallet::generate();
     let recipient = Wallet::generate();
-    let exec = shrugg_zkvm::executor::ZkExecutor::new(FriProfile::Test);
-    let note = Note::new(sender.vk.pk(), [0; 8], 3 * UNITS_PER_SHRUGG, 0, 1);
+    let exec = randprotocol_zkvm::executor::ZkExecutor::new(FriProfile::Test);
+    let note = Note::new(sender.vk.pk(), [0; 8], 3 * UNITS_PER_RAND, 0, 1);
     let tree = FullTree::new(vec![Note::new([1; 8], [0; 8], 1, 0, 1).commitment(), note.commitment()], &exec);
     let path: Vec<String> = tree.path(1).ok_or("fixture tree")?.iter().map(word8_to_hex).collect();
     let owned = owned_note(&sender, 1, 1, note.commitment(), note);
@@ -591,7 +591,7 @@ pub fn fixture_prove_request(profile: &str) -> Result<Value> {
         "spend_key": sender.spend_key_hex(),
         "chain_id": DEFAULT_CHAIN_ID,
         "to": recipient.address.to_string(),
-        "amount": UNITS_PER_SHRUGG.to_string(),
+        "amount": UNITS_PER_RAND.to_string(),
         "fee": gas::BUNDLE_BASE.to_string(),
         "anchor_height": 40,
         "anchor_root": word8_to_hex(&tree.root()),
@@ -610,15 +610,15 @@ pub fn constants() -> Value {
         "default_chain_id": DEFAULT_CHAIN_ID,
         "default_rpc_url": DEFAULT_RPC_URL,
         "explorer_url": EXPLORER_URL,
-        "token_symbol": "SHRUGG",
+        "token_symbol": "RAND",
         "token_decimals": 9,
-        "units_per_shrugg": UNITS_PER_SHRUGG.to_string(),
+        "units_per_rand": UNITS_PER_RAND.to_string(),
         "bundle_base_fee": gas::BUNDLE_BASE.to_string(),
         "faucet_max_units": FAUCET_MAX_UNITS.to_string(),
         "time_window": TIME_WINDOW,
-        "anchor_window": shrugg_core::ledger::ANCHOR_WINDOW,
+        "anchor_window": randprotocol_core::ledger::ANCHOR_WINDOW,
         "tree_depth": DEPTH,
-        "hc_bundle": word8_to_hex(&shrugg_zkvm::executor::ZkExecutor::hc_bundle()),
+        "hc_bundle": word8_to_hex(&randprotocol_zkvm::executor::ZkExecutor::hc_bundle()),
         "prover_peak_memory_bytes": PROVER_PEAK_MEMORY_BYTES,
     })
 }
@@ -754,16 +754,16 @@ mod tests {
         let info = wallet_info(&w);
         assert_eq!(info.spend_key.len(), 64);
         assert_eq!(info.viewing_key.len(), 64);
-        assert!(info.address.starts_with("shrugg1"));
-        assert_eq!(info.address.len(), 1668);
+        assert!(info.address.starts_with("rand1"));
+        assert_eq!(info.address.len(), 1666);
         assert!(parse_address(&info.address).valid);
-        assert!(!parse_address("shrugg1nope").valid);
+        assert!(!parse_address("rand1nope").valid);
         assert_eq!(Wallet::from_hex(&info.spend_key).unwrap().address.to_string(), info.address);
         assert_eq!(spend_key_from_input(&info.key_file).unwrap(), info.spend_key);
         assert_eq!(spend_key_from_input(&format!("0x{}", info.spend_key.to_uppercase())).unwrap(), info.spend_key);
         assert!(spend_key_from_input("zz").is_err());
         // The viewing key is what randscan derives from the same spend key.
-        let nk = shrugg_zkvm::notes::hash(shrugg_zkvm::notes::domain::NK, &w.sk.0);
+        let nk = randprotocol_zkvm::notes::hash(randprotocol_zkvm::notes::domain::NK, &w.sk.0);
         assert_eq!(info.viewing_key, word8_to_hex(&nk));
     }
 
@@ -845,7 +845,7 @@ mod tests {
     fn json_entry_point_reports_errors_as_json() {
         let v: Value = serde_json::from_str(&call("version", "{}")).unwrap();
         assert_eq!(v["ok"], true);
-        assert_eq!(v["value"]["default_chain_id"], 8);
+        assert_eq!(v["value"]["default_chain_id"], 10);
         assert_eq!(v["value"]["bundle_base_fee"], "1000000");
         let v: Value = serde_json::from_str(&call("wallet_info", r#"{"spend_key":"zz"}"#)).unwrap();
         assert_eq!(v["ok"], false);
@@ -861,10 +861,10 @@ mod tests {
     /// whose bundle the chain's own ledger rules accept (digest, nullifiers, commitments).
     #[test]
     fn prove_transfer_produces_an_admissible_bundle() {
-        use shrugg_core::notes::FullTree;
+        use randprotocol_core::notes::FullTree;
         let alice = wallet(11);
         let bob = wallet(12);
-        let exec = shrugg_zkvm::executor::ZkExecutor::new(FriProfile::Test);
+        let exec = randprotocol_zkvm::executor::ZkExecutor::new(FriProfile::Test);
         let note = Note::new(alice.vk.pk(), [0; 8], 3_000_000_000, 0, 1);
         let leaves = vec![Note::new([1; 8], [0; 8], 1, 0, 1).commitment(), note.commitment()];
         let tree = FullTree::new(leaves, &exec);
@@ -913,10 +913,10 @@ mod tests {
         assert_eq!(alice_scan.sent.len(), 1);
         // Exactly the ledger's two checks: the digest the proof published is the one recomputed
         // from the bundle's plaintext, and the proof verifies against the pinned bundle guest.
-        use shrugg_core::confidential::ConfidentialExecutor;
+        use randprotocol_core::confidential::ConfidentialExecutor;
         let recomputed = exec.bundle_digest(&bundle.digest_input());
         assert_eq!(exec.bundle_proof_digest(&bundle.proof).unwrap(), recomputed);
-        exec.verify_bundle(&shrugg_zkvm::executor::ZkExecutor::hc_bundle(), &bundle.proof).unwrap();
+        exec.verify_bundle(&randprotocol_zkvm::executor::ZkExecutor::hc_bundle(), &bundle.proof).unwrap();
         assert!(open_with_tx_key(&rows[0].cm, &rows[0].envelope, &res.tx_keys[0]).unwrap().is_some());
     }
 }

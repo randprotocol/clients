@@ -100,7 +100,7 @@ impl NoteStore {
         let _ = std::fs::remove_file(Self::path());
     }
 
-    /// Spendable SHRUGG (asset 0), in units.
+    /// Spendable RAND (asset 0), in units.
     pub fn balance(&self) -> u64 {
         self.notes.iter().filter(|n| n.is_spendable() && n.asset == 0).map(|n| n.units()).sum()
     }
@@ -197,7 +197,7 @@ pub fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<(), String>
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
-/// SHRUGG amounts: mirrors `shrugg_core::format_amount` / `parse_amount`.
+/// RAND amounts: mirrors `randprotocol_core::format_amount` / `parse_amount`.
 pub mod amount {
     pub const UNITS: u64 = 1_000_000_000;
 
@@ -289,6 +289,6 @@ mod tests {
         assert_eq!(amount::parse(".25"), Some(250_000_000));
         assert_eq!(amount::parse("0.0000000001"), None);
         assert_eq!(amount::parse("x"), None);
-        assert_eq!(shortened("shrugg1abcdefghijklmnop", 10, 4), "shrugg1abc…mnop");
+        assert_eq!(shortened("rand1abcdefghijklmnop", 10, 4), "rand1abc…mnop");
     }
 }

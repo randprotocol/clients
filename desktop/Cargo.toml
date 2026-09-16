@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["RandProtocol Contributors"]
-description = "Rand Wallet for Windows, Linux and macOS: a native shielded SHRUGG wallet on the shared Rust core"
+description = "Rand Wallet for Windows, Linux and macOS: a native shielded RAND wallet on the shared Rust core"
 default-run = "rand-wallet"
 
 [[bin]]
@@ -42,4 +42,4 @@ name = "Rand Wallet"
 identifier = "org.randprotocol.wallet.desktop"
 icon = ["assets/icon-1024.png"]
 category = "public.app-category.finance"
-short_description = "A shielded wallet for SHRUGG"
+short_description = "A shielded wallet for RAND"

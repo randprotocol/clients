@@ -27,8 +27,8 @@ public class AmountsTest {
 
     @Test
     public void shortensAddressesAndHashes() {
-        String addr = "shrugg1" + "a".repeat(1661);
-        assertEquals("shrugg1aaaaa…aaaaaa", Amounts.shortAddress(addr));
+        String addr = "rand1" + "a".repeat(1661);
+        assertEquals("rand1aaaaa…aaaaaa", Amounts.shortAddress(addr));
         assertEquals("short", Amounts.shortAddress("short"));
         assertEquals("abcdefgh…abcdef", Amounts.shortHex("abcdefgh0123456789abcdef"));
     }

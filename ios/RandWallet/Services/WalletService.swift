@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// The wallet: the spend key while unlocked, the note store, and the scan / send / faucet flows
-/// (design spec §3.2). Everything cryptographic goes through `ShruggCore`; everything on the
+/// (design spec §3.2). Everything cryptographic goes through `RandCore`; everything on the
 /// wire through `RpcClient`. The spend key never leaves this process.
 @MainActor
 final class WalletService: ObservableObject {
@@ -54,7 +54,7 @@ final class WalletService: ObservableObject {
     // MARK: wallet lifecycle
 
     func createWallet() throws -> WalletInfo {
-        let w = try ShruggCore.keygen()
+        let w = try RandCore.keygen()
         try Keychain.saveSpendKey(w.spendKey)
         NoteStore.delete()
         store = NoteStore()
@@ -63,7 +63,7 @@ final class WalletService: ObservableObject {
     }
 
     func importWallet(_ input: String) throws -> WalletInfo {
-        let w = try ShruggCore.importKey(input)
+        let w = try RandCore.importKey(input)
         try Keychain.saveSpendKey(w.spendKey)
         NoteStore.delete()
         store = NoteStore()
@@ -80,7 +80,7 @@ final class WalletService: ObservableObject {
 
     private func unlock(with sk: String) {
         spendKey = sk
-        info = try? ShruggCore.walletInfo(spendKey: sk)
+        info = try? RandCore.walletInfo(spendKey: sk)
         store = NoteStore.load()
     }
 
@@ -115,7 +115,7 @@ final class WalletService: ObservableObject {
     private static let page = 500
 
     /// Trial-decrypt every leaf this wallet has not seen, then mark spent notes from the nullifier
-    /// set. Mirrors `shrugg_client::wallet::scan` step for step.
+    /// set. Mirrors `randprotocol_client::wallet::scan` step for step.
     func scan() async throws {
         guard let sk = spendKey else { return }
         let rpc = try client()
@@ -130,7 +130,7 @@ final class WalletService: ObservableObject {
             if try await rpc.bridgeEnabled() {
                 for h in s.scannedAttestHeight...head0 {
                     for action in try await rpc.blockActions(height: h) {
-                        if let n = try ShruggCore.rebuiltDeposit(spendKey: sk, action: action) { s.addDeposit(n) }
+                        if let n = try RandCore.rebuiltDeposit(spendKey: sk, action: action) { s.addDeposit(n) }
                     }
                 }
             }
@@ -142,7 +142,7 @@ final class WalletService: ObservableObject {
             let rows = try await rpc.commitments(from: s.scannedIndex, limit: Self.page)
             if rows.isEmpty { break }
             let before = s.scannedIndex
-            let result = try ShruggCore.scanPage(spendKey: sk, rows: rows)
+            let result = try RandCore.scanPage(spendKey: sk, rows: rows)
             s.merge(received: result.received, sent: result.sent)
             s.scannedIndex = max(s.scannedIndex, result.nextIndex)
             if s.scannedIndex <= before { throw RpcClient.RpcError(code: 0, message: "getCommitments did not advance") }
@@ -196,7 +196,7 @@ final class WalletService: ObservableObject {
     func send(to: String, amount: UInt64, fee: UInt64) async throws -> SendOutcome {
         guard let sk = spendKey else { throw RpcClient.RpcError(code: 0, message: "wallet is locked") }
         let rpc = try client()
-        let addr = try ShruggCore.parseAddress(to)
+        let addr = try RandCore.parseAddress(to)
         guard addr.valid else { throw RpcClient.RpcError(code: 0, message: addr.error ?? "invalid address") }
         defer { phase = .idle }
 
@@ -205,7 +205,7 @@ final class WalletService: ObservableObject {
 
         phase = .selecting
         let need = amount &+ fee
-        let selection = try ShruggCore.selectInputs(notes: store.notes, need: need)
+        let selection = try RandCore.selectInputs(notes: store.notes, need: need)
 
         phase = .fetchingWitnesses
         var anchor = try await rpc.anchor()
@@ -264,13 +264,13 @@ final class WalletService: ObservableObject {
             if bg != .invalid { UIApplication.shared.endBackgroundTask(bg) }
         }
         return try await Task.detached(priority: .userInitiated) {
-            try ShruggCore.proveTransfer(request)
+            try RandCore.proveTransfer(request)
         }.value
     }
 
     // MARK: faucet
 
-    /// Ask a validator node to mint 100 SHRUGG into a note only this wallet can open.
+    /// Ask a validator node to mint 100 RAND into a note only this wallet can open.
     func faucet() async throws -> String {
         let rpc = try client()
         let hash = try await rpc.mint(to: address)

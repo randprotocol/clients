@@ -9,7 +9,7 @@ copy this directory plus the manifest into `dist/<browser>/` and zip it.
 shared/
   popup.html/js     the toolbar popup (360×600): lock, home, receive, faucet, activity, settings
   app.html/js       the same screens in a full tab; Send/proving, onboarding and exports run here
-  worker.js         Web Worker hosting the wasm core (core/shrugg_wallet.js + _bg.wasm)
+  worker.js         Web Worker hosting the wasm core (core/rand_wallet.js + _bg.wasm)
   background.js     auto-lock alarm; opens onboarding on first install
   styles.css        design/tokens.json as CSS variables; dark default, light theme
   lib/browser.js    `ext` = browser ?? chrome
@@ -52,4 +52,4 @@ chrome/pack.sh && firefox/pack.sh    # → dist/chrome, dist/firefox and the zip
 
 Load `dist/chrome` as an unpacked extension (chrome://extensions, Developer mode) or
 `dist/firefox` via about:debugging → "Load Temporary Add-on…" (pick `manifest.json`).
-Point Settings → RPC URL at a node you can reach (a local `shrugg-node`, or an SSH tunnel).
+Point Settings → RPC URL at a node you can reach (a local `rand-node`, or an SSH tunnel).

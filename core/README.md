@@ -3,16 +3,16 @@
 The one implementation of the chain's cryptography every client shares: the Poseidon2 key
 hierarchy (spend key → viewing key → address), ML-KEM-768 + ChaCha20-Poly1305 envelopes, note
 commitments and nullifiers, coin selection, and the STARK proof of a 2-in-2-out bundle. It is the
-fullnode's own crates (`shrugg-core`, `shrugg-zkvm`, vendored as the submodule `vendor/fullnode`
-at commit `03c9fb9`, the build chain 8 runs) behind one JSON entry point.
+fullnode's own crates (`randprotocol-core`, `randprotocol-zkvm`, vendored as the submodule `vendor/fullnode`
+at commit `a00c88c`, the build chain 10 runs) behind one JSON entry point.
 
 ```
 crates/wallet-core   the library and its tests; `wallet_core::call(method, params_json) -> reply_json`
-crates/wallet-ffi    C ABI (`shrugg_wallet_call`, `shrugg_wallet_free`) and JNI
-                     (`org.randprotocol.wallet.core.NativeCore.call`); lib name `shrugg_wallet`
+crates/wallet-ffi    C ABI (`rand_wallet_call`, `rand_wallet_free`) and JNI
+                     (`org.randprotocol.wallet.core.NativeCore.call`); lib name `rand_wallet`
 crates/wallet-wasm   wasm-bindgen `call()` for the extensions
 scripts/             build-ios.sh (XCFramework), build-android.sh (.so per ABI), build-wasm.sh
-vendor/circuits      a stub manifest for shrugg-zkvm's optional GPU dependency; never compiled
+vendor/circuits      a stub manifest for randprotocol-zkvm's optional GPU dependency; never compiled
 ```
 
 Every reply is `{"ok":true,"value":…}` or `{"ok":false,"error":"…"}`; a panic in the prover is

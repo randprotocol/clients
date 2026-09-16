@@ -1,10 +1,10 @@
 import Foundation
-import ShruggWalletCore
+import RandWalletCore
 
-/// The one call into the Rust core: `shrugg_wallet_call(method, paramsJson)` → JSON reply
+/// The one call into the Rust core: `rand_wallet_call(method, paramsJson)` → JSON reply
 /// `{"ok":true,"value":…}` or `{"ok":false,"error":"…"}`. Every method and its parameters are
 /// documented on `wallet_core::dispatch` in core/crates/wallet-core.
-enum ShruggCore {
+enum RandCore {
     struct CoreError: LocalizedError {
         let message: String
         var errorDescription: String? { message }
@@ -12,10 +12,10 @@ enum ShruggCore {
 
     /// Raw call. Thread-safe; the slow method (`prove_transfer`) must run off the main thread.
     static func callRaw(_ method: String, params: String) throws -> Any {
-        guard let reply = shrugg_wallet_call(method, params) else {
+        guard let reply = rand_wallet_call(method, params) else {
             throw CoreError(message: "core returned no reply")
         }
-        defer { shrugg_wallet_free(reply) }
+        defer { rand_wallet_free(reply) }
         let json = String(cString: reply)
         guard let data = json.data(using: .utf8),
               let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -39,7 +39,7 @@ enum ShruggCore {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    static var version: String { String(cString: shrugg_wallet_version()) }
+    static var version: String { String(cString: rand_wallet_version()) }
 
     // MARK: typed wrappers
 

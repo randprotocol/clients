@@ -1,5 +1,5 @@
 // Scan, send and faucet — the orchestration of design spec §3.2, mirroring the fullnode's
-// `shrugg_client::wallet`. Every cryptographic step is a core call; this file only moves JSON
+// `randprotocol_client::wallet`. Every cryptographic step is a core call; this file only moves JSON
 // between the node and the note store.
 import { core } from './core.js';
 import { makeRpc } from './rpc.js';
@@ -203,7 +203,7 @@ export async function waitForTransaction(rpc, hash, timeoutMs) {
   return null;
 }
 
-/** Testnet faucet: 100 SHRUGG into a note only this wallet can open. */
+/** Testnet faucet: 100 RAND into a note only this wallet can open. */
 export async function faucet(spendKey, address, settings) {
   const s = settings || (await getSettings());
   const rpc = await rpcFor(s);

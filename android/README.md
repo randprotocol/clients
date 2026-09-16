@@ -1,7 +1,7 @@
 # Rand Wallet — Android (Java)
 
-The Android client of the Rand Protocol SHRUGG wallet: a Java app around the shared Rust core
-(`../core`), which it loads as `libshrugg_wallet.so` through one JNI method
+The Android client of the Rand Protocol RAND wallet: a Java app around the shared Rust core
+(`../core`), which it loads as `librand_wallet.so` through one JNI method
 (`org.randprotocol.wallet.core.NativeCore.call`). Design: `../docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
 ```
@@ -25,7 +25,7 @@ app/src/main/java/org/randprotocol/wallet/
 ## Build
 
 ```bash
-# 1. The native core → app/src/main/jniLibs/{arm64-v8a,x86_64}/libshrugg_wallet.so
+# 1. The native core → app/src/main/jniLibs/{arm64-v8a,x86_64}/librand_wallet.so
 ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/27.2.12479018 ../core/scripts/build-android.sh
 
 # 2. The app
@@ -42,14 +42,14 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The app talks to a node's JSON-RPC. There is no public endpoint yet (see the root README), so
-point it at one you can reach: with a `shrugg-node` on your laptop (`scripts/local-testnet.sh`
+point it at one you can reach: with a `rand-node` on your laptop (`scripts/local-testnet.sh`
 in the fullnode repo, faucet on), set **Settings → RPC URL** to `http://10.0.2.2:8545` (the
 emulator's alias for the host) and **Test connection** should report chain id, height and peers.
 A debug build allows cleartext HTTP to `10.0.2.2`, `127.0.0.1` and `localhost` only
 (`res/xml/network_security_config.xml`); release builds are HTTPS-only.
 
-Flow to try: Create wallet → save the spend key → Faucet (100 SHRUGG lands after the mint
-commits) → Send 1.5 SHRUGG to a second wallet's address (a bundle proof takes a few minutes on
+Flow to try: Create wallet → save the spend key → Faucet (100 RAND lands after the mint
+commits) → Send 1.5 RAND to a second wallet's address (a bundle proof takes a few minutes on
 the emulator; a notification shows while it runs) → Activity → Disclose this payment → paste
 the transaction key on randscan.org.
 

@@ -1,17 +1,17 @@
-//! The foreign entry points. Both are one function: `shrugg_wallet_call(method, params_json)`
+//! The foreign entry points. Both are one function: `rand_wallet_call(method, params_json)`
 //! returning a JSON string (see `wallet_core::call`), so the Swift and Java wrappers are a few
 //! lines each and every rule lives in one place.
 
 use std::ffi::{c_char, CStr, CString};
 
 /// Call `method` with a JSON object `params`. Returns a NUL-terminated JSON string the caller
-/// must release with [`shrugg_wallet_free`]. Never returns NULL.
+/// must release with [`rand_wallet_free`]. Never returns NULL.
 ///
 /// # Safety
 /// `method` and `params` must be valid NUL-terminated UTF-8 strings (or NULL, which is treated as
 /// empty).
 #[no_mangle]
-pub unsafe extern "C" fn shrugg_wallet_call(method: *const c_char, params: *const c_char) -> *mut c_char {
+pub unsafe extern "C" fn rand_wallet_call(method: *const c_char, params: *const c_char) -> *mut c_char {
     let read = |p: *const c_char| -> String {
         if p.is_null() {
             String::new()
@@ -27,12 +27,12 @@ pub unsafe extern "C" fn shrugg_wallet_call(method: *const c_char, params: *cons
         .into_raw()
 }
 
-/// Release a string returned by [`shrugg_wallet_call`].
+/// Release a string returned by [`rand_wallet_call`].
 ///
 /// # Safety
-/// `s` must be a pointer returned by `shrugg_wallet_call` and not already freed, or NULL.
+/// `s` must be a pointer returned by `rand_wallet_call` and not already freed, or NULL.
 #[no_mangle]
-pub unsafe extern "C" fn shrugg_wallet_free(s: *mut c_char) {
+pub unsafe extern "C" fn rand_wallet_free(s: *mut c_char) {
     if !s.is_null() {
         drop(CString::from_raw(s));
     }
@@ -40,7 +40,7 @@ pub unsafe extern "C" fn shrugg_wallet_free(s: *mut c_char) {
 
 /// The core version, as a static string.
 #[no_mangle]
-pub extern "C" fn shrugg_wallet_version() -> *const c_char {
+pub extern "C" fn rand_wallet_version() -> *const c_char {
     static V: &str = concat!(env!("CARGO_PKG_VERSION"), "\0");
     V.as_ptr() as *const c_char
 }

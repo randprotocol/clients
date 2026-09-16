@@ -19,7 +19,7 @@ import org.randprotocol.wallet.databinding.ActivityReceiveBinding;
 import java.util.EnumMap;
 import java.util.Map;
 
-/** The address as a QR (1668 characters: byte mode, error correction L, version 33 or so) and as text. */
+/** The address as a QR (1666 characters: byte mode, error correction L, version 33 or so) and as text. */
 public class ReceiveActivity extends BaseActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {

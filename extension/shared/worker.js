@@ -1,7 +1,7 @@
 // The wasm core lives here. Messages: {id, method, params} → {id, ok, value|error}.
-import init, { call } from './core/shrugg_wallet.js';
+import init, { call } from './core/rand_wallet.js';
 
-const ready = init({ module_or_path: new URL('./core/shrugg_wallet_bg.wasm', import.meta.url) })
+const ready = init({ module_or_path: new URL('./core/rand_wallet_bg.wasm', import.meta.url) })
   .catch((e) => { throw new Error('loading the wallet core failed: ' + (e?.message || e)); });
 
 self.onmessage = async (e) => {

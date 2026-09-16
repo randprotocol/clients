@@ -1,4 +1,4 @@
-// JSON-RPC 2.0 over HTTP to a shrugg-node. One request per POST; errors carry the node's message.
+// JSON-RPC 2.0 over HTTP to a rand-node. One request per POST; errors carry the node's message.
 export class RpcError extends Error {
   constructor(message, code) { super(message); this.code = code; }
 }
@@ -25,19 +25,19 @@ export function makeRpc(url, { timeoutMs = 20000 } = {}) {
   }
   return {
     rpc,
-    chainId: () => rpc('shrugg_chainId'),
-    status: () => rpc('shrugg_status'),
-    head: () => rpc('shrugg_getHead'),
-    treeInfo: () => rpc('shrugg_getTreeInfo'),
-    commitments: (from, limit = 500) => rpc('shrugg_getCommitments', [from, limit]),
-    nullifiers: (fromHeight, limit = 500) => rpc('shrugg_getNullifiers', [fromHeight, limit]),
-    anchor: () => rpc('shrugg_getAnchor'),
-    witness: (index) => rpc('shrugg_getWitness', [index]),
-    sendTransaction: (hex) => rpc('shrugg_sendTransaction', [hex]),
-    getTransaction: (hash) => rpc('shrugg_getTransaction', [hash]),
-    mint: (address) => rpc('shrugg_mint', [address]),
-    blockByHeight: (h) => rpc('shrugg_getBlockByHeight', [h]),
-    bridgeState: () => rpc('shrugg_getBridgeState'),
-    estimateFee: () => rpc('shrugg_estimateFee', [{ kind: 'bundle' }]),
+    chainId: () => rpc('rand_chainId'),
+    status: () => rpc('rand_status'),
+    head: () => rpc('rand_getHead'),
+    treeInfo: () => rpc('rand_getTreeInfo'),
+    commitments: (from, limit = 500) => rpc('rand_getCommitments', [from, limit]),
+    nullifiers: (fromHeight, limit = 500) => rpc('rand_getNullifiers', [fromHeight, limit]),
+    anchor: () => rpc('rand_getAnchor'),
+    witness: (index) => rpc('rand_getWitness', [index]),
+    sendTransaction: (hex) => rpc('rand_sendTransaction', [hex]),
+    getTransaction: (hash) => rpc('rand_getTransaction', [hash]),
+    mint: (address) => rpc('rand_mint', [address]),
+    blockByHeight: (h) => rpc('rand_getBlockByHeight', [h]),
+    bridgeState: () => rpc('rand_getBridgeState'),
+    estimateFee: () => rpc('rand_estimateFee', [{ kind: 'bundle' }]),
   };
 }

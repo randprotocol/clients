@@ -1,7 +1,7 @@
 # addons.mozilla.org listing — Rand Wallet
 
 **Name**: Rand Wallet
-**Summary** (250 chars max): A shielded wallet for SHRUGG on the Rand Protocol chain. Private balances and transfers proved in your browser, a testnet faucet, and viewing keys to open your history on randscan.org.
+**Summary** (250 chars max): A shielded wallet for RAND on the Rand Protocol chain. Private balances and transfers proved in your browser, a testnet faucet, and viewing keys to open your history on randscan.org.
 **Categories**: Privacy & Security; Other
 **License**: Apache-2.0
 **Homepage**: https://randprotocol.org/clients  **Support**: https://github.com/randprotocol

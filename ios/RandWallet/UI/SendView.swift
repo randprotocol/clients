@@ -58,7 +58,7 @@ struct SendView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel(text: "To")
                     HStack(spacing: 8) {
-                        Field(placeholder: "shrugg1…", text: $recipient, mono: true)
+                        Field(placeholder: "rand1…", text: $recipient, mono: true)
                         Button { showScanner = true } label: {
                             Image(systemName: "qrcode.viewfinder").font(.system(size: 22)).foregroundColor(Theme.accent).frame(width: 44, height: 44)
                         }
@@ -79,9 +79,9 @@ struct SendView: View {
                     }
                     Field(placeholder: "0.0", text: $amountText, keyboard: .decimalPad)
                     HStack {
-                        Text("Available \(Amount.format(wallet.balance)) SHRUGG").font(.caption12).foregroundColor(Theme.textMute)
+                        Text("Available \(Amount.format(wallet.balance)) RAND").font(.caption12).foregroundColor(Theme.textMute)
                         Spacer()
-                        Text("Fee \(Amount.format(fee)) SHRUGG").font(.caption12).foregroundColor(Theme.textMute)
+                        Text("Fee \(Amount.format(fee)) RAND").font(.caption12).foregroundColor(Theme.textMute)
                     }
                     if let a = amountUnits, a &+ fee > wallet.balance {
                         ErrorText(message: "Amount plus fee exceeds your balance.")
@@ -96,8 +96,8 @@ struct SendView: View {
         .onChange(of: recipient) { v in
             let s = v.trimmingCharacters(in: .whitespacesAndNewlines)
             if s.isEmpty { addressError = nil; return }
-            let info = try? ShruggCore.parseAddress(s)
-            addressError = (info?.valid ?? false) ? nil : (info?.error ?? "Not a shrugg1 address")
+            let info = try? RandCore.parseAddress(s)
+            addressError = (info?.valid ?? false) ? nil : (info?.error ?? "Not a rand1 address")
         }
     }
 
@@ -105,9 +105,9 @@ struct SendView: View {
         VStack(spacing: 20) {
             Card {
                 VStack(alignment: .leading, spacing: 14) {
-                    row("Amount", "\(Amount.format(amountUnits ?? 0)) SHRUGG")
-                    row("Fee", "\(Amount.format(fee)) SHRUGG")
-                    row("Total", "\(Amount.format((amountUnits ?? 0) &+ fee)) SHRUGG")
+                    row("Amount", "\(Amount.format(amountUnits ?? 0)) RAND")
+                    row("Fee", "\(Amount.format(fee)) RAND")
+                    row("Total", "\(Amount.format((amountUnits ?? 0) &+ fee)) RAND")
                     Divider().background(Theme.borderSoft)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("To").font(.caption12).foregroundColor(Theme.textMute)
@@ -118,7 +118,7 @@ struct SendView: View {
             Text("Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount or the recipient.")
                 .font(.system(size: 13)).foregroundColor(Theme.textMute).multilineTextAlignment(.center)
             if !ProverRequirements.deviceHasEnoughMemory {
-                Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Until the prover's memory use drops, send from the shrugg command-line wallet on a computer with the key file from Settings › Export.")
+                Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Until the prover's memory use drops, send from the rand command-line wallet on a computer with the key file from Settings › Export.")
                     .font(.system(size: 13)).foregroundColor(Theme.warning).multilineTextAlignment(.center)
             }
             Spacer()
@@ -213,7 +213,7 @@ struct SentView: View {
             VStack(spacing: 18) {
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 56)).foregroundColor(Theme.positive).padding(.top, 20)
                 Text(outcome.committedHeight == nil ? "Submitted" : "Sent").font(.title).foregroundColor(Theme.textStrong)
-                Text("\(Amount.format(outcome.amount)) SHRUGG").font(.balance).foregroundColor(Theme.text)
+                Text("\(Amount.format(outcome.amount)) RAND").font(.balance).foregroundColor(Theme.text)
                 Card {
                     VStack(alignment: .leading, spacing: 12) {
                         CopyRow(label: "Transaction", value: outcome.hash)

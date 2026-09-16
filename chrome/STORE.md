@@ -1,21 +1,21 @@
 # Chrome Web Store listing — Rand Wallet
 
 **Name**: Rand Wallet
-**Summary** (132 chars max): A shielded wallet for SHRUGG on Rand Protocol: private balances, private transfers, viewing keys for randscan.org.
+**Summary** (132 chars max): A shielded wallet for RAND on Rand Protocol: private balances, private transfers, viewing keys for randscan.org.
 **Category**: Productivity → Tools (or Finance if offered)
 **Language**: English
 
 **Description**
 
-Rand Wallet is a lightweight wallet for the Rand Protocol testnet (SHRUGG). The chain is fully
+Rand Wallet is a lightweight wallet for the Rand Protocol testnet (RAND). The chain is fully
 shielded: there are no accounts and no public balances. Your wallet is a single spend key; your
 balance is the set of notes that key can open; a transfer is a zero-knowledge proof built in
 your browser.
 
 - Create a wallet or import a spend key / wallet.key.json
-- Receive: your shrugg1… address as text and QR
+- Receive: your rand1… address as text and QR
 - Send: choose the notes, prove the 2-in-2-out bundle locally (a few minutes), submit
-- Testnet faucet: 100 SHRUGG into a note only you can open
+- Testnet faucet: 100 RAND into a note only you can open
 - Activity: every note received and every payment sent
 - Disclosure on your terms: copy the viewing key to open your history on randscan.org, or a
   per-transaction key to show one payment
@@ -23,7 +23,7 @@ your browser.
 
 Testnet software: not audited, not for real value.
 
-**Single purpose**: manage a SHRUGG wallet (keys, balance, transfers) for the Rand Protocol chain.
+**Single purpose**: manage a RAND wallet (keys, balance, transfers) for the Rand Protocol chain.
 
 **Permission justifications**
 - `storage`: the encrypted spend key, settings and the local note cache.

@@ -1,4 +1,4 @@
-module ShruggWalletCore {
-    header "shrugg_wallet.h"
+module RandWalletCore {
+    header "rand_wallet.h"
     export *
 }

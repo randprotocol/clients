@@ -4,21 +4,21 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Rand Wallet core: keys, addresses, scanning, coin selection and bundle proving for the shielded SHRUGG chain, behind a JSON API every client wraps"
+description = "Rand Wallet core: keys, addresses, scanning, coin selection and bundle proving for the shielded RAND chain, behind a JSON API every client wraps"
 
 [lib]
 name = "wallet_core"
 
 [dependencies]
-shrugg-core = { workspace = true }
-shrugg-zkvm = { workspace = true }
+randprotocol-core = { workspace = true }
+randprotocol-zkvm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 hex = { workspace = true }
 bs58 = "0.5"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-# shrugg-core draws its randomness through rand 0.8 (getrandom 0.2, needs the `js` feature);
-# shrugg-zkvm through rand 0.10 (getrandom 0.4, selected by the cfg in .cargo/config.toml).
+# randprotocol-core draws its randomness through rand 0.8 (getrandom 0.2, needs the `js` feature);
+# randprotocol-zkvm through rand 0.10 (getrandom 0.4, selected by the cfg in .cargo/config.toml).
 getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
 getrandom = { version = "0.4", features = ["wasm_js"] }

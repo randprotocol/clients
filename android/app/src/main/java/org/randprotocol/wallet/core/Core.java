@@ -74,7 +74,7 @@ public final class Core {
         }
     }
 
-    /** Trial-decrypt a page of {@code shrugg_getCommitments} rows. */
+    /** Trial-decrypt a page of {@code rand_getCommitments} rows. */
     public static JSONObject scanPage(String spendKey, JSONArray rows) throws CoreException {
         return object("scan_page", p("spend_key", spendKey, "rows", rows));
     }

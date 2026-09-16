@@ -29,7 +29,7 @@ struct ActivityDetailView: View {
 
     private func received(_ n: OwnedNote) -> some View {
         Group {
-            Text("+\(Amount.format(n.units)) SHRUGG").font(.balance).foregroundColor(Theme.positive)
+            Text("+\(Amount.format(n.units)) RAND").font(.balance).foregroundColor(Theme.positive)
             Card {
                 VStack(alignment: .leading, spacing: 12) {
                     row("Status", n.spent ? "Spent" : (n.pending != nil ? "Held by a pending send" : "Unspent"))
@@ -51,12 +51,12 @@ struct ActivityDetailView: View {
 
     private func sent(_ s: Submission) -> some View {
         Group {
-            Text("−\(Amount.format(s.units)) SHRUGG").font(.balance).foregroundColor(Theme.text)
+            Text("−\(Amount.format(s.units)) RAND").font(.balance).foregroundColor(Theme.text)
             Card {
                 VStack(alignment: .leading, spacing: 12) {
                     row("Status", s.status == .pending ? "Pending" : (s.status == .failed ? "Not committed (notes released)" : "Committed"))
                     if let h = s.height { row("Block", "\(h)") }
-                    row("Fee", "\(Amount.format(s.fee)) SHRUGG")
+                    row("Fee", "\(Amount.format(s.fee)) RAND")
                     row("Submitted", s.submittedAt.formatted(date: .abbreviated, time: .shortened))
                     CopyRow(label: "To", value: s.to)
                     CopyRow(label: "Transaction", value: s.hash)
@@ -76,7 +76,7 @@ struct ActivityDetailView: View {
 
     private func sentRow(_ r: SentRow) -> some View {
         Group {
-            Text("−\(Amount.format(r.units)) SHRUGG").font(.balance).foregroundColor(Theme.text)
+            Text("−\(Amount.format(r.units)) RAND").font(.balance).foregroundColor(Theme.text)
             Card {
                 VStack(alignment: .leading, spacing: 12) {
                     row("Leaf", "#\(r.index)")

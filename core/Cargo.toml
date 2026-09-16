@@ -11,10 +11,13 @@ license = "Apache-2.0"
 authors = ["RandProtocol Contributors"]
 
 [workspace.dependencies]
-# The chain's own crates, pinned by the submodule at core/vendor/fullnode (commit 03c9fb9, the
-# build chain 8 runs). Bump the submodule to move the wallet to a new chain build.
-shrugg-core = { path = "vendor/fullnode/crates/shrugg-core" }
-shrugg-zkvm = { path = "vendor/fullnode/crates/shrugg-zkvm" }
+# The chain's own crates, pinned by the submodule at core/vendor/fullnode (commit a00c88c, the
+# build chain 10 runs). Bump the submodule to move the wallet to a new chain build.
+# randprotocol-zkvm also needs the sibling `circuits` checkout at ../../../circuits relative to the
+# crate: the cuda backend (optional, stubbed) and the evm-core / sbpf-core guest crates (required,
+# vendored as-is), all under core/vendor/circuits.
+randprotocol-core = { path = "vendor/fullnode/crates/randprotocol-core" }
+randprotocol-zkvm = { path = "vendor/fullnode/crates/randprotocol-zkvm" }
 wallet-core = { path = "crates/wallet-core" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -33,15 +36,15 @@ opt-level = 3
 
 # The zkVM crate is one enormous generic module; LLVM's wasm backend takes tens of minutes on it
 # as a single codegen unit (native takes under a minute). Splitting it costs little at fat LTO.
-[profile.release.package.shrugg-zkvm]
+[profile.release.package.randprotocol-zkvm]
 codegen-units = 16
 
-# The browser build. LLVM's wasm backend does not finish shrugg-zkvm at opt-level 3 (killed after
+# The browser build. LLVM's wasm backend does not finish randprotocol-zkvm at opt-level 3 (killed after
 # 4 CPU-hours); lower optimisation for that crate is the difference between minutes and never.
 [profile.wasm]
 inherits = "release"
 lto = "thin"
 codegen-units = 16
 opt-level = 2
-[profile.wasm.package.shrugg-zkvm]
+[profile.wasm.package.randprotocol-zkvm]
 opt-level = 1

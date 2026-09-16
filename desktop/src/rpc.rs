@@ -1,4 +1,4 @@
-//! JSON-RPC 2.0 over HTTP to a `shrugg-node` (fullnode `docs/rpc.md`). Blocking; only ever
+//! JSON-RPC 2.0 over HTTP to a `rand-node` (fullnode `docs/rpc.md`). Blocking; only ever
 //! called from the engine's worker thread.
 
 use serde_json::{json, Value};
@@ -54,23 +54,23 @@ impl Rpc {
     }
 
     pub fn chain_id(&self) -> Result<u64> {
-        Self::u64_of(&self.call("shrugg_chainId", json!([]))?)
+        Self::u64_of(&self.call("rand_chainId", json!([]))?)
     }
 
     pub fn status(&self) -> Result<Value> {
-        self.call("shrugg_status", json!([]))
+        self.call("rand_status", json!([]))
     }
 
     pub fn head_height(&self) -> Result<u64> {
-        Self::u64_of(&self.call("shrugg_getHead", json!([]))?["height"])
+        Self::u64_of(&self.call("rand_getHead", json!([]))?["height"])
     }
 
     pub fn commitments(&self, from: u64, limit: usize) -> Result<Vec<Value>> {
-        Ok(self.call("shrugg_getCommitments", json!([from, limit]))?.as_array().cloned().unwrap_or_default())
+        Ok(self.call("rand_getCommitments", json!([from, limit]))?.as_array().cloned().unwrap_or_default())
     }
 
     pub fn nullifiers(&self, from_height: u64, limit: usize) -> Result<Vec<(u64, String)>> {
-        let rows = self.call("shrugg_getNullifiers", json!([from_height, limit]))?;
+        let rows = self.call("rand_getNullifiers", json!([from_height, limit]))?;
         rows.as_array()
             .cloned()
             .unwrap_or_default()
@@ -80,12 +80,12 @@ impl Rpc {
     }
 
     pub fn anchor(&self) -> Result<(u64, String)> {
-        let v = self.call("shrugg_getAnchor", json!([]))?;
+        let v = self.call("rand_getAnchor", json!([]))?;
         Ok((Self::u64_of(&v["height"])?, v["root"].as_str().unwrap_or("").to_string()))
     }
 
     pub fn witness(&self, index: u64) -> Result<(String, Vec<String>)> {
-        let v = self.call("shrugg_getWitness", json!([index]))?;
+        let v = self.call("rand_getWitness", json!([index]))?;
         if v.is_null() {
             return Err(format!("no leaf at index {index}"));
         }
@@ -99,7 +99,7 @@ impl Rpc {
     }
 
     pub fn send_transaction(&self, hex: &str) -> Result<String> {
-        self.call("shrugg_sendTransaction", json!([hex]))?
+        self.call("rand_sendTransaction", json!([hex]))?
             .as_str()
             .map(str::to_string)
             .ok_or_else(|| "node returned no transaction hash".into())
@@ -107,7 +107,7 @@ impl Rpc {
 
     /// `None` until committed.
     pub fn transaction_height(&self, hash: &str) -> Result<Option<u64>> {
-        let v = self.call("shrugg_getTransaction", json!([hash]))?;
+        let v = self.call("rand_getTransaction", json!([hash]))?;
         if v.is_null() {
             return Ok(None);
         }
@@ -115,18 +115,18 @@ impl Rpc {
     }
 
     pub fn mint(&self, address: &str) -> Result<String> {
-        self.call("shrugg_mint", json!([address]))?
+        self.call("rand_mint", json!([address]))?
             .as_str()
             .map(str::to_string)
             .ok_or_else(|| "faucet returned no transaction hash".into())
     }
 
     pub fn bridge_enabled(&self) -> Result<bool> {
-        Ok(self.call("shrugg_getBridgeState", json!([]))?["enabled"].as_bool().unwrap_or(false))
+        Ok(self.call("rand_getBridgeState", json!([]))?["enabled"].as_bool().unwrap_or(false))
     }
 
     pub fn block_actions(&self, height: u64) -> Result<Vec<Value>> {
-        let b = self.call("shrugg_getBlockByHeight", json!([height]))?;
+        let b = self.call("rand_getBlockByHeight", json!([height]))?;
         Ok(b["transactions"]
             .as_array()
             .cloned()

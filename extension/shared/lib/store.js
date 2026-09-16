@@ -5,7 +5,7 @@ import { ext } from './browser.js';
 
 export const DEFAULTS = Object.freeze({
   rpcUrl: 'https://rpc.randprotocol.org',
-  chainId: 8,
+  chainId: 10,
   autoLockMin: 15,
   theme: 'system', // system | dark | light
   explorerUrl: 'https://randscan.org',

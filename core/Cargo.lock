@@ -416,6 +416,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "evm-core"
+version = "0.1.0"
+
+[[package]]
 name = "ff"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1234,6 +1238,56 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
+name = "randprotocol-core"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "blake3",
+ "bridge-codec",
+ "bs58",
+ "crystals-dilithium",
+ "hex",
+ "k256",
+ "rand 0.8.8",
+ "serde",
+ "serde_json",
+ "sha3 0.10.9",
+ "thiserror 2.0.20",
+ "tracing",
+ "zeroize",
+]
+
+[[package]]
+name = "randprotocol-zkvm"
+version = "0.1.0"
+dependencies = [
+ "chacha20poly1305",
+ "evm-core",
+ "ml-kem",
+ "p3-air",
+ "p3-batch-stark",
+ "p3-challenger",
+ "p3-commit",
+ "p3-dft",
+ "p3-field",
+ "p3-fri",
+ "p3-goldilocks",
+ "p3-keccak",
+ "p3-lookup",
+ "p3-matrix",
+ "p3-merkle-tree",
+ "p3-poseidon2",
+ "p3-symmetric",
+ "p3-uni-stark",
+ "postcard",
+ "rand 0.10.2",
+ "randprotocol-core",
+ "sbpf-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rfc6979"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1266,6 +1320,10 @@ checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
 dependencies = [
  "winapi-util",
 ]
+
+[[package]]
+name = "sbpf-core"
+version = "0.1.0"
 
 [[package]]
 name = "scopeguard"
@@ -1372,54 +1430,6 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
-
-[[package]]
-name = "shrugg-core"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "blake3",
- "bridge-codec",
- "bs58",
- "crystals-dilithium",
- "hex",
- "k256",
- "rand 0.8.8",
- "serde",
- "serde_json",
- "sha3 0.10.9",
- "thiserror 2.0.20",
- "tracing",
- "zeroize",
-]
-
-[[package]]
-name = "shrugg-zkvm"
-version = "0.1.0"
-dependencies = [
- "chacha20poly1305",
- "ml-kem",
- "p3-air",
- "p3-batch-stark",
- "p3-challenger",
- "p3-commit",
- "p3-dft",
- "p3-field",
- "p3-fri",
- "p3-goldilocks",
- "p3-keccak",
- "p3-lookup",
- "p3-matrix",
- "p3-merkle-tree",
- "p3-poseidon2",
- "p3-symmetric",
- "p3-uni-stark",
- "postcard",
- "rand 0.10.2",
- "serde",
- "serde_json",
- "shrugg-core",
-]
 
 [[package]]
 name = "signature"
@@ -1650,10 +1660,10 @@ dependencies = [
  "getrandom 0.2.17",
  "getrandom 0.4.3",
  "hex",
+ "randprotocol-core",
+ "randprotocol-zkvm",
  "serde",
  "serde_json",
- "shrugg-core",
- "shrugg-zkvm",
 ]
 
 [[package]]

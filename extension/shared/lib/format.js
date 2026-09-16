@@ -1,4 +1,4 @@
-// Amount and text formatting. Units are decimal strings (1 SHRUGG = 10^9 units) and are handled
+// Amount and text formatting. Units are decimal strings (1 RAND = 10^9 units) and are handled
 // as BigInt: a balance can exceed 2^53.
 export const UNITS = 1_000_000_000n;
 

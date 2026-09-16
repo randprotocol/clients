@@ -106,7 +106,7 @@ function viewWelcome() {
   return `<div class="screen"><div class="scroll"><div class="welcome">
     <img src="${ICON}" alt="">
     <h1>Rand Wallet</h1>
-    <p>A shielded wallet for SHRUGG. Your balance and your transfers are visible only to you — and to whoever you hand a viewing key.</p>
+    <p>A shielded wallet for RAND. Your balance and your transfers are visible only to you — and to whoever you hand a viewing key.</p>
     <div class="stack">
       <button class="btn primary" data-app="create">Create a new wallet</button>
       <button class="btn" data-app="import">I already have a wallet</button>
@@ -181,7 +181,7 @@ async function viewHome(wallet) {
     <div class="scroll">
       <div class="balance-card">
         <div class="label">Balance</div>
-        <div class="amount">${h(formatUnits(bal, 4))}<small>SHRUGG</small></div>
+        <div class="amount">${h(formatUnits(bal, 4))}<small>RAND</small></div>
         <div class="sync">${sync}${pendingSum > 0n ? ` · ${h(formatUnits(pendingSum, 4))} pending` : ''}</div>
       </div>
       <div style="text-align:center"><button class="address-chip" data-copy="${h(wallet.address)}" data-copy-label="Address copied" title="Copy address">${h(shortAddress(wallet.address))} ⧉</button></div>
@@ -195,7 +195,7 @@ async function viewHome(wallet) {
         <button class="btn ghost small" data-action="sync" ${state.syncing ? 'disabled' : ''}>${state.syncing ? 'Syncing…' : 'Refresh'}</button>
       </div>
       ${state.error ? `<p class="error">${h(state.error)}</p>` : ''}
-      <div class="list">${rows.length ? rows.map(activityRow).join('') : `<div class="empty">No activity yet. Ask the faucet for testnet SHRUGG, or receive a payment.</div>`}</div>
+      <div class="list">${rows.length ? rows.map(activityRow).join('') : `<div class="empty">No activity yet. Ask the faucet for testnet RAND, or receive a payment.</div>`}</div>
     </div></div>`;
 }
 
@@ -219,7 +219,7 @@ async function viewNote(indexStr) {
   if (!n) return errorScreen('Unknown note');
   const settings = await getSettings();
   return `<div class="screen">${topbar('Received note')}<div class="scroll"><div class="card">
-    <div class="kv"><span class="k">Amount</span><span class="v num">${h(formatUnits(n.amount))} SHRUGG</span></div>
+    <div class="kv"><span class="k">Amount</span><span class="v num">${h(formatUnits(n.amount))} RAND</span></div>
     <div class="kv"><span class="k">Status</span><span class="v">${n.pending != null ? 'held by a pending spend' : n.spent ? 'spent' : 'unspent'}</span></div>
     <div class="kv"><span class="k">From (pk)</span><span class="v mono">${h(n.from)}</span></div>
     <div class="kv"><span class="k">Leaf</span><span class="v">#${n.index} · height ${n.height}</span></div>
@@ -238,9 +238,9 @@ async function viewTx(hash) {
   if (!s) return errorScreen('Unknown transaction');
   const isFaucet = s.kind === 'faucet';
   return `<div class="screen">${topbar(isFaucet ? 'Faucet' : 'Sent payment')}<div class="scroll"><div class="card">
-    <div class="kv"><span class="k">Amount</span><span class="v num">${h(formatUnits(s.amount))} SHRUGG</span></div>
+    <div class="kv"><span class="k">Amount</span><span class="v num">${h(formatUnits(s.amount))} RAND</span></div>
     <div class="kv"><span class="k">Status</span><span class="v">${h(s.status)}${s.height ? ` · height ${s.height}` : ''}</span></div>
-    ${isFaucet ? '' : `<div class="kv"><span class="k">Fee</span><span class="v num">${h(formatUnits(s.fee))} SHRUGG</span></div>
+    ${isFaucet ? '' : `<div class="kv"><span class="k">Fee</span><span class="v num">${h(formatUnits(s.fee))} RAND</span></div>
     <div class="kv"><span class="k">To</span><span class="v mono">${h(shortAddress(s.to, 16, 8))}</span></div>`}
     <div class="kv"><span class="k">Hash</span><span class="v mono">${h(s.hash)}</span></div>
     <div class="kv"><span class="k">Submitted</span><span class="v">${h(timeAgo(s.created_ms))}</span></div>
@@ -266,10 +266,10 @@ async function viewReceive(wallet) {
 async function viewFaucet(wallet) {
   const settings = await getSettings();
   return `<div class="screen">${topbar('Testnet faucet')}<div class="scroll"><div class="stack">
-    <div class="callout info">The faucet asks the node at <span class="mono">${h(settings.rpcUrl)}</span> to mint 100 SHRUGG into a note only this wallet can open. The amount is public in that one transaction, as any deposit is; what you do with it afterwards is not.</div>
+    <div class="callout info">The faucet asks the node at <span class="mono">${h(settings.rpcUrl)}</span> to mint 100 RAND into a note only this wallet can open. The amount is public in that one transaction, as any deposit is; what you do with it afterwards is not.</div>
     <p class="error" data-err></p>
     <p class="ok" data-ok></p>
-    <button class="btn primary" data-action="faucet" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Waiting for the mint…' : 'Request 100 SHRUGG'}</button>
+    <button class="btn primary" data-action="faucet" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Waiting for the mint…' : 'Request 100 RAND'}</button>
     <p class="hint">Only chains whose genesis enables the faucet answer, and only validator nodes sign mints.</p>
   </div></div></div>`;
 }
@@ -286,13 +286,13 @@ async function viewSend() {
     const amt = parseUnits(d.amount), fee = parseUnits(d.fee);
     return `<div class="screen">${topbar('Review', 'send')}<div class="scroll"><div class="stack">
       <div class="card">
-        <div class="kv"><span class="k">Send</span><span class="v num"><b>${h(formatUnits(amt))} SHRUGG</b></span></div>
-        <div class="kv"><span class="k">Fee</span><span class="v num">${h(formatUnits(fee))} SHRUGG</span></div>
-        <div class="kv"><span class="k">Total</span><span class="v num">${h(formatUnits(amt + fee))} SHRUGG</span></div>
+        <div class="kv"><span class="k">Send</span><span class="v num"><b>${h(formatUnits(amt))} RAND</b></span></div>
+        <div class="kv"><span class="k">Fee</span><span class="v num">${h(formatUnits(fee))} RAND</span></div>
+        <div class="kv"><span class="k">Total</span><span class="v num">${h(formatUnits(amt + fee))} RAND</span></div>
         <div class="kv"><span class="k">To</span><span class="v mono">${h(shortAddress(d.to, 18, 10))}</span></div>
       </div>
       <div class="callout">Proving takes a few minutes in the browser and runs in this tab. <b>Keep this tab open</b> until the transfer is submitted; the popup can be closed.</div>
-      <div class="callout danger"><b>Known limitation.</b> A bundle proof needs about 5.6 GB of memory, and a browser's WebAssembly runtime is capped at 4 GB, so today the proof stops with an out-of-memory error before it finishes. Until the prover's memory use drops, send from the shrugg command-line wallet with the key file from Settings › Backup. Everything else here — receiving, scanning, the faucet, viewing keys — works.</div>
+      <div class="callout danger"><b>Known limitation.</b> A bundle proof needs about 5.6 GB of memory, and a browser's WebAssembly runtime is capped at 4 GB, so today the proof stops with an out-of-memory error before it finishes. Until the prover's memory use drops, send from the rand command-line wallet with the key file from Settings › Backup. Everything else here — receiving, scanning, the faucet, viewing keys — works.</div>
       <p class="error">${h(d.err)}</p>
       <button class="btn primary" data-action="confirm-send">Confirm and prove</button>
       <button class="btn ghost" data-action="edit-send">Edit</button>
@@ -300,10 +300,10 @@ async function viewSend() {
   }
   return `<div class="screen">${topbar('Send')}<div class="scroll">
     <form data-form="send" class="stack">
-      <div class="field"><label>Recipient address</label><textarea class="input" name="to" required placeholder="shrugg1…" autofocus>${h(d.to)}</textarea><span class="hint" data-to-hint></span></div>
-      <div class="field"><label>Amount (SHRUGG)</label><div class="row"><input class="input num" name="amount" inputmode="decimal" required placeholder="0.0" value="${h(d.amount)}"><button class="btn small" type="button" data-action="max">Max</button></div>
-        <span class="hint">Available: ${h(formatUnits(bal))} SHRUGG</span></div>
-      <div class="field"><label>Fee (SHRUGG)</label><input class="input num" name="fee" inputmode="decimal" value="${h(d.fee)}"><span class="hint">Floor 0.001 SHRUGG, paid to the block proposer.</span></div>
+      <div class="field"><label>Recipient address</label><textarea class="input" name="to" required placeholder="rand1…" autofocus>${h(d.to)}</textarea><span class="hint" data-to-hint></span></div>
+      <div class="field"><label>Amount (RAND)</label><div class="row"><input class="input num" name="amount" inputmode="decimal" required placeholder="0.0" value="${h(d.amount)}"><button class="btn small" type="button" data-action="max">Max</button></div>
+        <span class="hint">Available: ${h(formatUnits(bal))} RAND</span></div>
+      <div class="field"><label>Fee (RAND)</label><input class="input num" name="fee" inputmode="decimal" value="${h(d.fee)}"><span class="hint">Floor 0.001 RAND, paid to the block proposer.</span></div>
       <p class="error" data-err>${h(d.err)}</p>
       <button class="btn primary" type="submit">Review</button>
     </form></div></div>`;
@@ -341,7 +341,7 @@ async function viewSent(hash) {
   return `<div class="screen">${topbar('Sent', 'home')}<div class="scroll"><div class="prove">
     <div class="big-check">✓</div>
     <h2>${s?.status === 'committed' ? 'Transfer committed' : 'Transfer submitted'}</h2>
-    <p class="hint">${s ? `${h(formatUnits(s.amount))} SHRUGG to ${h(shortAddress(s.to, 12, 6))}${s.status === 'committed' ? '' : '. The node accepted it; it will be committed within a few blocks.'}` : ''}</p>
+    <p class="hint">${s ? `${h(formatUnits(s.amount))} RAND to ${h(shortAddress(s.to, 12, 6))}${s.status === 'committed' ? '' : '. The node accepted it; it will be committed within a few blocks.'}` : ''}</p>
     <div class="keybox" style="text-align:left">${h(hash)}</div>
     <div class="stack" style="margin-top:14px">
       <a class="btn" href="${h(settings.explorerUrl)}/transactions/${h(hash)}" target="_blank" rel="noopener">View on RandScan ↗</a>
@@ -372,7 +372,7 @@ async function viewSettings(wallet) {
     </div>
     <div class="card stack">
       <b>Backup</b>
-      <p class="hint">The spend key is the wallet. Export it to move to another device or to the shrugg command-line wallet.</p>
+      <p class="hint">The spend key is the wallet. Export it to move to another device or to the rand command-line wallet.</p>
       <button class="btn" data-app="export">Export spend key / key file</button>
     </div>
     <form data-form="prefs" class="card stack">
@@ -407,7 +407,7 @@ async function viewExport(unlocked) {
   return `<div class="screen">${topbar('Export', 'settings')}<div class="scroll"><div class="stack">
     <div class="callout danger"><b>Anyone with the spend key can spend your notes.</b> Do not paste it into a website or a chat. RandScan only ever needs the viewing key.</div>
     <div class="field"><label>Spend key</label><div class="keybox">${h(info.spend_key)}</div><button class="btn" data-copy="${h(info.spend_key)}" data-copy-label="Spend key copied">Copy spend key</button></div>
-    <div class="field"><label>wallet.key.json (for the shrugg CLI)</label><div class="keybox">${h(info.key_file)}</div><button class="btn" data-copy="${h(info.key_file)}" data-copy-label="Key file copied">Copy key file</button></div>
+    <div class="field"><label>wallet.key.json (for the rand CLI)</label><div class="keybox">${h(info.key_file)}</div><button class="btn" data-copy="${h(info.key_file)}" data-copy-label="Key file copied">Copy key file</button></div>
   </div></div></div>`;
 }
 
@@ -495,7 +495,7 @@ async function onSubmit(e) {
         let amt, fee;
         try { amt = parseUnits(f.amount); fee = parseUnits(f.fee); } catch (x) { return setErr('Amount: ' + x.message); }
         if (amt <= 0n) return setErr('Amount must be greater than zero');
-        if (fee < BUNDLE_BASE) return setErr('Fee is below the floor of 0.001 SHRUGG');
+        if (fee < BUNDLE_BASE) return setErr('Fee is below the floor of 0.001 RAND');
         const store = await getNoteStore();
         if (amt + fee > balanceOf(store)) return setErr('Amount plus fee exceeds your balance');
         sendDraft = { to: f.to.trim(), amount: f.amount, fee: f.fee, review: true, err: '' };
@@ -564,7 +564,7 @@ async function doSend() {
  * of the 4 GB a browser gives WebAssembly; say what happened instead of echoing the runtime. */
 function explainProvingError(msg) {
   if (/unreachable|out of memory|allocation|worker failed|memory access/i.test(msg || '')) {
-    return 'The proof ran out of memory: a bundle proof needs about 5.6 GB and the browser gives WebAssembly at most 4 GB. Your notes are untouched. Send from the shrugg command-line wallet (export the key file under Settings › Backup) until the prover fits in a browser.';
+    return 'The proof ran out of memory: a bundle proof needs about 5.6 GB and the browser gives WebAssembly at most 4 GB. Your notes are untouched. Send from the rand command-line wallet (export the key file under Settings › Backup) until the prover fits in a browser.';
   }
   return msg;
 }
@@ -575,7 +575,7 @@ async function doFaucet() {
   state.busy = true; await render();
   try {
     const hash = await faucet(u.spend_key, w.address);
-    state.busy = false; toast('Minted 100 SHRUGG');
+    state.busy = false; toast('Minted 100 RAND');
     go('tx/' + hash);
   } catch (e) { state.busy = false; await render(); root.querySelector('[data-err]').textContent = e.message; }
 }

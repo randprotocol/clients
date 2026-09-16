@@ -5,7 +5,7 @@ this session unattended, so the assumptions are stated rather than asked.
 
 ## 1. Goal
 
-Four lightweight wallets for the Rand Protocol SHRUGG chain, one per platform, each store-ready:
+Four lightweight wallets for the Rand Protocol RAND chain, one per platform, each store-ready:
 
 | client | language | ships as |
 |---|---|---|
@@ -15,7 +15,7 @@ Four lightweight wallets for the Rand Protocol SHRUGG chain, one per platform, e
 | Firefox | JavaScript (MV3) | a zip for addons.mozilla.org |
 
 Every client: an interface close to Phantom (balance card, Receive / Send / Faucet, activity
-list, lock screen), generates wallets (spend key, viewing key, `shrugg1…` address), signs —
+list, lock screen), generates wallets (spend key, viewing key, `rand1…` address), signs —
 which on this chain means *proves* — transfers, and hands the user the keys randscan.org needs
 to open confidential transactions (the party viewing key, and a per-transaction key per
 payment). The downloads are published at `https://randprotocol.org/clients`.
@@ -31,7 +31,7 @@ the proof Plonky3 — none of which exist as Swift, Java or JavaScript libraries
 re-implementation would have to be byte-identical to the node's or every transfer is refused.
 
 **Ruling: one Rust core, wrapped per platform.** `core/` vendors the fullnode's own crates
-(`shrugg-core`, `shrugg-zkvm`) at the chain 8 commit as a git submodule and exposes them through a
+(`randprotocol-core`, `randprotocol-zkvm`) at the chain 8 commit as a git submodule and exposes them through a
 single JSON entry point, `call(method, params) -> reply`. iOS links it as an XCFramework (C ABI),
 Android as a `.so` (JNI), the extensions as WebAssembly. The Swift, Java and JavaScript that the
 user asked for is the whole client above that line: the JSON-RPC client, the note store, the
@@ -56,7 +56,7 @@ the chain bit for bit.
    one payment).
 4. **Scope of actions.** Transfers and the testnet faucet. Bridge deposits are recognised when
    scanning (the deposit-rebuild path) so bridged notes show up, but bridge burns, staking,
-   deploys and confidential calls stay in the `shrugg` CLI. A client that tried to be the CLI would
+   deploys and confidential calls stay in the `rand` CLI. A client that tried to be the CLI would
    not be lightweight.
 5. **Desktop.** `linux/`, `macosx/`, `windows/` exist in the repo but were not asked for here;
    they hold a README pointing at the CLI.
@@ -69,11 +69,11 @@ clients/
     vendor/fullnode          git submodule @ 03c9fb9 (chain 8)
     vendor/circuits/…        a stub manifest for the zkVM's optional GPU dependency
     crates/wallet-core       the library: keys, scanning, selection, proving, JSON dispatch
-    crates/wallet-ffi        C ABI (iOS) + JNI (Android); lib name shrugg_wallet
+    crates/wallet-ffi        C ABI (iOS) + JNI (Android); lib name rand_wallet
     crates/wallet-wasm       wasm-bindgen `call()`
     scripts/build-{ios,android,wasm}.sh
   ios/                       xcodegen project → RandWallet.xcodeproj, SwiftUI, links the XCFramework
-  android/                   Gradle, Java, loads libshrugg_wallet.so
+  android/                   Gradle, Java, loads librand_wallet.so
   extension/shared/          the extension's code and assets (both browsers)
   chrome/  firefox/          manifest + packaging into dist/
   web/                       the /clients page for randprotocol.org (Astro), copied into that repo
@@ -91,7 +91,7 @@ Reply: `{"ok":true,"value":…}` or `{"ok":false,"error":"…"}`. Methods (`wall
 | `wallet_info` | `{spend_key}` | same |
 | `import_key` | `{input}` (64 hex or a `wallet.key.json`) | same |
 | `parse_address` | `{address}` | `{valid, pk, error}` |
-| `scan_page` | `{spend_key, rows}` (`shrugg_getCommitments` rows) | `{received: [OwnedNote], sent: [SentRow], next_index, rows}` |
+| `scan_page` | `{spend_key, rows}` (`rand_getCommitments` rows) | `{received: [OwnedNote], sent: [SentRow], next_index, rows}` |
 | `rebuilt_deposit` | `{spend_key, action}` (a `bridge_attest` action) | OwnedNote (index unknown) or null |
 | `pending_cleared` | `{note, read_through}` | bool |
 | `select_inputs` | `{notes, asset?, need}` | `{chosen, need, change}` or an error naming why |
@@ -105,15 +105,15 @@ height, spent, pending (u32|null)}`. Amounts are strings everywhere: units excee
 ### 3.2 What every client implements in its own language
 
 - **RPC client**: one `POST` of `{"jsonrpc":"2.0","id":1,"method","params"}`; methods used:
-  `shrugg_chainId`, `shrugg_status`, `shrugg_getHead`, `shrugg_getTreeInfo`,
-  `shrugg_getCommitments(from, 500)`, `shrugg_getNullifiers(from_height, 500)`,
-  `shrugg_getAnchor()`, `shrugg_getWitness(index)`, `shrugg_sendTransaction(hex)`,
-  `shrugg_getTransaction(hash)`, `shrugg_mint(address)`, `shrugg_getBlockByHeight(h)` (deposit
-  rebuild), `shrugg_getBridgeState`.
+  `rand_chainId`, `rand_status`, `rand_getHead`, `rand_getTreeInfo`,
+  `rand_getCommitments(from, 500)`, `rand_getNullifiers(from_height, 500)`,
+  `rand_getAnchor()`, `rand_getWitness(index)`, `rand_sendTransaction(hex)`,
+  `rand_getTransaction(hash)`, `rand_mint(address)`, `rand_getBlockByHeight(h)` (deposit
+  rebuild), `rand_getBridgeState`.
 - **Note store** (persisted JSON): `scanned_index`, `scanned_height`, `scanned_attest_height`,
   `notes: [OwnedNote]`, `sent: [SentRow]`, `submissions: [{hash, time, amount, to, fee, tx_key,
   status}]`.
-- **Scan** (mirrors `shrugg_client::wallet::scan`): page commitments from `scanned_index` →
+- **Scan** (mirrors `randprotocol_client::wallet::scan`): page commitments from `scanned_index` →
   `scan_page` → merge by leaf index; read `getHead` *before* paging nullifiers; page nullifiers
   from `scanned_height`, mark `spent`; `scanned_height = max(paged_to, head_before + 1)`; clear
   pending via `pending_cleared(note, scanned_height - 1)`. Balance = Σ amount of notes with
@@ -123,7 +123,7 @@ height, spent, pending (u32|null)}`. Amounts are strings everywhere: units excee
   `prove_transfer` on a background thread/worker → `sendTransaction` → mark inputs `pending =
   time` → poll `getTransaction` (until committed, ≤ 180 s) → rescan. Store the payment's
   `tx_keys[0]` with the submission so the user can disclose that one payment later.
-- **Faucet**: `shrugg_mint(address)`; then poll and rescan.
+- **Faucet**: `rand_mint(address)`; then poll and rescan.
 - **Key storage**: the spend key only, in the platform's secure store (§4). Never the viewing key
   (derived on demand), never in logs, never in a request.
 
@@ -166,7 +166,7 @@ Screens, in the order a user meets them:
 1. **Welcome** — "Create a new wallet" (primary) / "I already have a wallet" (import 64-hex or a
    `wallet.key.json`). Creating shows the spend key once with a "I have saved it" checkbox.
 2. **Lock** — biometric / password.
-3. **Home** — gradient balance card (`12.5 SHRUGG`, sync status line), address chip (first 10 and
+3. **Home** — gradient balance card (`12.5 RAND`, sync status line), address chip (first 10 and
    last 6 characters, tap to copy, QR icon → Receive), three round actions **Receive · Send ·
    Faucet**, then **Activity** (received / sent / pending rows with amount, height, relative time).
    Pull to refresh = scan.
@@ -209,7 +209,7 @@ Screens, in the order a user meets them:
   test FRI profile.
 - Each client: a unit test of its note-store merge and pending logic against fixtures produced by
   the core, and a smoke test of the FFI (`version` and `keygen` round trip).
-- Manual: against a local `shrugg-node` with faucet on (`scripts/local-testnet.sh` in the
+- Manual: against a local `rand-node` with faucet on (`scripts/local-testnet.sh` in the
   fullnode), documented in each client's README.
 
 ## 8. Finding during implementation: prover memory (2026-09-13)

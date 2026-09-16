@@ -1,12 +1,12 @@
 # Rand Wallet for iOS
 
 SwiftUI, iOS 16+, bundle id `org.randprotocol.wallet`. The chain cryptography (keys, envelopes,
-the bundle proof) is the Rust core in `../core`, linked as `Frameworks/ShruggWalletCore.xcframework`;
+the bundle proof) is the Rust core in `../core`, linked as `Frameworks/RandWalletCore.xcframework`;
 everything else in this directory is Swift.
 
 ```
 RandWallet/
-  Core/        ShruggCore (the one FFI call), Models (the core's JSON shapes), Amount
+  Core/        RandCore (the one FFI call), Models (the core's JSON shapes), Amount
   Network/     RpcClient — JSON-RPC 2.0 over URLSession
   Storage/     NoteStore (Application Support, complete file protection), Keychain, Settings
   Services/    WalletService (scan / send / faucet), AuthService (lock, Face ID)
@@ -17,7 +17,7 @@ RandWalletTests/   NoteStore logic and an FFI smoke test
 ## Build and run
 
 ```bash
-../core/scripts/build-ios.sh          # device + simulator slices → Frameworks/ShruggWalletCore.xcframework
+../core/scripts/build-ios.sh          # device + simulator slices → Frameworks/RandWalletCore.xcframework
 open RandWallet.xcodeproj             # or:
 xcodebuild -project RandWallet.xcodeproj -scheme RandWallet \
   -destination 'platform=iOS Simulator,name=iPhone 17' build
@@ -28,7 +28,7 @@ xcodebuild -project RandWallet.xcodeproj -scheme RandWallet \
 `RandWallet.xcodeproj` is generated from `project.yml` by [xcodegen](https://github.com/yonaskolb/XcodeGen)
 and committed; after editing `project.yml`, run `xcodegen generate`.
 
-The app talks to a `shrugg-node` JSON-RPC endpoint (Settings → Network). The default,
+The app talks to a `rand-node` JSON-RPC endpoint (Settings → Network). The default,
 `https://rpc.randprotocol.org`, has to be stood up by the operators (see the repository README);
 on the simulator a local node at `http://127.0.0.1:8545` works directly, and an SSH tunnel to a
 testnet droplet works the same way.

@@ -1,4 +1,4 @@
-# The JNI entry point is resolved by name from libshrugg_wallet.so.
+# The JNI entry point is resolved by name from librand_wallet.so.
 -keep class org.randprotocol.wallet.core.NativeCore { *; }
 -keepclasseswithmembernames class * { native <methods>; }
 

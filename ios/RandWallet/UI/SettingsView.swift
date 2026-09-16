@@ -42,7 +42,7 @@ struct SettingsView: View {
                     Button("Show spend key") { Task { await reveal(title: "Spend key", value: wallet.exportSpendKey()) } }
                         .foregroundColor(Theme.negative)
                 } header: { Text("Backup") } footer: {
-                    Text("The spend key is the wallet. Anyone who sees it can spend your SHRUGG. The key file is what the shrugg command-line wallet reads.")
+                    Text("The spend key is the wallet. Anyone who sees it can spend your RAND. The key file is what the rand command-line wallet reads.")
                 }
 
                 Section("Security") {
@@ -69,9 +69,9 @@ struct SettingsView: View {
 
                 Section("About") {
                     row("App", Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
-                    row("Core", ShruggCore.version)
-                    row("Chain build", (try? ShruggCore.constants())?.chainBuild ?? "")
-                    row("Fee floor", "\(Amount.format((try? ShruggCore.constants())?.bundleBaseFee ?? "0")) SHRUGG")
+                    row("Core", RandCore.version)
+                    row("Chain build", (try? RandCore.constants())?.chainBuild ?? "")
+                    row("Fee floor", "\(Amount.format((try? RandCore.constants())?.bundleBaseFee ?? "0")) RAND")
                     Link("Rand Protocol", destination: URL(string: "https://randprotocol.org/clients")!)
                 }
             }

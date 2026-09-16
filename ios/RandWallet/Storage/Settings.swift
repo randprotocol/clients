@@ -24,7 +24,7 @@ final class Settings: ObservableObject {
     @Published var hasBackedUpKey: Bool { didSet { defaults.set(hasBackedUpKey, forKey: "hasBackedUpKey") } }
 
     init() {
-        let core = try? ShruggCore.constants()
+        let core = try? RandCore.constants()
         rpcUrl = defaults.string(forKey: "rpcUrl") ?? core?.defaultRpcUrl ?? "https://rpc.randprotocol.org"
         chainId = defaults.object(forKey: "chainId") as? Int ?? Int(core?.defaultChainId ?? 8)
         autoLockMinutes = defaults.object(forKey: "autoLockMinutes") as? Int ?? 15

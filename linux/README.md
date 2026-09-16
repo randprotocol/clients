@@ -9,4 +9,4 @@ desktop/scripts/build-linux.sh                                    # package for 
 ```
 
 For every chain action the desktop app does not offer (bridge burns, staking, deploys and
-confidential calls), use the `shrugg` command-line wallet from the fullnode repository.
+confidential calls), use the `rand` command-line wallet from the fullnode repository.

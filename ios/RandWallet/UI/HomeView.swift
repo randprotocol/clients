@@ -62,10 +62,10 @@ struct HomeView: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(Amount.format(wallet.balance)).font(.balance).foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.5)
-                Text("SHRUGG").font(.system(size: 15, weight: .semibold)).foregroundColor(.white.opacity(0.85))
+                Text("RAND").font(.system(size: 15, weight: .semibold)).foregroundColor(.white.opacity(0.85))
             }
             if wallet.store.pendingOut > 0 {
-                Text("\(Amount.format(wallet.store.pendingOut)) SHRUGG pending").font(.caption12).foregroundColor(.white.opacity(0.8))
+                Text("\(Amount.format(wallet.store.pendingOut)) RAND pending").font(.caption12).foregroundColor(.white.opacity(0.8))
             }
             Button {
                 UIPasteboard.general.string = wallet.address
@@ -106,7 +106,7 @@ struct HomeView: View {
 
     private func faucet() async {
         faucetBusy = true
-        faucetMessage = "Asking the faucet for 100 SHRUGG…"
+        faucetMessage = "Asking the faucet for 100 RAND…"
         defer { faucetBusy = false }
         do {
             let hash = try await wallet.faucet()
@@ -157,7 +157,7 @@ struct ActivityList: View {
             SectionLabel(text: "Activity")
             if items.isEmpty {
                 Card {
-                    Text("No activity yet. Tap Faucet to get 100 testnet SHRUGG, or share your address to receive.")
+                    Text("No activity yet. Tap Faucet to get 100 testnet RAND, or share your address to receive.")
                         .font(.system(size: 14)).foregroundColor(Theme.textSoft)
                 }
             }

@@ -125,7 +125,7 @@ impl Ctx<'_> {
         (self.emit)(Event::Phase(p));
     }
 
-    /// Mirrors `shrugg_client::wallet::scan`: rebuilt bridge deposits, then every unseen leaf
+    /// Mirrors `randprotocol_client::wallet::scan`: rebuilt bridge deposits, then every unseen leaf
     /// through the core's trial decryption, then the nullifier set, then pending bookkeeping.
     fn scan(&self, w: &Wallet) -> Result<(), String> {
         self.phase(Phase::Syncing);

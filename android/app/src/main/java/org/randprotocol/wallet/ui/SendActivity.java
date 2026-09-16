@@ -50,7 +50,7 @@ public class SendActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         b = ActivitySendBinding.inflate(getLayoutInflater());
         setContentView(b.getRoot());
-        b.fee.setText(Amounts.format(fee) + " SHRUGG");
+        b.fee.setText(Amounts.format(fee) + " RAND");
         b.paste.setOnClickListener(v -> {
             ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             ClipData clip = cm.getPrimaryClip();
@@ -105,10 +105,10 @@ public class SendActivity extends BaseActivity {
             b.reviewError.setText(e.getMessage());
             b.confirm.setEnabled(false);
         }
-        b.rAmount.setText(Amounts.format(amount) + " SHRUGG");
+        b.rAmount.setText(Amounts.format(amount) + " RAND");
         b.rTo.setText(to);
-        b.rFee.setText(Amounts.format(fee) + " SHRUGG");
-        b.rTotal.setText(Amounts.format(amount.add(fee)) + " SHRUGG");
+        b.rFee.setText(Amounts.format(fee) + " RAND");
+        b.rTotal.setText(Amounts.format(amount.add(fee)) + " RAND");
         showMemoryWarning();
         b.flipper.setDisplayedChild(REVIEW);
     }
@@ -159,7 +159,7 @@ public class SendActivity extends BaseActivity {
                 b.flipper.setDisplayedChild(RESULT);
                 b.resultIcon.setImageResource(R.drawable.ic_check);
                 b.resultTitle.setText(R.string.sent_title);
-                b.resultAmount.setText("−" + Amounts.format(s.amount) + " SHRUGG");
+                b.resultAmount.setText("−" + Amounts.format(s.amount) + " RAND");
                 b.resultMessage.setText(s.message);
                 b.resultHash.setText(s.hash);
                 b.resultDetails.setVisibility(View.VISIBLE);

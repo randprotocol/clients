@@ -24,8 +24,8 @@
 		7F51FCBEB896DBFE88FAC922 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 422B13542A6961C4E86C6C77 /* QRScannerView.swift */; };
 		8F6C36B95B6DDDCD64E799C2 /* SendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356ED987BBE644E0AA7E6C60 /* SendView.swift */; };
 		923296960E607F866AEE2A14 /* RpcClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 600C46C8B2B89650FE98BDFC /* RpcClient.swift */; };
-		9DF5E2575A60628DFE3C965C /* ShruggCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148A83BC220B2030E35B052B /* ShruggCore.swift */; };
-		C18FDEE41B6F72074A2D800D /* ShruggWalletCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67A9953A0114B490BF725B39 /* ShruggWalletCore.xcframework */; };
+		9DF5E2575A60628DFE3C965C /* RandCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 148A83BC220B2030E35B052B /* RandCore.swift */; };
+		C18FDEE41B6F72074A2D800D /* RandWalletCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 67A9953A0114B490BF725B39 /* RandWalletCore.xcframework */; };
 		CC2E8838F78355A6E1C149F7 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11EDD0B6F2E0ABC54D4BFED /* AuthService.swift */; };
 		CC5B54F04757CD85EAEDF97B /* WalletService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9480BB9E9D8F9C3D2AD31509 /* WalletService.swift */; };
 		E016AEDBB976EB8AD8BE1CBE /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 976224CCD1E531D92268C700 /* Keychain.swift */; };
@@ -47,7 +47,7 @@
 
 /* Begin PBXFileReference section */
 		0EE01B221B5970997D744292 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		148A83BC220B2030E35B052B /* ShruggCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShruggCore.swift; sourceTree = "<group>"; };
+		148A83BC220B2030E35B052B /* RandCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandCore.swift; sourceTree = "<group>"; };
 		183284CD1DA185232100F09D /* NoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStore.swift; sourceTree = "<group>"; };
 		2D2DD8768BEDCFD16439F3C8 /* RandWalletApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandWalletApp.swift; sourceTree = "<group>"; };
 		356ED987BBE644E0AA7E6C60 /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
@@ -59,7 +59,7 @@
 		600C46C8B2B89650FE98BDFC /* RpcClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RpcClient.swift; sourceTree = "<group>"; };
 		60F34ABC176D8FF75D6013F8 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		676FE17810EFAC969314E1CB /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
-		67A9953A0114B490BF725B39 /* ShruggWalletCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = ShruggWalletCore.xcframework; path = Frameworks/ShruggWalletCore.xcframework; sourceTree = "<group>"; };
+		67A9953A0114B490BF725B39 /* RandWalletCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = RandWalletCore.xcframework; path = Frameworks/RandWalletCore.xcframework; sourceTree = "<group>"; };
 		6F81980ED99AC808A372C7D3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		8548109BF97F5DB7DB99F6CE /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		859D1BB14A8B8B0751915C9E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -82,7 +82,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C18FDEE41B6F72074A2D800D /* ShruggWalletCore.xcframework in Frameworks */,
+				C18FDEE41B6F72074A2D800D /* RandWalletCore.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -103,7 +103,7 @@
 			children = (
 				DE7B6AB7687B725C159B84EF /* Amount.swift */,
 				BA40E259F05440DD2DAE0A55 /* Models.swift */,
-				148A83BC220B2030E35B052B /* ShruggCore.swift */,
+				148A83BC220B2030E35B052B /* RandCore.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -145,7 +145,7 @@
 		B55B89E759D89F59F7A38E2D /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				67A9953A0114B490BF725B39 /* ShruggWalletCore.xcframework */,
+				67A9953A0114B490BF725B39 /* RandWalletCore.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -309,7 +309,7 @@
 				8F6C36B95B6DDDCD64E799C2 /* SendView.swift in Sources */,
 				3565A1CB00F34196A7E73AE8 /* Settings.swift in Sources */,
 				FE817779952D1666D69915AE /* SettingsView.swift in Sources */,
-				9DF5E2575A60628DFE3C965C /* ShruggCore.swift in Sources */,
+				9DF5E2575A60628DFE3C965C /* RandCore.swift in Sources */,
 				0EC3D5DBC6C8237CEAE39E80 /* Theme.swift in Sources */,
 				CC5B54F04757CD85EAEDF97B /* WalletService.swift in Sources */,
 				EF4A61C6A533C34F8AE93363 /* WelcomeView.swift in Sources */,

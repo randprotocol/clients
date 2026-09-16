@@ -2,18 +2,18 @@ package org.randprotocol.wallet.util;
 
 import java.math.BigInteger;
 
-/** SHRUGG amounts: 1 SHRUGG = 10^9 units, always carried as strings of units. */
+/** RAND amounts: 1 RAND = 10^9 units, always carried as strings of units. */
 public final class Amounts {
     private Amounts() {}
 
     public static final int DECIMALS = 9;
-    public static final BigInteger UNITS_PER_SHRUGG = BigInteger.TEN.pow(DECIMALS);
-    /** The bundle floor: the fee of a plain transfer, 0.001 SHRUGG. */
+    public static final BigInteger UNITS_PER_RAND = BigInteger.TEN.pow(DECIMALS);
+    /** The bundle floor: the fee of a plain transfer, 0.001 RAND. */
     public static final String BUNDLE_BASE_FEE = "1000000";
 
-    /** Units → decimal SHRUGG ("1.5", "0.000000001"), trailing zeros trimmed. */
+    /** Units → decimal RAND ("1.5", "0.000000001"), trailing zeros trimmed. */
     public static String format(BigInteger units) {
-        BigInteger[] qr = units.divideAndRemainder(UNITS_PER_SHRUGG);
+        BigInteger[] qr = units.divideAndRemainder(UNITS_PER_RAND);
         if (qr[1].signum() == 0) return qr[0].toString();
         String frac = String.format("%0" + DECIMALS + "d", qr[1].longValue());
         int end = frac.length();
@@ -29,7 +29,7 @@ public final class Amounts {
         }
     }
 
-    /** Decimal SHRUGG ("1.5", ".25") → units, or null for anything that is not an amount. */
+    /** Decimal RAND ("1.5", ".25") → units, or null for anything that is not an amount. */
     public static BigInteger parse(String text) {
         if (text == null) return null;
         String s = text.trim();
@@ -44,10 +44,10 @@ public final class Amounts {
         while (f.length() < DECIMALS) f.append('0');
         BigInteger w = whole.isEmpty() ? BigInteger.ZERO : new BigInteger(whole);
         BigInteger fr = frac.isEmpty() ? BigInteger.ZERO : new BigInteger(f.toString());
-        return w.multiply(UNITS_PER_SHRUGG).add(fr);
+        return w.multiply(UNITS_PER_RAND).add(fr);
     }
 
-    /** "shrugg1abcdefghij…klmnop" for chips and rows. */
+    /** "rand1abcdefghij…klmnop" for chips and rows. */
     public static String shortAddress(String address) {
         if (address == null || address.length() <= 20) return address == null ? "" : address;
         return address.substring(0, 12) + "…" + address.substring(address.length() - 6);

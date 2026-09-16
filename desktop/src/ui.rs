@@ -134,7 +134,7 @@ fn welcome(app: &mut App, ui: &mut Ui) {
         ui.add_space(16.0);
         ui.label(RichText::new("Rand Wallet").size(30.0).strong().color(p.text_strong));
         ui.add_space(6.0);
-        ui.label(RichText::new("A shielded wallet for SHRUGG.\nYour balance and payments are private; the chain sees only proofs.").color(p.text_soft));
+        ui.label(RichText::new("A shielded wallet for RAND.\nYour balance and payments are private; the chain sees only proofs.").color(p.text_soft));
     });
     ui.add_space(60.0);
     if primary(ui, "Create a new wallet", true) {
@@ -158,7 +158,7 @@ fn welcome(app: &mut App, ui: &mut Ui) {
 fn create(app: &mut App, ui: &mut Ui) {
     let p = app.palette();
     ui.heading(RichText::new("Your secret key").color(p.text_strong));
-    ui.label(RichText::new("This 64-character spend key is the only copy of your wallet. Anyone who has it can spend your SHRUGG; anyone who loses it loses the wallet. Write it down and keep it offline.").color(p.text_soft));
+    ui.label(RichText::new("This 64-character spend key is the only copy of your wallet. Anyone who has it can spend your RAND; anyone who loses it loses the wallet. Write it down and keep it offline.").color(p.text_soft));
     let Some(info) = app.create_info.clone() else { return };
     card(ui, &p, |ui| {
         ui.add(egui::Label::new(RichText::new(&info.spend_key).monospace().color(p.text)).wrap());
@@ -177,7 +177,7 @@ fn import(app: &mut App, ui: &mut Ui) {
     let p = app.palette();
     back(app, ui, Screen::Welcome);
     ui.heading(RichText::new("Import a wallet").color(p.text_strong));
-    ui.label(RichText::new("Paste your 64-character spend key, or the contents of a wallet.key.json from the shrugg command-line wallet.").color(p.text_soft));
+    ui.label(RichText::new("Paste your 64-character spend key, or the contents of a wallet.key.json from the rand command-line wallet.").color(p.text_soft));
     ui.add(egui::TextEdit::multiline(&mut app.import_text).font(egui::TextStyle::Monospace).desired_rows(4).desired_width(f32::INFINITY));
     error(ui, &p, &app.last_error);
     if primary(ui, "Import", !app.import_text.trim().is_empty()) {
@@ -243,10 +243,10 @@ fn home(app: &mut App, ui: &mut Ui) {
             ui.label(RichText::new("Balance").small().color(Color32::from_white_alpha(200)));
             ui.horizontal(|ui| {
                 ui.label(RichText::new(amount::format(balance)).size(40.0).strong().color(Color32::WHITE));
-                ui.label(RichText::new("SHRUGG").strong().color(Color32::from_white_alpha(220)));
+                ui.label(RichText::new("RAND").strong().color(Color32::from_white_alpha(220)));
             });
             if pending > 0 {
-                ui.label(RichText::new(format!("{} SHRUGG pending", amount::format(pending))).small().color(Color32::from_white_alpha(200)));
+                ui.label(RichText::new(format!("{} RAND pending", amount::format(pending))).small().color(Color32::from_white_alpha(200)));
             }
             ui.horizontal(|ui| {
                 let just = app.copied_at.map(|t| t.elapsed().as_secs_f32() < 1.5).unwrap_or(false);
@@ -275,7 +275,7 @@ fn home(app: &mut App, ui: &mut Ui) {
             app.screen = Screen::Send;
         }
         if action(&mut cols[2], &p, "💧", "Faucet") {
-            app.notice = Some("Asking the faucet for 100 SHRUGG…".into());
+            app.notice = Some("Asking the faucet for 100 RAND…".into());
             app.syncing = true;
             app.job(Job::Faucet);
         }
@@ -294,7 +294,7 @@ fn home(app: &mut App, ui: &mut Ui) {
     let items = activity_items(app);
     if items.is_empty() {
         card(ui, &p, |ui| {
-            ui.label(RichText::new("No activity yet. Tap Faucet to get 100 testnet SHRUGG, or share your address to receive.").color(p.text_soft));
+            ui.label(RichText::new("No activity yet. Tap Faucet to get 100 testnet RAND, or share your address to receive.").color(p.text_soft));
         });
     }
     for item in items {
@@ -421,7 +421,7 @@ fn send_form(app: &mut App, ui: &mut Ui) {
     label(ui, &p, "To");
     let before = app.recipient.clone();
     ui.horizontal(|ui| {
-        ui.add(egui::TextEdit::singleline(&mut app.recipient).hint_text("shrugg1…").font(egui::TextStyle::Monospace).desired_width(ui.available_width() - 60.0));
+        ui.add(egui::TextEdit::singleline(&mut app.recipient).hint_text("rand1…").font(egui::TextStyle::Monospace).desired_width(ui.available_width() - 60.0));
         if small_button(ui, &p, "Paste") {
             if let Ok(mut cb) = arboard_paste() {
                 cb = cb.trim().to_string();
@@ -435,7 +435,7 @@ fn send_form(app: &mut App, ui: &mut Ui) {
     let trimmed = app.recipient.trim().to_string();
     if !trimmed.is_empty() {
         let info = wallet_core::parse_address(&trimmed);
-        app.address_error = if info.valid { None } else { Some(info.error.unwrap_or_else(|| "Not a shrugg1 address".into())) };
+        app.address_error = if info.valid { None } else { Some(info.error.unwrap_or_else(|| "Not a rand1 address".into())) };
     } else {
         app.address_error = None;
     }
@@ -454,8 +454,8 @@ fn send_form(app: &mut App, ui: &mut Ui) {
     ui.add(egui::TextEdit::singleline(&mut app.amount_text).hint_text("0.0").desired_width(f32::INFINITY));
     let units = amount::parse(&app.amount_text);
     ui.horizontal(|ui| {
-        muted(ui, &p, &format!("Available {} SHRUGG", amount::format(balance)));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| muted(ui, &p, &format!("Fee {} SHRUGG", amount::format(FEE))));
+        muted(ui, &p, &format!("Available {} RAND", amount::format(balance)));
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| muted(ui, &p, &format!("Fee {} RAND", amount::format(FEE))));
     });
     let over = units.map(|a| a.saturating_add(FEE) > balance).unwrap_or(false);
     if over {
@@ -481,9 +481,9 @@ fn review(app: &mut App, ui: &mut Ui) {
     let units = amount::parse(&app.amount_text).unwrap_or(0);
     let to = app.recipient.trim().to_string();
     card(ui, &p, |ui| {
-        row(ui, &p, "Amount", &format!("{} SHRUGG", amount::format(units)));
-        row(ui, &p, "Fee", &format!("{} SHRUGG", amount::format(FEE)));
-        row(ui, &p, "Total", &format!("{} SHRUGG", amount::format(units + FEE)));
+        row(ui, &p, "Amount", &format!("{} RAND", amount::format(units)));
+        row(ui, &p, "Fee", &format!("{} RAND", amount::format(FEE)));
+        row(ui, &p, "Total", &format!("{} RAND", amount::format(units + FEE)));
         ui.separator();
         ui.label(RichText::new("To").small().color(p.text_mute));
         ui.label(RichText::new(shortened(&to, 14, 8)).monospace().color(p.text));
@@ -526,7 +526,7 @@ fn sent(app: &mut App, ui: &mut Ui, o: &crate::engine::SendOutcome) {
         ui.add_space(20.0);
         ui.label(RichText::new("✓").size(56.0).color(p.positive));
         ui.heading(RichText::new(if o.committed_height.is_some() { "Sent" } else { "Submitted" }).color(p.text_strong));
-        ui.label(RichText::new(format!("{} SHRUGG", amount::format_str(&o.amount))).size(36.0).strong().color(p.text));
+        ui.label(RichText::new(format!("{} RAND", amount::format_str(&o.amount))).size(36.0).strong().color(p.text));
     });
     copy_row(app, ui, "Transaction", &o.hash, true);
     match o.committed_height {
@@ -570,7 +570,7 @@ fn detail(app: &mut App, ui: &mut Ui, item: &ActivityItem) {
     match item {
         ActivityItem::Received(n) => {
             ui.heading(RichText::new("Received").color(p.text_strong));
-            ui.label(RichText::new(format!("+{} SHRUGG", amount::format(n.units()))).size(32.0).strong().color(p.positive));
+            ui.label(RichText::new(format!("+{} RAND", amount::format(n.units()))).size(32.0).strong().color(p.positive));
             card(ui, &p, |ui| {
                 row(ui, &p, "Status", if n.spent { "Spent" } else if n.pending.is_some() { "Held by a pending send" } else { "Unspent" });
                 row(ui, &p, "Leaf", &format!("#{}", n.index));
@@ -588,7 +588,7 @@ fn detail(app: &mut App, ui: &mut Ui, item: &ActivityItem) {
         }
         ActivityItem::Sent(s) => {
             ui.heading(RichText::new("Sent").color(p.text_strong));
-            ui.label(RichText::new(format!("−{} SHRUGG", amount::format(s.units()))).size(32.0).strong().color(p.text));
+            ui.label(RichText::new(format!("−{} RAND", amount::format(s.units()))).size(32.0).strong().color(p.text));
             card(ui, &p, |ui| {
                 row(
                     ui,
@@ -603,7 +603,7 @@ fn detail(app: &mut App, ui: &mut Ui, item: &ActivityItem) {
                 if let Some(h) = s.height {
                     row(ui, &p, "Block", &h.to_string());
                 }
-                row(ui, &p, "Fee", &format!("{} SHRUGG", amount::format_str(&s.fee)));
+                row(ui, &p, "Fee", &format!("{} RAND", amount::format_str(&s.fee)));
             });
             copy_row(app, ui, "To", &s.to, true);
             copy_row(app, ui, "Transaction", &s.hash, true);
@@ -618,7 +618,7 @@ fn detail(app: &mut App, ui: &mut Ui, item: &ActivityItem) {
         }
         ActivityItem::SentRow(r) => {
             ui.heading(RichText::new("Sent").color(p.text_strong));
-            ui.label(RichText::new(format!("−{} SHRUGG", amount::format_str(&r.amount))).size(32.0).strong().color(p.text));
+            ui.label(RichText::new(format!("−{} RAND", amount::format_str(&r.amount))).size(32.0).strong().color(p.text));
             card(ui, &p, |ui| {
                 row(ui, &p, "Leaf", &format!("#{}", r.index));
                 row(ui, &p, "Block", &r.height.to_string());
@@ -675,7 +675,7 @@ fn settings(app: &mut App, ui: &mut Ui) {
 
     label(ui, &p, "Backup");
     card(ui, &p, |ui| {
-        ui.label(RichText::new(format!("The spend key is the wallet; it is stored in {}. Anyone who sees it can spend your SHRUGG. The key file is what the shrugg command-line wallet reads.", crate::secrets::location())).size(13.0).color(p.text_soft));
+        ui.label(RichText::new(format!("The spend key is the wallet; it is stored in {}. Anyone who sees it can spend your RAND. The key file is what the rand command-line wallet reads.", crate::secrets::location())).size(13.0).color(p.text_soft));
     });
     if let Some(info) = app.info.clone() {
         if secondary(ui, &p, "Export key file (wallet.key.json)") {

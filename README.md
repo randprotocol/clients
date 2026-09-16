@@ -1,7 +1,7 @@
 # Rand Wallet — lightweight clients
 
-Wallets for the Rand Protocol SHRUGG chain (the fully shielded pool served by
-[`shrugg-node`](https://github.com/randprotocol/fullnode)), one per platform, sharing one Rust core:
+Wallets for the Rand Protocol RAND chain (the fully shielded pool served by
+[`rand-node`](https://github.com/randprotocol/fullnode)), one per platform, sharing one Rust core:
 
 | client | language | directory | ships as |
 |---|---|---|---|
@@ -11,7 +11,7 @@ Wallets for the Rand Protocol SHRUGG chain (the fully shielded pool served by
 | Firefox | JavaScript, Manifest V3 | `firefox/` + `extension/` | addons.mozilla.org |
 | Windows, Linux, macOS | Rust (egui) | `desktop/` | .msi / tarball / .dmg |
 
-Every client creates a wallet (spend key → viewing key → `shrugg1…` address), scans the
+Every client creates a wallet (spend key → viewing key → `rand1…` address), scans the
 commitment tree for its own notes, proves and submits shielded transfers, asks the testnet
 faucet, and hands the user the viewing key and per-transaction keys that
 [randscan.org](https://randscan.org) opens confidential transactions with. Downloads are listed
@@ -25,8 +25,8 @@ Chain 8 has no accounts and no signatures: a transfer is a 2-in-2-out bundle aut
 STARK proof, keys are Poseidon2 hashes, envelopes are ML-KEM-768 + ChaCha20-Poly1305. Those
 primitives exist only in the fullnode's Rust crates, and a wallet that re-implemented them in
 Swift, Java or JavaScript would have to be byte-identical to the node or every transfer is
-refused. So `core/` vendors the fullnode crates at the chain 8 commit (`core/vendor/fullnode`,
-a submodule at `03c9fb9`) and exposes one JSON entry point, `call(method, params)`, that each
+refused. So `core/` vendors the fullnode crates at the chain 10 commit (`core/vendor/fullnode`,
+a submodule at `a00c88c`) and exposes one JSON entry point, `call(method, params)`, that each
 client wraps: an XCFramework on iOS, a `.so` on Android, WebAssembly in the browser. Everything
 above that line — the RPC client, note store, scan and send flow, key storage and the UI — is
 Swift, Java and JavaScript.
@@ -69,20 +69,20 @@ less than about 8 GB of RAM will have the app terminated mid-proof (the review s
 the device's numbers). Every other feature — creating and importing wallets, receiving,
 scanning, the faucet, activity, viewing keys and per-transaction keys for randscan.org — works
 on all four clients, and the whole send path is implemented and tested against the chain's own
-verifier in the core. The fix is in the prover (`shrugg-zkvm`: it materialises every table's
+verifier in the core. The fix is in the prover (`randprotocol-zkvm`: it materialises every table's
 low-degree extension at once); when its peak drops, update `PROVER_PEAK_MEMORY_BYTES` in
 `core/crates/wallet-core/src/lib.rs` and the two mirrored constants in the mobile apps, rebuild,
-and the Send flows light up unchanged. Until then, send from the `shrugg` command-line wallet
+and the Send flows light up unchanged. Until then, send from the `rand` command-line wallet
 using the key file every client exports.
 
 ## Build
 
 ```bash
-git submodule update --init                    # core/vendor/fullnode @ 03c9fb9
+git submodule update --init                    # core/vendor/fullnode @ a00c88c
 cd core && cargo test --release                # the core, including a real proof (~1 min)
 
 core/scripts/build-wasm.sh                     # → extension/shared/core/   (installs wasm-bindgen-cli)
-core/scripts/build-ios.sh                      # → ios/Frameworks/ShruggWalletCore.xcframework
+core/scripts/build-ios.sh                      # → ios/Frameworks/RandWalletCore.xcframework
 core/scripts/build-android.sh                  # → android/app/src/main/jniLibs/ (needs an NDK)
 ```
 

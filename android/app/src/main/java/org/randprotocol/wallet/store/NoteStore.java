@@ -22,8 +22,8 @@ import java.util.Set;
  * every note is recoverable by rescanning from leaf 0 with the spend key, which is why a missing
  * or unreadable file starts from empty rather than failing.
  *
- * <p>The merge and bookkeeping rules mirror the {@code shrugg} CLI's note store
- * ({@code crates/shrugg-client/src/wallet.rs}) and have no Android dependency, so they are unit
+ * <p>The merge and bookkeeping rules mirror the {@code rand} CLI's note store
+ * ({@code crates/randprotocol-client/src/wallet.rs}) and have no Android dependency, so they are unit
  * tested on the JVM.
  */
 public final class NoteStore {
@@ -181,7 +181,7 @@ public final class NoteStore {
 
     // ------------------------------------------------------------------ balances
 
-    /** Spendable SHRUGG in units. */
+    /** Spendable RAND in units. */
     public BigInteger balance() {
         return balanceOf(0);
     }

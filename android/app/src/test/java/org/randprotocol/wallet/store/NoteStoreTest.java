@@ -92,7 +92,7 @@ public class NoteStoreTest {
         sub.time = 10;
         sub.amount = "5";
         sub.fee = "1000000";
-        sub.to = "shrugg1x";
+        sub.to = "rand1x";
         sub.txKey = "cd".repeat(32);
         s.submissions.add(sub);
         s.clearPending(10 + NoteStore.TIME_WINDOW + 1);

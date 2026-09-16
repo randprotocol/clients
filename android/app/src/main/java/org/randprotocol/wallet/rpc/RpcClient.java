@@ -13,7 +13,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 /**
- * JSON-RPC 2.0 over HTTP to a shrugg-node (docs/rpc.md of the fullnode). One request per POST;
+ * JSON-RPC 2.0 over HTTP to a rand-node (docs/rpc.md of the fullnode). One request per POST;
  * every call is blocking and must run off the main thread.
  */
 public class RpcClient {
@@ -102,16 +102,16 @@ public class RpcClient {
     // ---- the methods the wallet uses ----
 
     public long chainId() throws RpcException {
-        return ((Number) call("shrugg_chainId", null)).longValue();
+        return ((Number) call("rand_chainId", null)).longValue();
     }
 
     public JSONObject status() throws RpcException {
-        return (JSONObject) call("shrugg_status", null);
+        return (JSONObject) call("rand_status", null);
     }
 
     /** {@code {height, hash, view}}. */
     public JSONObject head() throws RpcException {
-        return (JSONObject) call("shrugg_getHead", null);
+        return (JSONObject) call("rand_getHead", null);
     }
 
     public long headHeight() throws RpcException {
@@ -119,49 +119,49 @@ public class RpcClient {
     }
 
     public JSONObject treeInfo() throws RpcException {
-        return (JSONObject) call("shrugg_getTreeInfo", null);
+        return (JSONObject) call("rand_getTreeInfo", null);
     }
 
     public JSONArray commitments(long fromIndex, int limit) throws RpcException {
-        return (JSONArray) call("shrugg_getCommitments", args(fromIndex, limit));
+        return (JSONArray) call("rand_getCommitments", args(fromIndex, limit));
     }
 
     public JSONArray nullifiers(long fromHeight, int limit) throws RpcException {
-        return (JSONArray) call("shrugg_getNullifiers", args(fromHeight, limit));
+        return (JSONArray) call("rand_getNullifiers", args(fromHeight, limit));
     }
 
     /** {@code {height, root}} for the head. */
     public JSONObject anchor() throws RpcException {
-        return (JSONObject) call("shrugg_getAnchor", null);
+        return (JSONObject) call("rand_getAnchor", null);
     }
 
     /** {@code {index, root, path:[32]}} or null past the end of the tree. */
     public JSONObject witness(long index) throws RpcException {
-        Object v = call("shrugg_getWitness", args(index));
+        Object v = call("rand_getWitness", args(index));
         return v instanceof JSONObject ? (JSONObject) v : null;
     }
 
     public String sendTransaction(String txHex) throws RpcException {
-        return String.valueOf(call("shrugg_sendTransaction", args(txHex)));
+        return String.valueOf(call("rand_sendTransaction", args(txHex)));
     }
 
     /** Null until committed. */
     public JSONObject transaction(String hash) throws RpcException {
-        Object v = call("shrugg_getTransaction", args(hash));
+        Object v = call("rand_getTransaction", args(hash));
         return v instanceof JSONObject ? (JSONObject) v : null;
     }
 
     public String mint(String address) throws RpcException {
-        return String.valueOf(call("shrugg_mint", args(address)));
+        return String.valueOf(call("rand_mint", args(address)));
     }
 
     public JSONObject blockByHeight(long height) throws RpcException {
-        Object v = call("shrugg_getBlockByHeight", args(height));
+        Object v = call("rand_getBlockByHeight", args(height));
         return v instanceof JSONObject ? (JSONObject) v : null;
     }
 
     public JSONObject bridgeState() throws RpcException {
-        return (JSONObject) call("shrugg_getBridgeState", null);
+        return (JSONObject) call("rand_getBridgeState", null);
     }
 
     public String estimateBundleFee() throws RpcException {
@@ -170,6 +170,6 @@ public class RpcClient {
             spec.put("kind", "bundle");
         } catch (JSONException ignored) {
         }
-        return String.valueOf(call("shrugg_estimateFee", args(spec)));
+        return String.valueOf(call("rand_estimateFee", args(spec)));
     }
 }
