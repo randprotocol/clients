@@ -67,7 +67,7 @@ const does = [
     v: "On the testnet, one tap mints 100 RAND into a note only you can open.",
   },
   {
-    k: "Disclose on purpose",
+    k: "Disclose only what you choose",
     v: "Copy your viewing key and open My history on RandScan to see every note you sent or received, or copy one payment's transaction key to disclose exactly that payment and nothing else. Keys are pasted into the explorer, which decrypts in your browser and never sends them anywhere.",
   },
 ];
@@ -82,7 +82,7 @@ const notes = [
 
 <Layout
   title="Wallets — Rand Protocol"
-  description="Rand Wallet: a shielded wallet for RAND on iOS, Android, Chrome and Firefox. Creates a spend key and rand1 address, proves transfers on your device, asks the testnet faucet, and hands you the viewing keys RandScan opens confidential transactions with."
+  description="Rand Wallet: a shielded wallet for RAND on iOS, Android, Chrome and Firefox. Creates a spend key and rand1 address, proves transfers on your device, requests testnet RAND from the faucet, and gives you the viewing keys that let RandScan open confidential transactions for you."
   ogPath="/clients"
 >
   <section class="container-page pt-16 md:pt-24 pb-10">
@@ -94,10 +94,10 @@ const notes = [
           A shielded wallet for RAND, one for each platform. It creates a spend key and a
           <span class="font-mono text-[0.95em]">rand1…</span> address, finds your notes by
           scanning the chain with your own key, proves every transfer on the device you are
-          holding, asks the testnet faucet, and gives you the viewing key and per-transaction
-          keys that <a href={EXPLORER} class="underline decoration-[color:var(--color-border)] underline-offset-4 hover:decoration-current" target="_blank" rel="noopener noreferrer">randscan.org</a>
+          holding, requests funds from the testnet faucet, and gives you the viewing key and
+          per-transaction keys that <a href={EXPLORER} class="underline decoration-[color:var(--color-border)] underline-offset-4 hover:decoration-current" target="_blank" rel="noopener noreferrer">randscan.org</a>
           opens confidential transactions with. Nothing about your balance or your payments is
-          visible to anyone you have not handed a key to — the wallet included in that rule:
+          visible to anyone you have not handed a key to — and the wallet is no exception:
           it holds no account, only your notes.
         </p>
       </div>
@@ -233,7 +233,7 @@ git clone {REPO}.git && cd clients
 git submodule update --init                    <span class="text-[color:var(--color-text-mute)]"># core/vendor/fullnode @ a00c88c</span>
 cd core && cargo test --release && cd ..       <span class="text-[color:var(--color-text-mute)]"># the core, including a real proof (~1 min)</span>
 
-core/scripts/build-wasm.sh                     <span class="text-[color:var(--color-text-mute)]"># → extension/shared/core/   (needs wasm-pack)</span>
+core/scripts/build-wasm.sh                     <span class="text-[color:var(--color-text-mute)]"># → extension/shared/core/   (installs wasm-bindgen-cli)</span>
 core/scripts/build-ios.sh                      <span class="text-[color:var(--color-text-mute)]"># → ios/Frameworks/RandWalletCore.xcframework</span>
 core/scripts/build-android.sh                  <span class="text-[color:var(--color-text-mute)]"># → android/app/src/main/jniLibs/ (needs an NDK)</span>
 
