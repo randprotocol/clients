@@ -179,14 +179,15 @@ desktop build, `xcodebuild` and `gradlew assembleDebug` pass.
 
 ## 11. Amendment: the node is already RAND (supersedes §2's last bullet and §10's "Kept")
 
-Fullnode `main` (142e1f7, chain 10) carries upstream commit ed96c39, "rename: SHRUGG/SESH → RAND,
+Fullnode `main` (142e1f7) carries upstream commit ed96c39, "rename: SHRUGG/SESH → RAND,
 everywhere": crates `randprotocol-{core,zkvm,client,node,rvm}`, binary `rand-node`, RPC namespace
 `rand_`, address prefix `rand1`, new hash domains. The owner's instruction: no "shrugg" anywhere
 in this repository, in any case, including crate, file and directory names.
 
 So the submodule moves from `03c9fb9` to `main`, `wallet-core` is ported to the renamed crates,
 every client calls `rand_<method>` and validates `rand1…`, `RPC_NAMESPACE = "rand"`,
-`ADDRESS_HRP = "rand1"`, the default chain id is 10, and `core/scripts/check-rename.sh` allows
+`ADDRESS_HRP = "rand1"`, the default chain id is 13 (the testnet `deploy/README.md` names at that commit; chains 10–12
+were cut and retired between the rename and today), and `core/scripts/check-rename.sh` allows
 nothing (only the inline `rename-guard: allow` marker, and these design records, are exempt).
 Wherever §3–§9 write `shrugg_…` or `shrugg1…`, read `rand_…` and `rand1…`. Keys and addresses
 made on chain 8 do not carry over: the hash domains changed.

@@ -14,7 +14,7 @@
 
 - No chain crypto outside `wallet-core`; new behaviour is a new `dispatch` method.
 - `ui/` and the extension: vanilla ES modules, no bundler, no framework, no network fonts, no `eval`; CSP `script-src 'self' 'wasm-unsafe-eval'`.
-- **Amended (spec §11):** the node is already renamed. Wire names are `rand_<method>` and `rand1…`, crates are `randprotocol-*`, the submodule tracks fullnode `main` (chain 10) and is never edited. No "shrugg" anywhere in any case; `core/scripts/check-rename.sh` allows nothing. The namespace and prefix still appear once per language as `RPC_NAMESPACE = "rand"` / `ADDRESS_HRP = "rand1"`. **Wherever a task below writes `shrugg_…`, `shrugg1…` or a `shrugg-*` crate, read `rand_…`, `rand1…`, `randprotocol-*`.**
+- **Amended (spec §11):** the node is already renamed. Wire names are `rand_<method>` and `rand1…`, crates are `randprotocol-*`, the submodule tracks fullnode `main` (chain 13 at 142e1f7) and is never edited. No "shrugg" anywhere in any case; `core/scripts/check-rename.sh` allows nothing. The namespace and prefix still appear once per language as `RPC_NAMESPACE = "rand"` / `ADDRESS_HRP = "rand1"`. **Wherever a task below writes `shrugg_…`, `shrugg1…` or a `shrugg-*` crate, read `rand_…`, `rand1…`, `randprotocol-*`.**
 - Display symbol is `RAND`; RPL = registry assets with index ≥ 1. No balance RPC exists; balances come from the local scan.
 - A shell whose `send.canProve().ok` is false never shows a Prove button and never simulates a send.
 - Colours, radius, spacing only from `design/tokens.json`. Aurora gradient only on the balance hero and primary action. Motion 150–250 ms, off under `prefers-reduced-motion`. Targets ≥ 44 px, visible focus, WCAG AA in both themes. Breakpoint: 900 px.
