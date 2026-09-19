@@ -4,6 +4,7 @@
 import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
+import { markInvalid, markValid } from '../lib/forms.js';
 
 registerScreen('lock', {
   render() {
@@ -36,12 +37,11 @@ registerScreen('lock', {
       evt.preventDefault();
       try {
         await ctx.backend.wallet.unlock(input.value);
+        markValid(wrap, input, 'lock-password-hint');
         input.value = '';
         ctx.go('#home');
       } catch {
-        wrap.classList.add('invalid');
-        input.setAttribute('aria-invalid', 'true');
-        input.setAttribute('aria-describedby', 'lock-password-error');
+        markInvalid(wrap, input, 'lock-password-error');
         input.value = '';
         input.focus();
       }

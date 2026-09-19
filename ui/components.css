@@ -804,8 +804,14 @@ body.wide .toast-area { bottom: var(--s-6); }
 .qr img, .qr canvas, .qr svg { width: 100%; max-width: 220px; height: auto; image-rendering: pixelated; }
 
 /* =========================================================================== onboard ========= */
-/* Welcome / create / import / lock: a single centred column, no tab bar or sidebar (there is no
-   wallet yet, or it is locked). Used inside `.app` in place of the usual top-aligned flow. */
+/* Welcome / create / import / backup / lock: a single column, vertically centred in the viewport
+   at every width — no tab bar or sidebar (there is no wallet yet, or it is locked), so there is
+   nothing to reserve a fixed 3-column desktop grid for (see body.wide in base.css, which only
+   turns on once the sidebar actually renders). Used inside `.app` in place of the usual
+   top-aligned flow.
+   Plain `.onboard` is the hero style (welcome, lock): centred text, a logo, one or two actions.
+   `.onboard.form` is the same vertical centring and column width for a screen that is mostly a
+   `.field`-based form (create, import, backup) — those read better left-aligned than centred. */
 .onboard {
   display: flex;
   flex-direction: column;
@@ -815,6 +821,10 @@ body.wide .toast-area { bottom: var(--s-6); }
   gap: var(--s-6);
   min-height: calc(100vh - var(--s-8) * 2);
   padding: var(--s-8) 0;
+}
+.onboard.form {
+  align-items: stretch;
+  text-align: left;
 }
 .onboard .mark-lg {
   width: 64px;
@@ -900,6 +910,9 @@ body.wide .toast-area { bottom: var(--s-6); }
   transform: scaleX(0);
   transform-origin: left;
 }
+/* 650ms is well past the house 150–250ms motion budget (base.css) on purpose: this animation is
+   yoked to the real press-and-hold gesture duration (the reveal only fires once it completes), not
+   a decorative transition, so it has to run exactly as long as the hold itself. */
 .hold-btn.holding .fill { animation: hold-fill 650ms linear forwards; }
 @keyframes hold-fill { to { transform: scaleX(1); } }
 .hold-btn svg { width: 20px; height: 20px; flex: none; }

@@ -1,10 +1,14 @@
 // Onboarding: welcome → create/import → backup. No wallet exists yet for welcome/create/import
 // (resolveRoute only reaches these while `!exists`); by the time `backup` renders, the wallet
 // does exist (wallet.create/import already ran), which is why backup is reachable through the
-// normal "unlocked" routing branch.
+// normal "unlocked" routing branch. resolveRoute also refuses to route back to welcome/create/
+// import once a wallet exists, but the create/import submit handlers check again themselves
+// (defence in depth — see wirePasswordForm) rather than trust that they were only ever reached
+// while there is no wallet.
 import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
+import { markInvalid, markValid } from '../lib/forms.js';
 
 const STRENGTH_LABELS = ['Enter at least 10 characters', 'Weak', 'Fair', 'Good', 'Strong'];
 
@@ -21,16 +25,6 @@ function scorePassword(pw) {
   if (pw.length >= 20 || variety >= 3) score++;
   if (pw.length >= 24 && variety >= 2) score++;
   return Math.min(score, 4);
-}
-
-function markInvalid(wrap, input, errorId) {
-  wrap.classList.add('invalid');
-  input.setAttribute('aria-invalid', 'true');
-  input.setAttribute('aria-describedby', errorId);
-}
-function markValid(wrap, input) {
-  wrap.classList.remove('invalid');
-  input.removeAttribute('aria-invalid');
 }
 
 // ---------------------------------------------------------------------------------- welcome ---
@@ -61,34 +55,36 @@ function passwordFormMarkup({ mode }) {
       <span class="topbar-title">${isImport ? 'Import wallet' : 'Create wallet'}</span>
       <span class="spacer"></span>
     </div>
-    <form novalidate class="stack loose">
-      ${isImport ? raw(h`
-      <label class="field">
-        <span class="label">Recovery key</span>
-        <textarea name="key" rows="3" spellcheck="false" autocomplete="off" placeholder="Paste your recovery phrase or spend key" aria-describedby="key-hint"></textarea>
-        <span class="hint" id="key-hint">The key you exported when this wallet was created.</span>
-        <span class="error" id="key-error">Enter your recovery key.</span>
-      </label>`) : ''}
-      <label class="field">
-        <span class="label">${isImport ? 'New password' : 'Password'}</span>
-        <input name="password" type="password" autocomplete="new-password" minlength="10" aria-describedby="password-hint">
-        <span class="strength" data-level="0">
-          <span class="strength-track">
-            <span class="strength-bar"></span><span class="strength-bar"></span><span class="strength-bar"></span><span class="strength-bar"></span>
+    <div class="onboard form">
+      <form novalidate class="stack loose">
+        ${isImport ? raw(h`
+        <label class="field">
+          <span class="label">Recovery key</span>
+          <textarea name="key" rows="3" spellcheck="false" autocomplete="off" placeholder="Paste your recovery key" aria-describedby="key-hint"></textarea>
+          <span class="hint" id="key-hint">The key you exported when this wallet was created.</span>
+          <span class="error" id="key-error">Enter your recovery key.</span>
+        </label>`) : ''}
+        <label class="field">
+          <span class="label">${isImport ? 'New password' : 'Password'}</span>
+          <input name="password" type="password" autocomplete="new-password" minlength="10" aria-describedby="password-hint">
+          <span class="strength" data-level="0">
+            <span class="strength-track">
+              <span class="strength-bar"></span><span class="strength-bar"></span><span class="strength-bar"></span><span class="strength-bar"></span>
+            </span>
+            <span class="strength-label">${STRENGTH_LABELS[0]}</span>
           </span>
-          <span class="strength-label">${STRENGTH_LABELS[0]}</span>
-        </span>
-        <span class="hint" id="password-hint">Unlocks this wallet on this device only — it is never sent anywhere.</span>
-        <span class="error" id="password-error">Use at least 10 characters.</span>
-      </label>
-      <label class="field">
-        <span class="label">Confirm password</span>
-        <input name="confirm" type="password" autocomplete="new-password" aria-describedby="confirm-hint">
-        <span class="hint" id="confirm-hint">Type it once more.</span>
-        <span class="error" id="confirm-error">Passwords do not match.</span>
-      </label>
-      <button class="btn btn-primary block" type="submit">${isImport ? 'Import wallet' : 'Create wallet'}</button>
-    </form>`;
+          <span class="hint" id="password-hint">Unlocks this wallet on this device only — it is never sent anywhere.</span>
+          <span class="error" id="password-error">Use at least 10 characters.</span>
+        </label>
+        <label class="field">
+          <span class="label">Confirm password</span>
+          <input name="confirm" type="password" autocomplete="new-password" aria-describedby="confirm-hint">
+          <span class="hint" id="confirm-hint">Type it once more.</span>
+          <span class="error" id="confirm-error">Passwords do not match.</span>
+        </label>
+        <button class="btn btn-primary block" type="submit">${isImport ? 'Import wallet' : 'Create wallet'}</button>
+      </form>
+    </div>`;
 }
 
 function wirePasswordForm(ctx, root, { mode }) {
@@ -107,7 +103,7 @@ function wirePasswordForm(ctx, root, { mode }) {
     const score = scorePassword(input.value);
     strengthEl.dataset.level = String(score);
     strengthLabel.textContent = STRENGTH_LABELS[score];
-    if (input.value.length >= 10) markValid(pwWrap, pwField);
+    if (input.value.length >= 10) markValid(pwWrap, pwField, 'password-hint');
   });
 
   async function onSubmit(evt) {
@@ -115,18 +111,31 @@ function wirePasswordForm(ctx, root, { mode }) {
     let ok = true;
     if (keyField) {
       if (!keyField.value.trim()) { markInvalid(keyWrap, keyField, 'key-error'); ok = false; }
-      else markValid(keyWrap, keyField);
+      else markValid(keyWrap, keyField, 'key-hint');
     }
     if (pwField.value.length < 10) { markInvalid(pwWrap, pwField, 'password-error'); ok = false; }
-    else markValid(pwWrap, pwField);
+    else markValid(pwWrap, pwField, 'password-hint');
     if (confirmField.value !== pwField.value || confirmField.value === '') {
       markInvalid(confirmWrap, confirmField, 'confirm-error'); ok = false;
-    } else markValid(confirmWrap, confirmField);
+    } else markValid(confirmWrap, confirmField, 'confirm-hint');
     if (!ok) return;
+
+    // Defence in depth: resolveRoute already refuses to route here once a wallet exists, so this
+    // should be unreachable in normal use — but this handler must never call wallet.create/import
+    // a second time over an existing wallet (that overwrites, i.e. destroys, the current keys),
+    // so it checks again itself rather than trust routing alone.
+    if (await ctx.backend.wallet.exists()) {
+      ctx.toast('A wallet already exists on this device.', { kind: 'negative' });
+      ctx.go('#home');
+      return;
+    }
 
     try {
       if (isImport) await ctx.backend.wallet.import(keyField.value.trim(), pwField.value);
       else await ctx.backend.wallet.create(pwField.value);
+      pwField.value = '';
+      confirmField.value = '';
+      if (keyField) keyField.value = '';
       ctx.go('#backup');
     } catch (err) {
       const message = (err && err.message) || 'Could not create the wallet.';
@@ -156,25 +165,29 @@ registerScreen('backup', {
   render() {
     return h`
       <div class="topbar"><span class="topbar-title">Back up your wallet</span></div>
-      <div class="banner">
-        <span class="ic">${raw(icons.shield())}</span>
-        <span><span class="banner-title">Shown once, kept on this device</span>Your recovery key is never sent anywhere and will not be shown again after this step.</span>
-      </div>
-      <div class="hold-reveal">
-        <span class="key-mask masked" data-role="key">•••• •••• •••• •••• •••• •••• •••• ••••</span>
-        <button class="btn block hold-btn" type="button" data-role="hold">
-          <span class="fill"></span>${raw(icons.eye())}Hold to reveal
-        </button>
-      </div>
-      <form novalidate class="stack" data-role="check-form" hidden>
-        <label class="field">
-          <span class="label">Confirm you saved it</span>
-          <input name="check" type="text" autocomplete="off" spellcheck="false" placeholder="First 4 characters" aria-describedby="check-hint">
-          <span class="hint" id="check-hint">Enter the first 4 characters of your recovery key.</span>
-          <span class="error" id="check-error">That does not match — reveal the key again and check.</span>
-        </label>
-        <button class="btn btn-primary block" type="submit">Continue</button>
-      </form>`;
+      <div class="onboard form">
+        <div class="stack loose">
+          <div class="banner">
+            <span class="ic">${raw(icons.shield())}</span>
+            <span><span class="banner-title">Save your recovery key</span>This key is your wallet. Anyone who has it can spend your funds, and without it a lost device means lost funds. You can view it again in Settings with your password.</span>
+          </div>
+          <div class="hold-reveal">
+            <span class="key-mask masked" data-role="key">•••• •••• •••• •••• •••• •••• •••• ••••</span>
+            <button class="btn block hold-btn" type="button" data-role="hold">
+              <span class="fill"></span>${raw(icons.eye())}Hold to reveal
+            </button>
+          </div>
+          <form novalidate class="stack" data-role="check-form" hidden>
+            <label class="field">
+              <span class="label">Confirm you saved it</span>
+              <input name="check" type="text" autocomplete="off" spellcheck="false" placeholder="First 4 characters" aria-describedby="check-hint">
+              <span class="hint" id="check-hint">Enter the first 4 characters of your recovery key.</span>
+              <span class="error" id="check-error">That does not match — reveal the key again and check.</span>
+            </label>
+            <button class="btn btn-primary block" type="submit">Continue</button>
+          </form>
+        </div>
+      </div>`;
   },
   async after(ctx, root) {
     let key = null;
@@ -226,7 +239,7 @@ registerScreen('backup', {
         markInvalid(wrap, input, 'check-error');
         return;
       }
-      markValid(wrap, input);
+      markValid(wrap, input, 'check-hint');
       cleanup();
       ctx.go('#home');
     });

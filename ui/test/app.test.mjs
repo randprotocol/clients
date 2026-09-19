@@ -4,23 +4,46 @@ import './dom-env.mjs';
 import { mount, resolveRoute } from '../app.js';
 import { fakeBackend, unlockedBackend } from './fake-backend.mjs';
 
+// Every test that mounts an app uses this: it resets location.hash (so no test depends on
+// whatever an earlier one left behind), creates and attaches a fresh root, and — via `t.after` —
+// destroys the app and detaches the root once the test finishes, however it finishes. Without
+// this, an undestroyed mount leaks a window-level `hashchange` listener and DOM nodes into the
+// shared document for the rest of the suite (see the 'destroy()' isolation test below, which
+// exists because this was exactly the bug: two tests mounted without ever destroying).
+async function mountApp(t, backend, opts = {}) {
+  location.hash = '';
+  const root = document.createElement('div');
+  document.body.append(root);
+  const app = await mount(root, backend, opts);
+  t.after(() => { app.destroy(); root.remove(); });
+  return { app, root };
+}
+
 test('route gating', () => {
   assert.equal(resolveRoute({ exists: false, unlocked: false }, '#home').name, 'welcome');
   assert.equal(resolveRoute({ exists: false, unlocked: false }, '#import').name, 'import');
   assert.equal(resolveRoute({ exists: true, unlocked: false }, '#send').name, 'lock');
   assert.deepEqual(resolveRoute({ exists: true, unlocked: true }, '#asset/1'), { name: 'asset', arg: '1' });
   assert.equal(resolveRoute({ exists: true, unlocked: true }, '').name, 'home');
+
+  // A wallet exists: welcome/create/import must never come back, locked or not — reaching
+  // wallet.create()/import() a second time overwrites (loses) the existing keys.
+  assert.equal(resolveRoute({ exists: true, unlocked: true }, '#create').name, 'home');
+  assert.equal(resolveRoute({ exists: true, unlocked: true }, '#import').name, 'home');
+  assert.equal(resolveRoute({ exists: true, unlocked: true }, '#welcome').name, 'home');
+  assert.equal(resolveRoute({ exists: true, unlocked: false }, '#create').name, 'lock');
+  // backup stays reachable once unlocked (it's how create/import land there in the first place).
+  assert.equal(resolveRoute({ exists: true, unlocked: true }, '#backup').name, 'backup');
 });
-test('first run shows welcome with create and import', async () => {
-  const root = document.createElement('div'); document.body.append(root);
-  await mount(root, fakeBackend());
+test('first run shows welcome with create and import', async (t) => {
+  const { root } = await mountApp(t, fakeBackend());
   assert.ok(root.querySelector('[data-go="create"]'));
   assert.ok(root.querySelector('[data-go="import"]'));
   assert.equal(root.querySelector('.tabbar, .sidebar'), null);
 });
-test('create → password → backup check → home', async () => {
-  const root = document.createElement('div'); document.body.append(root);
-  const b = fakeBackend(); const app = await mount(root, b);
+test('create → password → backup check → home', async (t) => {
+  const b = fakeBackend();
+  const { app, root } = await mountApp(t, b);
   await app.go('#create');
   root.querySelector('input[name=password]').value = 'correct horse battery';
   root.querySelector('input[name=confirm]').value = 'correct horse battery';
@@ -37,33 +60,25 @@ test('mount throws on an invalid backend', async () => {
   await assert.rejects(() => mount(document.createElement('div'), { wallet: {} }));
 });
 
-test("mode: 'popup' sets body.compact", async () => {
-  location.hash = '';
-  const root = document.createElement('div'); document.body.append(root);
-  const app = await mount(root, unlockedBackend(), { mode: 'popup' });
+test("mode: 'popup' sets body.compact", async (t) => {
+  await mountApp(t, unlockedBackend(), { mode: 'popup' });
   assert.ok(document.body.classList.contains('compact'));
   assert.ok(document.body.classList.contains('popup'));
-  app.destroy();
 });
 
-test('the tab bar exists once unlocked and marks the active tab with aria-current', async () => {
-  location.hash = '';
-  const root = document.createElement('div'); document.body.append(root);
-  const app = await mount(root, unlockedBackend());
+test('the tab bar exists once unlocked and marks the active tab with aria-current', async (t) => {
+  const { root } = await mountApp(t, unlockedBackend());
   const nav = root.querySelector('.tabbar, .sidebar');
   assert.ok(nav);
   assert.equal(nav.tagName, 'NAV');
   const current = root.querySelector('[aria-current="page"]');
   assert.ok(current);
   assert.equal(current.getAttribute('data-go'), 'home');
-  app.destroy();
 });
 
-test('backup screen never puts the spend key in location.hash', async () => {
-  location.hash = '';
-  const root = document.createElement('div'); document.body.append(root);
+test('backup screen never puts the spend key in location.hash', async (t) => {
   const b = fakeBackend();
-  const app = await mount(root, b);
+  const { app, root } = await mountApp(t, b);
   await app.go('#create');
   root.querySelector('input[name=password]').value = 'correct horse battery';
   root.querySelector('input[name=confirm]').value = 'correct horse battery';
@@ -73,16 +88,13 @@ test('backup screen never puts the spend key in location.hash', async () => {
   const spendKey = await b.wallet.exportSpendKey();
   assert.doesNotMatch(location.hash, new RegExp(spendKey));
   assert.ok(!location.hash.includes('sk-'));
-  app.destroy();
 });
 
-test('lock screen: wrong password shows an inline error and stays on #lock', async () => {
-  location.hash = '';
-  const root = document.createElement('div'); document.body.append(root);
+test('lock screen: wrong password shows an inline error and stays on #lock', async (t) => {
   const b = fakeBackend();
   await b.wallet.create('correct horse battery');
   await b.wallet.lock();
-  const app = await mount(root, b);
+  const { app, root } = await mountApp(t, b);
   await app.go('#lock');
   root.querySelector('input[name=password]').value = 'totally the wrong one';
   root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
@@ -92,33 +104,27 @@ test('lock screen: wrong password shows an inline error and stays on #lock', asy
   assert.ok(errorField);
   const input = errorField.querySelector('input[name=password]');
   assert.equal(input.getAttribute('aria-invalid'), 'true');
-  assert.ok(input.getAttribute('aria-describedby'));
-  app.destroy();
+  assert.equal(input.getAttribute('aria-describedby'), 'lock-password-error');
 });
 
-test('lock screen: correct password lands on #home', async () => {
-  location.hash = '';
-  const root = document.createElement('div'); document.body.append(root);
+test('lock screen: correct password lands on #home', async (t) => {
   const b = fakeBackend();
   await b.wallet.create('correct horse battery');
   await b.wallet.lock();
-  const app = await mount(root, b);
+  const { app, root } = await mountApp(t, b);
   await app.go('#lock');
   root.querySelector('input[name=password]').value = 'correct horse battery';
   root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   await app.idle();
   assert.equal(location.hash, '#home');
   assert.equal(await b.wallet.isUnlocked(), true);
-  app.destroy();
 });
 
-test('a sheet opens with role=dialog and closes on Escape, restoring focus', async () => {
-  location.hash = '';
-  const root = document.createElement('div'); document.body.append(root);
+test('a sheet opens with role=dialog and closes on Escape, restoring focus', async (t) => {
   const b = fakeBackend();
   await b.wallet.create('correct horse battery');
   await b.wallet.lock();
-  const app = await mount(root, b);
+  const { app, root } = await mountApp(t, b);
   await app.go('#lock');
   const trigger = root.querySelector('[data-action="wipe"]');
   assert.ok(trigger);
@@ -132,5 +138,65 @@ test('a sheet opens with role=dialog and closes on Escape, restoring focus', asy
   await app.idle();
   assert.equal(root.querySelector('[role="dialog"]'), null);
   assert.equal(document.activeElement, trigger);
+});
+
+test('create/import are unreachable once a wallet exists: #create redirects to #home without creating', async (t) => {
+  const b = unlockedBackend();
+  const { app } = await mountApp(t, b);
+  await app.go('#create');
+  assert.equal(location.hash, '#home');
+  assert.equal(b.calls.filter((c) => c[0] === 'wallet.create').length, 0);
+
+  await app.go('#import');
+  assert.equal(location.hash, '#home');
+  assert.equal(b.calls.filter((c) => c[0] === 'wallet.import').length, 0);
+});
+
+test('create screen: password field restores aria-describedby to the hint once valid again', async (t) => {
+  const { app, root } = await mountApp(t, fakeBackend());
+  await app.go('#create');
+  const pw = root.querySelector('input[name=password]');
+  const confirm = root.querySelector('input[name=confirm]');
+
+  // Submitting a too-short password points aria-describedby at the error.
+  pw.value = 'short';
+  confirm.value = 'short';
+  root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+  assert.equal(pw.getAttribute('aria-invalid'), 'true');
+  assert.equal(pw.getAttribute('aria-describedby'), 'password-error');
+
+  // Typing past 10 characters (the live 'input' handler, not a submit) must restore it to the
+  // field's own hint, not leave it pointed at an error message that no longer applies.
+  pw.value = 'now it is long enough';
+  pw.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+  assert.equal(pw.hasAttribute('aria-invalid'), false);
+  assert.equal(pw.getAttribute('aria-describedby'), 'password-hint');
+});
+
+test("destroy() unhooks the app: a later hashchange does not re-render, and body classes it added are cleared", async () => {
+  location.hash = '';
+  const root = document.createElement('div');
+  document.body.append(root);
+  const app = await mount(root, unlockedBackend());
+  assert.ok(document.body.classList.contains('compact') || document.body.classList.contains('wide'));
+  assert.ok(root.querySelector('.tabbar, .sidebar'));
+
   app.destroy();
+  assert.equal(root.innerHTML, '');
+  assert.ok(!document.body.classList.contains('compact'));
+  assert.ok(!document.body.classList.contains('wide'));
+  assert.ok(!document.body.classList.contains('popup'));
+  assert.ok(!document.body.classList.contains('nav-on'));
+
+  // A hashchange after destroy() must not resurrect the (now detached-from-the-app) root, and
+  // must not re-add any body class — the window-level listener was removed by destroy().
+  location.hash = '#activity';
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(root.innerHTML, '');
+  assert.ok(!document.body.classList.contains('compact'));
+  assert.ok(!document.body.classList.contains('wide'));
+
+  root.remove();
+  location.hash = '';
 });

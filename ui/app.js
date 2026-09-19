@@ -39,12 +39,27 @@ function route(name, arg) {
 }
 
 const PRE_WALLET_SCREENS = ['create', 'import', 'backup'];
+// Once a wallet exists on the device, create/import/welcome must never render again — reaching
+// wallet.create()/wallet.import() a second time would overwrite (and lose) the existing keys.
+// `backup` is deliberately not in this list: it stays reachable, but only through the "unlocked"
+// branch below (immediately after wallet.create()/import() itself flips `exists` to true), never
+// through the `!exists` branch above.
+const ONBOARDING_ONLY_SCREENS = ['welcome', 'create', 'import'];
 
 /**
  * Pure routing decision, exported for tests. `hash` is the raw `location.hash` (leading `#`
- * optional). No wallet on the device → `welcome` unless the hash already names one of the
- * onboarding-flow screens; a wallet that is not unlocked → `lock` no matter what was asked for;
- * otherwise the requested screen, or `home` when the hash is empty.
+ * optional).
+ *
+ *   exists  unlocked  hash names…              → resolves to
+ *   false   —         create/import/backup      the requested screen
+ *   false   —         anything else             welcome
+ *   true    false     anything                  lock (create/import/welcome included — a locked
+ *                                                device never re-exposes them)
+ *   true    true      welcome/create/import      home (a wallet already exists; never re-run
+ *                                                create/import over it)
+ *   true    true      empty                      home
+ *   true    true      anything else (incl.       the requested screen
+ *                      backup, asset/1, …)
  */
 export function resolveRoute({ exists, unlocked }, hash) {
   const { name, arg } = parseHash(hash);
@@ -52,7 +67,7 @@ export function resolveRoute({ exists, unlocked }, hash) {
     return PRE_WALLET_SCREENS.includes(name) ? route(name, arg) : route('welcome');
   }
   if (!unlocked) return route('lock');
-  if (!name) return route('home');
+  if (!name || ONBOARDING_ONLY_SCREENS.includes(name)) return route('home');
   return route(name, arg);
 }
 
@@ -288,6 +303,20 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
 
     const r = resolveRoute({ exists, unlocked }, location.hash || '');
     if (mySeq !== renderSeq) return;
+
+    // If the requested hash actually resolved somewhere else (e.g. #create once a wallet already
+    // exists — see ONBOARDING_ONLY_SCREENS above — refuses and lands on home), keep location.hash
+    // truthful: it must name the screen that is about to render, not the one that was asked for
+    // and refused, otherwise the address bar and the screen on it disagree.
+    const { name: requestedName } = parseHash(location.hash || '');
+    if (requestedName !== '' && requestedName !== r.name) {
+      const canonical = r.arg !== undefined ? `#${r.name}/${r.arg}` : `#${r.name}`;
+      if (location.hash !== canonical) location.hash = canonical;
+      // The assignment above may have synchronously re-entered this function (this test
+      // environment dispatches `hashchange` synchronously; see dom-env.mjs) and started a newer
+      // render — if so, let that one finish the job instead of doubling up on it.
+      if (mySeq !== renderSeq) return;
+    }
 
     // A real browser fires `hashchange` asynchronously (a task, not a microtask), so go()'s own
     // explicit render and the native event it triggers both land here — the second one after the
