@@ -1,7 +1,7 @@
 # Rand Wallet — lightweight clients
 
 Wallets for the Rand Protocol RAND chain (the fully shielded pool served by
-[`shrugg-node`](https://github.com/randprotocol/fullnode)), one per platform, sharing one Rust core:
+[`rand-node`](https://github.com/randprotocol/fullnode)), one per platform, sharing one Rust core:
 
 | client | language | directory | ships as |
 |---|---|---|---|
@@ -21,12 +21,12 @@ Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
 ## Why there is a Rust core
 
-Chain 8 has no accounts and no signatures: a transfer is a 2-in-2-out bundle authorised by a
+Chain 13 has no accounts and no signatures: a transfer is a 2-in-2-out bundle authorised by a
 STARK proof, keys are Poseidon2 hashes, envelopes are ML-KEM-768 + ChaCha20-Poly1305. Those
 primitives exist only in the fullnode's Rust crates, and a wallet that re-implemented them in
 Swift, Java or JavaScript would have to be byte-identical to the node or every transfer is
-refused. So `core/` vendors the fullnode crates at the chain 10 commit (`core/vendor/fullnode`,
-a submodule at `a00c88c`) and exposes one JSON entry point, `call(method, params)`, that each
+refused. So `core/` vendors the fullnode crates at the chain 13 commit (`core/vendor/fullnode`,
+a submodule at `142e1f7`) and exposes one JSON entry point, `call(method, params)`, that each
 client wraps: an XCFramework on iOS, a `.so` on Android, WebAssembly in the browser. Everything
 above that line — the RPC client, note store, scan and send flow, key storage and the UI — is
 Swift, Java and JavaScript.
@@ -55,7 +55,7 @@ from the emulator).
 
 ## Known limitation: the proof does not fit on small devices yet
 
-A bundle proof (what authorises a transfer) peaks at about **5.6 GB of memory** on chain 8's
+A bundle proof (what authorises a transfer) peaks at about **5.6 GB of memory** on chain 13's
 build, measured with `core/crates/wallet-core/examples/prove_fixture.rs`:
 
 ```bash
@@ -78,7 +78,7 @@ using the key file every client exports.
 ## Build
 
 ```bash
-git submodule update --init                    # core/vendor/fullnode @ a00c88c
+git submodule update --init                    # core/vendor/fullnode @ 142e1f7
 cd core && cargo test --release                # the core, including a real proof (~1 min)
 
 core/scripts/build-wasm.sh                     # → extension/shared/core/   (installs wasm-bindgen-cli)

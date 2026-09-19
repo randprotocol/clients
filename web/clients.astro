@@ -73,7 +73,7 @@ const does = [
 ];
 
 const notes = [
-  { k: "Chain", v: "Chain 10, the shielded pool with staking and the bridge; wallet core built from fullnode a00c88c" },
+  { k: "Chain", v: "Chain 13, the shielded pool with staking and the call limits; wallet core built from fullnode 142e1f7" },
   { k: "RPC endpoint", v: `Settings → Network. Defaults to ${DEFAULT_RPC}; any rand-node RPC you can reach works` },
   { k: "Proving", v: "A transfer proof takes about a minute on a laptop CPU and longer on a phone or in the browser; keep the app open" },
   { k: "Status", v: "Experimental testnet software. Not audited. RAND carries no real value" },
@@ -82,7 +82,7 @@ const notes = [
 
 <Layout
   title="Wallets — Rand Protocol"
-  description="Rand Wallet: a shielded wallet for RAND on iOS, Android, Chrome and Firefox. Creates a spend key and shrugg1 address, proves transfers on your device, asks the testnet faucet, and hands you the viewing keys RandScan opens confidential transactions with."
+  description="Rand Wallet: a shielded wallet for RAND on iOS, Android, Chrome and Firefox. Creates a spend key and rand1 address, proves transfers on your device, asks the testnet faucet, and hands you the viewing keys RandScan opens confidential transactions with."
   ogPath="/clients"
 >
   <section class="container-page pt-16 md:pt-24 pb-10">
@@ -92,7 +92,7 @@ const notes = [
         <h1 class="mt-4 text-4xl md:text-5xl font-medium tracking-tight">Rand Wallet</h1>
         <p class="prose-rand mt-4 max-w-2xl">
           A shielded wallet for RAND, one for each platform. It creates a spend key and a
-          <span class="font-mono text-[0.95em]">shrugg1…</span> address, finds your notes by
+          <span class="font-mono text-[0.95em]">rand1…</span> address, finds your notes by
           scanning the chain with your own key, proves every transfer on the device you are
           holding, requests funds from the testnet faucet, and gives you the viewing key and
           per-transaction keys that <a href={EXPLORER} class="underline decoration-[color:var(--color-border)] underline-offset-4 hover:decoration-current" target="_blank" rel="noopener noreferrer">randscan.org</a>
@@ -211,7 +211,7 @@ const notes = [
         <h2 class="mt-4 text-3xl font-medium tracking-tight">Or build it yourself</h2>
         <p class="prose-rand mt-3">
           The clients repository holds the Rust core, the four apps and the packaging scripts
-          for each store. The core vendors the full node at the chain 10 commit as a submodule.
+          for each store. The core vendors the full node at the chain 13 commit as a submodule.
         </p>
         <a href={REPO} target="_blank" rel="noopener noreferrer" class="mt-5 card p-5 flex items-center justify-between hover:border-[color:var(--color-text-mute)] transition-colors">
           <div>
@@ -230,7 +230,7 @@ const notes = [
           </div>
           <pre class="px-5 py-5 text-sm leading-relaxed overflow-x-auto"><code class="text-[color:var(--color-text-soft)]"><span class="text-[color:var(--color-text-mute)]"># Rust 1.98.1 (pinned; rustup installs it). Xcode 16+ for iOS, JDK 17+ with SDK 35 and NDK 27 for Android, Node 20+ for the extensions</span>
 git clone {REPO}.git && cd clients
-git submodule update --init                    <span class="text-[color:var(--color-text-mute)]"># core/vendor/fullnode @ a00c88c</span>
+git submodule update --init                    <span class="text-[color:var(--color-text-mute)]"># core/vendor/fullnode @ 142e1f7</span>
 cd core && cargo test --release && cd ..       <span class="text-[color:var(--color-text-mute)]"># the core, including a real proof (~1 min)</span>
 
 core/scripts/build-wasm.sh                     <span class="text-[color:var(--color-text-mute)]"># → extension/shared/core/   (needs wasm-pack)</span>

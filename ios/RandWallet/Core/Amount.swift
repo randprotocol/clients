@@ -1,6 +1,6 @@
 import Foundation
 
-/// RAND amounts: 1 RAND = 10^9 units. Mirrors `shrugg_core::{format_amount, parse_amount}`
+/// RAND amounts: 1 RAND = 10^9 units. Mirrors `randprotocol_core::{format_amount, parse_amount}`
 /// so a UI row never needs a core call.
 enum Amount {
     static let unitsPerRand: UInt64 = 1_000_000_000

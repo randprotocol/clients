@@ -300,7 +300,7 @@ async function viewSend() {
   }
   return `<div class="screen">${topbar('Send')}<div class="scroll">
     <form data-form="send" class="stack">
-      <div class="field"><label>Recipient address</label><textarea class="input" name="to" required placeholder="shrugg1…" autofocus>${h(d.to)}</textarea><span class="hint" data-to-hint></span></div>
+      <div class="field"><label>Recipient address</label><textarea class="input" name="to" required placeholder="rand1…" autofocus>${h(d.to)}</textarea><span class="hint" data-to-hint></span></div>
       <div class="field"><label>Amount (RAND)</label><div class="row"><input class="input num" name="amount" inputmode="decimal" required placeholder="0.0" value="${h(d.amount)}"><button class="btn small" type="button" data-action="max">Max</button></div>
         <span class="hint">Available: ${h(formatUnits(bal))} RAND</span></div>
       <div class="field"><label>Fee (RAND)</label><input class="input num" name="fee" inputmode="decimal" value="${h(d.fee)}"><span class="hint">Floor 0.001 RAND, paid to the block proposer.</span></div>

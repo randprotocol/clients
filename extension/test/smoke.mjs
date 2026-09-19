@@ -9,7 +9,10 @@ const c = (m, p = {}) => { const r = JSON.parse(call(m, JSON.stringify(p))); if 
 console.log('core version', version(), c('version').chain_build, 'chain', c('version').default_chain_id);
 const w = c('keygen');
 const ver = c('version');
-if (!w.address.startsWith(ver.address_hrp) || w.address.length !== 1668) throw new Error('bad address ' + w.address.length);
+// `rand1` + base58(32-byte pk || 1184-byte ML-KEM encapsulation key). base58 of 1216 bytes is
+// 1661 characters unless the leading bytes happen to be small, which costs one (~8% of keys),
+// so a freshly generated address is 1665 or 1666 — never a single fixed number.
+if (!w.address.startsWith(ver.address_hrp) || ![1665, 1666].includes(w.address.length)) throw new Error('bad address ' + w.address.length);
 if (!c('parse_address', { address: w.address }).valid) throw new Error('address does not parse');
 if (c('parse_address', { address: 'rand1nope' }).valid) throw new Error('bogus address parsed');
 if (c('wallet_info', { spend_key: w.spend_key }).address !== w.address) throw new Error('wallet_info mismatch');

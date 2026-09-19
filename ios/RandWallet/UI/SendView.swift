@@ -97,7 +97,7 @@ struct SendView: View {
             let s = v.trimmingCharacters(in: .whitespacesAndNewlines)
             if s.isEmpty { addressError = nil; return }
             let info = try? RandCore.parseAddress(s)
-            addressError = (info?.valid ?? false) ? nil : (info?.error ?? "Not a shrugg1 address")
+            addressError = (info?.valid ?? false) ? nil : (info?.error ?? "Not a rand1 address")
         }
     }
 
