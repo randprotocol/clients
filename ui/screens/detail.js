@@ -82,7 +82,7 @@ registerScreen('tx', {
     // and not a hard-coded 9.
     const feeRow = raw(item.fee ? h`<div class="kv"><span class="k">Fee</span><span class="v amount">${formatUnits(item.fee, 6, native ? native.decimals : 9)} ${native ? native.symbol : 'RAND'}</span></div>` : '');
     const keyRow = raw(txKey ? h`
-        <div class="kv wrap">
+        <div class="kv controls">
           <span class="k">Transaction key</span>
           <span class="v cluster">
             <span class="mono truncate" data-role="txkey">${shortHex(txKey)}</span>
@@ -136,10 +136,13 @@ registerScreen('tx', {
 
 // ---------------------------------------------------------------------------------- note ------
 registerScreen('note', {
-  // Same rule as a transaction: beside whichever list the user came from, home by default — a
-  // note is reached from home's note-bearing rows or from a received transaction.
+  // Same rule as a transaction: beside whichever list the user came from. The only place a note
+  // is reachable from today is a received transaction's "View the received note" — so `from` is
+  // in practice always the list that transaction was opened beside, and the fallback only decides
+  // a deep link. `#activity` for that, as the brief says: a note *is* a received transfer, and
+  // the activity list is the one that lists them.
   pane: 'detail',
-  parent: (_arg, from) => listParent(from, '#home'),
+  parent: (_arg, from) => listParent(from, '#activity'),
   render: (ctx) => skeletonMarkup(ctx, 'Note', 'home'),
   async after(ctx, root, indexArg) {
     let assets, sync;

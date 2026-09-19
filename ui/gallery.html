@@ -542,10 +542,10 @@
 
   <!-- ============================ kv.wrap ============================ -->
   <section class="g-section">
-    <h2 class="g-h">Key/value row that wraps (kv.wrap)</h2>
+    <h2 class="g-h">Key/value row whose value carries controls (kv.controls)</h2>
     <div class="card">
       <div class="kv"><span class="k">Block</span><span class="v amount">1,402,918</span></div>
-      <div class="kv wrap">
+      <div class="kv controls">
         <span class="k">Transaction key</span>
         <span class="v cluster">
           <span class="mono truncate">tk1x8f4k…2d9a</span>
@@ -554,7 +554,7 @@
         </span>
       </div>
     </div>
-    <p class="g-note">A plain .kv value (Block) stays on the label's line at any width. A value that is itself a cluster of controls (mono text plus one or two icon buttons) can't always fit beside a two-word label on a 360 px popup; .kv.wrap gives it its own full-width line instead of an accidental narrow sliver on the right.</p>
+    <p class="g-note">A plain .kv value (Block) stays on the label's line at any width. A value that is itself a cluster of controls (mono text plus one or two icon buttons) reads the same way — label left, value right — because one stacked row in a panel of aligned rows looks like a bug rather than like emphasis. .kv.controls only drops the value onto its own line when the controls plus a useful amount of the value no longer fit beside the label, which at 420 px (the detail pane) they do and at 360 px with a long label they do not.</p>
   </section>
 
   <!-- ============================ sync progress ============================ -->

@@ -36,6 +36,10 @@
      the empty detail column, which offsets itself by exactly one header so its placeholder lines
      up with the list beside it rather than floating above it. */
   --topbar-h: 56px;
+  /* The second breakpoint: the width at which there is room for two panes. Mirrored by
+     TWO_PANE_AT in ui/lib/panes.js (the shell's matchMedia) and by the @media rule below; the
+     arithmetic behind the number is in both comments. */
+  --two-pane-at: 1080px;
 }
 :root[data-theme="light"] {
   --shadow-1: 0 1px 2px rgba(20, 26, 46, .06);
@@ -330,20 +334,35 @@ body.compact.popup {
   scrollbar-color: var(--border) transparent;
 }
 
-/* Wide: desktop. Sidebar | main (| detail pane, when one is on screen). minmax(0, …) so long
-   hashes cannot push the grid.
+/* Wide: desktop. Sidebar | content (| detail pane, when one is on screen).
 
-   The third column is reserved ONLY when a `.detail` aside is actually rendered — a permanently
-   reserved 420 px gutter for a pane that is not there pushes the content column left of centre
-   and leaves half the window blank. `:has()` keeps the two cases in CSS rather than asking the
-   router to toggle a class it would then have to keep in sync. */
+   TWO breakpoints, not one. --wide-at (900) brings in the sidebar. --two-pane-at (1080) is the
+   width at which there is room to put a detail *beside* the content rather than over it; between
+   the two, the layout is sidebar + one column and a detail route replaces that column exactly as
+   it does on a phone, back button and all. The arithmetic (kept identical in ui/lib/panes.js,
+   which is where the shell reads it):
+
+       240  the sidebar's fixed column
+     + 452  the content column — the compact layout's 420 px column is 388 px of content inside
+            its 2 x --s-4 padding, and the wide column pads by 2 x --s-7 (64): 388 + 64
+     + 352  the detail column — 328 px of content, what a 360 px popup gets inside its padding,
+            plus this pane's own --s-6 (24) right padding
+     = 1044, rounded up to 1080.
+
+   Below that, splitting leaves one of the two panes narrower than the single column it replaced,
+   which is worse than not splitting at all. (The first version reserved `minmax(0, 420px)` for
+   the detail from 900 px: a fixed-max track is sized before the flexible one, so the list was
+   crushed to ~240 px at 900 and only reached ~476 px at 1200.)
+
+   The two-pane grid is driven by `body.two-pane`, a class the shell sets when it has actually
+   mounted a detail column, rather than by a `:has()` test on the aside — so an engine without
+   `:has()` still lays this out correctly. */
 body.wide {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   align-items: stretch;
 }
-body.wide:has(.detail) { grid-template-columns: 240px minmax(0, 1fr) minmax(0, 420px); }
 body.wide .app {
   grid-column: 2;
   padding: var(--s-5) var(--s-7) var(--s-8);
@@ -352,13 +371,7 @@ body.wide .app {
   margin: 0 auto;
   align-self: start;
 }
-/* With a pane beside it the content column stops floating in the middle of its track and hugs
-   that pane instead. The gutter between the two is then the content column's own right padding —
-   the same 32 px at 1200 px as at 2000 px — and the slack goes to the left of the content, where
-   it reads as breathing room after the sidebar rather than as a gap down the middle of what is
-   meant to be one surface. Without a detail pane nothing changes: the column stays centred. */
-body.wide:has(.detail) .app { margin-right: 0; }
-/* The third column scrolls on its own, pinned to the top of the window, so a long transaction
+/* The detail column scrolls on its own, pinned to the top of the window, so a long transaction
    never drags the list beside it out of view — and both columns start at the same y, which is
    what makes the pair read as one surface rather than two stacked cards. */
 body.wide .detail {
@@ -373,13 +386,27 @@ body.wide .detail {
   scrollbar-color: var(--border) transparent;
   padding: var(--s-5) var(--s-6) var(--s-8) 0;
 }
-/* Two columns, one row: with a pane header on each side, the two titles should sit on the same
-   baseline at the same left edge, not as two captions centred in tracks of different widths. A
-   centred title is the compact/phone convention (it balances a back button against a spacer) and
-   it stays there. */
-body.wide .topbar .topbar-title { text-align: left; }
-/* …and the empty column starts one pane header down, so its placeholder is level with the list's
-   own first card rather than floating level with the list's title. The offset belongs to the pane
-   (which knows there is a header beside it), not to `.detail-empty` itself. */
-body.wide .detail > .detail-empty { margin-top: var(--topbar-h); }
+
+@media (min-width: 1080px) {
+  /* A 1fr gutter on each side of the content+detail pair. Below ~1140 px both are 0 and the two
+     panes take everything there is; above it they split the slack evenly, so the pair stays
+     centred in the space after the sidebar instead of drifting apart (the content column floating
+     in the middle of a wide track, with a canyon before the detail) or hugging one edge. The
+     minmax minimums are the arithmetic above; their maximums are the panes' own caps, so neither
+     stretches. */
+  body.wide.two-pane {
+    grid-template-columns: 240px 1fr minmax(452px, 720px) minmax(352px, 420px) 1fr;
+  }
+  body.wide.two-pane .app { grid-column: 3; }
+  body.wide.two-pane .detail { grid-column: 4; }
+  /* Two columns, one row: with a pane header on each side, the two titles sit on the same
+     baseline at the same left edge, not as two captions centred in tracks of different widths.
+     Scoped to the two-pane case — a centred title is the convention everywhere else, including
+     every wide single-pane screen (send, receive, settings), and it stays there. */
+  body.wide.two-pane .topbar .topbar-title { text-align: left; }
+  /* …and the empty column starts one pane header down, so its placeholder is level with the
+     list's own first card rather than floating level with the list's title. The offset belongs
+     to the pane (which knows there is a header beside it), not to `.detail-empty` itself. */
+  body.wide.two-pane .detail > .detail-empty { margin-top: var(--topbar-h); }
+}
 body.compact .detail { display: none; }

@@ -13,6 +13,29 @@
 import { h, raw } from './dom.js';
 import { icons } from './icons.js';
 
+/**
+ * The width at which there is room for *two* panes — a second breakpoint, above the 900 px one
+ * that brings in the sidebar. Between the two the layout is sidebar + a single content pane, and
+ * a detail route replaces that pane exactly as it does on a phone.
+ *
+ * The arithmetic, from the layout's own numbers (`ui/base.css` mirrors it in a comment, and
+ * `--two-pane-at` records the result so the two cannot drift):
+ *
+ *     240  the sidebar's fixed column
+ *   + 452  the list column: the compact layout's 420 px column is 388 px of content inside its
+ *          2 × --s-4 padding, and the wide column pads by 2 × --s-7 (64), so 388 + 64 = 452
+ *   + 352  the detail column: 328 px of content — what a 360 px popup gets inside its padding —
+ *          plus the pane's own --s-6 (24) right padding
+ *   = 1044, rounded up to the round number below.
+ *
+ * Under this, one of the two panes is narrower than the single-column layout it replaced, which
+ * is worse than not splitting at all.
+ */
+export const TWO_PANE_AT = 1080;
+
+/** The media query for it. One string, used by the shell; `ui/base.css` mirrors it exactly. */
+export const TWO_PANE_QUERY = `(min-width: ${TWO_PANE_AT}px)`;
+
 /** The routes that can host a detail pane: screens that are lists of rows. */
 export const PARENT_ROUTES = ['home', 'activity', 'asset'];
 
@@ -101,15 +124,24 @@ export function retireToken(token) {
  * One mounted pane: the element screens render into, the key of the route mounted there, that
  * render's token and the mounted screen's `after()` cleanup.
  *
- * Retiring the token and running the cleanup are two calls rather than one because `destroy()`
- * wants them in a particular order — every token dead *first*, so nothing a cleanup does can be
- * painted by a screen that is still mid-await, and only then the cleanups.
+ * **`epoch` is the pane's identity, and the key is not.** A route can come back — `#tx/A → #tx/B
+ * → #tx/A` — so a render that fell asleep during the first A and compared *keys* on waking would
+ * find its key on the pane again and mount a second instance over the live one, orphaning that
+ * instance's cleanup (which is how a revealed transaction key ends up in a detached node with its
+ * `window.blur`/`visibilitychange` listeners still attached). `epoch` is monotonic: every retire
+ * and every mount moves it on, and nothing can move it back. A render captures the epoch it is
+ * writing against and re-checks it after every await.
+ *
+ * Retiring the token and running the cleanup are separable because `destroy()` wants them in a
+ * particular order — every token dead *first*, so nothing a cleanup does can be painted by a
+ * screen that is still mid-await, and only then the cleanups.
  */
 export function createPane(el, name) {
   const pane = {
     el,
     name,
     key: null,
+    epoch: 0,
     token: null,
     cleanup: null,
     retireToken() {
@@ -122,11 +154,24 @@ export function createPane(el, name) {
       if (!fn) return;
       try { fn(); } catch (err) { console.error('rand-wallet: screen cleanup failed', err); }
     },
-    /** Both, in the order a route change needs them. */
+    /** This mount is over: token dead, cleanup run exactly once, key gone, epoch moved on. */
     retire() {
       pane.retireToken();
       pane.runCleanup();
       pane.key = null;
+      pane.epoch += 1;
+      return pane.epoch;
+    },
+    /** Claims the pane for a new mount and returns that mount's epoch. */
+    claim(key, token) {
+      pane.key = key;
+      pane.token = token;
+      pane.epoch += 1;
+      return pane.epoch;
+    },
+    /** What a test needs to assert "one live instance, no orphaned cleanup". Route data only. */
+    debug() {
+      return { key: pane.key, epoch: pane.epoch, hasCleanup: typeof pane.cleanup === 'function' };
     },
   };
   return pane;

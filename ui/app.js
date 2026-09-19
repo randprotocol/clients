@@ -8,7 +8,7 @@ import { icons } from './lib/icons.js';
 import { shortAddress } from './lib/format.js';
 import {
   parseHash, routeHash, routeGo, isParentRoute, planPanes,
-  createPane, createRenderToken,
+  createPane, createRenderToken, TWO_PANE_QUERY,
 } from './lib/panes.js';
 
 // Screens registered so far, `#name` → { render(ctx, arg), after?(ctx, root), tab? }. Registering
@@ -350,10 +350,13 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     try { abortSession(); } catch { /* an already-aborted controller */ }
     closeSheet(); // a dialog belongs to the session that opened it
     setPinnedChip(null); // and so does anything pinned in the nav by it
-    // …and so does "which list the user was looking at". It is only ever a route string, never
-    // wallet data, but it is still one wallet's browsing history and the next one does not inherit
-    // it: a deep link into the new wallet falls back to the screen's own default parent.
+    // …and so does everything the two-pane layout remembers about *where in this wallet* the user
+    // was. `originParentHash` is only a route string, but `selectedGo` and `detailClose.go` carry
+    // a transaction hash — wallet-derived data, and the next wallet inherits none of it. A deep
+    // link into the new wallet falls back to the screen's own default parent.
     originParentHash = null;
+    setSelected(null);
+    detailClose = null;
     const carried = {};
     for (const key of SESSION_SAFE_STATE_KEYS) {
       if (Object.prototype.hasOwnProperty.call(ctx.state, key)) carried[key] = ctx.state[key];
@@ -392,32 +395,55 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   // The 3-column wide grid (sidebar | app | detail) only makes sense once there is a sidebar to
   // put in it, i.e. once the wallet is unlocked — welcome/create/import/lock stay a single
   // centred column even on a wide viewport, the same as they would on the popup or a phone.
+  // Two breakpoints, not one. `WIDE_AT` (900) brings in the sidebar; `TWO_PANE_AT` (1080, see
+  // ui/lib/panes.js for the arithmetic) is the width at which there is room for a *second pane*
+  // without one of the two ending up narrower than the single column it replaced. Between them
+  // the layout is sidebar + one content pane, and a detail route replaces that pane exactly as it
+  // does on a phone.
   let mql = null;
   let mqlListener = null;
+  let twoPaneMql = null;
+  let twoPaneListener = null;
   let viewportWide = false;
+  let viewportTwoPane = false;
   let lastUnlocked = false;
-  /** The wide layout is on: a sidebar, and room for a second pane. */
+  /** The wide layout is on: a sidebar and a desktop-width column. */
   function wideLayout() {
     return mode !== 'popup' && viewportWide && lastUnlocked;
+  }
+  /** …and there is room to put a detail beside it. */
+  function twoPaneLayout() {
+    return mode !== 'popup' && viewportTwoPane && lastUnlocked;
   }
   function applyBodyLayout() {
     const wide = wideLayout();
     document.body.classList.toggle('wide', wide);
     document.body.classList.toggle('compact', !wide);
+    // Never leave the two-pane grid on a layout that has no second column; doRender sets it when
+    // a detail column is actually mounted.
+    if (!wide) document.body.classList.remove('two-pane');
   }
   if (mode === 'popup') {
     document.body.classList.add('compact', 'popup');
   } else {
     document.body.classList.remove('popup');
     if (typeof matchMedia === 'function') {
+      const listen = (list, fn) => {
+        if (typeof list.addEventListener === 'function') list.addEventListener('change', fn);
+        else if (typeof list.addListener === 'function') list.addListener(fn);
+      };
       mql = matchMedia(`(min-width: ${WIDE_AT}px)`);
       viewportWide = mql.matches;
-      // Crossing the breakpoint changes *how many panes there are*, not just the CSS, so it is a
-      // real re-render: a transaction that was filling the content pane has to move into the
-      // detail pane with its list beside it, and back. The route itself never changes.
       mqlListener = (e) => { viewportWide = e.matches; applyBodyLayout(); scheduleRender(); };
-      if (typeof mql.addEventListener === 'function') mql.addEventListener('change', mqlListener);
-      else if (typeof mql.addListener === 'function') mql.addListener(mqlListener);
+      listen(mql, mqlListener);
+      // Crossing *this* one changes how many panes there are, not just the CSS, so it is a real
+      // re-render: a transaction that was filling the content pane has to move into the detail
+      // pane with its list beside it, and back. The route itself never changes. The query string
+      // comes from ui/lib/panes.js, which ui/base.css mirrors — one number, two readers.
+      twoPaneMql = matchMedia(TWO_PANE_QUERY);
+      viewportTwoPane = twoPaneMql.matches;
+      twoPaneListener = (e) => { viewportTwoPane = e.matches; scheduleRender(); };
+      listen(twoPaneMql, twoPaneListener);
     }
     applyBodyLayout();
   }
@@ -667,9 +693,19 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
    * Mounts one screen into one pane: its own render token, its own view of `ctx`, its own
    * `after()` cleanup. Everything the single-pane version did, done twice a render at most.
    */
-  async function renderPane(pane, screen, r) {
+  async function renderPane(pane, screen, r, key) {
+    // Structurally safe, whatever the caller did: whatever this pane held is torn down *here* —
+    // its cleanup run exactly once and dropped — before anything new is mounted. The router is
+    // careful not to call this for a pane it is reusing, but a future slip must not be able to
+    // leave a live screen's cleanup orphaned; that is what strands a revealed secret in a
+    // detached node with its listeners still attached.
+    pane.retire();
     const token = createRenderToken();
-    pane.token = token;
+    const myEpoch = pane.claim(key, token);
+    // Two names for one fact, kept in step by `retire()`/`claim()`: `isCurrent()` is what a
+    // *screen* asks ("am I still on display?"), `mine()` is what this function asks ("does this
+    // pane still belong to this mount?"). A route that comes back cannot forge the epoch.
+    const mine = () => !destroyed && pane.epoch === myEpoch;
     const screenCtx = Object.create(ctx);
     screenCtx.isCurrent = () => token.alive && !destroyed;
     screenCtx.signal = token.signal;
@@ -682,13 +718,13 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       console.error('rand-wallet: screen render failed', err);
       markup = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Something went wrong</span>This screen could not be shown.</span></div>`;
     }
-    // Past the commit point the token, not the sequence number, is the authority: a newer render
+    // Past the commit point the epoch, not the sequence number, is the authority: a newer render
     // that resolved to the destination already on screen returns without committing, and must not
     // stop this one from finishing the job it is halfway through.
-    if (!screenCtx.isCurrent()) return;
+    if (!mine()) return myEpoch;
     pane.el.innerHTML = markup;
 
-    if (typeof screen.after !== 'function') return;
+    if (typeof screen.after !== 'function') return myEpoch;
     try {
       // `r.arg` (the `#name/arg` suffix, e.g. the index in `#asset/1` or the hash in `#tx/0x…`)
       // is a third, optional argument — added in task 1.4 for the asset/tx/note detail screens,
@@ -696,11 +732,12 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       // (`render(ctx, arg)` already gets it; `after` didn't). Purely additive: every screen
       // registered before this task takes only `(ctx, root)` and ignores the third argument.
       const cleanup = await screen.after(screenCtx, pane.el, r.arg);
-      if (!screenCtx.isCurrent()) { if (typeof cleanup === 'function') { try { cleanup(); } catch { /* stale */ } } return; }
+      if (!mine()) { if (typeof cleanup === 'function') { try { cleanup(); } catch { /* stale */ } } return myEpoch; }
       if (typeof cleanup === 'function') pane.cleanup = cleanup;
     } catch (err) {
       console.error('rand-wallet: screen after() failed', err);
     }
+    return myEpoch;
   }
 
   async function doRender() {
@@ -735,12 +772,16 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
 
     const screen = screens.get(r.name) || fallbackScreen;
     // A screen can opt out of nav even while unlocked (`nav: false`) — used by `backup`, a
-    // security gate the user should not be able to tab away from mid-flow. The wide 3-column
-    // grid follows nav visibility too: without a sidebar to put in its first column, it would
-    // just leave a blank gutter (see applyBodyLayout). No sidebar, no second pane either — a
-    // flow, the lock screen and onboarding are never two-pane.
+    // security gate the user should not be able to tab away from mid-flow. The wide grid follows
+    // nav visibility: without a sidebar to put in its first column it would just leave a blank
+    // gutter (see applyBodyLayout), so `backup`, the lock screen and onboarding are never
+    // two-pane either. The *flows* (send, receive, faucet, settings) do keep their sidebar; they
+    // are single-pane simply because they are not `pane: 'detail'` screens, which is
+    // `planPanes`'s decision, not this line's.
     const showNav = unlocked && screen.nav !== false;
-    const twoPane = showNav && mode !== 'popup' && viewportWide;
+    // Two panes need the second breakpoint, not the first: between 900 and TWO_PANE_AT there is
+    // a sidebar but no room to split what is left.
+    const twoPane = showNav && mode !== 'popup' && viewportTwoPane;
 
     // ---- who goes where ----
     const plan = planPanes({
@@ -775,15 +816,23 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     if (!contentChanged && !detailChanged) return;
 
     // ---- commit point: from here on, whatever each changed pane held is gone ----
-    // The route that is closing, remembered before `selectedGo` moves on, so focus can go back to
-    // the row that opened it.
-    const closedDetailGo = detailChanged && !plan.detail ? selectedGo : null;
-    // Retire first, assign after: `retire()` clears the pane's key along with its token, so a key
-    // written before it would be wiped and every later render would think the pane had changed.
-    if (contentChanged) contentPane.retire();
-    if (detailChanged) detailPane.retire();
-    contentPane.key = contentKey;
-    detailPane.key = detailKey;
+    // What was open, and whether this navigation is that detail being *closed* — a move to its own
+    // parent — rather than an ordinary one. Read before `detailClose`/`selectedGo` move on.
+    //
+    // Deliberately not "the detail pane became empty": closing a transaction whose parent is
+    // `#asset/<i>` lands on a route that is itself a detail (home + the asset), so the pane is
+    // still full. It is still a close, and focus still owes the user the row they came from.
+    const closedDetailGo = detailChanged ? selectedGo : null;
+    const wasClose = !!closedDetailGo && !!detailClose && detailClose.parentHash === routeHash(r);
+    // The epochs this render is writing against. A pane it is *not* touching keeps the epoch it
+    // already has — if a newer render remounts that one, this render has to notice and stop, and
+    // its key coming back around must not be able to convince it otherwise. `retire()`/`claim()`
+    // move the epoch on; nothing moves it back.
+    let myContentEpoch = contentPane.epoch;
+    let myDetailEpoch = detailPane.epoch;
+    const owns = () => !destroyed
+      && contentPane.epoch === myContentEpoch
+      && detailPane.epoch === myDetailEpoch;
     // Only the URL's own route is remembered as an origin — not the parent the plan just chose,
     // which would be remembering our own answer, and not a detail route, which is not a list.
     if (isParentRoute(r.name)) originParentHash = routeHash(r);
@@ -811,44 +860,68 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     }
 
     // ---- the panes ----
-    // Rendering the content pane is an await, so a newer render can commit while this one is
-    // inside it — and a newer render that only changed the *detail* deliberately leaves this
-    // render's content token alive (nothing about the content pane is being replaced), so
-    // `isCurrent()` inside renderPane does not stop this render here. `owns()` is the missing
-    // half: a pane whose key is no longer the one this render wrote belongs to a newer render,
-    // and must not be touched again — without it, a slow parent render would finish and then
-    // paint *its* transaction over the one the user has since opened.
-    const owns = () => contentPane.key === contentKey && detailPane.key === detailKey;
-    if (contentChanged) await renderPane(contentPane, plan.contentScreen, plan.content);
-    if (destroyed || !owns()) return;
+    // Rendering a pane is an await, so a newer render can commit while this one is inside it —
+    // and a newer render that changed only the *other* pane deliberately leaves this render's
+    // screen alive (nothing about its pane is being replaced), so `isCurrent()` inside renderPane
+    // does not stop this render here. `owns()` is the other half, and it is checked after every
+    // await: a pane whose epoch has moved on belongs to a newer render and must not be touched.
+    if (contentChanged) {
+      myContentEpoch = await renderPane(contentPane, plan.contentScreen, plan.content, contentKey);
+    }
+    if (!owns()) return;
     if (detailChanged) {
       if (plan.detail || emptyText) {
         if (!container.contains(detailEl)) container.insertBefore(detailEl, mainEl.nextSibling);
       }
-      if (plan.detail) await renderPane(detailPane, plan.detailScreen, plan.detail);
-      else if (emptyText) detailEl.innerHTML = detailEmptyMarkup(emptyText);
-      else { detailEl.innerHTML = ''; detailEl.remove(); }
+      if (plan.detail) {
+        myDetailEpoch = await renderPane(detailPane, plan.detailScreen, plan.detail, detailKey);
+      } else {
+        // No screen to mount, so the retire this pane needs is done here rather than by
+        // renderPane — the placeholder and the empty column are inert markup, not instances.
+        myDetailEpoch = detailPane.retire();
+        detailPane.key = detailKey;
+        if (emptyText) detailEl.innerHTML = detailEmptyMarkup(emptyText);
+        else { detailEl.innerHTML = ''; detailEl.remove(); }
+      }
     }
-    if (destroyed || !owns()) return;
+    if (!owns()) return;
+    // The grid's third and fourth columns exist only while a detail column does. A class the
+    // shell sets, rather than `:has(.detail)`, so an engine without `:has()` still lays this out.
+    document.body.classList.toggle('two-pane', container.contains(detailEl));
 
     // ---- focus ----
     // Last, so a screen that placed focus itself (an `input.focus()` in its own `after()`) wins.
     if (keepFocusInList) return;
-    if (detailChanged && plan.detail) {
-      if (detailPane.token && detailPane.token.alive) focusPaneStart(detailEl);
-    } else if (detailChanged && !plan.detail && !contentChanged) {
-      focusListRow(closedDetailGo);
+    if (wasClose) {
+      // A close, not a navigation: focus goes back to the row that opened the detail. Usually
+      // that row is still in the content pane, which a close never re-renders — but closing a
+      // transaction whose parent was an asset lands on `#asset/<i>`, i.e. home + the asset, and
+      // the row is now inside the *detail* pane.
+      focusClosedRow(closedDetailGo);
+    } else if (detailChanged && plan.detail) {
+      focusPaneStart(detailEl);
     } else if (contentChanged) {
-      if (contentPane.token && contentPane.token.alive) focusScreenStart(mainEl);
+      focusScreenStart(mainEl);
     }
   }
 
-  /** Focus the content pane's row for `go` — the row a closing detail came from. */
-  function focusListRow(go) {
-    const row = go
-      ? [...mainEl.querySelectorAll('[data-go]')].find((el) => el.getAttribute('data-go') === go)
-      : null;
-    if (row && typeof row.focus === 'function') row.focus();
+  /**
+   * Focus the row `go` names, wherever it ended up, after its detail was closed.
+   *
+   * The detail pane is searched first: a route can list the same transaction in both panes (home
+   * in the content pane and the asset beside it both show that transfer), and the one the user's
+   * attention just moved to is the one that should take focus. Falling back, the pane that is
+   * actually on screen gets its own start rather than nothing at all.
+   */
+  function focusClosedRow(go) {
+    const panes = container.contains(detailEl) ? [detailEl, mainEl] : [mainEl];
+    for (const paneEl of panes) {
+      const row = go
+        ? [...paneEl.querySelectorAll('[data-go]')].find((el) => el.getAttribute('data-go') === go)
+        : null;
+      if (row && typeof row.focus === 'function') { row.focus(); return; }
+    }
+    if (container.contains(detailEl)) focusPaneStart(detailEl);
     else focusScreenStart(mainEl);
   }
 
@@ -946,8 +1019,13 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     const handler = (evt) => {
       if (destroyed || sheetEl) return;
       if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
-      if (!wideLayout()) return;
+      // A modified arrow is somebody else's shortcut — the browser's (Cmd+↓ = end of page on
+      // macOS), the platform's, or a selection gesture. Never ours.
+      if (evt.metaKey || evt.ctrlKey || evt.altKey || evt.shiftKey) return;
+      if (!twoPaneLayout()) return;
       const target = evt.target instanceof Element ? evt.target : null;
+      // …and inside anything editable the arrows belong to the caret, not to the list.
+      if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
       const row = target && target.closest('.row[data-go]');
       if (!row || !mainEl.contains(row)) return;
       const rows = [...mainEl.querySelectorAll('.row[data-go]')];
@@ -1036,6 +1114,20 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     idle,
     /** The current wallet session, `{ id, signal }` — the same object screens get as `ctx.session`. */
     get session() { return session; },
+    /**
+     * Diagnostic view of the two panes, for tests and for a shell's own assertions: per pane the
+     * mounted route key, its monotonic mount epoch and whether it owns a cleanup — which is what
+     * makes "exactly one live instance per pane, zero orphaned cleanups" checkable from outside.
+     * Route data only; nothing here is not already in `location.hash`.
+     */
+    debugPanes() {
+      return {
+        content: contentPane.debug(),
+        detail: detailPane.debug(),
+        selected: selectedGo,
+        closeTo: detailClose ? detailClose.parentHash : null,
+      };
+    },
     destroy() {
       destroyed = true;
       // Every token dead first, both panes, so nothing a cleanup does can still be painted by a
@@ -1050,9 +1142,10 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       offLockClicks();
       offActivity();
       try { offLocked(); } catch { /* a backend that dropped its own listener */ }
-      if (mql && mqlListener) {
-        if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', mqlListener);
-        else if (typeof mql.removeListener === 'function') mql.removeListener(mqlListener);
+      for (const [list, fn] of [[mql, mqlListener], [twoPaneMql, twoPaneListener]]) {
+        if (!list || !fn) continue;
+        if (typeof list.removeEventListener === 'function') list.removeEventListener('change', fn);
+        else if (typeof list.removeListener === 'function') list.removeListener(fn);
       }
       // The detail's cleanup first: it is the inner screen, and it is the one holding a secret.
       detailPane.runCleanup();
@@ -1072,7 +1165,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
         try { backend.dispose(); } catch (err) { console.error('rand-wallet: backend.dispose() failed', err); }
       }
       container.textContent = '';
-      document.body.classList.remove('compact', 'wide', 'popup', 'nav-on');
+      document.body.classList.remove('compact', 'wide', 'popup', 'nav-on', 'two-pane');
     },
   };
 }

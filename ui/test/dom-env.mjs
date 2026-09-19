@@ -29,11 +29,15 @@ window.location = location;
 document.location = location;
 
 // ---- matchMedia: a tiny MediaQueryList backed by a mutable `window.innerWidth` ----
-// Every list this factory hands out is remembered (weakly) so `setViewportWidth()` can re-evaluate
-// all of them and fire their `change` listeners, exactly as a real browser does on a resize. That
-// is what lets a test cross the 900 px breakpoint live — `ui/app.js` switches between the compact
-// and the wide (two-pane) layout on that event, and the app under test holds the only reference to
-// its own MediaQueryList.
+// Every list this factory hands out is remembered so `setViewportWidth()` can re-evaluate all of
+// them and fire their `change` listeners, exactly as a real browser does on a resize. That is what
+// lets a test cross the 900 px and 1080 px breakpoints live — `ui/app.js` switches between the
+// compact, wide and two-pane layouts on those events, and the app under test holds the only other
+// reference to its own MediaQueryLists.
+//
+// The set is pruned rather than weak: a mounted app registers a listener and `destroy()` removes
+// it, so a list with no listeners left is one nobody can observe any more and is dropped on the
+// next resize. Without that, a file that mounts fifty apps would resize fifty dead lists.
 window.innerWidth = window.innerWidth || 375;
 const mediaLists = new Set();
 function matchMedia(query) {
@@ -61,7 +65,15 @@ window.matchMedia = matchMedia;
  */
 export function setViewportWidth(width) {
   window.innerWidth = width;
-  for (const mql of mediaLists) mql._check();
+  for (const mql of [...mediaLists]) {
+    if (mql._listeners.length === 0) { mediaLists.delete(mql); continue; }
+    mql._check();
+  }
+}
+
+/** How many live MediaQueryLists this environment is still tracking (for a leak assertion). */
+export function liveMediaListCount() {
+  return mediaLists.size;
 }
 
 /** The compact default every other test file relies on. */
@@ -74,7 +86,13 @@ class KeyboardEvent extends window.Event {
   constructor(type, init = {}) {
     super(type, init);
     this.key = init.key ?? '';
+    // All four modifiers, not just Shift: a handler that ignores a modified keypress (the arrow
+    // keys in the two-pane list, which must not fight Cmd+Down or a Shift-selection) can only be
+    // tested if the environment actually carries them.
     this.shiftKey = !!init.shiftKey;
+    this.metaKey = !!init.metaKey;
+    this.ctrlKey = !!init.ctrlKey;
+    this.altKey = !!init.altKey;
   }
 }
 window.KeyboardEvent = KeyboardEvent;

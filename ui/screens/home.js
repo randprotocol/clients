@@ -449,6 +449,15 @@ registerScreen('home', {
       ctx.toast('Address copied', { kind: 'positive' });
     });
 
-    return () => { store.listeners.delete(onProgress); offSync(); offCopy(); selection.destroy(); };
+    // `on()` binds to `root`, which is a *pane element* the shell reuses across screens — so every
+    // listener taken out here has to be handed back, or it outlives this screen holding this
+    // render's closure (its assets, its sync result) past a lock or a wipe.
+    return () => {
+      store.listeners.delete(onProgress);
+      offSync();
+      offCopy();
+      offRescanChain();
+      selection.destroy();
+    };
   },
 });
