@@ -21,6 +21,7 @@ import './dom-env.mjs';
 import { registerScreen } from '../app.js';
 import { fakeBackend, unlockedBackend } from './fake-backend.mjs';
 import { mountApp } from './helpers.mjs';
+import { markUnknownOutcome, unknownOutcome } from '../screens/send/state.js';
 
 /** A screen that hands its render's `ctx` back to the test and does nothing else. */
 const visits = [];
@@ -258,4 +259,72 @@ test('the shell counts scans started, and counts a scan finished only when it fu
   ctl.settle[1]({ notes: [], activity: [] });
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(ctx.state.scansConfirmed, 2, 'and one that fulfilled did');
+});
+
+test('a scan from an ended session never touches the next session’s counters', async (t) => {
+  // `endSession()` replaces `ctx.state`, and a scan started under the old wallet settles later. If
+  // its fulfilment writes its ordinal into the *new* session's `scansConfirmed`, that session
+  // starts life believing a scan has already confirmed — and the send flow's unknown-outcome gate
+  // (which is lifted by `scansConfirmed > atStarted`, and records `atStarted = 0` in a fresh
+  // session) is lifted before any scan has run at all.
+  const ctl = { settle: [] };
+  const b = unlockedBackend({
+    sync: { scan: () => new Promise((resolve) => { ctl.settle.push(resolve); }) },
+  });
+  visits.length = 0;
+  const { app } = await mountApp(t, b, { hash: '#spy' });
+  await app.idle();
+  const ctx = visits[0];
+
+  ctx.backend.sync.scan(() => {});
+  assert.equal(ctx.state.scansStarted, 1);
+
+  const before = app.session.id;
+  ctx.endSession();
+  assert.ok(app.session.id > before, 'the session ended');
+  assert.equal(ctx.state.scansStarted || 0, 0, 'the new session starts from zero');
+
+  ctl.settle[0]({ notes: [], activity: [] });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(ctx.state.scansConfirmed || 0, 0, 'the old session’s scan did not credit the new one');
+
+  // …which is what keeps the unknown-outcome notice standing in the new session.
+  markUnknownOutcome(ctx, { hash: null });
+  assert.ok(unknownOutcome(ctx), 'the unknown-outcome record was lifted by a scan from another wallet');
+});
+
+test('a backend whose wrapped methods are accessors still mounts and works', async (t) => {
+  // `trackGroup` forwards an accessor property with a getter and *no setter*. The shell then
+  // re-wraps `sync.scan` and the five session-ending `wallet.*` methods by assignment — which on
+  // a getter-only property throws "Cannot set property … which has only a getter" in strict mode
+  // (an ES module is always strict), so such a backend could not be mounted at all.
+  visits.length = 0;
+  const b = unlockedBackend();
+  const scan = b.sync.scan;
+  const lock = b.wallet.lock;
+  let scans = 0;
+  let locks = 0;
+  Object.defineProperty(b.sync, 'scan', {
+    configurable: true,
+    enumerable: true,
+    get() { return (...args) => { scans += 1; return scan(...args); }; },
+  });
+  Object.defineProperty(b.wallet, 'lock', {
+    configurable: true,
+    enumerable: true,
+    get() { return (...args) => { locks += 1; return lock(...args); }; },
+  });
+
+  const { app } = await mountApp(t, b, { hash: '#spy' });
+  await app.idle();
+  const ctx = visits[0];
+
+  await ctx.backend.sync.scan(() => {});
+  assert.equal(scans, 1, 'the accessor-backed scan ran');
+  assert.equal(ctx.state.scansConfirmed, 1, 'and it was still counted by the shell');
+
+  const before = app.session.id;
+  await ctx.lockWallet();
+  assert.equal(locks, 1, 'the accessor-backed lock ran');
+  assert.ok(app.session.id > before, 'and the shell still ended the session around it');
 });

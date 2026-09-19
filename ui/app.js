@@ -149,6 +149,18 @@ function trackGroup(orig, declared, onCall) {
   return g;
 }
 
+/**
+ * Replaces one method on a *wrapped* group with `fn`.
+ *
+ * Plain assignment is not enough: `trackGroup` forwards an accessor property with a getter and no
+ * setter, so a shell that exposes `sync.scan` (or one of the session-ending `wallet.*` methods) as
+ * a getter would make `group.method = …` throw "Cannot set property … which has only a getter" —
+ * an ES module is always strict — and the app would fail to mount at all.
+ */
+function defineMethod(group, name, fn) {
+  Object.defineProperty(group, name, { value: fn, writable: true, configurable: true, enumerable: true });
+}
+
 /** Wraps every backend group (the BACKEND_SHAPE ones, plus any optional group a shell adds). */
 function trackedBackend(backend, onCall) {
   const wrapped = {};
@@ -459,23 +471,33 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   // whether a transfer whose outcome it could not establish is on chain after all (see
   // ui/screens/send/state.js). The shell is where this belongs because every backend call goes
   // through it, so a scan started by *any* screen counts — the one home starts on mount just as
-  // much as the one the send flow starts deliberately. `ctx.state` is emptied when the session
-  // ends, so the counters reset with it.
+  // much as the one the send flow starts deliberately.
   //
   // Two separate numbers on purpose: `scansStarted` is the ordinal handed to each call, and
   // `scansConfirmed` is the highest ordinal to have *fulfilled*. A rejected or aborted scan read
   // nothing, so it never moves the second one.
+  //
+  // **The state object is captured at the call, not resolved at the answer.** `endSession()`
+  // *replaces* `ctx.state`, so a scan started under one wallet may fulfil long after another one
+  // is on screen; writing its ordinal into the new session's counters would leave that session
+  // with `scansConfirmed` set while its own `scansStarted` is back at 0 — and the send flow's
+  // unknown-outcome gate (lifted the moment `scansConfirmed > atStarted`) would be lifted before
+  // any scan had run under that wallet at all. A scan from an ended session credits nothing.
   const origScan = backendApi.sync.scan;
   if (typeof origScan === 'function') {
-    backendApi.sync.scan = (...args) => {
-      const ordinal = (ctx.state.scansStarted = (ctx.state.scansStarted || 0) + 1);
+    defineMethod(backendApi.sync, 'scan', (...args) => {
+      const state = ctx.state; // this session's state object, captured synchronously
+      const ordinal = (state.scansStarted = (state.scansStarted || 0) + 1);
       const p = origScan(...args);
       p.then(
-        () => { if (ordinal > (ctx.state.scansConfirmed || 0)) ctx.state.scansConfirmed = ordinal; },
+        () => {
+          if (ctx.state !== state) return; // the wallet under it changed; this proves nothing
+          if (ordinal > (state.scansConfirmed || 0)) state.scansConfirmed = ordinal;
+        },
         () => { /* a scan that failed saw nothing */ },
       );
       return p;
-    };
+    });
   }
 
   // One place, not five call sites: every wallet method that changes *who is looking* ends the
@@ -485,7 +507,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   for (const method of SESSION_ENDING_WALLET_METHODS) {
     const orig = backendApi.wallet[method];
     if (typeof orig !== 'function') continue;
-    backendApi.wallet[method] = (...args) => {
+    defineMethod(backendApi.wallet, method, (...args) => {
       const p = (async () => {
         const result = await orig(...args);
         endSession();
@@ -496,7 +518,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       // in the window between the wallet method answering and the session actually ending.
       trackTask(p);
       return p;
-    };
+    });
   }
 
   function navLink(tab, activeName, variant) {
