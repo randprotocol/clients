@@ -7,6 +7,11 @@
 # lowercase and is never renamed. The token symbol and our own identifiers (`ShruggCore`,
 # `SHRUGG` as a currency ticker, `shrugg_wallet` as our library name) are not wire names and must
 # become RAND/Rand/rand_wallet.
+#
+# Inline opt-out: a line containing the marker `rename-guard: allow` (e.g. in a trailing comment)
+# is skipped, for the rare line that legitimately mentions the old name on purpose (doc prose
+# contrasting it with the new one, or a test asserting the old name/key is now absent) rather than
+# leaving it behind by mistake. The HARDFAIL set below always wins over the marker.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -25,26 +30,22 @@ ALLOW="$ALLOW"'|[[:<:]]shrugg[[:>:]]'    # the standalone `shrugg` CLI/binary na
 # against this hard-fail set FIRST and unconditionally, before any ALLOW stripping.
 HARDFAIL='shrugg_wallet|ShruggCore'
 
-# core/crates/ is out of scope here: it is task 0.1's own directory (already renamed and
-# reviewed there), and this task is explicitly told not to touch it. It legitimately retains
-# `shrugg`/`SHRUGG` in a couple of spots that are not stale leftovers — e.g. a doc comment
-# contrasting what "upstream" (the vendored fullnode crate) calls the token with what our code
-# calls it, and test assertions that check the *absence* of the old name/JSON key by matching it
-# as a literal string. A path-prefix filter (not a directory exclusion) is used so other `core/`
-# content (scripts/, README.md, Cargo.toml) is still checked.
 RAW=$(grep -rIniE 'shrugg' . \
   --exclude-dir=.git --exclude-dir=vendor --exclude-dir=target --exclude-dir=dist \
   --exclude-dir=build --exclude-dir=.gradle --exclude-dir=node_modules \
   --exclude-dir=DerivedData --exclude-dir=Frameworks --exclude-dir=jniLibs \
   --exclude-dir=.superpowers \
   --exclude=check-rename.sh --exclude=Cargo.lock --exclude='2026-09-1[39]-*.md' \
-  2>/dev/null | grep -v '^\./extension/shared/core/' | grep -v '^\./core/crates/' || true)
+  2>/dev/null | grep -v '^\./extension/shared/core/' || true)
 
 offenders=()
 while IFS= read -r line; do
   [ -z "$line" ] && continue
   if echo "$line" | grep -qiE "$HARDFAIL"; then
     offenders+=("$line")
+    continue
+  fi
+  if echo "$line" | grep -qF 'rename-guard: allow'; then
     continue
   fi
   # Strip every allowed (wire-name) token, case-sensitively; if "shrugg" in any case still

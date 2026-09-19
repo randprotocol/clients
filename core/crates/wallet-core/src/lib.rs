@@ -34,7 +34,7 @@ use shrugg_zkvm::viewing::TxKey;
 pub const RPC_NAMESPACE: &str = "shrugg";
 /// The address human-readable part the fullnode defines. A wire name: never renamed.
 pub const ADDRESS_HRP: &str = "shrugg1";
-/// Units per whole token. Upstream calls the token SHRUGG; our code says RAND everywhere else.
+/// Units per whole token. Upstream calls the token SHRUGG; our code says RAND everywhere else. (rename-guard: allow)
 pub use shrugg_core::UNITS_PER_SHRUGG as UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -859,13 +859,13 @@ mod tests {
         assert_eq!(v["address_hrp"], ADDRESS_HRP);
         assert_eq!(RPC_NAMESPACE, "shrugg");
         assert_eq!(ADDRESS_HRP, "shrugg1");
-        assert!(v.get("units_per_rand").is_some() && v.get("units_per_shrugg").is_none());
+        assert!(v.get("units_per_rand").is_some() && v.get("units_per_shrugg").is_none()); // rename-guard: allow
     }
 
     #[test]
     fn user_facing_errors_say_rand() {
         let err = select_inputs(&[], 0, 1).unwrap_err().to_string();
-        assert!(err.contains("RAND") && !err.contains("SHRUGG"), "{err}");
+        assert!(err.contains("RAND") && !err.contains("SHRUGG"), "{err}"); // rename-guard: allow
     }
 
     #[test]
