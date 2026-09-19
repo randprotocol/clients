@@ -99,6 +99,30 @@ and nothing on chain changes. It is the cure for a wallet that has got ahead of 
 pointed at, and it is what the wrong-chain banner's *Rescan* uses (that one also drops the other
 chain's history, which no longer describes anything).
 
+## What a wallet can and cannot check
+
+This is a **light** wallet: it reads the chain through one node and trial-decrypts what that node
+hands it. That means the honest limit of what it can tell you:
+
+- **"Unspent" and "no new notes" are ultimately the node's word.** The wallet checks that every
+  page really answers the request it made — the right leaf indexes, contiguous, sorted nullifiers
+  no lower than it asked for, nothing past the tip the node claims — and refuses anything that does
+  not. But there is no proof of *absence* in this protocol: a node that simply withholds notes or
+  nullifiers is indistinguishable from a quiet chain. The consequence is a balance that is too
+  high or history that is missing, never funds that are gone — the notes are on chain, and a
+  transfer built on a note that was actually spent is refused by the chain, not lost.
+- **So choose a node you trust**, and if a balance ever looks wrong, point Settings at a different
+  one and use **Rescan wallet**: it re-reads everything from the start, so a second node's view
+  replaces the first's.
+
+## Known limitations
+
+- **A block with more than 500 nullifiers stops the scan.** The wallet pages nullifiers by height
+  and cannot page *within* one height, so a single block that spends more than a page's worth
+  leaves it with an error rather than a wrong answer. It needs intra-height paging upstream; on
+  today's chain no block comes close.
+- **No transfers from this shell**, for the memory reason above.
+
 ## More than one tab
 
 The wallet is a normal web page, so you can open two of them. They share one IndexedDB, and the
@@ -108,6 +132,9 @@ wallet is built for it:
   others wait for its "done" on a `BroadcastChannel` and then simply read what it wrote, rather
   than racing it to the node. Both APIs are feature-detected — without them every tab scans, which
   is wasteful but still correct, because of the next point.
+- **A rescan is atomic.** It takes the same lock a scan does, writes its reset conditionally, and
+  any scan that was already running against the older store abandons its page instead of writing it
+  back — otherwise the reset you asked for could silently evaporate into another tab's merge.
 - **The note store is written conditionally.** Each save carries the revision it was loaded at and
   lands only if nothing else has written since; a tab that loses the race merges in what the other
   one wrote and retries. Without this the last writer would silently erase the other's whole scan.

@@ -59,8 +59,9 @@ const SESSION_ENDING_WALLET_METHODS = ['lock', 'wipe', 'unlock', 'create', 'impo
 // as the backend defined them, rather than wrapped into promise-returning tracked calls:
 //   wallet.onLocked(cb)   returns the unsubscribe function — a Promise instead of it is useless
 //   wallet.noteActivity() fire-and-forget, called on every (throttled) user event
+//   sync.onChanged(cb)    likewise a subscription: another tab finished, refresh from the cache
 // See `trackGroup`.
-const SYNC_PASSTHROUGH = { wallet: ['onLocked', 'noteActivity'] };
+const SYNC_PASSTHROUGH = { wallet: ['onLocked', 'noteActivity'], sync: ['onChanged'] };
 
 /**
  * The network chip's text, derived from `settings.get().chainId` — never a chain number written

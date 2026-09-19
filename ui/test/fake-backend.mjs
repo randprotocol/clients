@@ -36,12 +36,19 @@ function requirePassword(password) {
   }
 }
 
+// Subscription-style members: they answer with an unsubscribe function (or nothing) and must not
+// be made async, exactly as ui/app.js's SYNC_PASSTHROUGH describes. A fake that promise-wraps
+// them would hide the very bug that list exists to prevent.
+const PASSTHROUGH = new Set(['onLocked', 'noteActivity', 'onChanged']);
+
 /** Wraps every function in `defs` (merged with `overridesGroup`) so calls are recorded on `calls`. */
 function buildGroup(groupName, defs, overridesGroup, calls) {
   const merged = { ...defs, ...(overridesGroup || {}) };
   const out = {};
   for (const [key, val] of Object.entries(merged)) {
-    if (typeof val === 'function') {
+    if (typeof val === 'function' && PASSTHROUGH.has(key)) {
+      out[key] = (...args) => { calls.push([`${groupName}.${key}`, ...args]); return val(...args); };
+    } else if (typeof val === 'function') {
       out[key] = async (...args) => {
         calls.push([`${groupName}.${key}`, ...args]);
         return val(...args);

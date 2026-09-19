@@ -20,6 +20,7 @@ import { registerScreen } from '../app.js';
 import { formatUnits, shortAddress, timeAgo } from '../lib/format.js';
 import { totalInRand } from '../lib/assets.js';
 import { assetRowMarkup, activityRowMarkup, listMarkup } from '../lib/rows.js';
+import { wrongChainBannerMarkup, behindBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
 import { wireSelection } from '../lib/panes.js';
 
 const ACTIONS = [
@@ -276,47 +277,14 @@ registerScreen('home', {
         </div>`;
     }
 
-    /**
-     * The node is not on the chain this wallet's notes came from — so nothing was read and nothing
-     * was merged (ui/backend.js). Blocking, because carrying on would show one chain's balance
-     * under another chain's node, and offering both real ways out: point at a different node, or
-     * forget this chain's cache and read the new one.
-     *
-     * Every field of `info` came from a node, so all of it is interpolated, never `raw()`ed.
-     */
+    // The two chain banners are ui/lib/chain-banner.js: home, activity and the send entry all
+    // show the same blocking state, because `sync.cached()` carries it for the whole wallet.
     function showWrongChainBanner(info) {
-      const got = info && info.got ? info.got : {};
-      const expected = info && info.expected ? info.expected : {};
-      const name = (id) => (id === null || id === undefined || id === '' ? 'an unknown chain' : `chain ${id}`);
-      const rescanBtn = raw(typeof ctx.backend.sync.rescan === 'function'
-        ? h`<button class="btn sm" type="button" data-action="rescan-chain">Rescan</button>`
-        : '');
-      el.banner.innerHTML = h`
-        <div class="banner negative">
-          <span class="ic">${raw(icons.warning())}</span>
-          <span>
-            <span class="banner-title">This node is on a different chain (${name(got.chainId)})</span>
-            Your wallet's history was read from ${name(expected.chainId)}. Nothing has been changed.
-            Switch node in Settings, or rescan this wallet for the new chain.
-          </span>
-          <span class="banner-actions">
-            <a class="btn sm" href="#settings" data-go="settings">Settings</a>
-            ${rescanBtn}
-          </span>
-        </div>`;
+      el.banner.innerHTML = wrongChainBannerMarkup(info, { canRescan: canRescan(ctx) });
     }
 
-    /** The node's tip is below what this wallet has already read: a lagging replica, or one
-     *  restored from a snapshot. Nothing moved, and scanning resumes by itself when it catches
-     *  up — so this is a quiet notice, not a failure. */
     function showBehindBanner(info) {
-      el.banner.innerHTML = h`
-        <div class="banner warn">
-          <span class="ic">${raw(icons.info())}</span>
-          <span><span class="banner-title">This node is behind your wallet</span>It is at block ${String((info && info.tip) ?? '?')}; your wallet has read to ${String((info && info.wallet) ?? '?')}. Try another node in Settings.</span>
-          <span class="grow"></span>
-          <a class="btn sm" href="#settings" data-go="settings">Settings</a>
-        </div>`;
+      el.banner.innerHTML = behindBannerMarkup(info, { canRescan: canRescan(ctx) });
     }
 
     /** Another tab of this wallet is doing the scanning; this one is showing what it has. */
@@ -397,41 +365,32 @@ registerScreen('home', {
       applyData(0, cachedAssets, cachedSync);
     })();
 
-    // The wrong-chain banner's own way out: drop this chain's cache (never the keys) and read the
-    // node the user is now pointed at. Behind a confirmation, because it throws away history that
-    // takes a full scan to rebuild.
-    const offRescanChain = on(root, '[data-action="rescan-chain"]', 'click', (evt) => {
+    /** Paints the result of a rescan exactly as a scan's result is painted. */
+    async function applyRescan(fresh) {
+      if (!fresh || !live()) return;
+      let freshAssets = assets;
+      try { freshAssets = await ctx.backend.assets.list(); } catch { /* keep what we had */ }
+      if (!live()) return;
+      paintScanNotice(fresh);
+      setScanning(false);
+      applyData(1, freshAssets, fresh);
+    }
+
+    // The two banners' own ways out. `rescan-chain` drops the old chain's history; `rescan-plain`
+    // keeps the notes and simply re-reads, which is what a wallet that got ahead of its node needs.
+    const offRescanChain = on(root, '[data-action="rescan-chain"]', 'click', async (evt) => {
       evt.preventDefault();
-      if (typeof ctx.backend.sync.rescan !== 'function') return;
-      const dialog = ctx.sheet(h`
-        <h3 class="sheet-title">Rescan for this chain?</h3>
-        <p class="sheet-sub">This forgets the notes and history read from the old chain and reads this node from the start. Your keys and your password are not touched.</p>
-        <div class="sheet-foot">
-          <button class="btn" type="button" data-role="cancel">Cancel</button>
-          <button class="btn btn-primary" type="button" data-role="confirm">Rescan</button>
-        </div>`);
-      on(dialog, '[data-role="cancel"]', 'click', () => ctx.closeSheet());
-      on(dialog, '[data-role="confirm"]', 'click', async () => {
-        ctx.closeSheet();
-        if (!live()) return;
-        el.banner.innerHTML = '';
-        setScanning(true);
-        try {
-          const fresh = await ctx.backend.sync.rescan({ forChain: true, signal: ctx.session.signal });
-          if (!live()) return;
-          let freshAssets = assets;
-          try { freshAssets = await ctx.backend.assets.list(); } catch { /* keep what we had */ }
-          if (!live()) return;
-          paintScanNotice(fresh);
-          setScanning(false);
-          applyData(1, freshAssets, fresh);
-        } catch (err) {
-          if (!live()) return;
-          setScanning(false);
-          if (isAbortError(err)) return;
-          showBanner((err && err.message) || 'The rescan could not be started.');
-        }
-      });
+      el.banner.innerHTML = '';
+      setScanning(true);
+      await applyRescan(await confirmRescan(ctx, { forChain: true }));
+      if (live()) setScanning(false);
+    });
+    const offRescanPlain = on(root, '[data-action="rescan-plain"]', 'click', async (evt) => {
+      evt.preventDefault();
+      el.banner.innerHTML = '';
+      setScanning(true);
+      await applyRescan(await confirmRescan(ctx, {}));
+      if (live()) setScanning(false);
     });
 
     const offSync = on(root, '[data-action="sync"]', 'click', (evt) => {
@@ -449,14 +408,40 @@ registerScreen('home', {
       ctx.toast('Address copied', { kind: 'positive' });
     });
 
+    // Another tab finished a scan, or reset the store. Refresh from what it wrote rather than
+    // starting a scan of our own — which is what makes the `otherTab` banner's "this will refresh
+    // when that finishes" true rather than a hopeful sentence.
+    const offChanged = (() => {
+      const subscribe = ctx.backend.sync.onChanged;
+      if (typeof subscribe !== 'function') return () => {};
+      let off;
+      try {
+        off = subscribe(async () => {
+          if (!live()) return;
+          let fresh;
+          let freshAssets = assets;
+          try {
+            [fresh, freshAssets] = await Promise.all([ctx.backend.sync.cached(), ctx.backend.assets.list()]);
+          } catch { return; }
+          if (!live()) return;
+          paintScanNotice(fresh);
+          applyData(1, freshAssets, fresh);
+        });
+      } catch { return () => {}; }
+      return typeof off === 'function' ? off : () => {};
+    })();
+
     // `on()` binds to `root`, which is a *pane element* the shell reuses across screens — so every
     // listener taken out here has to be handed back, or it outlives this screen holding this
-    // render's closure (its assets, its sync result) past a lock or a wipe.
+    // render's closure (its assets, its sync result) past a lock or a wipe. The same is true of
+    // the backend subscription: it holds this render's `applyData` closure until it is dropped.
     return () => {
       store.listeners.delete(onProgress);
       offSync();
       offCopy();
       offRescanChain();
+      offRescanPlain();
+      offChanged();
       selection.destroy();
     };
   },

@@ -979,9 +979,11 @@ test('home: a node on another chain is a blocking banner with both ways out', as
   const { root } = await at(t, '#home', b);
   const banner = root.querySelector('[data-role="banner-slot"] .banner.negative');
   assert.ok(banner, 'a wrong chain was not reported');
-  assert.match(banner.textContent, /different chain \(chain 14\)/);
-  assert.match(banner.textContent, /chain 13/, "the wallet's own chain is not named");
-  assert.match(banner.textContent, /Nothing has been changed/);
+  // Both identities carry their genesis, because two chains can share an id — "different chain
+  // (chain 13) … read from chain 13" is a banner that reads like a bug.
+  assert.match(banner.textContent, /different chain \(chain 14 · bb…\)/);
+  assert.match(banner.textContent, /chain 13 · aa…/, "the wallet's own chain is not named");
+  assert.match(banner.textContent, /nothing has been changed/);
   assert.ok(banner.querySelector('[data-go="settings"]'), 'no way to change the node');
   assert.ok(banner.querySelector('[data-action="rescan-chain"]'), 'no way to rescan');
 });
@@ -1078,4 +1080,125 @@ test('settings: a backend without sync.rescan renders no rescan control', async 
   delete b.sync.rescan;
   const { root } = await at(t, '#settings', b);
   assert.equal(root.querySelector('[data-role="rescan"]'), null);
+});
+
+// ------------------------------------------------------------------------- fix round 3 --------
+const SAME_ID_DIFFERENT_CHAIN = {
+  expected: { chainId: 13, genesis: 'aaaaaaaabbbb' },
+  got: { chainId: 13, genesis: 'ccccccccdddd' },
+};
+
+test('home: two chains with the same id are told apart by their genesis', async (t) => {
+  // Without the genesis this read "different chain (chain 13) … read from chain 13".
+  const b = scanAnswering({ wrongChain: SAME_ID_DIFFERENT_CHAIN });
+  const { root } = await at(t, '#home', b);
+  const text = root.querySelector('[data-role="wrong-chain"]').textContent;
+  assert.match(text, /chain 13 · cccccccc…/);
+  assert.match(text, /chain 13 · aaaaaaaa…/);
+});
+
+test('home: a node that will not identify itself is named as such', async (t) => {
+  const b = scanAnswering({
+    wrongChain: { expected: { chainId: 13, genesis: 'aaaaaaaabbbb' }, got: { chainId: null, genesis: null, unknown: true } },
+  });
+  const { root } = await at(t, '#home', b);
+  assert.match(root.querySelector('[data-role="wrong-chain"]').textContent, /will not say which chain it is/);
+});
+
+test('home: a wallet ahead of the network is told so, and offered a plain rescan', async (t) => {
+  const b = scanAnswering({ behind: { tip: 12, wallet: 900_000, walletAhead: true } });
+  const { app, root } = await at(t, '#home', b);
+  const banner = root.querySelector('[data-role="behind"]');
+  assert.match(banner.textContent, /scan position is ahead of this network/);
+  assert.match(banner.textContent, /read to block 900000/);
+  assert.ok(banner.querySelector('[data-action="rescan-plain"]'), 'no way out is offered');
+
+  banner.querySelector('[data-action="rescan-plain"]').click();
+  await app.idle();
+  root.querySelector('[role="dialog"] [data-role="confirm"]').click();
+  await app.idle();
+  const call = b.calls.find(([name]) => name === 'sync.rescan');
+  assert.ok(call, 'the rescan never happened');
+  assert.notEqual(call[1] && call[1].forChain, true, 'a wallet that is merely ahead must keep its notes');
+});
+
+test('home: another tab finishing refreshes from the cache, without starting a scan', async (t) => {
+  // The promise the `otherTab` banner makes. The old code removed its only channel listener when
+  // the wait resolved, so nothing was left to hear the other tab finish.
+  let fire = null;
+  const b = unlockedBackend({
+    sync: {
+      scan: async () => ({ notes: [], activity: [], scannedHeight: 1, head: 1, lastSyncMs: Date.now(), otherTab: true }),
+      onChanged: (cb) => { fire = cb; return () => { fire = null; }; },
+    },
+  });
+  const { app, root } = await at(t, '#home', b);
+  assert.match(root.querySelector('[data-role="banner-slot"]').textContent, /Another tab is syncing/);
+  assert.ok(typeof fire === 'function', 'the screen never subscribed');
+
+  const scansBefore = b.calls.filter(([name]) => name === 'sync.scan').length;
+  fire({ reason: 'scan' });
+  await app.idle();
+  assert.equal(root.querySelector('[data-role="banner-slot"]').innerHTML, '', 'the banner never cleared');
+  assert.equal(b.calls.filter(([name]) => name === 'sync.scan').length, scansBefore, 'it started a scan instead of reading the cache');
+  assert.ok(b.calls.some(([name]) => name === 'sync.cached'));
+
+  app.destroy();
+  assert.equal(fire, null, 'the subscription outlived the screen');
+});
+
+test('home: a backend without sync.onChanged still works', async (t) => {
+  const b = unlockedBackend();
+  assert.equal(typeof b.sync.onChanged, 'undefined');
+  const { root } = await at(t, '#home', b);
+  assert.ok(root.querySelector('.hero'));
+});
+
+test('activity: the wrong-chain banner is shown there too, with its way out', async (t) => {
+  // `sync.cached()` carries the wallet's chain state, so a user who goes straight to Activity
+  // sees the same blocking state as one who stayed on home.
+  const b = unlockedBackend({
+    sync: {
+      cached: () => ({
+        notes: [], activity: [], scannedHeight: 1, head: 1, lastSyncMs: Date.now(),
+        wrongChain: SAME_ID_DIFFERENT_CHAIN,
+      }),
+      scan: () => new Promise(() => {}),
+    },
+  });
+  const { app, root } = await at(t, '#activity', b);
+  const banner = root.querySelector('[data-role="wrong-chain"]');
+  assert.ok(banner, 'activity showed a history from another chain with no warning');
+  assert.match(banner.textContent, /chain 13 · cccccccc…/);
+
+  banner.querySelector('[data-action="rescan-chain"]').click();
+  await app.idle();
+  root.querySelector('[role="dialog"] [data-role="confirm"]').click();
+  await app.idle();
+  assert.ok(b.calls.some(([name, opts]) => name === 'sync.rescan' && opts && opts.forChain === true));
+});
+
+test('send: the entry refuses outright while the node is on another chain', async (t) => {
+  const b = unlockedBackend({
+    sync: {
+      cached: () => ({
+        notes: [], activity: [], scannedHeight: 1, head: 1, lastSyncMs: Date.now(),
+        wrongChain: SAME_ID_DIFFERENT_CHAIN,
+      }),
+      scan: () => new Promise(() => {}),
+    },
+  });
+  const { root } = await at(t, '#send/0', b);
+  assert.ok(root.querySelector('[data-role="wrong-chain"]'), 'the send flow started anyway');
+  assert.equal(root.querySelector('textarea[name=to]'), null, 'it offered an address field');
+  assert.equal(root.querySelector('input[name=amount]'), null, 'it offered an amount field');
+  // …and it never asked what a transfer would cost against the wrong chain's node.
+  assert.equal(b.calls.some(([name]) => name === 'send.estimate'), false);
+  assert.equal(b.calls.some(([name]) => name === 'send.maxSendable'), false);
+});
+
+test('send: with the chains agreeing, the flow is untouched', async (t) => {
+  const { root } = await at(t, '#send/0');
+  assert.ok(root.querySelector('textarea[name=to]'), 'the ordinary send flow broke');
+  assert.equal(root.querySelector('[data-role="wrong-chain"]'), null);
 });

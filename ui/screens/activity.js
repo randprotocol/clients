@@ -6,6 +6,7 @@ import { registerScreen } from '../app.js';
 import { groupByDay } from '../lib/assets.js';
 import { activityRowMarkup, listMarkup } from '../lib/rows.js';
 import { wireSelection } from '../lib/panes.js';
+import { wrongChainBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
 
 function skeletonMarkup() {
   return h`
@@ -60,11 +61,18 @@ registerScreen('activity', {
     const all = [...(sync.activity || [])].sort((a, b) => b.time - a.time);
     let active = 'all';
 
+    // `sync.cached()` carries the wallet's chain state, not just the scanning screen's — so a
+    // user who comes straight here sees the same blocking banner as one who stayed on home, and
+    // knows this history was read from a chain the current node is not on.
+    let wrongChain = sync.wrongChain || null;
+
     function paint() {
       const items = active === 'all' ? all : all.filter((a) => String(a.asset) === active);
+      const banner = raw(wrongChain ? wrongChainBannerMarkup(wrongChain, { canRescan: canRescan(ctx) }) : '');
       root.innerHTML = h`
         <h1 class="sr-only">Activity</h1>
         <div class="topbar"><span class="topbar-title">Activity</span></div>
+        ${banner}
         ${raw(filterChipsMarkup(assets, active))}
         ${raw(groupsMarkup(items, assetsByIndex, Date.now()))}`;
       // These rows are brand new nodes, so the marker has to be put back on whichever of them is
@@ -87,6 +95,18 @@ registerScreen('activity', {
       paint();
     });
 
-    return () => { offFilter(); selection.destroy(); };
+    // The banner's own way out. This is a PARENT pane on a wide screen — a detail may be open
+    // beside it — so the rescan repaints this list only, and never re-fetches for a detail change.
+    const offRescanChain = on(root, '[data-action="rescan-chain"]', 'click', async (evt) => {
+      evt.preventDefault();
+      const fresh = await confirmRescan(ctx, { forChain: true });
+      if (!fresh || !ctx.isCurrent()) return;
+      wrongChain = fresh.wrongChain || null;
+      all.length = 0;
+      all.push(...[...(fresh.activity || [])].sort((a, b) => b.time - a.time));
+      paint();
+    });
+
+    return () => { offFilter(); offRescanChain(); selection.destroy(); };
   },
 });

@@ -95,7 +95,8 @@ function networkMarkup(settings) {
 // non-destructive way out of a wallet that has read the wrong chain, or has simply got itself
 // into a state a fresh read would fix — the alternative used to be a wipe, which loses the keys.
 const RESCAN_CONTROL = '<div class="stack tight">'
-  + '<p class="caption">Re-read this node from the start. Your keys, your password and your settings are not touched.</p>'
+  + '<p class="caption">Re-read this node from the start. Your keys, your password and your settings are not touched. '
+  + 'A light wallet can only report what its node serves it, so if a balance looks wrong, switch node and rescan.</p>'
   + '<button class="btn block" type="button" data-role="rescan">Rescan wallet</button>'
   + '</div>';
 

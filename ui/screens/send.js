@@ -24,6 +24,7 @@
 import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
+import { wrongChainBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
 import { parseUnits, formatUnits, elapsed } from '../lib/format.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink } from '../lib/explorer.js';
@@ -53,16 +54,18 @@ registerScreen('send', {
     let assets;
     let ownAddress = '';
     let settings = {};
+    let cached = {};
     let canProve = { ok: false, reason: 'Proving is not available here.' };
     try {
-      const [list, info, prove, cfg] = await Promise.all([
+      const [list, info, prove, cfg, sync] = await Promise.all([
         ctx.backend.assets.list(), ctx.backend.wallet.info(), ctx.backend.send.canProve(),
-        ctx.backend.settings.get(),
+        ctx.backend.settings.get(), ctx.backend.sync.cached(),
       ]);
       assets = list;
       ownAddress = (info && info.address) || '';
       if (prove) canProve = prove;
       if (cfg) settings = cfg;
+      if (sync) cached = sync;
     } catch (err) {
       if (!live()) return;
       root.querySelector('[data-role="step"]').innerHTML = h`
@@ -70,6 +73,20 @@ registerScreen('send', {
       return;
     }
     if (!live()) return;
+
+    // These notes were read from a different chain than the node is on, so there is no honest
+    // transfer to build: the backend refuses (definitely) and this says why before the user has
+    // typed an address. The same banner as home and activity — one implementation, three screens.
+    if (cached.wrongChain) {
+      root.querySelector('[data-role="step"]').innerHTML = wrongChainBannerMarkup(cached.wrongChain, { canRescan: canRescan(ctx) });
+      const offChainRescan = on(root, '[data-action="rescan-chain"]', 'click', async (evt) => {
+        evt.preventDefault();
+        const fresh = await confirmRescan(ctx, { forChain: true });
+        if (!fresh || !live()) return;
+        if (!fresh.wrongChain) ctx.go('#send');
+      });
+      return () => { offChainRescan(); };
+    }
 
     const stepEl = root.querySelector('[data-role="step"]');
     const indicatorEl = root.querySelector('[data-role="step-indicator"]');
