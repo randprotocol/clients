@@ -26,6 +26,12 @@
   --hairline: rgba(255, 255, 255, .04);
   --shimmer: rgba(255, 255, 255, .07);
   --press: rgba(255, 255, 255, .05);
+  /* Identicon knobs for registry-asset avatars: only the hue comes from the asset id. */
+  --id-s: 62%;
+  --id-bg-l: 58%;
+  --id-bg-a: .18;
+  --id-bd-a: .34;
+  --id-fg-l: 74%;
 }
 :root[data-theme="light"] {
   --shadow-1: 0 1px 2px rgba(20, 26, 46, .06);
@@ -35,6 +41,11 @@
   --hairline: rgba(20, 26, 46, .03);
   --shimmer: rgba(20, 26, 46, .06);
   --press: rgba(20, 26, 46, .04);
+  --id-s: 58%;
+  --id-bg-l: 52%;
+  --id-bg-a: .14;
+  --id-bd-a: .26;
+  --id-fg-l: 38%;
 }
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] {
@@ -45,6 +56,11 @@
     --hairline: rgba(20, 26, 46, .03);
     --shimmer: rgba(20, 26, 46, .06);
     --press: rgba(20, 26, 46, .04);
+    --id-s: 58%;
+    --id-bg-l: 52%;
+    --id-bg-a: .14;
+    --id-bd-a: .26;
+    --id-fg-l: 38%;
   }
 }
 
@@ -158,6 +174,7 @@ hr { border: 0; border-top: 1px solid var(--border-soft); margin: var(--s-4) 0; 
 .btn-primary:focus-visible,
 .btn-ghost:focus-visible,
 .btn-round:focus-visible,
+.btn-icon:focus-visible,
 .row:focus-visible,
 .chip:focus-visible,
 .card:focus-visible,

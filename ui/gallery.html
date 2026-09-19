@@ -14,10 +14,11 @@
 
 <!-- Icon sprite. Screens can copy the symbols they need; <use> keeps the markup readable. -->
 <svg class="g-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
-  <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></symbol>
-  <symbol id="i-receive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
-  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v6c0 4.2 2.8 7.6 7 9 4.2-1.4 7-4.8 7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
-  <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3"/><path d="M20 16H7l3 3"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M9 7h8v8"/></symbol>
+  <symbol id="i-receive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7 7 17"/><path d="M15 17H7V9"/></symbol>
+  <symbol id="i-faucet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5s5.5 5.9 5.5 9.7a5.5 5.5 0 0 1-11 0C6.5 9.4 12 3.5 12 3.5z"/><path d="M9.6 13.6a2.6 2.6 0 0 0 2.4 2.6"/></symbol>
+  <symbol id="i-bridge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"/><path d="M4 18c0-4.4 3.6-8 8-8s8 3.6 8 8"/><path d="M12 18v-8"/><path d="M7.6 18v-4.7"/><path d="M16.4 18v-4.7"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 12S6.4 5.8 12 5.8 21.4 12 21.4 12 17.6 18.2 12 18.2 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 11 8-7 8 7"/><path d="M6 10v9h12v-9"/></symbol>
   <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 1.8"/></symbol>
   <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="m15 9-2 4-4 2 2-4z"/></symbol>
@@ -58,7 +59,7 @@
   <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
   <a class="nav-item" href="#settings"><svg class="g-i"><use href="#i-settings"/></svg>Settings</a>
   <div class="sidebar-foot">
-    <button class="chip" type="button"><span class="dot"></span>Chain 8 · synced</button>
+    <button class="chip" type="button"><span class="dot"></span>Chain 10 · synced</button>
   </div>
 </aside>
 
@@ -76,9 +77,9 @@
   </header>
 
   <section class="hero" id="home">
-    <span class="label">Shielded balance</span>
+    <span class="label">Balance</span>
     <span class="amount">1,284.5392<span class="unit">RAND</span></span>
-    <span class="fiat">≈ $3,918.41</span>
+    <span class="sub">+12.05 RAND pending</span>
     <div class="hero-foot">
       <span class="dot"></span>
       <span>Synced to block 1,402,918</span>
@@ -87,20 +88,20 @@
 
   <div class="actions">
     <button class="btn-round" type="button">
-      <span class="ic"><svg><use href="#i-send"/></svg></span>
-      <span class="cap">Send</span>
-    </button>
-    <button class="btn-round" type="button">
       <span class="ic"><svg><use href="#i-receive"/></svg></span>
       <span class="cap">Receive</span>
     </button>
     <button class="btn-round" type="button">
-      <span class="ic"><svg><use href="#i-shield"/></svg></span>
-      <span class="cap">Shield</span>
+      <span class="ic"><svg><use href="#i-send"/></svg></span>
+      <span class="cap">Send</span>
     </button>
     <button class="btn-round" type="button">
-      <span class="ic"><svg><use href="#i-swap"/></svg></span>
-      <span class="cap">Swap</span>
+      <span class="ic"><svg><use href="#i-faucet"/></svg></span>
+      <span class="cap">Faucet</span>
+    </button>
+    <button class="btn-round" type="button">
+      <span class="ic"><svg><use href="#i-bridge"/></svg></span>
+      <span class="cap">Bridge</span>
     </button>
   </div>
 
@@ -110,34 +111,32 @@
       <button class="row" type="button">
         <span class="avatar accent">R</span>
         <span class="row-main">
-          <span class="row-title">Rand</span>
-          <span class="row-sub">Shielded · RAND</span>
+          <span class="row-title"><span class="truncate">Rand</span></span>
+          <span class="row-sub">RAND</span>
         </span>
         <span class="row-end">
           <span class="amount">1,284.5392</span>
-          <span class="row-meta">$3,918.41</span>
+          <span class="row-meta">+12.05 pending</span>
         </span>
       </button>
       <button class="row" type="button">
-        <span class="avatar">T</span>
+        <span class="avatar rpl" data-hue="204">W</span>
         <span class="row-main">
-          <span class="row-title">Test USD</span>
-          <span class="row-sub">Shielded · tUSD</span>
+          <span class="row-title"><span class="truncate">Wrapped Ether</span><span class="chip xs">RPL</span></span>
+          <span class="row-sub">wETH</span>
         </span>
         <span class="row-end">
-          <span class="amount">420.0000</span>
-          <span class="row-meta">$420.00</span>
+          <span class="amount">0.5000</span>
         </span>
       </button>
       <button class="row" type="button">
-        <span class="avatar">N</span>
+        <span class="avatar rpl" data-hue="36">W</span>
         <span class="row-main">
-          <span class="row-title">Notes pending</span>
-          <span class="row-sub">3 notes awaiting confirmation</span>
+          <span class="row-title"><span class="truncate">Wrapped Bitcoin</span><span class="chip xs">RPL</span></span>
+          <span class="row-sub">wBTC</span>
         </span>
         <span class="row-end">
-          <span class="amount">12.0500</span>
-          <span class="row-meta">2 blocks</span>
+          <span class="amount">0.0000</span>
         </span>
       </button>
     </div>
@@ -149,44 +148,44 @@
       <button class="row" type="button">
         <span class="avatar in"><svg><use href="#i-receive"/></svg></span>
         <span class="row-main">
-          <span class="row-title">Received</span>
+          <span class="row-title"><span class="truncate">Received</span></span>
           <span class="row-sub mono">rand1q9x…7k2m</span>
         </span>
         <span class="row-end">
-          <span class="amount in">+24.0000</span>
+          <span class="amount in">+0.5 wETH</span>
           <span class="row-meta">2 min ago</span>
         </span>
       </button>
       <button class="row" type="button">
         <span class="avatar out"><svg><use href="#i-send"/></svg></span>
         <span class="row-main">
-          <span class="row-title">Sent</span>
+          <span class="row-title"><span class="truncate">Sent</span></span>
           <span class="row-sub mono">rand1p4r…9v3d</span>
         </span>
         <span class="row-end">
-          <span class="amount">−8.2500</span>
+          <span class="amount">−8.25 RAND</span>
           <span class="row-meta">Today, 09:14</span>
         </span>
       </button>
       <button class="row" type="button">
         <span class="avatar pending"><svg><use href="#i-clock"/></svg></span>
         <span class="row-main">
-          <span class="row-title">Proving</span>
+          <span class="row-title"><span class="truncate">Proving</span></span>
           <span class="row-sub">Bundle proof · 62 %</span>
         </span>
         <span class="row-end">
-          <span class="amount">−120.0000</span>
+          <span class="amount">−120.00 RAND</span>
           <span class="row-meta">Pending</span>
         </span>
       </button>
       <button class="row" type="button">
         <span class="avatar failed"><svg><use href="#i-close"/></svg></span>
         <span class="row-main">
-          <span class="row-title">Failed</span>
-          <span class="row-sub">Insufficient shielded notes</span>
+          <span class="row-title"><span class="truncate">Failed</span></span>
+          <span class="row-sub">Not enough notes to cover the amount</span>
         </span>
         <span class="row-end">
-          <span class="amount">−60.0000</span>
+          <span class="amount">−60.00 RAND</span>
           <span class="row-meta">Yesterday</span>
         </span>
       </button>
@@ -221,18 +220,18 @@
         <label class="field">
           <span class="label">Recipient</span>
           <input type="text" value="rand1q9x…7k2m" spellcheck="false">
-          <span class="hint">Shielded addresses start with rand1.</span>
+          <span class="hint">Addresses start with rand1.</span>
         </label>
         <label class="field amount-field">
           <span class="label">Amount</span>
-          <input type="text" inputmode="decimal" value="120.0000">
+          <input type="text" inputmode="decimal" value="120.00">
           <span class="hint">Available 1,284.5392 RAND · fee 0.0021 RAND</span>
         </label>
         <label class="field invalid">
-          <span class="label">Memo</span>
-          <input type="text" value="rent for the loft in the old mill district" aria-invalid="true">
-          <span class="hint">Encrypted, visible only to the recipient.</span>
-          <span class="error">Memo is 512 bytes over the note limit.</span>
+          <span class="label">Recipient</span>
+          <input type="text" value="rand1q9x…7k2n" spellcheck="false" aria-invalid="true">
+          <span class="hint">Addresses start with rand1.</span>
+          <span class="error">Not a valid address — the checksum does not match.</span>
         </label>
         <label class="field">
           <span class="label">Recovery phrase</span>
@@ -252,6 +251,7 @@
       <span class="chip positive"><svg class="g-i"><use href="#i-check"/></svg>Confirmed</span>
       <span class="chip warn">Pending</span>
       <span class="chip negative">Failed</span>
+      <span class="chip xs">RPL</span>
       <button class="chip" type="button"><span class="mono">rand1q9x…7k2m</span><svg class="g-i"><use href="#i-copy"/></svg></button>
     </div>
   </section>
@@ -325,7 +325,6 @@
         </div>
         <div class="cluster">
           <button class="chip" type="button"><span class="mono">rand1q9x…7k2m</span><svg class="g-i"><use href="#i-copy"/></svg></button>
-          <button class="chip" type="button">Set amount</button>
         </div>
         <button class="btn block" type="button"><svg class="g-i"><use href="#i-copy"/></svg>Copy address</button>
       </div>
@@ -340,9 +339,9 @@
       <div class="sheet">
         <div class="grab"></div>
         <h3 class="sheet-title">Confirm send</h3>
-        <p class="sheet-sub">This spends 3 shielded notes and creates a new change note.</p>
+        <p class="sheet-sub">This spends 3 notes and creates a new change note.</p>
         <div class="kv"><span class="k">To</span><span class="v mono">rand1p4r…9v3d</span></div>
-        <div class="kv"><span class="k">Amount</span><span class="v amount">120.0000 RAND</span></div>
+        <div class="kv"><span class="k">Amount</span><span class="v amount">120.00 RAND</span></div>
         <div class="kv"><span class="k">Network fee</span><span class="v amount">0.0021 RAND</span></div>
         <div class="sheet-foot">
           <button class="btn" type="button">Cancel</button>
@@ -490,11 +489,18 @@
       <h3>Transaction</h3>
       <span class="chip positive"><svg class="g-i"><use href="#i-check"/></svg>Confirmed</span>
     </div>
-    <span class="amount">−8.2500<span class="unit">RAND</span></span>
+    <span class="amount">−8.25<span class="unit">RAND</span></span>
     <div class="kv"><span class="k">To</span><span class="v mono">rand1p4r…9v3d</span></div>
     <div class="kv"><span class="k">Block</span><span class="v amount">1,402,914</span></div>
     <div class="kv"><span class="k">Fee</span><span class="v amount">0.0021 RAND</span></div>
-    <div class="kv"><span class="k">Memo</span><span class="v">Rent, September</span></div>
+    <div class="kv">
+      <span class="k">Transaction key</span>
+      <span class="v cluster">
+        <span class="mono truncate">tk1x8f4k…2d9a</span>
+        <button class="btn-icon" type="button" aria-label="Reveal the full transaction key"><svg class="g-i"><use href="#i-eye"/></svg></button>
+        <button class="btn-icon" type="button" aria-label="Copy the transaction key"><svg class="g-i"><use href="#i-copy"/></svg></button>
+      </span>
+    </div>
     <button class="btn block" type="button">View in explorer</button>
   </div>
 </aside>
@@ -506,7 +512,7 @@
   <h3 class="sheet-title">Confirm send</h3>
   <p class="sheet-sub">Sliding up over a fading scrim, 220 ms, ease-out.</p>
   <div class="kv"><span class="k">To</span><span class="v mono">rand1p4r…9v3d</span></div>
-  <div class="kv"><span class="k">Amount</span><span class="v amount">120.0000 RAND</span></div>
+  <div class="kv"><span class="k">Amount</span><span class="v amount">120.00 RAND</span></div>
   <div class="sheet-foot">
     <button class="btn" id="close-sheet" type="button">Cancel</button>
     <button class="btn btn-primary" type="button">Prove &amp; send</button>

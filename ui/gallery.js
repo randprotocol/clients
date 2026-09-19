@@ -49,6 +49,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (label) label.textContent = `${Math.round(pct * 100)}%`;
   }
 
+  // Registry-asset avatars: the hue is a property of the asset, not of the theme, so it is written
+  // through the CSSOM exactly as a screen would do it from the asset id.
+  for (const avatar of document.querySelectorAll('.avatar[data-hue]')) {
+    avatar.style.setProperty('--hue', avatar.dataset.hue);
+  }
+
   // Live overlay demo, so the slide-up and the scrim fade can be seen for real.
   const overlay = document.getElementById('live-sheet');
   const scrim = document.getElementById('live-scrim');
