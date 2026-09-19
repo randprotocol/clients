@@ -27,7 +27,7 @@ enum Theme {
     static let borderSoft = Color.adaptive(light: 0xE8EAF3, dark: 0x1E2439)
     static let text = Color.adaptive(light: 0x141A2E, dark: 0xEEF0F7)
     static let textSoft = Color.adaptive(light: 0x4A5270, dark: 0xA6ADC8)
-    static let textMute = Color.adaptive(light: 0x7B8299, dark: 0x6F7797)
+    static let textMute = Color.adaptive(light: 0x646B82, dark: 0x848BA6)
     static let textStrong = Color.adaptive(light: 0x0A0F1F, dark: 0xFFFFFF)
     static let accent = Color.adaptive(light: 0x4F5FE8, dark: 0x6F7EFF)
     static let accent2 = Color.adaptive(light: 0x8457E6, dark: 0x9B6BFF)
