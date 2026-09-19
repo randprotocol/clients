@@ -1,31 +1,36 @@
 #!/usr/bin/env bash
-# Fails if our tree still says shrugg anywhere except the wire names the node owns.
+# Fails if our tree still says shrugg anywhere, in any case.
 #
-# Case matters here by design: the node's wire vocabulary (RPC method names like
-# `shrugg_getCommitments`, the `shrugg1` address prefix, the vendored crate/binary names
-# `shrugg-core`/`shrugg-zkvm`/`shrugg-client`/`shrugg-node`, and the `shrugg` CLI itself) is always
-# lowercase and is never renamed. The token symbol and our own identifiers (`ShruggCore`,
-# `SHRUGG` as a currency ticker, `shrugg_wallet` as our library name) are not wire names and must
-# become RAND/Rand/rand_wallet.
+# The fullnode renamed itself (SHRUGG/SESH → RAND) at upstream `ed96c39`: the crates are
+# `randprotocol-core`/`-zkvm`/`-client`/`-node`, the binaries are `rand-node` and `rand`, the RPC
+# namespace is `rand_`, addresses are `rand1…`. Nothing on the wire is called shrugg any more, so
+# this guard has no allow-list: every hit is an offender.
 #
 # Inline opt-out: a line containing the marker `rename-guard: allow` (e.g. in a trailing comment)
-# is skipped, for the rare line that legitimately mentions the old name on purpose (doc prose
-# contrasting it with the new one, or a test asserting the old name/key is now absent) rather than
-# leaving it behind by mistake. The HARDFAIL set below always wins over the marker.
+# is skipped, for the rare line that legitimately mentions the old name on purpose — doc prose
+# contrasting it with the new one, or a test asserting the old name is now absent — rather than
+# leaving it behind by mistake. The HARDFAIL set below always wins over the marker: our own former
+# identifiers (`shrugg_wallet` as the library name, `ShruggCore`) may never come back under any
+# excuse.
 #
-# Portability: the allow-list stripping runs through one `perl` invocation over the whole grep
-# stream, not a `sed`/`grep` pipeline inside a per-line bash loop. Word-boundary matching for the
-# bare `shrugg` CLI name needs backslash-b-style lookaround, and BSD sed/grep (macOS) and GNU
-# sed/grep (Linux CI) disagree on how to spell that: the old draft of this script used a
-# BSD-only bracket-expression word-boundary extension that GNU's sed/grep reject outright, and
-# GNU's own word-boundary escapes aren't recognised by BSD's. Perl's regex engine is the same
-# everywhere it ships, which is every mainstream macOS and Linux install, so it is used instead
-# of trying to keep two sed dialects in sync (see the `(?<!...)`/`(?!...)` lookaround below).
+# Portability: the whole grep stream is filtered by one `perl` invocation rather than a
+# `sed`/`grep` pipeline inside a per-line bash loop, because BSD (macOS) and GNU (Linux CI)
+# sed/grep disagree on regex dialect — an earlier draft used a BSD-only bracket-expression word
+# boundary that GNU rejects outright. Perl's regex engine is identical everywhere it ships, which
+# is every mainstream macOS and Linux install.
+#
+# Two kinds of thing are deliberately out of scope for the scan:
+#   * non-source trees — the vendored fullnode and circuits checkouts (upstream's own history
+#     still names the old chain in its docs and retired genesis files), build output, package
+#     caches, and `.superpowers/` task briefs;
+#   * this script, which cannot grep for a word without containing it, and the four design
+#     records that describe the rename itself and must keep quoting the old names to stay
+#     readable: `docs/superpowers/{specs,plans}/2026-09-1[39]-*.md`.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 command -v perl >/dev/null 2>&1 || {
-  echo "check-rename.sh needs perl (for portable BSD/GNU-identical word-boundary matching); none found on PATH" >&2
+  echo "check-rename.sh needs perl (for portable BSD/GNU-identical regex matching); none found on PATH" >&2
   exit 2
 }
 
@@ -34,14 +39,13 @@ RAW=$(grep -rIniE 'shrugg' . \
   --exclude-dir=build --exclude-dir=.gradle --exclude-dir=node_modules \
   --exclude-dir=DerivedData --exclude-dir=Frameworks --exclude-dir=jniLibs \
   --exclude-dir=.superpowers \
-  --exclude=check-rename.sh --exclude=Cargo.lock --exclude='2026-09-1[39]-*.md' \
-  2>/dev/null | grep -v '^\./extension/shared/core/' || true)
+  --exclude=check-rename.sh \
+  2>/dev/null \
+  | grep -v '^\./extension/shared/core/' \
+  | grep -Ev '^\./docs/superpowers/(specs|plans)/2026-09-1[39]-[^:]*\.md:' || true)
 
-# For each line: HARDFAIL (case-insensitive) always wins, even over the rename-guard marker.
-# Otherwise the marker skips the line. Otherwise strip every allowed (wire-name) token
-# case-sensitively; if "shrugg" in any case still remains, the line is a real offender (e.g. an
-# un-renamed "SHRUGG" ticker, or a bare `shrugg` immediately glued to other identifier characters
-# that isn't one of the recognised wire-name shapes).
+# HARDFAIL (case-insensitive) always wins, even over the rename-guard marker. Otherwise the
+# marker skips the line. Otherwise any shrugg at all, in any case, is an offender.
 offenders=()
 while IFS= read -r line; do
   offenders+=("$line")
@@ -49,26 +53,12 @@ done < <(printf '%s\n' "$RAW" | perl -ne '
   BEGIN {
     $HARDFAIL = qr{shrugg_wallet|ShruggCore}i;
     $MARKER   = qr{rename-guard: allow};
-    $ALLOW = qr{
-        shrugg_[a-zA-Z]+                          # shrugg_getCommitments, shrugg_core, shrugg_client, etc
-      | shrugg1                                    # the shrugg1 address prefix, incl. examples, test vectors
-      | shrugg-(?:core|zkvm|client|node)            # vendored crate names and fullnode binaries
-      | UNITS_PER_SHRUGG                            # the vendor crate own constant name
-      | "shrugg"                                    # the bare wire literal, e.g. RPC_NAMESPACE == "shrugg"
-      | (?<![A-Za-z0-9_-])shrugg(?![A-Za-z0-9_-])   # standalone shrugg CLI name in prose: a whole word,
-                                                     # not glued to a letter, digit, underscore or hyphen
-                                                     # on either side (so shrugg wallet, backtick shrugg
-                                                     # backtick, shrugg send pass; shrugg-node and
-                                                     # shrugg_wallet do not, those are handled above and
-                                                     # by HARDFAIL respectively)
-    }x;
   }
   chomp;
   next if $_ eq "";
   if (/$HARDFAIL/) { print "$_\n"; next; }
   next if /$MARKER/;
-  (my $stripped = $_) =~ s/$ALLOW//g;
-  print "$_\n" if $stripped =~ /shrugg/i;
+  print "$_\n" if /shrugg/i;
 ')
 
 if [ "${#offenders[@]}" -gt 0 ]; then
