@@ -15,19 +15,27 @@
 //! Wire conventions match `docs/rpc.md` of the fullnode: `Word8` values (keys, commitments,
 //! nullifiers, roots, witness levels) are 64 lowercase hex characters, little-endian word by
 //! word; amounts are decimal strings of units (1 RAND = 10^9 units); addresses are
-//! `rand1` + base58.
+//! `shrugg1` + base58.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use randprotocol_core::gas;
-use randprotocol_core::ledger::TIME_WINDOW;
-use randprotocol_core::notes::{word8_from_hex, word8_to_hex, Bundle, Envelope, ShieldedAddress, Word8, DEPTH};
-use randprotocol_core::{format_amount, parse_amount, Action, Transaction, FAUCET_MAX_UNITS, UNITS_PER_RAND};
-use randprotocol_zkvm::address::{address_of, envelope_from_core, seal_note};
-use randprotocol_zkvm::executor::prove_bundle;
-use randprotocol_zkvm::machine::{Backend, FriProfile};
-use randprotocol_zkvm::notes::{bundle_inputs, expected_bundle_outputs, Note, SpendKey, ViewingKey};
-use randprotocol_zkvm::viewing::TxKey;
+use shrugg_core::gas;
+use shrugg_core::ledger::TIME_WINDOW;
+use shrugg_core::notes::{word8_from_hex, word8_to_hex, Bundle, Envelope, ShieldedAddress, Word8, DEPTH};
+use shrugg_core::{format_amount, parse_amount, Action, Transaction, FAUCET_MAX_UNITS};
+use shrugg_zkvm::address::{address_of, envelope_from_core, seal_note};
+use shrugg_zkvm::executor::prove_bundle;
+use shrugg_zkvm::machine::{Backend, FriProfile};
+use shrugg_zkvm::notes::{bundle_inputs, expected_bundle_outputs, Note, SpendKey, ViewingKey};
+use shrugg_zkvm::viewing::TxKey;
+
+/// The RPC namespace the fullnode defines (`shrugg_getCommitments`, …). A wire name: never
+/// renamed, whatever this wallet or its token are called.
+pub const RPC_NAMESPACE: &str = "shrugg";
+/// The address human-readable part the fullnode defines. A wire name: never renamed.
+pub const ADDRESS_HRP: &str = "shrugg1";
+/// Units per whole token. Upstream calls the token SHRUGG; our code says RAND everywhere else.
+pub use shrugg_core::UNITS_PER_SHRUGG as UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode).
@@ -582,7 +590,7 @@ pub fn fixture_prove_request(profile: &str) -> Result<Value> {
     profile_from_str(profile)?;
     let sender = Wallet::generate();
     let recipient = Wallet::generate();
-    let exec = randprotocol_zkvm::executor::ZkExecutor::new(FriProfile::Test);
+    let exec = shrugg_zkvm::executor::ZkExecutor::new(FriProfile::Test);
     let note = Note::new(sender.vk.pk(), [0; 8], 3 * UNITS_PER_RAND, 0, 1);
     let tree = FullTree::new(vec![Note::new([1; 8], [0; 8], 1, 0, 1).commitment(), note.commitment()], &exec);
     let path: Vec<String> = tree.path(1).ok_or("fixture tree")?.iter().map(word8_to_hex).collect();
@@ -610,9 +618,11 @@ pub fn constants() -> Value {
         "default_chain_id": DEFAULT_CHAIN_ID,
         "default_rpc_url": DEFAULT_RPC_URL,
         "explorer_url": EXPLORER_URL,
+        "rpc_namespace": RPC_NAMESPACE,
+        "address_hrp": ADDRESS_HRP,
         "token_symbol": "RAND",
         "token_decimals": 9,
-        "units_per_rand": UNITS_PER_RAND.to_string(),
+        "units_per_shrugg": UNITS_PER_RAND.to_string(),
         "bundle_base_fee": gas::BUNDLE_BASE.to_string(),
         "faucet_max_units": FAUCET_MAX_UNITS.to_string(),
         "time_window": TIME_WINDOW,
@@ -839,6 +849,22 @@ mod tests {
         assert_eq!(select_inputs(&held, 0, 25).unwrap().chosen.len(), 2);
         assert!(pending_cleared(&held[1], 3 + TIME_WINDOW + 1));
         assert!(!pending_cleared(&held[1], 3 + TIME_WINDOW));
+    }
+
+    #[test]
+    fn version_reports_rand_and_wire_names() {
+        let v = constants();
+        assert_eq!(v["token_symbol"], "RAND");
+        assert_eq!(v["rpc_namespace"], RPC_NAMESPACE);
+        assert_eq!(v["address_hrp"], ADDRESS_HRP);
+        assert_eq!(RPC_NAMESPACE, "shrugg");
+        assert_eq!(ADDRESS_HRP, "shrugg1");
+    }
+
+    #[test]
+    fn user_facing_errors_say_rand() {
+        let err = select_inputs(&[], 0, 1).unwrap_err().to_string();
+        assert!(err.contains("RAND") && !err.contains("SHRUGG"), "{err}");
     }
 
     #[test]
