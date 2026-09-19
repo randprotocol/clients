@@ -100,6 +100,12 @@ export function wireSecretReveal(root, options = {}) {
     paintTimedLabel();
   }
 
+  /**
+   * `drop` is the difference between "stop showing it" and "forget it". The ten-second auto-hide
+   * and the Hide button only re-mask — the panel is still open and the caller still holds the
+   * secret, so revealing again is free. Losing focus, backgrounding, the post-copy timer and
+   * teardown are the ones that hand it back, and only for a caller that asked (`dropOnHide`).
+   */
   function hide({ drop = false } = {}) {
     holdTimer = clearTimer(holdTimer);
     autoHideTimer = clearTimer(autoHideTimer);
@@ -110,7 +116,7 @@ export function wireSecretReveal(root, options = {}) {
     }
     if (holdBtn) holdBtn.classList.remove('holding');
     paintTimedLabel();
-    if ((drop || dropOnHide) && typeof onDrop === 'function') onDrop();
+    if (drop && typeof onDrop === 'function') onDrop();
   }
 
   // ---- press and hold ----
@@ -150,12 +156,15 @@ export function wireSecretReveal(root, options = {}) {
     // shortly afterwards rather than leaving it in a closure for the life of the screen.
     if (dropOnHide && typeof onDrop === 'function') {
       dropTimer = clearTimer(dropTimer);
-      dropTimer = setTimeout(() => { hide(); }, copyDropMs);
+      dropTimer = setTimeout(() => { hide({ drop: true }); }, copyDropMs);
     }
   }
 
   // ---- the window stopped being looked at ----
-  function onAway() { if (revealed) hide(); }
+  // Backgrounded or blurred: a secret must not sit on a screen nobody is looking at. For a caller
+  // with `dropOnHide` this also hands it back — the post-copy timer aside, this is the path that
+  // makes settings ask for the password again.
+  function onAway() { if (revealed) hide({ drop: dropOnHide }); }
   function onVisibility() { if (typeof document !== 'undefined' && document.hidden) onAway(); }
 
   if (holdBtn) {

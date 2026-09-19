@@ -778,6 +778,66 @@ test('a real scan failure while home is still on screen does show the banner', a
 // padding, the 44 px tap target) all comes from `.btn`, so on their own they render as bare,
 // left-aligned text. `.btn-round` and `.btn-icon` declare their own box and are standalone. This
 // guard encodes exactly that, and reads it back out of the stylesheet so the two cannot drift.
+
+/**
+ * The static class tokens of every `class="…"` attribute in `src`.
+ *
+ * A class attribute in this codebase is often part-literal, part-template — `class="chip ${done ?
+ * 'positive' : 'warn'}"`. An earlier version of this guard skipped any attribute containing a
+ * `${…}` outright, which is exactly where an offending variant could hide. Each interpolation is
+ * replaced by a space (it is an unknown token, and it is also a token *boundary* — splicing the
+ * halves together would invent a class nobody wrote) and the literal text either side is kept.
+ */
+export function classTokenSets(src) {
+  const sets = [];
+  for (const match of src.matchAll(/class="([^"]*)"/g)) {
+    const value = match[1];
+    let statics = '';
+    let i = 0;
+    while (i < value.length) {
+      if (value[i] === '$' && value[i + 1] === '{') {
+        let depth = 1;
+        i += 2;
+        while (i < value.length && depth > 0) {
+          if (value[i] === '{') depth += 1;
+          else if (value[i] === '}') depth -= 1;
+          i += 1;
+        }
+        statics += ' ';
+      } else {
+        statics += value[i];
+        i += 1;
+      }
+    }
+    sets.push({ value, tokens: statics.split(/\s+/).filter(Boolean) });
+  }
+  return sets;
+}
+
+/** The `class="…"` attributes in `src` that use a variant from `needsBase` without `btn`. */
+export function variantOffenders(src, needsBase) {
+  const out = [];
+  for (const { value, tokens } of classTokenSets(src)) {
+    for (const variant of needsBase) {
+      if (tokens.includes(variant) && !tokens.includes('btn')) out.push(`class="${value}"`);
+    }
+  }
+  return out;
+}
+
+test('the button-variant matcher reads class tokens on both sides of an interpolation', () => {
+  // A unit test of the guard itself, so the guard below cannot pass by simply not looking.
+  assert.deepEqual(classTokenSets(`<a class="chip \${done ? 'positive' : 'warn'}">`)[0].tokens, ['chip']);
+  assert.deepEqual(classTokenSets('<b class="\${cls} btn-ghost">')[0].tokens, ['btn-ghost']);
+  assert.deepEqual(classTokenSets('<b class="btn btn-ghost \${x}">')[0].tokens, ['btn', 'btn-ghost']);
+  assert.deepEqual(classTokenSets('<b class="a\${x}b">')[0].tokens, ['a', 'b'], 'an interpolation splits tokens');
+
+  assert.deepEqual(variantOffenders('<button class="\${size} btn-ghost">x</button>', ['btn-ghost']),
+    ['class="\${size} btn-ghost"'], 'the case the old regex skipped');
+  assert.deepEqual(variantOffenders('<button class="btn btn-ghost \${size}">x</button>', ['btn-ghost']), []);
+  assert.deepEqual(variantOffenders('<button class="btn-round">x</button>', ['btn-ghost']), []);
+});
+
 test('no markup uses a button variant that needs .btn without it', async () => {
   const { readFile, readdir } = await import('node:fs/promises');
   const css = await readFile(new URL('../components.css', import.meta.url), 'utf8');
@@ -798,16 +858,11 @@ test('no markup uses a button variant that needs .btn without it', async () => {
     }
   }
   const offenders = [];
-  for (const dir of ['../screens/', '../']) {
+  for (const dir of ['../screens/', '../lib/', '../']) {
     for await (const [name, url] of walk(new URL(dir, import.meta.url))) {
       if (dir === '../' && !/^(app\.js|gallery\.html|dev\.html)$/.test(name)) continue;
       const src = await readFile(url, 'utf8');
-      for (const [, value] of src.matchAll(/class="([^"$]*)"/g)) {
-        const tokens = value.split(/\s+/).filter(Boolean);
-        for (const variant of NEEDS_BASE) {
-          if (tokens.includes(variant) && !tokens.includes('btn')) offenders.push(`${name}: class="${value}"`);
-        }
-      }
+      for (const offender of variantOffenders(src, NEEDS_BASE)) offenders.push(`${name}: ${offender}`);
     }
   }
   assert.deepEqual(offenders, [], 'a variant that only re-colours needs .btn for its box');

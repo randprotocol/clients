@@ -30,7 +30,7 @@ import { explorerLink } from '../lib/explorer.js';
 import {
   PHASE_LABELS, CANCELLABLE, ADDRESS_DEBOUNCE_MS, SELF_SEND_QUESTION,
   explainProvingError, outcomeOf, safeHash, draftFor, currentSend, startSend,
-  unknownOutcome, noteSyncFinished, plainUnits, checkAmount,
+  unknownOutcome, plainUnits, checkAmount,
 } from './send/state.js';
 import {
   shellMarkup, assetStepMarkup, rplOnlyMarkup, noRandMarkup, detailsStepMarkup,
@@ -110,6 +110,9 @@ registerScreen('send', {
     let debounceTimer = null;
     let screenTicker = null;
     let attached = null;          // the store this render is listening to
+    // The unknown-outcome confirmation, held here rather than read back off the checkbox: the DOM
+    // is what the user sees, not what the wallet decides on. Cleared by every re-render of a step.
+    let unknownConfirmed = false;
 
     function focusStepTitle() {
       const title = stepEl.querySelector('[data-role="step-title"]');
@@ -158,7 +161,10 @@ registerScreen('send', {
       if (next === 'review' && (!draft.estimate || reviewUnits <= 0n)) next = 'details';
       step = next;
       const unknown = unknownOutcome(ctx);
-      if (next === 'asset') stepEl.innerHTML = assetStepMarkup(assets);
+      // The review is the only step that can start a send, so it is the only one that carries the
+      // gate — but every step carries the warning, including the very first.
+      unknownConfirmed = false;
+      if (next === 'asset') stepEl.innerHTML = assetStepMarkup(assets, unknown);
       else if (next === 'details') {
         stepEl.innerHTML = detailsStepMarkup(asset, draft, {
           canPaste: typeof ctx.backend.platform.paste === 'function',
@@ -451,10 +457,12 @@ registerScreen('send', {
       goStep('review');
     });
 
-    // The unknown-outcome gate: proving again is only live once the box is ticked.
+    // The unknown-outcome gate: proving again is only live once the box is ticked. The flag is the
+    // gate; the `disabled` attribute is only how it looks.
     const offGate = on(root, 'input[name="checked-activity"]', 'change', (evt, box) => {
+      unknownConfirmed = !!box.checked;
       const prove = stepEl.querySelector('[data-action="prove"]');
-      if (prove) prove.disabled = !box.checked;
+      if (prove) prove.disabled = !unknownConfirmed;
     });
 
     const offCheckActivity = on(root, '[data-role="check-activity"]', 'click', (evt) => {
@@ -462,10 +470,11 @@ registerScreen('send', {
       // This attempt is over either way; the warning it left behind is not.
       ctx.state.send = null;
       attached = null;
-      // Re-scan before showing Activity, so what the user is sent to look at is current — and
-      // note when it finishes, because that is what lifts the extra confirm on the review.
+      // Re-scan before showing Activity, so what the user is sent to look at is current. Nothing
+      // is wired to its result here: the shell counts every scan, and a scan that starts after the
+      // failure and fulfils is what lifts the warning — whether this one, or the one home starts
+      // when the user simply navigates there (see markUnknownOutcome).
       Promise.resolve(ctx.backend.sync.scan(() => {}, { signal: ctx.session.signal }))
-        .then(() => { if (ctx.session.id === mySession) noteSyncFinished(ctx); })
         .catch(() => { /* the banner on Activity/home is where a scan failure belongs */ });
       ctx.go('#activity');
     });
@@ -479,8 +488,12 @@ registerScreen('send', {
 
     const offProve = on(root, '[data-action="prove"]', 'click', (evt) => {
       evt.preventDefault();
-      if (evt.target && evt.target.disabled) return;
+      // Everything that decides whether a transfer may start is re-checked here, from this flow's
+      // own state, at the moment of the click. Not from the DOM: `evt.target` is whatever was
+      // actually clicked (the button's icon, for one, which has no `disabled` at all), and a
+      // `disabled` attribute is a rendering, not a rule.
       if (currentSend(ctx)) return; // one transfer at a time
+      if (unknownOutcome(ctx) && !unknownConfirmed) return; // the last one's fate is still unknown
       const store = startSend(ctx, {
         asset: asset.index,
         to: draft.to,

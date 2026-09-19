@@ -454,6 +454,30 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     importWallet: (secret, password) => backendApi.wallet.import(secret, password),
   };
 
+  // Every `sync.scan` is counted, started and finished, on session-scoped state. Nothing in the
+  // shell uses the numbers; the send flow does, to decide whether the user has had a chance to see
+  // whether a transfer whose outcome it could not establish is on chain after all (see
+  // ui/screens/send/state.js). The shell is where this belongs because every backend call goes
+  // through it, so a scan started by *any* screen counts — the one home starts on mount just as
+  // much as the one the send flow starts deliberately. `ctx.state` is emptied when the session
+  // ends, so the counters reset with it.
+  //
+  // Two separate numbers on purpose: `scansStarted` is the ordinal handed to each call, and
+  // `scansConfirmed` is the highest ordinal to have *fulfilled*. A rejected or aborted scan read
+  // nothing, so it never moves the second one.
+  const origScan = backendApi.sync.scan;
+  if (typeof origScan === 'function') {
+    backendApi.sync.scan = (...args) => {
+      const ordinal = (ctx.state.scansStarted = (ctx.state.scansStarted || 0) + 1);
+      const p = origScan(...args);
+      p.then(
+        () => { if (ordinal > (ctx.state.scansConfirmed || 0)) ctx.state.scansConfirmed = ordinal; },
+        () => { /* a scan that failed saw nothing */ },
+      );
+      return p;
+    };
+  }
+
   // One place, not five call sites: every wallet method that changes *who is looking* ends the
   // session the moment it succeeds — before the caller's `await` resumes, so a handler that
   // navigates straight afterwards (create → #backup) is already inside the new session. A failure

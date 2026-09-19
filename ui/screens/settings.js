@@ -392,16 +392,29 @@ registerScreen('settings', {
     // Both go through lib/reveal.js: one implementation of the gesture, the masking, the copy and
     // the auto-hide, and `dropOnHide` on top — in settings a key that stops being looked at is
     // forgotten outright, and getting it back costs the password again.
-    let openPanel = null; // { slot, reveal } — at most one key is ever unlocked at a time
+    let openPanel = null; // { slot, reveal, collapsed } — one key is unlocked at a time, at most
+    let closingPanel = false; // `reveal.destroy()` calls back into onDrop; do not recurse
 
-    function closePanel({ collapse = true } = {}) {
+    /**
+     * Forgets the key and puts the password gate back. Called for every reason a key stops being
+     * available — Done, a blur, a backgrounded tab, a minute after a copy, teardown — so the screen
+     * can never be left showing Hold / Show / Copy controls that are silently inert.
+     */
+    function closePanel({ collapse = true, notify = false } = {}) {
+      if (closingPanel) return;
+      closingPanel = true;
       const panel = openPanel;
       openPanel = null;
       viewingKey = null;
       spendKey = null;
-      if (!panel) return;
-      panel.reveal.destroy();
-      if (collapse && panel.slot.isConnected !== false) panel.slot.innerHTML = panel.collapsed;
+      if (panel) {
+        panel.reveal.destroy();
+        if (collapse && panel.slot.isConnected !== false) panel.slot.innerHTML = panel.collapsed;
+      }
+      closingPanel = false;
+      if (panel && notify && live()) {
+        ctx.toast('Key hidden — enter your password to view it again.', { kind: 'positive' });
+      }
     }
 
     function keyPanelMarkup({ label, extra = '', disabled = false }) {
@@ -430,7 +443,9 @@ registerScreen('settings', {
         copy: (secret) => ctx.backend.platform.copy(secret),
         onCopied: () => { if (live()) ctx.toast('Copied', { kind: 'positive' }); },
         dropOnHide: true,
-        onDrop: () => { viewingKey = null; spendKey = null; },
+        // Not just "null the variable": the panel goes too, so what is on screen is the password
+        // gate rather than three buttons that would quietly do nothing.
+        onDrop: () => closePanel({ notify: true }),
         labels: { reveal: `Show ${label} for 10 seconds`, hide: `Hide ${label}` },
       });
       openPanel = { slot, reveal, collapsed };

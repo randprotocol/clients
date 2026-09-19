@@ -59,9 +59,10 @@ function assetRowMarkup(asset) {
     </li>`;
 }
 
-export function assetStepMarkup(assets) {
+export function assetStepMarkup(assets, unknown = null) {
   return h`
     <h2 class="title" data-role="step-title" tabindex="-1">Which asset?</h2>
+    ${unknownNoticeMarkup(unknown)}
     <div class="card flush">${listMarkup(assets.map((a) => assetRowMarkup(a)))}</div>`;
 }
 
@@ -133,8 +134,9 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
     ? raw(h`<div class="kv"><span class="k">Change back to you</span><span class="v amount">${amountOf(estimate.change)}</span></div>`)
     : '';
   // A standing unknown outcome makes proving again a deliberate act: the box has to be ticked
-  // before the button is live, and only until a scan has actually finished since the failure.
-  const gated = !!unknown && !unknown.syncedSince;
+  // before the button is live. `unknown` is already null once a later scan has settled the
+  // question (see unknownOutcome), so there is nothing else to ask here.
+  const gated = !!unknown;
   const gate = gated
     ? raw(h`
       <label class="check">

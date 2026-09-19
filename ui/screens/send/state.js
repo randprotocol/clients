@@ -110,25 +110,32 @@ export function draftFor(ctx, assetIndex) {
 
 // ------------------------------------------------------------- the unknown-outcome record ------
 /**
- * A transfer whose fate this wallet could not establish leaves a mark on the session. It is what
- * puts a standing warning above the form and the review, and what makes proving again take an
- * explicit "I checked" until the user has actually re-scanned. Nothing secret is in it.
+ * A transfer whose fate this wallet could not establish leaves a mark on the session: a standing
+ * warning on every step of the flow, and an explicit "I checked" in front of proving again.
+ *
+ * It is lifted by exactly one thing — **a scan that started after the failure and then fulfilled**
+ * — whoever started it: Check Activity, or simply going to home, which scans on mount. Both halves
+ * of that rule matter:
+ *   * *started after*, because a scan already running when the transfer failed may have read the
+ *     chain before the transaction ever reached it, so its finishing proves nothing;
+ *   * *fulfilled*, because a scan that failed or was aborted read nothing at all.
+ * The shell counts both (`ctx.state.scansStarted` / `scansConfirmed`, see ui/app.js); this only has
+ * to remember which ordinal it was at. Nothing secret is in the record.
  */
 export function markUnknownOutcome(ctx, { hash = null } = {}) {
-  ctx.state.sendUnknown = { hash: safeHash(hash), atMs: Date.now(), syncedSince: false };
+  ctx.state.sendUnknown = {
+    hash: safeHash(hash),
+    atMs: Date.now(),
+    atStarted: ctx.state.scansStarted || 0,
+  };
   return ctx.state.sendUnknown;
 }
 
+/** The standing record, or `null` once a later scan has settled the question. */
 export function unknownOutcome(ctx) {
-  return ctx.state.sendUnknown || null;
-}
-
-/** Called when a scan started *after* the failure has finished: the user has now had a chance to
- *  see whether the transfer is there. The warning stays for the session; the extra confirm does
- *  not. */
-export function noteSyncFinished(ctx) {
   const record = ctx.state.sendUnknown;
-  if (record) record.syncedSince = true;
+  if (!record) return null;
+  return (ctx.state.scansConfirmed || 0) > record.atStarted ? null : record;
 }
 
 // ------------------------------------------------------------------- the in-flight send -------

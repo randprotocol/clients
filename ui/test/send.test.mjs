@@ -18,6 +18,7 @@ import { registerScreen } from '../app.js';
 import { unlockedBackend } from './fake-backend.mjs';
 import { mountApp } from './helpers.mjs';
 import { explainProvingError } from '../screens/send.js';
+import { markUnknownOutcome, unknownOutcome } from '../screens/send/state.js';
 import { RPL_SEND_DISABLED_TEXT } from '../screens/asset.js';
 
 const TO = `rand1${'p'.repeat(40)}`;
@@ -646,8 +647,10 @@ test('a completed sync lifts the unknown-outcome gate', async (t) => {
   await turns();
   submit(root);
   await turns(6);
-  assert.ok(root.querySelector('[data-role="unknown-notice"]'), 'the notice stands for the session');
-  assertGone(root.querySelector('input[name="checked-activity"]'), 'but the gate is gone');
+  // Per the controller's ruling: the notice goes with the gate. Once a scan that started after the
+  // failure has finished, the user has had their chance to look, and the wallet stops nagging.
+  assertGone(root.querySelector('[data-role="unknown-notice"]'), 'the notice');
+  assertGone(root.querySelector('input[name="checked-activity"]'), 'the gate');
   assert.equal(root.querySelector('[data-action="prove"]').disabled, false);
 });
 
@@ -779,4 +782,163 @@ test('the proof cost comes from the estimate', async (t) => {
   assert.match(root.textContent, /2 proofs/);
   assert.match(root.textContent, /about 4 minutes/i);
   assert.doesNotMatch(root.textContent, /1 proof\b/);
+});
+
+// ============================================================ follow-up 1.5b ===================
+
+// ---- R. which scans lift the unknown-outcome gate ---------------------------------------------
+
+test('only a scan that both started after the failure and finished lifts the gate', () => {
+  // The rule, stated once: a scan already running when the transfer failed may have read the chain
+  // *before* the transaction reached it, so finishing proves nothing. Only a scan that started
+  // afterwards can have seen it. The shell counts both (see ui/app.js).
+  const ctx = { state: { scansStarted: 1, scansConfirmed: 0 } }; // one scan already in flight
+  markUnknownOutcome(ctx, {});
+  assert.ok(unknownOutcome(ctx), 'nothing has finished yet');
+
+  ctx.state.scansConfirmed = 1; // the scan that was already running finishes
+  assert.ok(unknownOutcome(ctx), 'a scan that started before the failure saw nothing');
+
+  ctx.state.scansStarted = 2;   // a new scan starts…
+  assert.ok(unknownOutcome(ctx), 'and has not finished');
+  ctx.state.scansConfirmed = 2; // …and finishes
+  assertGone(unknownOutcome(ctx), 'the record');
+});
+
+test('a scan that fails does not lift the gate', () => {
+  const ctx = { state: { scansStarted: 0, scansConfirmed: 0 } };
+  markUnknownOutcome(ctx, {});
+  ctx.state.scansStarted = 1; // a scan starts and then rejects: scansConfirmed never moves
+  assert.ok(unknownOutcome(ctx));
+});
+
+test('home’s own scan lifts the gate, not only the one Check Activity starts', async (t) => {
+  // The first scan — the one Check Activity kicks off — never answers. The second, which home
+  // starts when the user simply navigates there, does. Under the old rule only the first could
+  // ever lift the gate, so it stayed up for ever.
+  const src = unlockedBackend();
+  let scans = 0;
+  const { b, ctl } = controlledSend({
+    sync: {
+      scan: (...args) => {
+        scans += 1;
+        return scans === 1 ? new Promise(() => {}) : src.sync.scan(...args);
+      },
+    },
+  });
+  const { root, app } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  ctl.emit('submitting');
+  await turns();
+  ctl.fail(new Error('timed out'));
+  await turns();
+  root.querySelector('[data-role="check-activity"]').click();
+  await turns();
+  assert.equal(scans, 1, 'Check Activity started a scan that will never answer');
+
+  // Straight to home, which scans on mount.
+  await app.go('#home');
+  await turns(8);
+  assert.ok(scans >= 2, 'home started one of its own');
+
+  await app.go('#send');
+  await turns(4);
+  assertGone(root.querySelector('[data-role="unknown-notice"]'), 'the notice');
+});
+
+test('the standing notice is on every step of the flow, not only the form and the review', async (t) => {
+  const { b, ctl } = controlledSend({ sync: { scan: () => new Promise(() => {}) } });
+  const { root, app } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  ctl.emit('submitting');
+  await turns();
+  ctl.fail(new Error('timed out'));
+  await turns();
+  root.querySelector('[data-role="check-activity"]').click();
+  await turns();
+
+  // A fresh flow, started from the picker rather than resumed.
+  spied.length = 0; // `spied` is module-level: without this we would read another mount's ctx
+  await app.go('#spy');
+  await turns();
+  spied[0].state.sendDraft = null; // as if the user had not typed anything yet
+  await app.go('#send');
+  await turns();
+  assert.ok(root.querySelector('[data-asset="0"]'), 'the picker');
+  assert.ok(root.querySelector('[data-role="unknown-notice"]'), 'warned before a single field');
+});
+
+// ---- 2. the prove gate is enforced from state, not from the DOM -------------------------------
+
+async function gatedReview(t) {
+  const { b, ctl } = controlledSend({ sync: { scan: () => new Promise(() => {}) } });
+  const { root, app } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  ctl.emit('submitting');
+  await turns();
+  ctl.fail(new Error('timed out'));
+  await turns();
+  root.querySelector('[data-role="check-activity"]').click();
+  await turns();
+  await app.go('#send');
+  await turns();
+  submit(root);
+  await turns(6);
+  assert.ok(root.querySelector('input[name="checked-activity"]'), 'the gate is up');
+  // The failed attempt is already in `b.calls`; every assertion below is about what happens *next*.
+  const sends = () => b.calls.filter((c) => c[0] === 'send.send').length;
+  return { root, app, b, sends, sendsBefore: sends() };
+}
+
+test('a click landing on the prove button’s icon does not slip past the gate', async (t) => {
+  const { root, sends, sendsBefore } = await gatedReview(t);
+  // `evt.target` here is the <svg>, which has no `disabled` — the old check read it off the target
+  // and let this through.
+  const icon = root.querySelector('[data-action="prove"] svg');
+  assert.ok(icon, 'the button has an icon child to click on');
+  icon.dispatchEvent(new Event('click', { bubbles: true, cancelable: true }));
+  await turns();
+  assert.equal(sends(), sendsBefore, 'nothing was sent');
+});
+
+test('removing the disabled attribute by hand does not start a send', async (t) => {
+  const { root, sends, sendsBefore } = await gatedReview(t);
+  const prove = root.querySelector('[data-action="prove"]');
+  prove.removeAttribute('disabled');
+  prove.disabled = false;
+  prove.click();
+  await turns();
+  assert.equal(sends(), sendsBefore, 'the DOM is not the gate');
+});
+
+test('ticking the box really does let the send through', async (t) => {
+  const { root, sends, sendsBefore } = await gatedReview(t);
+  const gate = root.querySelector('input[name="checked-activity"]');
+  gate.checked = true;
+  gate.dispatchEvent(new Event('change', { bubbles: true }));
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  assert.equal(sends(), sendsBefore + 1, 'the gate opens, it does not jam');
+});
+
+test('re-rendering the review clears a tick the user is no longer looking at', async (t) => {
+  const { root, sends, sendsBefore } = await gatedReview(t);
+  const gate = root.querySelector('input[name="checked-activity"]');
+  gate.checked = true;
+  gate.dispatchEvent(new Event('change', { bubbles: true }));
+
+  // Back to the form and forward again: a fresh review, and the confirmation has to be given again.
+  root.querySelector('[data-role="edit"]').click();
+  await turns();
+  submit(root);
+  await turns(6);
+  const prove = root.querySelector('[data-action="prove"]');
+  assert.equal(prove.disabled, true, 'the new review is gated again');
+  prove.removeAttribute('disabled');
+  prove.click();
+  await turns();
+  assert.equal(sends(), sendsBefore, 'and the stale tick did not carry over');
 });

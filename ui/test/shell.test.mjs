@@ -225,3 +225,37 @@ test('trackGroup copies accessor properties without invoking them at mount', asy
   assert.equal(ctx.backend.platform.version, '9.9.9');
   assert.equal(reads, 2);
 });
+
+// ------------------------------------------------------------------------------------- 1.5b ----
+test('the shell counts scans started, and counts a scan finished only when it fulfils', async (t) => {
+  // The send flow's unknown-outcome gate is lifted by "a scan that started after the failure and
+  // finished". The shell is what can see both, because every backend call goes through it.
+  const ctl = { starts: 0, settle: [], fail: [] };
+  const b = unlockedBackend({
+    sync: {
+      scan: () => {
+        ctl.starts += 1;
+        return new Promise((resolve, reject) => { ctl.settle.push(resolve); ctl.fail.push(reject); });
+      },
+    },
+  });
+  visits.length = 0;
+  const { app } = await mountApp(t, b, { hash: '#spy' });
+  await app.idle();
+  const ctx = visits[0];
+  assert.equal(ctx.state.scansStarted || 0, 0, 'nothing has scanned yet');
+
+  ctx.backend.sync.scan(() => {});
+  assert.equal(ctx.state.scansStarted, 1, 'counted at the call, not at the answer');
+  assert.equal(ctx.state.scansConfirmed || 0, 0);
+
+  ctl.fail[0](new Error('the node could not be reached'));
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(ctx.state.scansConfirmed || 0, 0, 'a scan that failed saw nothing');
+
+  ctx.backend.sync.scan(() => {});
+  assert.equal(ctx.state.scansStarted, 2);
+  ctl.settle[1]({ notes: [], activity: [] });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(ctx.state.scansConfirmed, 2, 'and one that fulfilled did');
+});

@@ -383,3 +383,46 @@ test('a revealed secret is hidden again when the window loses focus', async (t) 
   await app.idle();
   assert.ok(!root.textContent.includes(key), 'it does not stay on a screen nobody is looking at');
 });
+
+// ============================================================ follow-up 1.5b ===================
+
+test('a key dropped because the window lost focus closes its panel and says so', async (t) => {
+  const b = unlockedBackend();
+  const key = await b.wallet.viewingKey();
+  const { app, root } = await settings(t, b);
+  await reauth(app, root, '[data-role="show-viewing-key"]');
+  const slot = root.querySelector('[data-role="viewing-key-slot"]');
+  slot.querySelector('[data-role="timed"]').click();
+  assert.ok(root.textContent.includes(key));
+
+  window.dispatchEvent(new Event('blur'));
+  await app.idle();
+
+  assert.ok(!root.textContent.includes(key), 'the key is gone');
+  assertGone(root.querySelector('[data-role="viewing-key-slot"] [data-role="hold"]'), 'the inert panel');
+  assert.ok(root.querySelector('[data-role="show-viewing-key"]'), 'the password gate is back');
+  assert.match(root.textContent, /Key hidden — enter your password to view it again\./);
+});
+
+test('a copied key is dropped a minute later, and the panel goes with it', async (t) => {
+  const b = unlockedBackend();
+  const key = await b.wallet.viewingKey();
+  const { app, root } = await settings(t, b);
+  await reauth(app, root, '[data-role="show-viewing-key"]');
+  const slot = root.querySelector('[data-role="viewing-key-slot"]');
+
+  // Mock timers from here on: the drop is a minute away, and `app.idle()` (which hops a real
+  // macrotask) must not be used while they are enabled.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  slot.querySelector('[data-role="copy"]').click();
+  for (let i = 0; i < 8; i += 1) await Promise.resolve(); // let the copy's await chain run
+  assert.deepEqual(b.calls.filter((c) => c[0] === 'platform.copy').at(-1), ['platform.copy', key]);
+  assert.ok(root.querySelector('[data-role="viewing-key-slot"] [data-role="hold"]'), 'still open just after');
+
+  t.mock.timers.tick(59_000);
+  assert.ok(root.querySelector('[data-role="viewing-key-slot"] [data-role="hold"]'), 'and at 59 s');
+  t.mock.timers.tick(2_000);
+  assertGone(root.querySelector('[data-role="viewing-key-slot"] [data-role="hold"]'), 'the panel at 61 s');
+  assert.ok(root.querySelector('[data-role="show-viewing-key"]'), 'the password gate is back');
+  t.mock.timers.reset();
+});
