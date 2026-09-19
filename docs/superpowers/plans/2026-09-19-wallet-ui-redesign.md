@@ -463,6 +463,54 @@ test('set/get/clear round-trip and session is memory only', async () => {
 - [ ] **Step 4:** Tests PASS. Then `web/wallet/serve.sh &`, open `http://127.0.0.1:8787` in Chrome: create a wallet, reload (lock screen appears), unlock, set RPC URL, Receive shows QR, Send ends in the 5.5 GB explanation, toggle light theme, resize across 900 px. No console errors.
 - [ ] **Step 5:** Commit `web: local wasm wallet on the shared ui`.
 
+### Task 1.7: Wide layout — list and detail side by side
+
+Deferred from Task 1.4 (spec §3.3: "≥ 900 px: left sidebar, content pane + detail pane"). Today a
+detail route (`#tx/<hash>`, `#note/<index>`, `#asset/<index>`) replaces the content pane at every
+width, and the `.detail` aside in the wide grid is never used.
+
+**Behaviour.** At ≥ 900 px (`body.wide`, never in `mode: 'popup'`): a *detail* route renders into the
+detail pane while its *parent list* stays mounted in the content pane — `#tx/…` and `#note/…` keep
+whichever of `#home` / `#activity` / `#asset/<i>` the user came from (default `#activity`);
+`#asset/<i>` keeps `#home`. The selected row is marked (`aria-current="true"` + a selected style).
+Closing the detail (its close button, Escape, or selecting the same row again) returns to the parent
+route. Below 900 px nothing changes: the detail replaces the content pane with a back button, as now.
+Crossing the breakpoint live re-lays-out without losing the route. Flows (`#send`, `#receive`,
+`#faucet`, `#settings`, onboarding, lock) are never two-pane.
+
+**Shell.** `registerScreen(name, { …, pane: 'detail', parent: (arg, from) => '#activity' })`. `doRender`
+renders parent and detail as two independent screen instances, each with its own per-render token
+(`ctx.isCurrent()`, `ctx.signal`), its own `after()` cleanup and its own container; re-rendering the
+detail must NOT re-render (or re-fetch) the parent when the parent route is unchanged — selecting
+another row swaps only the detail pane and moves the `aria-current` marker. Session rules are
+unchanged (a session end tears down both panes). `app.idle()` covers both. Focus: opening a detail
+moves focus to the detail pane's title; closing returns it to the row that opened it.
+
+**Files:** `ui/app.js`, `ui/base.css`, `ui/components.css`, `ui/screens/{detail,asset,activity,home}.js`,
+`ui/lib/rows.js`, `ui/gallery.html`, `ui/test/twopane.test.mjs`.
+
+- [ ] **Step 1: Failing tests** (`ui/test/twopane.test.mjs`, linkedom; the test env's `matchMedia` shim
+  must be switchable between compact and wide): wide + `#activity` then `#tx/<hash>` → the activity list
+  is still in the content pane (same DOM node identity — not re-rendered), the detail pane holds the
+  transaction, the row has `aria-current="true"`; selecting a second row swaps only the detail pane and
+  the parent's first backend call count is unchanged; close → `#activity`, detail pane empty, focus on
+  the originating row; Escape closes; deep link straight to `#tx/<hash>` wide → parent defaults to
+  `#activity`; from `#home` the parent stays home; `#asset/1` wide → home in content, asset in detail;
+  compact → detail replaces content with a back button (existing behaviour, existing tests still pass);
+  `mode: 'popup'` is never two-pane even if wide; switching the media query from wide to compact on
+  `#tx/<hash>` re-lays-out to single pane and back; a stale parent fetch cannot write into the new
+  parent, a stale detail fetch cannot write into the next detail (hold each screen's first backend
+  promise, navigate, release); lock while a detail is open tears down both panes and lands on `#lock`.
+- [ ] **Step 2:** `node --test ui/test/twopane.test.mjs` — FAIL.
+- [ ] **Step 3:** Implement. Keep `doRender` readable: extract the pane bookkeeping into
+  `ui/lib/panes.js` if `app.js` grows past what one module should hold.
+- [ ] **Step 4:** Full `node --test ui/test web/wallet/test` PASS (run under a watchdog; the suite must
+  exit by itself). Playwright screenshots at 1200×800 light and dark: activity + tx detail, home + asset
+  detail, home + tx detail, and the same routes at 360×600 to show nothing changed; iterate until the
+  two panes read as one designed surface (aligned top edges, the detail pane's own scroll, a quiet
+  empty state "Select a transaction" when nothing is selected on `#activity`).
+- [ ] **Step 5:** Commit `ui: list and detail side by side on wide screens`.
+
 ---
 
 ## Phase 2 — Extension on `ui/`
