@@ -1,7 +1,8 @@
 # Rand Wallet: shared UI, Tauri desktop, web wallet, RAND/RPL — design
 
 Date: 2026-09-19. Status: approved by the user in session. Builds on
-`2026-09-13-rand-wallet-clients-design.md`; iOS and Android are out of scope here.
+`2026-09-13-rand-wallet-clients-design.md`; iOS and Android get the rename of §10 and a rebuild,
+no UI work.
 
 ## 1. Goal
 
