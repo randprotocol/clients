@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="referrer" content="no-referrer">
+<title>Rand Wallet</title>
+<!-- No inline script and no inline style anywhere in this page: the server's CSP is
+     `script-src 'self' 'wasm-unsafe-eval'`, which is exactly enough to run the wasm core and
+     nothing else. The three stylesheets are ui/'s own, in their required order. -->
+<link rel="stylesheet" href="ui/tokens.css">
+<link rel="stylesheet" href="ui/base.css">
+<link rel="stylesheet" href="ui/components.css">
+<link rel="icon" href="data:,">
+<script src="main.js" type="module"></script>
+</head>
+<body>
+<noscript>Rand Wallet needs JavaScript: every key, every scan and every signature happens in this page.</noscript>
+</body>
+</html>

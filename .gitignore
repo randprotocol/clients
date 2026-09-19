@@ -2,6 +2,7 @@
 core/target/
 # Build outputs
 dist/
+web/wallet/dist/
 ios/build/
 ios/DerivedData/
 ios/Frameworks/*.xcframework
