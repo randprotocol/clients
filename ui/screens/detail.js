@@ -1,11 +1,25 @@
 // Transaction detail (#tx/<hash>) and note detail (#note/<index>). Both pull their record out of
 // `sync.cached()` by the route arg — the backend contract has no per-hash/per-note getter, so
-// this is the same source home/activity/asset already read. "Open in randscan" only ever puts the
-// transaction hash in the URL (amendment 7) — never a viewing key, spend key or transaction key.
+// this is the same source home/activity/asset already read.
+//
+// Two rules this screen exists to keep:
+//   * the transaction key never leaves this closure. It is not in a DOM attribute (not even a
+//     `data-full` one — an attribute is readable by anything with a handle on the document, and
+//     survives in the serialised DOM), not in `ctx.state`, not in the hash, not in the console.
+//     It is written to one text node while it is revealed, cleared on hide, and dropped on
+//     cleanup; `platform.copy()` is handed the closure variable directly.
+//   * the explorer URL is built from the transaction hash alone, and only after the hash has been
+//     checked against a strict hex pattern — `item.hash` is node-controlled text. If the user has
+//     no explorer configured, no button is offered at all rather than a guessed default.
 import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits, shortAddress, shortHex } from '../lib/format.js';
+import { kindOf } from '../lib/rows.js';
+
+// 32 bytes of hex, with the `0x` prefix this chain's hashes are written with throughout (see
+// `send.send()`'s return shape in ui/backend.js) optional.
+const TX_HASH_RE = /^(0x)?[0-9a-f]{64}$/i;
 
 function skeletonMarkup(title, backGo) {
   return h`
@@ -19,83 +33,116 @@ function notFoundMarkup(title, backGo, message) {
     <div class="card"><div class="empty"><span class="empty-title">${message}</span></div></div>`;
 }
 
+/**
+ * `{url, label}` for the explorer button, or `null` when there is nothing safe (or nothing
+ * configured) to link to. `explorerUrl` comes from the user's own settings; `hash` comes from the
+ * node, so it is validated before it is allowed anywhere near a URL.
+ */
+export function explorerLink(explorerUrl, hash) {
+  if (!explorerUrl || !TX_HASH_RE.test(String(hash || ''))) return null;
+  let base;
+  try {
+    base = new URL(String(explorerUrl).endsWith('/') ? String(explorerUrl) : `${explorerUrl}/`);
+  } catch { return null; }
+  if (base.protocol !== 'https:' && base.protocol !== 'http:') return null;
+  const url = new URL(`tx/${hash}`, base);
+  const onRandscan = base.hostname === 'randscan.org' || base.hostname.endsWith('.randscan.org');
+  return { url: url.href, label: onRandscan ? 'Open in randscan' : 'Open in explorer' };
+}
+
 // ------------------------------------------------------------------------------------ tx ------
 registerScreen('tx', {
   render: () => skeletonMarkup('Transaction', 'activity'),
   async after(ctx, root, hash) {
-    let alive = true;
     let assets, sync, settings;
     try {
       [assets, sync, settings] = await Promise.all([
         ctx.backend.assets.list(), ctx.backend.sync.cached(), ctx.backend.settings.get(),
       ]);
     } catch (err) {
-      if (!alive) return () => { alive = false; };
+      if (!ctx.isCurrent()) return;
       root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Could not load this transaction</span>${err && err.message ? err.message : 'Something went wrong.'}</span></div>`;
-      return () => { alive = false; };
+      return;
     }
-    if (!alive) return () => { alive = false; };
+    if (!ctx.isCurrent()) return;
 
     const item = (sync.activity || []).find((a) => a.hash === hash);
     if (!item) {
       root.innerHTML = notFoundMarkup('Transaction', 'activity', 'This transaction was not found.');
-      return () => { alive = false; };
+      return;
     }
+
+    // The key lives here and nowhere else. `item` is a copy handed over by sync.cached(), so
+    // clearing the field on it costs nothing and keeps one fewer reference around.
+    let txKey = item.txKey || null;
+    item.txKey = undefined;
+
     const asset = assets.find((a) => a.index === item.asset) || { symbol: `RPL#${item.asset}`, decimals: 9 };
-    const kind = item.kind === 'in' || item.kind === 'out' ? item.kind : 'pending';
-    const sign = kind === 'in' ? '+' : kind === 'out' ? '−' : '';
-    const statusChip = raw(kind === 'pending'
-      ? h`<span class="chip warn">Pending</span>`
+    const native = assets.find((a) => a.index === 0);
+    const k = kindOf(item);
+    const statusChip = raw(k.kind === 'pending'
+      ? h`<span class="chip warn">${k.title}</span>`
       : h`<span class="chip positive">${raw(icons.check())}Confirmed</span>`);
-    const addressRow = raw(item.address ? h`<div class="kv"><span class="k">${kind === 'in' ? 'From' : 'To'}</span><span class="v mono">${shortAddress(item.address)}</span></div>` : '');
+    // Every row below is optional in the Backend contract — an item may carry none of them.
+    const addressRow = raw(item.address ? h`<div class="kv"><span class="k">${k.kind === 'out' ? 'To' : 'From'}</span><span class="v mono">${shortAddress(item.address)}</span></div>` : '');
     const blockRow = raw(item.block ? h`<div class="kv"><span class="k">Block</span><span class="v amount">${item.block.toLocaleString('en-US')}</span></div>` : '');
-    const feeRow = raw(item.fee ? h`<div class="kv"><span class="k">Fee</span><span class="v amount">${formatUnits(item.fee, 6, 9)} RAND</span></div>` : '');
-    const keyRow = raw(item.txKey ? h`
+    // Fees are always paid in the native asset, so they use its decimals — not this row's asset,
+    // and not a hard-coded 9.
+    const feeRow = raw(item.fee ? h`<div class="kv"><span class="k">Fee</span><span class="v amount">${formatUnits(item.fee, 6, native ? native.decimals : 9)} ${native ? native.symbol : 'RAND'}</span></div>` : '');
+    const keyRow = raw(txKey ? h`
         <div class="kv wrap">
           <span class="k">Transaction key</span>
           <span class="v cluster">
-            <span class="mono truncate" data-role="txkey" data-full="${item.txKey}" data-short="${shortHex(item.txKey)}">${shortHex(item.txKey)}</span>
+            <span class="mono truncate" data-role="txkey">${shortHex(txKey)}</span>
             <button class="btn-icon" type="button" data-role="reveal-key" aria-label="Reveal the full transaction key">${raw(icons.eye())}</button>
             <button class="btn-icon" type="button" data-role="copy-key" aria-label="Copy the transaction key">${raw(icons.copy())}</button>
           </span>
         </div>` : '');
-    const noteLink = raw(kind === 'in' && item.index !== undefined ? h`<button class="btn-ghost sm" type="button" data-go="note/${item.index}">View the received note</button>` : '');
+    const noteLink = raw(k.kind === 'in' && item.index !== undefined ? h`<button class="btn-ghost sm" type="button" data-go="note/${item.index}">View the received note</button>` : '');
+    const explorer = explorerLink(settings.explorerUrl, item.hash);
+    const explorerBtn = raw(explorer ? h`<button class="btn block" type="button" data-role="explorer">${explorer.label}</button>` : '');
 
     root.innerHTML = h`
       <h1 class="sr-only">Transaction</h1>
       <div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="activity" aria-label="Back">${raw(icons.chevron())}</button><span class="topbar-title">Transaction</span><span class="spacer"></span></div>
       <div class="card stack">
-        <div class="card-head"><h3>Transaction</h3>${statusChip}</div>
-        <span class="amount ${kind === 'in' ? 'in' : ''}">${sign}${formatUnits(item.amount, 6, asset.decimals)}<span class="unit">${asset.symbol}</span></span>
+        <div class="card-head"><h3>${k.title}</h3>${statusChip}</div>
+        <span class="amount ${k.sign === '+' ? 'in' : ''}">${k.sign}${formatUnits(item.amount, 6, asset.decimals)}<span class="unit">${asset.symbol}</span></span>
         ${addressRow}
         ${blockRow}
         ${feeRow}
         ${keyRow}
         ${noteLink}
-        <button class="btn block" type="button" data-role="explorer">View in explorer</button>
+        ${explorerBtn}
       </div>`;
 
+    let revealed = false;
     const offReveal = on(root, '[data-role="reveal-key"]', 'click', (evt, btn) => {
       evt.preventDefault();
       const span = root.querySelector('[data-role="txkey"]');
-      const revealed = span.textContent === span.dataset.full;
-      span.textContent = revealed ? span.dataset.short : span.dataset.full;
-      btn.setAttribute('aria-label', revealed ? 'Reveal the full transaction key' : 'Hide the transaction key');
+      if (!span || !txKey) return;
+      revealed = !revealed;
+      span.textContent = revealed ? txKey : shortHex(txKey);
+      btn.setAttribute('aria-label', revealed ? 'Hide the transaction key' : 'Reveal the full transaction key');
     });
     const offCopyKey = on(root, '[data-role="copy-key"]', 'click', async (evt) => {
       evt.preventDefault();
-      await ctx.backend.platform.copy(item.txKey);
+      if (!txKey) return;
+      await ctx.backend.platform.copy(txKey);
+      if (!ctx.isCurrent()) return;
       ctx.toast('Transaction key copied', { kind: 'positive' });
     });
-    // Never build this URL from anything but the public hash — no viewing key, spend key or
-    // transaction key ever reaches platform.openExternal (amendment 7).
     const offExplorer = on(root, '[data-role="explorer"]', 'click', (evt) => {
       evt.preventDefault();
-      const base = (settings.explorerUrl || 'https://explorer.rand.example').replace(/\/$/, '');
-      ctx.backend.platform.openExternal(`${base}/tx/${item.hash}`);
+      if (explorer) ctx.backend.platform.openExternal(explorer.url);
     });
 
-    return () => { alive = false; offReveal(); offCopyKey(); offExplorer(); };
+    return () => {
+      const span = root.querySelector('[data-role="txkey"]');
+      if (span) span.textContent = '';
+      txKey = null;
+      offReveal(); offCopyKey(); offExplorer();
+    };
   },
 });
 
@@ -103,21 +150,20 @@ registerScreen('tx', {
 registerScreen('note', {
   render: () => skeletonMarkup('Note', 'home'),
   async after(ctx, root, indexArg) {
-    let alive = true;
     let assets, sync;
     try {
       [assets, sync] = await Promise.all([ctx.backend.assets.list(), ctx.backend.sync.cached()]);
     } catch (err) {
-      if (!alive) return () => { alive = false; };
+      if (!ctx.isCurrent()) return;
       root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Could not load this note</span>${err && err.message ? err.message : 'Something went wrong.'}</span></div>`;
-      return () => { alive = false; };
+      return;
     }
-    if (!alive) return () => { alive = false; };
+    if (!ctx.isCurrent()) return;
 
     const note = (sync.notes || []).find((n) => String(n.index) === String(indexArg));
     if (!note) {
       root.innerHTML = notFoundMarkup('Note', 'home', 'This note was not found.');
-      return () => { alive = false; };
+      return;
     }
     const asset = assets.find((a) => a.index === note.asset) || { symbol: `RPL#${note.asset}`, decimals: 9 };
     const statusChip = raw(note.spent ? h`<span class="chip">Spent</span>` : h`<span class="chip positive">${raw(icons.check())}Unspent</span>`);
@@ -145,9 +191,10 @@ registerScreen('note', {
     const offCopy = on(root, '[data-role="copy-commitment"]', 'click', async (evt) => {
       evt.preventDefault();
       await ctx.backend.platform.copy(note.commitment);
+      if (!ctx.isCurrent()) return;
       ctx.toast('Commitment copied', { kind: 'positive' });
     });
 
-    return () => { alive = false; offCopy(); };
+    return () => { offCopy(); };
   },
 });

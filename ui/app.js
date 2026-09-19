@@ -27,6 +27,16 @@ const TABS = [
 ];
 const WIDE_AT = 900; // keep in sync with tokens.css --wide-at
 
+/**
+ * The network chip's text, derived from `settings.get().chainId` — never a chain number written
+ * into a screen. A numeric id reads as "Chain 13"; anything else (a named network some other
+ * shell reports) is shown as given, escaped by `h` at the call site.
+ */
+function networkLabel(chainId) {
+  if (chainId === undefined || chainId === null || chainId === '') return 'Not connected';
+  return /^\d+$/.test(String(chainId)) ? `Chain ${chainId}` : String(chainId);
+}
+
 function parseHash(hash) {
   const s = String(hash || '').replace(/^#/, '');
   if (!s) return { name: '', arg: undefined };
@@ -88,6 +98,23 @@ function trackedBackend(backend, onCall) {
   return wrapped;
 }
 
+/**
+ * One per render. `alive` stays true only while that render is the one on screen: a newer render
+ * retires it at the moment it commits (right where the previous screen's cleanup runs), and so
+ * does `destroy()`. `signal` is an AbortSignal aborted at exactly the same moment, for screens
+ * that hand a signal to something cancellable.
+ */
+function createRenderToken() {
+  const ac = typeof AbortController === 'function' ? new AbortController() : null;
+  return { alive: true, signal: ac ? ac.signal : undefined, abort: () => { if (ac) ac.abort(); } };
+}
+
+function retireToken(token) {
+  if (!token || !token.alive) return;
+  token.alive = false;
+  try { token.abort(); } catch { /* an already-aborted controller */ }
+}
+
 function focusableIn(root) {
   return Array.from(root.querySelectorAll(
     'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -143,6 +170,10 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   let renderPromise = null;
   let currentCleanup = null;
   let lastRouteKey = null;
+  let destroyed = false;
+  // The token of the render whose markup is (or is about to be) on screen. Retired by the next
+  // render at its commit point, and by destroy().
+  let currentToken = null;
 
   const mainEl = document.createElement('main');
   mainEl.className = 'app';
@@ -254,6 +285,11 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   }
 
   // ---- ctx handed to every screen ----
+  // This is the *base* ctx: everything that lives as long as the mount. Each render gets its own
+  // view of it (`Object.create(baseCtx)` + `isCurrent`/`signal`, see doRender) so a screen can
+  // tell whether it is still the screen on display after an await — `ctx.state`, `ctx.go`,
+  // `ctx.toast`, `ctx.sheet`, `ctx.backend` all resolve through the prototype to the objects
+  // below, so they are shared, identical and mutable across renders exactly as before.
   const ctx = {
     backend: backendApi,
     go,
@@ -278,11 +314,13 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
 
   function renderSidebar(activeName) {
     sidebarEl.innerHTML = h`
-      <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
-      ${raw(TABS.map((t) => navLink(t, activeName, 'nav-item')).join(''))}
-      <div class="sidebar-foot stack tight">
-        <span class="chip"><span class="dot"></span>${settings.chainId || 'rand'}</span>
-        <button class="btn sm block" type="button" data-action="lock">${raw(icons.lock())}Lock</button>
+      <div class="sidebar-inner">
+        <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
+        ${raw(TABS.map((t) => navLink(t, activeName, 'nav-item')).join(''))}
+        <div class="sidebar-foot stack tight">
+          <span class="chip"><span class="dot"></span>${networkLabel(settings.chainId)}</span>
+          <button class="btn sm block" type="button" data-action="lock">${raw(icons.lock())}Lock</button>
+        </div>
       </div>`;
   }
 
@@ -301,6 +339,16 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
 
   async function doRender() {
     const mySeq = ++renderSeq;
+    // Handed to this render's screen in place of the base ctx. Before the commit point below a
+    // screen has not been mounted yet, so "superseded" is still `mySeq !== renderSeq`; after it,
+    // the token is what says whether this screen is still the one on screen (a repeat render for
+    // a destination already showing bumps renderSeq and then returns without committing — it must
+    // not silently kill the live screen's reactions).
+    const token = createRenderToken();
+    const screenCtx = Object.create(ctx);
+    screenCtx.isCurrent = () => token.alive && !destroyed;
+    screenCtx.signal = token.signal;
+
     let exists = false, unlocked = false;
     try {
       exists = await backendApi.wallet.exists();
@@ -308,10 +356,10 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     } catch (err) {
       console.error('rand-wallet: failed to read wallet state', err);
     }
-    if (mySeq !== renderSeq) return;
+    if (mySeq !== renderSeq) { retireToken(token); return; }
 
     const r = resolveRoute({ exists, unlocked }, location.hash || '');
-    if (mySeq !== renderSeq) return;
+    if (mySeq !== renderSeq) { retireToken(token); return; }
 
     // If the requested hash actually resolved somewhere else (e.g. #create once a wallet already
     // exists — see ONBOARDING_ONLY_SCREENS above — refuses and lands on home), keep location.hash
@@ -324,7 +372,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       // The assignment above may have synchronously re-entered this function (this test
       // environment dispatches `hashchange` synchronously; see dom-env.mjs) and started a newer
       // render — if so, let that one finish the job instead of doubling up on it.
-      if (mySeq !== renderSeq) return;
+      if (mySeq !== renderSeq) { retireToken(token); return; }
     }
 
     // A real browser fires `hashchange` asynchronously (a task, not a microtask), so go()'s own
@@ -333,9 +381,14 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     // would blow away whatever the user has since typed into the screen that render #1 produced,
     // so a repeat of the destination we already have on screen is a no-op.
     const routeKey = `${unlocked ? '1' : '0'}:${r.name}:${r.arg ?? ''}`;
-    if (routeKey === lastRouteKey) return;
+    // Only this render's own token is retired here — `currentToken` (the screen actually on
+    // screen) is deliberately left alone, because nothing about it is being replaced.
+    if (routeKey === lastRouteKey) { retireToken(token); return; }
     lastRouteKey = routeKey;
 
+    // ---- commit point: from here on, the screen that was on display is gone ----
+    retireToken(currentToken);
+    currentToken = token;
     if (currentCleanup) {
       const cleanup = currentCleanup;
       currentCleanup = null;
@@ -365,12 +418,15 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
 
     let markup = '';
     try {
-      markup = (await screen.render(ctx, r.arg)) || '';
+      markup = (await screen.render(screenCtx, r.arg)) || '';
     } catch (err) {
       console.error('rand-wallet: screen render failed', err);
       markup = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Something went wrong</span>This screen could not be shown.</span></div>`;
     }
-    if (mySeq !== renderSeq) return;
+    // Past the commit point the token, not the sequence number, is the authority: a newer render
+    // that resolved to the destination already on screen returns without committing, and must not
+    // stop this one from finishing the job it is halfway through.
+    if (!screenCtx.isCurrent()) return;
     mainEl.innerHTML = markup;
 
     if (typeof screen.after === 'function') {
@@ -380,8 +436,8 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
         // which need to know which one they are showing once their markup is already in the DOM
         // (`render(ctx, arg)` already gets it; `after` didn't). Purely additive: every screen
         // registered before this task takes only `(ctx, root)` and ignores the third argument.
-        const cleanup = await screen.after(ctx, mainEl, r.arg);
-        if (mySeq !== renderSeq) { if (typeof cleanup === 'function') { try { cleanup(); } catch { /* stale */ } } return; }
+        const cleanup = await screen.after(screenCtx, mainEl, r.arg);
+        if (!screenCtx.isCurrent()) { if (typeof cleanup === 'function') { try { cleanup(); } catch { /* stale */ } } return; }
         if (typeof cleanup === 'function') currentCleanup = cleanup;
       } catch (err) {
         console.error('rand-wallet: screen after() failed', err);
@@ -437,6 +493,9 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     go,
     idle,
     destroy() {
+      destroyed = true;
+      retireToken(currentToken);
+      currentToken = null;
       offHashchange();
       offGoClicks();
       offLockClicks();

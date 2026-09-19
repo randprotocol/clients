@@ -30,6 +30,7 @@
   <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17.2h.01"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.9 4.8v5.4h-5.4"/><path d="M2.1 19.2v-5.4h5.4"/><path d="M4.36 9.3a8.1 8.1 0 0 1 13.37-3.02l4.17 3.92"/><path d="m2.1 13.8 4.18 3.92a8.1 8.1 0 0 0 13.36-3.02"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
 </svg>
 
@@ -50,16 +51,18 @@
 
 <!-- Wide layout column 1. Hidden under body.compact. -->
 <aside class="sidebar">
-  <div class="brand">
-    <span class="mark"></span>
-    <span class="name">Rand Wallet</span>
-  </div>
-  <a class="nav-item on" href="#home"><svg class="g-i"><use href="#i-home"/></svg>Home</a>
-  <a class="nav-item" href="#activity"><svg class="g-i"><use href="#i-clock"/></svg>Activity</a>
-  <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
-  <a class="nav-item" href="#settings"><svg class="g-i"><use href="#i-settings"/></svg>Settings</a>
-  <div class="sidebar-foot">
-    <button class="chip" type="button"><span class="dot"></span>Chain 10 · synced</button>
+  <div class="sidebar-inner">
+    <div class="brand">
+      <span class="mark"></span>
+      <span class="name">Rand Wallet</span>
+    </div>
+    <a class="nav-item on" href="#home"><svg class="g-i"><use href="#i-home"/></svg>Home</a>
+    <a class="nav-item" href="#activity"><svg class="g-i"><use href="#i-clock"/></svg>Activity</a>
+    <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
+    <a class="nav-item" href="#settings"><svg class="g-i"><use href="#i-settings"/></svg>Settings</a>
+    <div class="sidebar-foot">
+      <button class="chip" type="button"><span class="dot"></span>Chain 13 · synced</button>
+    </div>
   </div>
 </aside>
 
@@ -83,6 +86,8 @@
     <div class="hero-foot">
       <span class="dot"></span>
       <span>Synced to block 1,402,918</span>
+      <span class="grow"></span>
+      <button class="btn-icon" type="button" aria-label="Sync now"><svg class="g-i"><use href="#i-refresh"/></svg></button>
     </div>
   </section>
 
@@ -107,90 +112,128 @@
 
   <h2 class="section-title">Assets</h2>
   <div class="card flush">
-    <div class="list">
-      <button class="row" type="button">
-        <span class="avatar accent">R</span>
-        <span class="row-main">
-          <span class="row-title"><span class="truncate">Rand</span></span>
-          <span class="row-sub">RAND</span>
-        </span>
-        <span class="row-end">
-          <span class="amount">1,284.5392</span>
-          <span class="row-meta">+12.05 pending</span>
-        </span>
-      </button>
-      <button class="row" type="button">
-        <span class="avatar rpl" data-hue="204">W</span>
-        <span class="row-main">
-          <span class="row-title"><span class="truncate">Wrapped Ether</span><span class="chip xs">RPL</span></span>
-          <span class="row-sub">wETH</span>
-        </span>
-        <span class="row-end">
-          <span class="amount">0.5000</span>
-        </span>
-      </button>
-      <button class="row" type="button">
-        <span class="avatar rpl" data-hue="36">W</span>
-        <span class="row-main">
-          <span class="row-title"><span class="truncate">Wrapped Bitcoin</span><span class="chip xs">RPL</span></span>
-          <span class="row-sub">wBTC</span>
-        </span>
-        <span class="row-end">
-          <span class="amount">0.0000</span>
-        </span>
-      </button>
-    </div>
+    <ul class="list" role="list">
+      <li>
+        <button class="row" type="button">
+          <span class="avatar accent">R</span>
+          <span class="row-main">
+            <span class="row-title"><span class="truncate">Rand</span></span>
+            <span class="row-sub">RAND</span>
+          </span>
+          <span class="row-end">
+            <span class="amount">1,284.5392</span>
+            <span class="row-meta">+12.05 pending</span>
+          </span>
+        </button>
+      </li>
+      <li>
+        <button class="row" type="button">
+          <span class="avatar rpl" data-hue="204">W</span>
+          <span class="row-main">
+            <span class="row-title"><span class="truncate">Wrapped Ether</span><span class="chip xs">RPL</span></span>
+            <span class="row-sub">wETH</span>
+          </span>
+          <span class="row-end">
+            <span class="amount">0.5000</span>
+          </span>
+        </button>
+      </li>
+      <li>
+        <button class="row" type="button">
+          <span class="avatar rpl" data-hue="36">W</span>
+          <span class="row-main">
+            <span class="row-title"><span class="truncate">Wrapped Bitcoin</span><span class="chip xs">RPL</span></span>
+            <span class="row-sub">wBTC</span>
+          </span>
+          <span class="row-end">
+            <span class="amount">0.0000</span>
+          </span>
+        </button>
+      </li>
+    </ul>
   </div>
 
   <h2 class="section-title" id="activity">Activity</h2>
   <div class="card flush">
-    <div class="list">
-      <button class="row" type="button">
-        <span class="avatar in"><svg><use href="#i-receive"/></svg></span>
-        <span class="row-main">
-          <span class="row-title"><span class="truncate">Received</span></span>
-          <span class="row-sub mono">rand1q9x…7k2m</span>
-        </span>
-        <span class="row-end">
-          <span class="amount in">+0.5 wETH</span>
-          <span class="row-meta">2 min ago</span>
-        </span>
-      </button>
-      <button class="row" type="button">
-        <span class="avatar out"><svg><use href="#i-send"/></svg></span>
-        <span class="row-main">
-          <span class="row-title"><span class="truncate">Sent</span></span>
-          <span class="row-sub mono">rand1p4r…9v3d</span>
-        </span>
-        <span class="row-end">
-          <span class="amount">−8.25 RAND</span>
-          <span class="row-meta">Today, 09:14</span>
-        </span>
-      </button>
-      <button class="row" type="button">
-        <span class="avatar pending"><svg><use href="#i-clock"/></svg></span>
-        <span class="row-main">
-          <span class="row-title"><span class="truncate">Proving</span></span>
-          <span class="row-sub">Bundle proof · 62 %</span>
-        </span>
-        <span class="row-end">
-          <span class="amount">−120.00 RAND</span>
-          <span class="row-meta">Pending</span>
-        </span>
-      </button>
-      <button class="row" type="button">
-        <span class="avatar failed"><svg><use href="#i-close"/></svg></span>
-        <span class="row-main">
-          <span class="row-title"><span class="truncate">Failed</span></span>
-          <span class="row-sub">Not enough notes to cover the amount</span>
-        </span>
-        <span class="row-end">
-          <span class="amount">−60.00 RAND</span>
-          <span class="row-meta">Yesterday</span>
-        </span>
-      </button>
-    </div>
+    <ul class="list" role="list">
+      <li>
+        <button class="row" type="button">
+          <span class="avatar in"><svg><use href="#i-receive"/></svg></span>
+          <span class="row-main">
+            <span class="row-title"><span class="truncate">Received</span></span>
+            <span class="row-sub mono">rand1q9x…7k2m</span>
+          </span>
+          <span class="row-end">
+            <span class="amount in">+0.5 wETH</span>
+            <span class="row-meta">2 min ago</span>
+          </span>
+        </button>
+      </li>
+      <li>
+        <button class="row" type="button">
+          <span class="avatar out"><svg><use href="#i-send"/></svg></span>
+          <span class="row-main">
+            <span class="row-title"><span class="truncate">Sent</span></span>
+            <span class="row-sub mono">rand1p4r…9v3d</span>
+          </span>
+          <span class="row-end">
+            <span class="amount">−8.25 RAND</span>
+            <span class="row-meta">Today, 09:14</span>
+          </span>
+        </button>
+      </li>
+      <li>
+        <button class="row" type="button">
+          <span class="avatar pending"><svg><use href="#i-clock"/></svg></span>
+          <span class="row-main">
+            <span class="row-title"><span class="truncate">Proving</span></span>
+            <span class="row-sub">Bundle proof · 62 %</span>
+          </span>
+          <span class="row-end">
+            <span class="amount">−120.00 RAND</span>
+            <span class="row-meta">Pending</span>
+          </span>
+        </button>
+      </li>
+      <li>
+        <button class="row" type="button">
+          <span class="avatar faucet"><svg><use href="#i-faucet"/></svg></span>
+          <span class="row-main">
+            <span class="row-title"><span class="truncate">Faucet</span></span>
+            <span class="row-sub">RAND</span>
+          </span>
+          <span class="row-end">
+            <span class="amount in">+10 RAND</span>
+            <span class="row-meta">2 h ago</span>
+          </span>
+        </button>
+      </li>
+      <li>
+        <button class="row" type="button">
+          <span class="avatar failed"><svg><use href="#i-close"/></svg></span>
+          <span class="row-main">
+            <span class="row-title"><span class="truncate">Failed</span></span>
+            <span class="row-sub">Not enough notes to cover the amount</span>
+          </span>
+          <span class="row-end">
+            <span class="amount">−60.00 RAND</span>
+            <span class="row-meta">Yesterday</span>
+          </span>
+        </button>
+      </li>
+    </ul>
   </div>
+
+  <!-- ============================ round actions ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Round actions (.actions)</h2>
+    <div class="actions">
+      <button class="btn-round" type="button"><span class="ic"><svg><use href="#i-receive"/></svg></span><span class="cap">Receive</span></button>
+      <button class="btn-round" type="button" aria-disabled="true" aria-describedby="g-send-off"><span class="ic"><svg><use href="#i-send"/></svg></span><span class="cap">Send</span></button>
+    </div>
+    <p class="caption" id="g-send-off">RPL transfers are not available on this network.</p>
+    <p class="g-note">Four actions fill the row; two or three cluster in the middle instead of being stranded at the corners of a 720 px desktop column. The off action carries <code>aria-disabled</code>, not <code>disabled</code>, so it keeps its place in the tab order and the reason it is off (tied on with <code>aria-describedby</code>) can actually be announced — it is dimmed, has no hover lift, and has no destination, so a click does nothing.</p>
+  </section>
 
   <!-- ============================ buttons ============================ -->
   <section class="g-section">
@@ -297,7 +340,9 @@
       <span class="chip negative">Failed</span>
       <span class="chip xs">RPL</span>
       <button class="chip" type="button"><span class="mono">rand1q9x…7k2m</span><svg class="g-i"><use href="#i-copy"/></svg></button>
+      <span class="chip action" role="button" tabindex="0">.chip.action</span>
     </div>
+    <p class="g-note">A chip is 34 px tall, which is not a legal touch target on its own. Every interactive one — <code>button.chip</code>, <code>a.chip</code>, or <code>.chip.action</code> for anything else that takes a tap — gets an invisible 5 px band above and below (derived from <code>--tap</code>, same technique as <code>.btn.sm</code>), so the hit area is 44 px while the chip still reads small. An icon inside a chip is sized to 14 px by the component, because the icon set ships a viewBox and no width.</p>
   </section>
 
   <section class="g-section">
@@ -370,9 +415,13 @@
         <div class="cluster">
           <button class="chip" type="button"><span class="mono">rand1q9x…7k2m</span><svg class="g-i"><use href="#i-copy"/></svg></button>
         </div>
+        <div class="address-box">
+          <span class="mono">rand1q9xk4m2p7v8h3c6z0aw5rtdynqfj1l4b8xe7u2s9g6k3m0pv5cz8hrt4ydnqwj1fl7b2xa9e6u3s0g5k8m2pv7cz4hrt1yd6nqwj9fl3b7xa2e5u8s6g0k4m9pv3cz7hrt5yd2nqwj8fl6b1xa4e9u7s3g2k5m8pv0cz6hrt9yd4nqwj2fl1b5xa8e3u6s9g7k0m4pv2cz5hrt8yd1nqwj6fl9b3xa7e2u5s8g4k1m6pv9cz3hrt0yd7k2m</span>
+        </div>
         <button class="btn block" type="button"><svg class="g-i"><use href="#i-copy"/></svg>Copy address</button>
       </div>
     </div>
+    <p class="g-note">The chip is the short form for scanning at a glance; <code>.address-box</code> is the whole address, wrapping at any character, selectable, in a fixed-height box with its own scroll and a fade at the bottom edge. A shielded address runs to well over a thousand characters, so it cannot be allowed to set the height of the screen.</p>
   </section>
 
   <!-- ============================ kv.wrap ============================ -->
@@ -406,8 +455,13 @@
         <span class="amount">3.5<span class="unit">RAND</span></span>
         <div class="progress" data-indeterminate="true"><span class="progress-bar"></span></div>
       </div>
+      <div class="hero">
+        <span class="label">Balance</span>
+        <span class="amount"><span class="skeleton line lg"></span></span>
+        <div class="progress" data-indeterminate="true"><span class="progress-bar"></span></div>
+      </div>
     </div>
-    <p class="g-note">A thin bar under the hero balance while sync.scan() is running: determinate once the scan reports a head height (--pct written through the CSSOM, same as the .ring above), indeterminate before that.</p>
+    <p class="g-note">A thin bar under the hero balance while sync.scan() is running: determinate once the scan reports a head height (--pct written through the CSSOM, same as the .ring above), indeterminate before that, and an indeterminate bar is what shows when the node never reports progress at all. The third hero is the state before any figure is known — the same .skeleton component, re-tinted to a white alpha because the surface tokens read as a hole on the gradient.</p>
   </section>
 
   <!-- ============================ sheet / modal ============================ -->
@@ -472,13 +526,15 @@
     </div>
     <div class="g-stage">
       <aside class="sidebar">
-        <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
-        <a class="nav-item on" href="#home"><svg class="g-i"><use href="#i-home"/></svg>Home</a>
-        <a class="nav-item" href="#activity"><svg class="g-i"><use href="#i-clock"/></svg>Activity</a>
-        <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
-        <a class="nav-item" href="#settings"><svg class="g-i"><use href="#i-settings"/></svg>Settings</a>
-        <div class="sidebar-foot">
-          <button class="chip" type="button"><svg class="g-i"><use href="#i-plus"/></svg>Add account</button>
+        <div class="sidebar-inner">
+          <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
+          <a class="nav-item on" href="#home"><svg class="g-i"><use href="#i-home"/></svg>Home</a>
+          <a class="nav-item" href="#activity"><svg class="g-i"><use href="#i-clock"/></svg>Activity</a>
+          <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
+          <a class="nav-item" href="#settings"><svg class="g-i"><use href="#i-settings"/></svg>Settings</a>
+          <div class="sidebar-foot">
+            <button class="chip" type="button"><svg class="g-i"><use href="#i-plus"/></svg>Add account</button>
+          </div>
         </div>
       </aside>
     </div>
@@ -490,22 +546,26 @@
     <div class="stack">
       <div class="skeleton hero"></div>
       <div class="card flush">
-        <div class="list">
-          <div class="row">
-            <span class="skeleton circle"></span>
-            <span class="row-main">
-              <span class="skeleton line lg"></span>
-              <span class="skeleton line sm"></span>
-            </span>
-          </div>
-          <div class="row">
-            <span class="skeleton circle"></span>
-            <span class="row-main">
-              <span class="skeleton line lg"></span>
-              <span class="skeleton line sm"></span>
-            </span>
-          </div>
-        </div>
+        <ul class="list" role="list">
+          <li>
+            <div class="row">
+              <span class="skeleton circle"></span>
+              <span class="row-main">
+                <span class="skeleton line lg"></span>
+                <span class="skeleton line sm"></span>
+              </span>
+            </div>
+          </li>
+          <li>
+            <div class="row">
+              <span class="skeleton circle"></span>
+              <span class="row-main">
+                <span class="skeleton line lg"></span>
+                <span class="skeleton line sm"></span>
+              </span>
+            </div>
+          </li>
+        </ul>
       </div>
     </div>
   </section>

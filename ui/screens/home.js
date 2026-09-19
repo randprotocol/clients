@@ -1,26 +1,25 @@
 // Home: balance hero, the four round actions, the asset list and a recent-activity preview.
 //
-// Renders immediately from `sync.cached()` (a skeleton while that resolves), then runs
-// `sync.scan()` in the background without blocking the render (amendment 6): `render()` never
-// awaits either call — only `after()` does, and only for the cached/asset fetch that produces the
-// *first* paint. The scan itself is kicked off and left to run; its `.then`/`.catch` reactions
-// update the DOM in place when it settles.
+// The screen is built exactly once, by `render()`: hero, actions and two list containers, with
+// skeleton rows where the data will go. `after()` then fills *containers*, never the whole screen
+// — a progress tick touches only the bar's `--pct` and the status line, a scan result touches only
+// the two lists and the hero figure. Repainting `root.innerHTML` on every tick (what this screen
+// used to do) drops keyboard focus mid-sync and restarts the bar's own transition, so the bar
+// never actually animates.
 //
-// A scan started by a visit to home that the user has since left (navigated away from) must not
-// reach into the next screen's DOM — `mainEl` is reused across every screen, so writing into it
-// from a stale reaction would corrupt whatever screen is on screen by then. `after()` returns a
-// `cleanup` function (per the app.js contract: called right before the next render, or on
-// destroy()); this closes over a per-visit `alive` flag that every DOM-touching reaction checks
-// first, and that flag — not a boolean on the promise — is what "kept from touching a screen that
-// was left" actually means here: the scan promise itself is never cancelled (fetch/sync work
-// already in flight keeps running either way), only its *effect on the DOM* is suppressed once
-// the screen has been torn down.
+// Two lifecycle rules, both enforced by the shell rather than by flags in here:
+//   * every reaction that touches the DOM after an await first checks `ctx.isCurrent()` — false
+//     as soon as another screen has taken over, or the app was destroyed (see ui/app.js);
+//   * there is at most one `sync.scan()` in flight per mounted app. The promise lives on
+//     `ctx.state` (one object for the whole mount, shared by every render), so leaving home and
+//     coming straight back attaches to the running scan instead of starting a second one that
+//     would race the first and repaint with staler data.
 import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits, shortAddress, timeAgo } from '../lib/format.js';
 import { totalInRand } from '../lib/assets.js';
-import { assetRowMarkup, activityRowMarkup } from '../lib/rows.js';
+import { assetRowMarkup, activityRowMarkup, listMarkup } from '../lib/rows.js';
 
 const ACTIONS = [
   { go: 'receive', icon: 'arrowDownLeft', label: 'Receive' },
@@ -38,32 +37,20 @@ function actionsMarkup() {
 }
 
 function skeletonRows(n) {
-  // Already returns raw() (an h`` template's own result is plain text otherwise): every place
-  // this is interpolated into another h`` template relies on that, per the house rule below.
-  return raw(Array.from({ length: n }, () => h`
-    <div class="row">
-      <span class="skeleton circle"></span>
-      <span class="row-main">
-        <span class="skeleton line lg"></span>
-        <span class="skeleton line sm"></span>
-      </span>
-    </div>`).join(''));
-}
-
-function skeletonMarkup() {
-  return h`
-    <h1 class="sr-only">Home</h1>
-    <div class="topbar"><div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div></div>
-    <div class="skeleton hero"></div>
-    ${actionsMarkup()}
-    <h2 class="section-title">Assets</h2>
-    <div class="card flush"><div class="list" role="list">${skeletonRows(2)}</div></div>
-    <h2 class="section-title">Activity</h2>
-    <div class="card flush"><div class="list" role="list">${skeletonRows(2)}</div></div>`;
+  return Array.from({ length: n }, () => h`
+    <li>
+      <div class="row">
+        <span class="skeleton circle"></span>
+        <span class="row-main">
+          <span class="skeleton line lg"></span>
+          <span class="skeleton line sm"></span>
+        </span>
+      </div>
+    </li>`);
 }
 
 function emptyActivityMarkup() {
-  return raw(h`
+  return h`
     <div class="card">
       <div class="empty">
         <span class="avatar lg">${raw(icons.activity())}</span>
@@ -71,137 +58,253 @@ function emptyActivityMarkup() {
         <span>Transactions you send or receive will appear here.</span>
         <button class="btn sm" type="button" data-go="faucet">Get test RAND from the faucet</button>
       </div>
-    </div>`);
+    </div>`;
 }
 
-/** A thin sync progress bar. Determinate once `head` is known (`--pct` written through the CSSOM
- *  by `paintProgress` below, never an inline style attribute); an indeterminate sliding bar until
- *  then, the same distinction `.ring`/`.ring.spin` already draws for the proving indicator. */
-function progressMarkup(progress) {
-  if (!progress) return '';
-  const determinate = progress.head > 0;
-  return raw(h`<div class="progress"${determinate ? '' : raw(' data-indeterminate="true"')} data-role="progress" role="progressbar" aria-label="Syncing" ${determinate ? raw(`aria-valuenow="${Math.round(Math.min(1, progress.scanned / progress.head) * 100)}" aria-valuemin="0" aria-valuemax="100"`) : ''}><span class="progress-bar" data-role="progress-bar"></span></div>`);
-}
-
-function paintProgress(root, progress) {
-  const bar = root.querySelector('[data-role="progress"]');
-  if (!bar || !progress || !(progress.head > 0)) return;
-  bar.style.setProperty('--pct', String(Math.min(1, progress.scanned / progress.head)));
-}
-
-function heroMarkup({ address, assets, sync, error, progress, scanning }) {
-  const totalUnits = totalInRand(assets);
-  const rand = assets.find((a) => a.index === 0);
-  const decimals = rand ? rand.decimals : 9;
-  const pending = raw(rand && rand.pending && rand.pending !== '0'
-    ? h`<span class="sub">+${formatUnits(rand.pending, 6, decimals)} RAND pending</span>`
-    : '');
-  const syncedText = sync.lastSyncMs ? `Synced ${timeAgo(sync.lastSyncMs)}` : 'Not synced yet';
-  const banner = raw(error ? h`
-    <div class="banner negative">
-      <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">Could not reach the node</span>${error} <a href="#settings" data-go="settings">Check settings</a></span>
-      <span class="grow"></span>
-      <button class="btn sm" type="button" data-action="sync">Retry</button>
-    </div>` : '');
-  return h`
-    <section class="hero" aria-label="Balance">
-      <span class="label">Balance</span>
-      <span class="amount">${formatUnits(totalUnits, 6, decimals)}<span class="unit">RAND</span></span>
-      ${pending}
-      ${scanning ? progressMarkup(progress) : ''}
-      <div class="hero-foot">
-        <span class="dot ${scanning ? 'busy' : ''}"></span>
-        <span>${syncedText}</span>
-        <span class="grow"></span>
-        <button class="btn-icon" type="button" data-action="sync" aria-label="Sync now">${raw(icons.activity())}</button>
-      </div>
-    </section>
-    ${banner}`;
-}
-
-function bodyMarkup({ address, assets, sync, assetsByIndex, error, progress, scanning }) {
-  const recent = [...(sync.activity || [])].sort((a, b) => b.time - a.time).slice(0, 5);
-  const activitySection = raw(recent.length === 0
-    ? emptyActivityMarkup()
-    : h`<div class="card flush"><div class="list" role="list">${raw(recent.map((item) => activityRowMarkup(item, assetsByIndex)).join(''))}</div></div>`);
+/** The whole screen, built once. Everything `after()` fills later is a `[data-role]` container
+ *  that stays put across every update. */
+function shellMarkup() {
   return h`
     <h1 class="sr-only">Home</h1>
     <div class="topbar">
       <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
       <span class="grow"></span>
-      <button class="chip" type="button" data-role="copy-address" aria-label="Copy address"><span class="mono">${shortAddress(address)}</span>${raw(icons.copy())}</button>
+      <span data-role="address-slot"></span>
     </div>
-    ${raw(heroMarkup({ address, assets, sync, error, progress, scanning }))}
+    <section class="hero" aria-label="Balance">
+      <span class="label">Balance</span>
+      <span class="amount" data-role="hero-amount"><span class="skeleton line lg"></span></span>
+      <span class="sub" data-role="hero-sub" hidden></span>
+      <div class="progress" data-role="progress" role="progressbar" aria-label="Syncing" data-indeterminate="true" hidden><span class="progress-bar"></span></div>
+      <div class="hero-foot">
+        <span class="dot" data-role="sync-dot"></span>
+        <span data-role="sync-text"></span>
+        <span class="grow"></span>
+        <button class="btn-icon" type="button" data-action="sync" aria-label="Sync now">${raw(icons.refresh())}</button>
+      </div>
+    </section>
     ${actionsMarkup()}
+    <div data-role="banner-slot"></div>
     <h2 class="section-title">Assets</h2>
-    <div class="card flush"><div class="list" role="list">${raw(assets.map(assetRowMarkup).join(''))}</div></div>
+    <div class="card flush" data-role="assets">${listMarkup(skeletonRows(2))}</div>
     <h2 class="section-title">Activity</h2>
-    ${activitySection}`;
+    <div data-role="activity"><div class="card flush">${listMarkup(skeletonRows(2))}</div></div>`;
+}
+
+/**
+ * The app-wide scan record: `{inFlight, progress, listeners}`, kept on `ctx.state` (the one object
+ * that outlives a render) rather than in this screen's closure. Nothing secret goes in it.
+ */
+function scanStore(ctx) {
+  if (!ctx.state.scan) ctx.state.scan = { inFlight: null, progress: null, listeners: new Set() };
+  return ctx.state.scan;
+}
+
+/** Starts the app's one scan if none is running; returns the promise either way. */
+function startScan(ctx, store) {
+  if (store.inFlight) return store.inFlight;
+  store.progress = null;
+  const fanout = (p) => {
+    store.progress = p;
+    for (const fn of [...store.listeners]) {
+      try { fn(p); } catch (err) { console.error('rand-wallet: sync progress listener failed', err); }
+    }
+  };
+  const p = Promise.resolve(ctx.backend.sync.scan(fanout));
+  store.inFlight = p;
+  const done = () => { if (store.inFlight === p) store.inFlight = null; };
+  p.then(done, done); // also marks `p` handled: every consumer attaches its own reactions after
+  return p;
 }
 
 registerScreen('home', {
-  render: () => skeletonMarkup(),
-  async after(ctx, root) {
-    let alive = true;
-    const stop = () => { alive = false; };
+  render: () => shellMarkup(),
+  // Deliberately NOT async: the shell is already on screen, so `after()` wires it up, kicks the
+  // fetches off and returns its cleanup immediately. Awaiting data here would make `mount()` (and
+  // every navigation to home) block on the node.
+  after(ctx, root) {
+    const el = {
+      addressSlot: root.querySelector('[data-role="address-slot"]'),
+      amount: root.querySelector('[data-role="hero-amount"]'),
+      sub: root.querySelector('[data-role="hero-sub"]'),
+      progress: root.querySelector('[data-role="progress"]'),
+      dot: root.querySelector('[data-role="sync-dot"]'),
+      syncText: root.querySelector('[data-role="sync-text"]'),
+      syncBtn: root.querySelector('.hero [data-action="sync"]'),
+      banner: root.querySelector('[data-role="banner-slot"]'),
+      assets: root.querySelector('[data-role="assets"]'),
+      activity: root.querySelector('[data-role="activity"]'),
+    };
 
-    let info;
-    try { info = await ctx.backend.wallet.info(); } catch { info = { address: '' }; }
-    if (!alive) return stop;
+    let address = '';
+    let assets = [];
+    let sync = null;
+    let scanning = false;
+    let dataStamp = -1; // 0 = from sync.cached(), 1 = from sync.scan(): never go backwards
 
-    let assets, sync;
-    try {
-      [assets, sync] = await Promise.all([ctx.backend.assets.list(), ctx.backend.sync.cached()]);
-    } catch (err) {
-      if (!alive) return stop;
-      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Could not load your wallet</span>${err && err.message ? err.message : 'Something went wrong.'}</span></div>`;
-      return stop;
+    // ---- painters: each one owns exactly one container ----
+    function paintAddress() {
+      el.addressSlot.innerHTML = address
+        // Short form (the gallery's `rand1q9x…7k2m`): the topbar also carries the brand, and a
+        // 360 px popup has no room for more. The full address lives on the Receive screen.
+        ? h`<button class="chip action" type="button" data-role="copy-address" aria-label="Copy address"><span class="mono">${shortAddress(address, 8, 4)}</span>${raw(icons.copy())}</button>`
+        : '';
     }
-    if (!alive) return stop;
 
-    function paint(nextAssets, nextSync, error, progress, scanning) {
-      if (!alive) return;
-      assets = nextAssets;
-      sync = nextSync;
-      const assetsByIndex = new Map(assets.map((a) => [a.index, a]));
-      root.innerHTML = bodyMarkup({ address: info.address, assets, sync, assetsByIndex, error, progress, scanning });
-      wireAvatarHues(root);
-      paintProgress(root, progress);
+    function paintHero() {
+      const rand = assets.find((a) => a.index === 0);
+      const decimals = rand ? rand.decimals : 9;
+      el.amount.innerHTML = h`${formatUnits(totalInRand(assets), 6, decimals)}<span class="unit">RAND</span>`;
+      const pending = rand && rand.pending && rand.pending !== '0';
+      if (pending) {
+        el.sub.textContent = `+${formatUnits(rand.pending, 6, decimals)} RAND pending`;
+        el.sub.removeAttribute('hidden');
+      } else {
+        el.sub.textContent = '';
+        el.sub.setAttribute('hidden', '');
+      }
     }
 
-    paint(assets, sync, null, null, false);
+    function paintSyncLine() {
+      el.syncText.textContent = scanning
+        ? 'Syncing…'
+        : (sync && sync.lastSyncMs ? `Synced ${timeAgo(sync.lastSyncMs)}` : 'Not synced yet');
+      el.dot.classList.toggle('busy', scanning);
+    }
 
-    function runScan() {
-      paint(assets, sync, null, null, true);
-      const onProgress = (p) => { if (alive) paint(assets, sync, null, p, true); };
-      ctx.backend.sync.scan(onProgress).then(
+    function paintAssets() {
+      el.assets.innerHTML = h`${listMarkup(assets.map((a) => assetRowMarkup(a)))}`;
+      for (const node of el.assets.querySelectorAll('.avatar[data-hue]')) node.style.setProperty('--hue', node.dataset.hue);
+    }
+
+    function paintActivity() {
+      const byIndex = new Map(assets.map((a) => [a.index, a]));
+      const recent = [...((sync && sync.activity) || [])].sort((a, b) => b.time - a.time).slice(0, 5);
+      el.activity.innerHTML = recent.length === 0
+        ? emptyActivityMarkup()
+        : h`<div class="card flush">${listMarkup(recent.map((item) => activityRowMarkup(item, byIndex)))}</div>`;
+    }
+
+    function applyData(stamp, nextAssets, nextSync) {
+      if (stamp < dataStamp) return; // a slower cached() must never overwrite a fresher scan
+      dataStamp = stamp;
+      if (nextAssets) assets = nextAssets;
+      if (nextSync) sync = nextSync;
+      paintHero();
+      paintAssets();
+      paintActivity();
+      paintSyncLine();
+    }
+
+    // ---- the sync bar: the only thing a progress tick is allowed to touch ----
+    function showProgress(p) {
+      const determinate = p && p.head > 0;
+      if (determinate) {
+        const pct = Math.max(0, Math.min(1, p.scanned / p.head));
+        el.progress.removeAttribute('data-indeterminate');
+        el.progress.style.setProperty('--pct', String(pct));
+        el.progress.setAttribute('aria-valuenow', String(Math.round(pct * 100)));
+        el.progress.setAttribute('aria-valuemin', '0');
+        el.progress.setAttribute('aria-valuemax', '100');
+      } else {
+        // Scanning, but the node has not said how far along it is (it may never call onProgress at
+        // all): a sliding indeterminate bar, which prefers-reduced-motion freezes into a static
+        // one (see base.css's blanket `animation: none`).
+        el.progress.setAttribute('data-indeterminate', 'true');
+        el.progress.removeAttribute('aria-valuenow');
+      }
+    }
+
+    function setScanning(on) {
+      scanning = on;
+      if (on) {
+        el.progress.removeAttribute('hidden');
+        el.syncBtn.disabled = true;
+        el.syncBtn.setAttribute('aria-busy', 'true');
+      } else {
+        el.progress.setAttribute('hidden', '');
+        el.syncBtn.disabled = false;
+        el.syncBtn.removeAttribute('aria-busy');
+      }
+      paintSyncLine();
+    }
+
+    function showBanner(message) {
+      el.banner.innerHTML = h`
+        <div class="banner negative">
+          <span class="ic">${raw(icons.warning())}</span>
+          <span><span class="banner-title">Could not reach the node</span>${message} <a href="#settings" data-go="settings">Check settings</a></span>
+          <span class="grow"></span>
+          <button class="btn sm" type="button" data-action="sync">Retry</button>
+        </div>`;
+    }
+
+    // ---- the app's single scan ----
+    const store = scanStore(ctx);
+    const onProgress = (p) => { if (ctx.isCurrent()) showProgress(p); };
+    store.listeners.add(onProgress);
+
+    function attachScan() {
+      const running = !!store.inFlight;
+      const p = startScan(ctx, store);
+      setScanning(true);
+      showProgress(running ? store.progress : null);
+      p.then(
         async (fresh) => {
-          if (!alive) return;
+          if (!ctx.isCurrent()) return;
           let freshAssets = assets;
           try { freshAssets = await ctx.backend.assets.list(); } catch { /* keep the assets we had */ }
-          if (!alive) return;
-          paint(freshAssets, fresh, null, null, false);
+          if (!ctx.isCurrent()) return;
+          el.banner.innerHTML = '';
+          setScanning(false);
+          applyData(1, freshAssets, fresh);
         },
         (err) => {
-          if (!alive) return;
-          paint(assets, sync, (err && err.message) || 'The node could not be reached.', null, false);
+          if (!ctx.isCurrent()) return;
+          setScanning(false);
+          showBanner((err && err.message) || 'The node could not be reached.');
         },
       );
     }
-    runScan();
 
-    const offSync = on(root, '[data-action="sync"]', 'click', (evt) => { evt.preventDefault(); runScan(); });
+    // ---- first paint ----
+    paintSyncLine();
+    attachScan();
+
+    (async () => {
+      try {
+        const info = await ctx.backend.wallet.info();
+        if (!ctx.isCurrent()) return;
+        address = info.address || '';
+        paintAddress();
+      } catch { /* no address to show; the rest of the screen still works */ }
+
+      let cachedAssets, cachedSync;
+      try {
+        [cachedAssets, cachedSync] = await Promise.all([ctx.backend.assets.list(), ctx.backend.sync.cached()]);
+      } catch (err) {
+        if (!ctx.isCurrent()) return;
+        showBanner((err && err.message) || 'Something went wrong.');
+        return;
+      }
+      if (!ctx.isCurrent()) return;
+      applyData(0, cachedAssets, cachedSync);
+    })();
+
+    const offSync = on(root, '[data-action="sync"]', 'click', (evt) => {
+      evt.preventDefault();
+      if (store.inFlight) return; // one scan at a time, however many times this is tapped
+      el.banner.innerHTML = '';
+      attachScan();
+    });
     const offCopy = on(root, '[data-role="copy-address"]', 'click', async (evt) => {
       evt.preventDefault();
-      await ctx.backend.platform.copy(info.address);
+      if (!address) return;
+      await ctx.backend.platform.copy(address);
+      if (!ctx.isCurrent()) return;
       ctx.toast('Address copied', { kind: 'positive' });
     });
 
-    return () => { stop(); offSync(); offCopy(); };
+    return () => { store.listeners.delete(onProgress); offSync(); offCopy(); };
   },
 });
-
-function wireAvatarHues(root) {
-  for (const el of root.querySelectorAll('.avatar[data-hue]')) el.style.setProperty('--hue', el.dataset.hue);
-}

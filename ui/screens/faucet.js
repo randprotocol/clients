@@ -39,9 +39,11 @@ registerScreen('faucet', {
       btn.setAttribute('aria-disabled', 'true');
       try {
         await ctx.backend.faucet.request();
+        if (!ctx.isCurrent()) return; // the user left while the node was thinking
         ctx.toast('RAND is on its way', { kind: 'positive' });
         ctx.go('#home');
       } catch (err) {
+        if (!ctx.isCurrent()) return;
         showError((err && err.message) || 'The faucet is unavailable right now.');
         btn.disabled = false;
         btn.removeAttribute('aria-disabled');

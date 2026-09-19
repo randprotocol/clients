@@ -152,6 +152,13 @@
 }
 .btn-round:active .ic { transform: scale(.98); }
 .btn-round:disabled { opacity: .4; pointer-events: none; }
+/* An action that is off for a reason the user needs to hear keeps `aria-disabled` instead of
+   `disabled`, so it stays in the tab order and its aria-describedby hint can be announced. It
+   still has to *look* off — and it carries no destination, so a click does nothing. */
+.btn-round[aria-disabled="true"] { opacity: .4; cursor: default; }
+.btn-round[aria-disabled="true"]:hover { color: var(--text-soft); }
+.btn-round[aria-disabled="true"]:hover .ic,
+.btn-round[aria-disabled="true"]:active .ic { background: var(--surface); border-color: var(--border); box-shadow: var(--shadow-1); transform: none; }
 
 .actions {
   display: grid;
@@ -160,6 +167,17 @@
   gap: var(--s-2);
   padding: var(--s-5) 0 var(--s-2);
 }
+/* Four actions fill a row at any width. Two or three would be stranded at the corners of a
+   720 px desktop column, so they cluster in the middle at their natural size instead. */
+.actions:has(> *:nth-child(2):last-child),
+.actions:has(> *:nth-child(3):last-child) {
+  grid-auto-columns: 88px;
+  justify-content: center;
+  gap: var(--s-7);
+}
+/* A note explaining an action (why Send is off) belongs under the row it explains, not hugging
+   the left edge of a 720 px column. */
+.actions + .caption { text-align: center; margin-top: var(--s-1); }
 
 /* ============================================================================= hero ========= */
 /* The balance card: the only large gradient surface in the app. A radial highlight from the top
@@ -327,9 +345,14 @@ body.wide .hero .amount { font-size: var(--fs-balance); }
 .row .row-meta { font-size: var(--fs-caption); color: var(--text-soft); }
 .row .chev { color: var(--text-soft); flex: none; }
 
-/* A stack of rows inside a .card.flush — hairline between, none at the ends. */
+/* A stack of rows inside a .card.flush — hairline between, none at the ends. A list is a real
+   <ul class="list" role="list"> with one <li> per row (the explicit role is needed because
+   base.css's `list-style: none` otherwise strips a <ul>'s list semantics in Safari/VoiceOver);
+   the <li> is a pure wrapper, so it carries the hairline and nothing else. */
 .list { display: flex; flex-direction: column; }
-.list > .row + .row { border-top: 1px solid var(--border-soft); }
+.list > li { display: flex; min-width: 0; }
+.list > li > .row { width: 100%; }
+.list > li + li { border-top: 1px solid var(--border-soft); }
 
 /* Placeholder rows while the wallet scans. */
 .row .row-main > .skeleton + .skeleton { margin-top: var(--s-2); }
@@ -354,6 +377,8 @@ body.wide .hero .amount { font-size: var(--fs-balance); }
 .avatar.accent { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--accent); }
 .avatar.in { background: color-mix(in srgb, var(--positive) 16%, transparent); border-color: color-mix(in srgb, var(--positive) 28%, transparent); color: var(--positive); }
 .avatar.out { background: var(--surface-2); color: var(--text-soft); }
+/* A faucet claim is money arriving, so it reads like one — the positive tint, with the droplet. */
+.avatar.faucet { background: color-mix(in srgb, var(--positive) 16%, transparent); border-color: color-mix(in srgb, var(--positive) 28%, transparent); color: var(--positive); }
 .avatar.pending { background: color-mix(in srgb, var(--warning) 16%, transparent); border-color: color-mix(in srgb, var(--warning) 30%, transparent); color: var(--warning); }
 .avatar.failed { background: color-mix(in srgb, var(--negative) 16%, transparent); border-color: color-mix(in srgb, var(--negative) 30%, transparent); color: var(--negative); }
 /* Registry (RPL) assets have no artwork, so the avatar is the asset's initial on a hue derived
@@ -423,19 +448,26 @@ body.wide .hero .amount { font-size: var(--fs-balance); }
 body.wide .tabbar { display: none; }
 
 /* =========================================================================== sidebar ========= */
-/* The wide layout's first column. Same destinations as the tab bar, plus the account switcher. */
+/* The wide layout's first column. Same destinations as the tab bar, plus the account switcher.
+   Two elements on purpose: the <nav> itself stretches to the full height of the page, so its
+   background and hairline never stop part-way down and leave a band of page behind them, while
+   `.sidebar-inner` is the viewport-tall column that actually sticks as the content scrolls. */
 .sidebar {
   grid-column: 1;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-soft);
+  border-right: 1px solid var(--border-soft);
+}
+.sidebar > .sidebar-inner {
   position: sticky;
   top: 0;
-  align-self: start;
   height: 100vh;
   display: flex;
   flex-direction: column;
   gap: var(--s-1);
   padding: var(--s-5) var(--s-3);
-  background: var(--bg-soft);
-  border-right: 1px solid var(--border-soft);
 }
 .sidebar .brand { padding: 0 var(--s-2) var(--s-4); }
 .sidebar .nav-item {
@@ -643,9 +675,17 @@ body.compact .sidebar { display: none; }
   white-space: nowrap;
   transition: background var(--mid) var(--ease), border-color var(--mid) var(--ease), color var(--mid) var(--ease), transform var(--fast) var(--ease);
 }
-/* Interactive chips stay visually small but claim a 44 px tall hit area. */
+/* An interactive chip (a filter, the copy-address pill) stays visually 34 px but claims the full
+   44 px touch target with an invisible band above and below — the same technique as `.btn.sm`.
+   The band is derived from --tap so the two cannot drift apart. `.chip.action` is here for a chip
+   that is interactive without being a <button>/<a> itself. */
 button.chip::after,
-a.chip::after { content: ""; position: absolute; inset: -5px 0; }
+a.chip::after,
+.chip.action::after { content: ""; position: absolute; inset: calc((34px - var(--tap)) / 2) 0; }
+/* A chip's icon (the copy glyph on an address pill) — icons carry only a viewBox, so without an
+   explicit size a flex container collapses them to nothing, which is exactly how the home
+   header's copy affordance went missing. */
+.chip svg { width: 14px; height: 14px; flex: none; }
 button.chip:hover,
 a.chip:hover { border-color: var(--border); color: var(--text-strong); background: var(--surface-2); text-decoration: none; }
 button.chip:active,
@@ -691,6 +731,14 @@ a.chip:active { transform: scale(.98); }
 .skeleton.circle { width: 40px; height: 40px; border-radius: var(--r-pill); flex: none; }
 .skeleton.block { height: 72px; border-radius: var(--r-md); }
 .skeleton.hero { height: 148px; border-radius: var(--r-xl); }
+/* On the gradient hero (the balance figure before the first scan answers) the surface tokens would
+   read as a dark hole, so the placeholder is a white alpha there — the same reasoning as
+   .progress's fixed white track. */
+.hero .skeleton { background: rgba(255, 255, 255, .22); }
+.hero .skeleton::after { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .28), transparent); }
+/* `.skeleton.line` is normally a flex item (inside `.row-main`); here it sits in an inline
+   formatting context, so it needs a box of its own before width/height mean anything. */
+.hero .amount > .skeleton.line.lg { display: block; height: .62em; width: 46%; margin: .2em 0 .18em; border-radius: var(--r-md); }
 
 /* ============================================================================= toast ========= */
 .toast-area {
@@ -846,6 +894,45 @@ body.wide .toast-area { bottom: var(--s-6); }
   box-shadow: var(--shadow-1);
 }
 .qr img, .qr canvas, .qr svg { width: 100%; max-width: 220px; height: auto; image-rendering: pixelated; }
+
+/* ======================================================================= address box ========= */
+/* A shielded address in full: over a thousand characters, so it wraps at any character and lives
+   in a fixed-height box with its own scroll rather than pushing the rest of the screen off a
+   360 px popup. The fade at the bottom edge is the affordance that says there is more below; it
+   is a gradient of the box's own background, so it works on both themes, and it is
+   pointer-events: none so it never eats a selection drag. */
+.address-box {
+  position: relative;
+  max-height: 84px;
+  overflow-y: auto;
+  padding: var(--s-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.address-box .mono {
+  display: block;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  user-select: all;
+  -webkit-user-select: all;
+}
+.address-box::after {
+  content: "";
+  position: sticky;
+  display: block;
+  bottom: calc(var(--s-3) * -1);
+  height: 20px;
+  margin: -20px calc(var(--s-3) * -1) calc(var(--s-3) * -1);
+  background: linear-gradient(to top, var(--bg-soft), transparent);
+  pointer-events: none;
+}
 
 /* =========================================================================== onboard ========= */
 /* Welcome / create / import / backup / lock: a single column, vertically centred in the viewport

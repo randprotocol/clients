@@ -11,13 +11,17 @@ export function totalInRand(assets) {
 const DAY_MS = 86400000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-function startOfDayUTC(ms) {
-  const d = new Date(ms);
+// A day bucket is keyed by the start of the *viewer's* calendar day. Shifting the timestamp by the
+// zone offset and then reading it with the UTC getters gives the local calendar fields without
+// ever consulting the host zone again — which is what keeps this function pure and testable at a
+// zone the test machine is not in.
+function startOfLocalDay(ms, tzOffsetMinutes) {
+  const d = new Date(ms - tzOffsetMinutes * 60000);
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
-function formatDay(ms) {
-  const d = new Date(ms);
+function formatDay(shiftedDayStartMs) {
+  const d = new Date(shiftedDayStartMs);
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
@@ -26,12 +30,17 @@ function formatDay(ms) {
  * `'Today'`, `'Yesterday'` or `'D Mon YYYY'`. Each item's `.time` is a unix timestamp in
  * *seconds* (the chain's convention); `now` is milliseconds (`Date.now()`), like everywhere else
  * in ui/.
+ *
+ * Days are the *viewer's* calendar days: at UTC−7 an evening transaction belongs to that evening,
+ * not to the next UTC day. `tzOffsetMinutes` is `Date.prototype.getTimezoneOffset()`'s sign
+ * (minutes to ADD to local time to get UTC, so UTC−7 is `420`); it defaults to the host zone and
+ * is a parameter only so tests can pin a zone the machine is not in.
  */
-export function groupByDay(activity, now = Date.now()) {
-  const today = startOfDayUTC(now);
-  const buckets = new Map(); // day-start-ms -> items[]
+export function groupByDay(activity, now = Date.now(), tzOffsetMinutes = new Date().getTimezoneOffset()) {
+  const today = startOfLocalDay(now, tzOffsetMinutes);
+  const buckets = new Map(); // day-start-ms (shifted) -> items[]
   for (const item of activity || []) {
-    const dayStart = startOfDayUTC(item.time * 1000);
+    const dayStart = startOfLocalDay(item.time * 1000, tzOffsetMinutes);
     if (!buckets.has(dayStart)) buckets.set(dayStart, []);
     buckets.get(dayStart).push(item);
   }

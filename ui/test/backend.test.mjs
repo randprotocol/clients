@@ -25,18 +25,21 @@ test('unlockedBackend already has a wallet and is unlocked', async () => {
   assert.ok(info.address.startsWith('rand1'));
 });
 
-test('unlockedBackend returns three activity items from cached() and scan()', async () => {
+test('unlockedBackend returns one activity item per contract kind from cached() and scan()', async () => {
   const b = unlockedBackend();
   const cached = await b.sync.cached();
-  assert.equal(cached.activity.length, 3);
+  assert.equal(cached.activity.length, 4);
   const kinds = cached.activity.map((a) => a.kind);
   assert.ok(kinds.includes('in'));
   assert.ok(kinds.includes('out'));
+  // A `faucet` item was added in the task 1.4 fix round: the contract admits four kinds, and the
+  // screens used to render anything that was not in/out as "Pending".
+  assert.ok(kinds.includes('faucet'));
   const assetIndexes = cached.activity.map((a) => a.asset);
   assert.ok(assetIndexes.includes(1));
 
   const scanned = await b.sync.scan(() => {});
-  assert.equal(scanned.activity.length, 3);
+  assert.equal(scanned.activity.length, 4);
 });
 
 test('fake wallet.create requires a password of length >= 10', async () => {

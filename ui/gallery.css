@@ -69,6 +69,9 @@ body.wide .detail { padding-top: 64px; }
 .g-stage .toast-area { bottom: var(--s-4); }
 body.compact .g-stage .sidebar,
 body.wide .g-stage .sidebar { position: static; height: 100%; width: 240px; display: flex; }
+/* In the app the inner column is sticky and 100vh tall; framed inside a 300 px stage it just
+   fills the stage, so the whole sidebar can be seen at once. */
+.g-stage .sidebar > .sidebar-inner { position: static; height: 100%; }
 body.compact .g-stage .tabbar,
 body.wide .g-stage .tabbar { display: block; }
 .g-stage .g-stage-body { padding: var(--s-4); }

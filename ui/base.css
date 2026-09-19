@@ -280,7 +280,9 @@ hr { border: 0; border-top: 1px solid var(--border-soft); margin: var(--s-4) 0; 
   flex: none;
   box-shadow: var(--shadow-1);
 }
-.brand .name { font-weight: 700; font-size: 16px; color: var(--text-strong); letter-spacing: -0.02em; }
+/* Never wrapped: a topbar that also carries an address pill has no room for a second line, and a
+   two-line brand pushes everything below it down. */
+.brand .name { font-weight: 700; font-size: 16px; color: var(--text-strong); letter-spacing: -0.02em; white-space: nowrap; }
 
 /* ------------------------------------------------------------------------- page skeletons --- */
 /* Compact: the extension popup, the phone-width web wallet and the narrow desktop window. One
@@ -304,25 +306,42 @@ body.compact .app {
 body.compact.nav-on .app {
   padding-bottom: calc(72px + var(--s-6));
 }
+/* An extension popup is a hard 360x600 window. It still has to scroll vertically: an activity
+   list, or the note under a full address on Receive, runs past 600 px and would otherwise be
+   simply unreachable (`overflow: hidden` here used to clip it). Horizontal overflow stays
+   clipped — nothing in the app is allowed to be wider than the popup. The tab bar is
+   `position: fixed`, so it stays pinned while the page scrolls under it. */
 body.compact.popup {
   width: var(--popup-w);
   height: var(--popup-h);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
-/* Wide: desktop. Sidebar | main | detail pane. minmax(0, …) so long hashes cannot push the grid. */
+/* Wide: desktop. Sidebar | main (| detail pane, when one is on screen). minmax(0, …) so long
+   hashes cannot push the grid.
+
+   The third column is reserved ONLY when a `.detail` aside is actually rendered — a permanently
+   reserved 420 px gutter for a pane that is not there pushes the content column left of centre
+   and leaves half the window blank. `:has()` keeps the two cases in CSS rather than asking the
+   router to toggle a class it would then have to keep in sync. */
 body.wide {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) minmax(0, 420px);
-  align-items: start;
+  grid-template-columns: 240px minmax(0, 1fr);
+  align-items: stretch;
 }
+body.wide:has(.detail) { grid-template-columns: 240px minmax(0, 1fr) minmax(0, 420px); }
 body.wide .app {
   grid-column: 2;
   padding: var(--s-5) var(--s-7) var(--s-8);
   max-width: 720px;
   width: 100%;
   margin: 0 auto;
+  align-self: start;
 }
 body.wide .detail {
   grid-column: 3;

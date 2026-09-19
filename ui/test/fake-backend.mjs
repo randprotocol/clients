@@ -13,13 +13,13 @@ function fixedPk() {
 }
 
 function defaultSettings() {
-  return { rpcUrl: 'http://127.0.0.1:8899', theme: 'system', autoLockMin: 15, explorerUrl: 'https://explorer.rand.example', chainId: 'rand-testnet-8' };
+  return { rpcUrl: 'http://127.0.0.1:8899', theme: 'system', autoLockMin: 15, explorerUrl: 'https://randscan.org', chainId: 13 };
 }
 
 function defaultAssets() {
   return [
-    { index: 0, id: 'rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0' },
-    { index: 1, id: 'wrapped-eth', symbol: 'wETH', decimals: 9, balance: '120000000', pending: '0' },
+    { index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0' },
+    { index: 1, id: 'wrapped-eth', name: 'Wrapped Ether', symbol: 'wETH', decimals: 9, balance: '120000000', pending: '0' },
   ];
 }
 
@@ -182,8 +182,12 @@ export function fakeBackend(overrides = {}) {
 }
 
 /**
- * A fake backend that already has a wallet and is unlocked, with three activity items and the
- * two notes ('in' activity items 1/3 reference them by `index`) behind them.
+ * A fake backend that already has a wallet and is unlocked, with one activity item of each of the
+ * contract's four kinds (`in`, `out`, `faucet`, `pending` — see ui/backend.js) and the two notes
+ * the two `in` items reference by `index`.
+ *
+ * The `faucet` item deliberately carries none of the optional `address`/`block`/`fee`/`txKey`
+ * fields, so a screen that renders those rows unconditionally fails a test rather than a user.
  *
  * `activity[].time` and `notes[].time` are unix seconds (the chain's convention — see
  * `groupByDay` in lib/assets.js, whose own test fixes this contract), not milliseconds; every
@@ -208,6 +212,7 @@ export function unlockedBackend(overrides = {}) {
         kind: 'in', asset: 1, amount: '20000000', time: nowSec - 600, hash: `0x${'cc'.repeat(32)}`,
         index: 7, address: 'rand1' + 'w'.repeat(40), block: 1402918,
       },
+      { kind: 'faucet', asset: 0, amount: '10000000000', time: nowSec - 7200, hash: `0x${'ff'.repeat(32)}` },
     ],
     notes: [
       { index: 3, asset: 0, amount: '1000000000', blockHeight: 1402914, spent: false, commitment: `0x${'a1'.repeat(32)}`, time: nowSec - 3600 },
