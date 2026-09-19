@@ -8,11 +8,14 @@ const c = (m, p = {}) => { const r = JSON.parse(call(m, JSON.stringify(p))); if 
 
 console.log('core version', version(), c('version').chain_build, 'chain', c('version').default_chain_id);
 const w = c('keygen');
-if (!w.address.startsWith('rand1') || w.address.length !== 1666) throw new Error('bad address ' + w.address.length);
+const ver = c('version');
+if (!w.address.startsWith(ver.address_hrp) || w.address.length !== 1668) throw new Error('bad address ' + w.address.length);
 if (!c('parse_address', { address: w.address }).valid) throw new Error('address does not parse');
 if (c('parse_address', { address: 'rand1nope' }).valid) throw new Error('bogus address parsed');
 if (c('wallet_info', { spend_key: w.spend_key }).address !== w.address) throw new Error('wallet_info mismatch');
 if (c('format_amount', { units: '1500000000' }) !== '1.5') throw new Error('format_amount');
+if (ver.token_symbol !== 'RAND') throw new Error('token_symbol ' + ver.token_symbol);
+if (!w.address.startsWith(ver.address_hrp)) throw new Error('address_hrp mismatch');
 console.log('keys ok; address', w.address.slice(0, 16) + '…');
 
 // Proving is opt-in: a bundle proof peaks at ~5.5 GB and wasm32 stops at 4 GB, so this aborts
