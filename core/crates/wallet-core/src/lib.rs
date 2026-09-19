@@ -622,7 +622,7 @@ pub fn constants() -> Value {
         "address_hrp": ADDRESS_HRP,
         "token_symbol": "RAND",
         "token_decimals": 9,
-        "units_per_shrugg": UNITS_PER_RAND.to_string(),
+        "units_per_rand": UNITS_PER_RAND.to_string(),
         "bundle_base_fee": gas::BUNDLE_BASE.to_string(),
         "faucet_max_units": FAUCET_MAX_UNITS.to_string(),
         "time_window": TIME_WINDOW,
@@ -859,6 +859,7 @@ mod tests {
         assert_eq!(v["address_hrp"], ADDRESS_HRP);
         assert_eq!(RPC_NAMESPACE, "shrugg");
         assert_eq!(ADDRESS_HRP, "shrugg1");
+        assert!(v.get("units_per_rand").is_some() && v.get("units_per_shrugg").is_none());
     }
 
     #[test]
