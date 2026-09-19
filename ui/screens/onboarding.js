@@ -131,8 +131,11 @@ function wirePasswordForm(ctx, root, { mode }) {
     }
 
     try {
-      if (isImport) await ctx.backend.wallet.import(keyField.value.trim(), pwField.value);
-      else await ctx.backend.wallet.create(pwField.value);
+      // Through the shell, not backend.wallet.create/import directly: a new wallet is a new
+      // session, and ctx.createWallet/importWallet start it *before* this returns, so #backup
+      // below renders inside the new session (and can still read its own spend key).
+      if (isImport) await ctx.importWallet(keyField.value.trim(), pwField.value);
+      else await ctx.createWallet(pwField.value);
       pwField.value = '';
       confirmField.value = '';
       if (keyField) keyField.value = '';
@@ -194,8 +197,12 @@ registerScreen('backup', {
     try {
       key = await ctx.backend.wallet.exportSpendKey();
     } catch {
-      ctx.toast('Could not load your recovery key.', { kind: 'negative' });
+      if (ctx.isCurrent()) ctx.toast('Could not load your recovery key.', { kind: 'negative' });
     }
+    // The user may have navigated away while the key was being exported. Drop it on the floor
+    // rather than wiring up a screen that is no longer on display: `key` goes out of scope with
+    // this function, so it is never written anywhere at all.
+    if (!ctx.isCurrent()) { key = null; return; }
 
     const mask = root.querySelector('[data-role="key"]');
     const holdBtn = root.querySelector('[data-role="hold"]');

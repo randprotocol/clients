@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import './dom-env.mjs';
-import { mount, resolveRoute } from '../app.js';
+import { mount, registerScreen, resolveRoute } from '../app.js';
 import { fakeBackend, unlockedBackend } from './fake-backend.mjs';
 import { mountApp } from './helpers.mjs';
 
@@ -191,4 +191,202 @@ test("destroy() unhooks the app: a later hashchange does not re-render, and body
 
   root.remove();
   location.hash = '';
+});
+
+// ============================================================================ sessions =========
+// A "session" is one stretch of one wallet being looked at. It ends on lock, wipe, unlock,
+// create, import and destroy(); `ctx.state` is emptied and `ctx.session.signal` aborts at exactly
+// that moment, so nothing derived from one wallet can be shown under the next one.
+
+/** A screen that only records what `ctx.state`/`ctx.session` look like each time it is visited. */
+const probeVisits = [];
+registerScreen('probe', {
+  render: () => '<div data-role="probe"></div>',
+  after(ctx) {
+    probeVisits.push({ sentinel: ctx.state.sentinel, sessionId: ctx.session.id, state: ctx.state, ctx });
+    ctx.state.sentinel = `from-session-${ctx.session.id}`;
+  },
+});
+
+async function unlockVia(app, root, password) {
+  root.querySelector('input[name=password]').value = password;
+  root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+}
+
+test('ctx.session: a fresh mount is session 1 and exposes an unaborted signal', async (t) => {
+  probeVisits.length = 0;
+  const { app } = await mountApp(t, unlockedBackend(), { hash: '#probe' });
+  await app.idle();
+  assert.equal(probeVisits.length, 1);
+  assert.equal(probeVisits[0].sessionId, 1);
+  assert.equal(probeVisits[0].sentinel, undefined);
+});
+
+test('ctx.state keeps nothing from the previous session across a lock/unlock', async (t) => {
+  probeVisits.length = 0;
+  const b = unlockedBackend();
+  const { app, root } = await mountApp(t, b, { hash: '#probe' });
+  await app.idle();
+  const firstState = probeVisits[0].state;
+  assert.equal(firstState.sentinel, 'from-session-1');
+
+  root.querySelector('.sidebar [data-action="lock"]').click();
+  await app.idle();
+  assert.equal(location.hash, '#lock');
+
+  await unlockVia(app, root, 'unlocked-password-1');
+  await app.go('#probe');
+  await app.idle();
+
+  assert.equal(probeVisits.length, 2);
+  assert.equal(probeVisits[1].sentinel, undefined, 'the sentinel from session 1 is gone');
+  assert.notEqual(probeVisits[1].state, firstState, 'ctx.state is a different object');
+  assert.ok(probeVisits[1].sessionId > probeVisits[0].sessionId);
+});
+
+test('ctx.session.signal aborts when the wallet is locked, and again when it is unlocked', async (t) => {
+  probeVisits.length = 0;
+  const b = unlockedBackend();
+  const { app, root } = await mountApp(t, b, { hash: '#probe' });
+  await app.idle();
+  const first = probeVisits[0];
+  const firstSignal = app.session.signal;
+  assert.equal(firstSignal.aborted, false);
+
+  root.querySelector('.sidebar [data-action="lock"]').click();
+  await app.idle();
+  assert.equal(firstSignal.aborted, true, 'locking ends the session');
+  const lockedSignal = app.session.signal;
+  assert.equal(lockedSignal.aborted, false);
+  assert.ok(app.session.id > first.sessionId);
+
+  await unlockVia(app, root, 'unlocked-password-1');
+  assert.equal(lockedSignal.aborted, true, 'unlocking ends the locked-out session too');
+  assert.equal(app.session.aborted, undefined); // the session object is just {id, signal}
+});
+
+test('creating a wallet starts the new session before #backup renders', async (t) => {
+  const b = fakeBackend();
+  const { app, root } = await mountApp(t, b);
+  await app.go('#create');
+  const before = app.session.id;
+  root.querySelector('input[name=password]').value = 'correct horse battery';
+  root.querySelector('input[name=confirm]').value = 'correct horse battery';
+  root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+
+  assert.match(location.hash, /^#backup/);
+  assert.ok(app.session.id > before, 'a new wallet is a new session');
+  assert.equal(app.session.signal.aborted, false, 'and #backup runs inside it');
+  // #backup must still be able to read the key it was sent there to show.
+  assert.equal(b.calls.filter((c) => c[0] === 'wallet.exportSpendKey').length, 1);
+  assert.ok(root.querySelector('[data-role="key"]'));
+});
+
+test('wiping from the lock screen ends the session and closes the sheet', async (t) => {
+  const b = fakeBackend();
+  await b.wallet.create('correct horse battery');
+  await b.wallet.lock();
+  const { app, root } = await mountApp(t, b);
+  await app.go('#lock');
+  const before = app.session.id;
+  const beforeSignal = app.session.signal;
+  root.querySelector('[data-action="wipe"]').click();
+  await app.idle();
+  root.querySelector('[role="dialog"] [data-role="confirm"]').click();
+  await app.idle();
+
+  assert.equal(await b.wallet.exists(), false);
+  assert.equal(location.hash, '#welcome');
+  assert.equal(root.querySelector('[role="dialog"]'), null, 'the sheet closed cleanly');
+  assert.equal(root.querySelector('.scrim'), null);
+  assert.equal(beforeSignal.aborted, true);
+  assert.ok(app.session.id > before);
+});
+
+test('destroy() ends the session: the signal aborts and ctx.state is cleared', async (t) => {
+  probeVisits.length = 0;
+  location.hash = '#probe';
+  const root = document.createElement('div');
+  document.body.append(root);
+  const app = await mount(root, unlockedBackend());
+  t.after(() => { try { app.destroy(); } catch { /* already torn down */ } root.remove(); });
+  await app.idle();
+  const signal = app.session.signal;
+  const state = probeVisits[0].state;
+
+  app.destroy();
+  assert.equal(signal.aborted, true);
+  assert.equal(state.sentinel, undefined, 'the session state was emptied, not just replaced');
+  root.remove();
+  location.hash = '';
+});
+
+test('destroy() during the first await leaves the container empty and the body classes off', async (t) => {
+  // The wallet-state read that opens every render is an await; a destroy() landing inside it used
+  // to let that render carry on and re-insert the sidebar/tab bar into the emptied container.
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const src = unlockedBackend();
+  let n = 0;
+  const b = unlockedBackend({ wallet: { exists: async () => { n += 1; if (n > 1) await gate; return src.wallet.exists(); } } });
+
+  location.hash = '';
+  const root = document.createElement('div');
+  document.body.append(root);
+  const app = await mount(root, b);
+  t.after(() => { try { app.destroy(); } catch { /* already torn down */ } root.remove(); });
+
+  app.go('#activity'); // not awaited: its very first await is gated
+  await new Promise((r) => setTimeout(r, 0));
+  app.destroy();
+  release();
+  await app.idle();
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert.equal(root.innerHTML, '');
+  assert.ok(!document.body.classList.contains('compact'));
+  assert.ok(!document.body.classList.contains('wide'));
+  assert.ok(!document.body.classList.contains('nav-on'));
+  root.remove();
+});
+
+test('backup: a spend key arriving after the user navigated away is never written to the DOM', async (t) => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const b = fakeBackend();
+  b.wallet.exportSpendKey = async () => { await gate; return `sk-${'ab'.repeat(32)}`; };
+  const { app, root } = await mountApp(t, b);
+  await app.go('#create');
+  root.querySelector('input[name=password]').value = 'correct horse battery';
+  root.querySelector('input[name=confirm]').value = 'correct horse battery';
+  root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  assert.match(location.hash, /^#backup/);
+
+  await app.go('#home');
+  release();
+  await app.idle();
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert.doesNotMatch(root.innerHTML, /sk-/, 'the key never reached the DOM');
+  assert.doesNotMatch(location.hash, /sk-/);
+  assert.equal(root.querySelector('[data-role="key"]'), null);
+});
+
+test('a screen that bypasses the helpers and calls backend.wallet.lock() still ends the session', async (t) => {
+  // The helpers on ctx read better, but they are not the guarantee: the shell intercepts the
+  // wallet methods themselves, so a screen written later cannot leave a session behind.
+  probeVisits.length = 0;
+  const { app } = await mountApp(t, unlockedBackend(), { hash: '#probe' });
+  await app.idle();
+  const { ctx } = probeVisits[0];
+  const signal = app.session.signal;
+  const before = app.session.id;
+
+  await ctx.backend.wallet.lock();
+  assert.equal(signal.aborted, true);
+  assert.ok(app.session.id > before);
+  assert.equal(ctx.state.sentinel, undefined);
 });

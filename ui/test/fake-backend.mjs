@@ -23,6 +23,13 @@ function defaultAssets() {
   ];
 }
 
+/** The shape ui/ recognises as "this was cancelled", not "the node failed". */
+function abortError() {
+  const err = new Error('The operation was aborted.');
+  err.name = 'AbortError';
+  return err;
+}
+
 function requirePassword(password) {
   if (typeof password !== 'string' || password.length < MIN_PASSWORD_LEN) {
     throw new Error(`password must be at least ${MIN_PASSWORD_LEN} characters`);
@@ -112,7 +119,12 @@ function createBackend(initial = {}, overrides = {}) {
       head: state.head,
       lastSyncMs: state.lastSyncMs,
     }),
-    scan: (onProgress) => {
+    // `options.signal` is the wallet session's AbortSignal (see ui/backend.js). This fake answers
+    // immediately, so the only abort it can observe is one that already happened before the call;
+    // it rejects with an AbortError then, the way a real backend would mid-scan.
+    scan: (onProgress, options) => {
+      const signal = options && options.signal;
+      if (signal && signal.aborted) throw abortError();
       if (typeof onProgress === 'function') onProgress({ scanned: state.scannedHeight, head: state.head });
       return {
         notes: state.notes.map((n) => ({ ...n })),

@@ -44,7 +44,11 @@ export function explorerLink(explorerUrl, hash) {
   try {
     base = new URL(String(explorerUrl).endsWith('/') ? String(explorerUrl) : `${explorerUrl}/`);
   } catch { return null; }
-  if (base.protocol !== 'https:' && base.protocol !== 'http:') return null;
+  // https only. Plain http is allowed for a developer's own explorer on this machine and nowhere
+  // else: a transaction hash sent in clear to a remote host is a privacy leak, and a plaintext
+  // response is something a network can rewrite.
+  const local = base.hostname === 'localhost' || base.hostname === '127.0.0.1' || base.hostname === '[::1]';
+  if (base.protocol !== 'https:' && !(base.protocol === 'http:' && local)) return null;
   const url = new URL(`tx/${hash}`, base);
   const onRandscan = base.hostname === 'randscan.org' || base.hostname.endsWith('.randscan.org');
   return { url: url.href, label: onRandscan ? 'Open in randscan' : 'Open in explorer' };
@@ -72,10 +76,11 @@ registerScreen('tx', {
       return;
     }
 
-    // The key lives here and nowhere else. `item` is a copy handed over by sync.cached(), so
-    // clearing the field on it costs nothing and keeps one fewer reference around.
+    // The key lives in this closure and is never written to an attribute, ctx.state or the hash.
+    // `item` itself is left exactly as the backend returned it — a backend is free to hand back a
+    // cached object, and clearing a field on it would destroy the key for everyone (see the
+    // read-only rule in ui/backend.js).
     let txKey = item.txKey || null;
-    item.txKey = undefined;
 
     const asset = assets.find((a) => a.index === item.asset) || { symbol: `RPL#${item.asset}`, decimals: 9 };
     const native = assets.find((a) => a.index === 0);

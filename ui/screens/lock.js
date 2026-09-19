@@ -36,7 +36,9 @@ registerScreen('lock', {
     async function onSubmit(evt) {
       evt.preventDefault();
       try {
-        await ctx.backend.wallet.unlock(input.value);
+        // Through the shell, not backend.wallet.unlock directly: unlocking is a new wallet
+        // session, and the shell is what ends the old one (see ctx.unlockWallet in ../app.js).
+        await ctx.unlockWallet(input.value);
         markValid(wrap, input, 'lock-password-hint');
         input.value = '';
         ctx.go('#home');
@@ -59,8 +61,10 @@ registerScreen('lock', {
         </div>`);
       on(dialog, '[data-role="cancel"]', 'click', () => ctx.closeSheet());
       on(dialog, '[data-role="confirm"]', 'click', async () => {
-        await ctx.backend.wallet.wipe();
-        ctx.closeSheet();
+        // ctx.wipeWallet() ends the wallet session: it aborts anything in flight, empties
+        // ctx.state and closes this very sheet, so nothing from the wiped wallet can outlive it.
+        await ctx.wipeWallet();
+        ctx.closeSheet(); // idempotent — endSession() has usually closed it already
         ctx.go('#welcome');
       });
       // No explicit unsubscribe: `dialog` is removed from the DOM on close (by closeSheet or the

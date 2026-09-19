@@ -11,6 +11,7 @@ import { fakeBackend, unlockedBackend } from './fake-backend.mjs';
 import { mountApp } from './helpers.mjs';
 import { groupByDay, avatarFor, totalInRand } from '../lib/assets.js';
 import { icons } from '../lib/icons.js';
+import { explorerLink } from '../screens/detail.js';
 
 const IN_HASH = `0x${'aa'.repeat(32)}`;
 const OUT_HASH = `0x${'bb'.repeat(32)}`;
@@ -585,4 +586,146 @@ test('no screen in this task hard-codes a chain number or a fallback explorer UR
     assert.doesNotMatch(src, /chain\s*(id)?\s*[:=]\s*['"]?\d/i, `${file} hard-codes a chain number`);
   }
   assert.ok(fakeBackend);
+});
+
+// ------------------------------------------------------------------- sessions and the scan ----
+// `ctx.state` (where the one in-flight scan lives) is emptied whenever the wallet session ends,
+// and a scan carries the session id it started under. Neither a returning screen nor a late
+// resolve may carry one wallet's data into the next one's screen.
+
+// A scan that never settles keeps `app.idle()` waiting for ever (it is a tracked backend call),
+// so these tests drain the queue with plain turns instead.
+const turns = async (n = 3) => { for (let i = 0; i < n; i += 1) await new Promise((r) => setTimeout(r, 0)); };
+
+/** A backend whose sync.scan() never settles on its own; `settle(...)`/`fail(...)` drives it. */
+function controlledScan(overrides = {}) {
+  const ctl = { calls: 0, signals: [], settle: null, fail: null };
+  const b = unlockedBackend({
+    ...overrides,
+    sync: {
+      ...(overrides.sync || {}),
+      scan: (_onProgress, opts) => {
+        ctl.calls += 1;
+        ctl.signals.push(opts && opts.signal);
+        return new Promise((resolve, reject) => { ctl.settle = resolve; ctl.fail = reject; });
+      },
+    },
+  });
+  return { b, ctl };
+}
+
+const OLD_ACTIVITY = {
+  notes: [],
+  activity: [{ kind: 'in', asset: 0, amount: '99000000000', time: Math.floor(Date.now() / 1000), hash: `0x${'9a'.repeat(32)}`, address: `rand1${'old'.repeat(13)}o` }],
+  scannedHeight: 9, head: 9, lastSyncMs: Date.now(),
+};
+
+test('a scan from before a wipe never paints under the new wallet', async (t) => {
+  const { b, ctl } = controlledScan();
+  const { app, root } = await mountApp(t, b, { hash: '#home' });
+  assert.equal(ctl.calls, 1, 'session 1 started a scan');
+  const staleSettle = ctl.settle;
+
+  // Lock → wipe → create a brand-new wallet → home, all inside the same mount.
+  root.querySelector('.sidebar [data-action="lock"]').click();
+  await turns();
+  root.querySelector('[data-action="wipe"]').click();
+  await turns();
+  root.querySelector('[role="dialog"] [data-role="confirm"]').click();
+  await turns();
+  assert.equal(location.hash, '#welcome');
+
+  await app.go('#create');
+  root.querySelector('input[name=password]').value = 'a brand new password';
+  root.querySelector('input[name=confirm]').value = 'a brand new password';
+  root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await turns();
+  await app.go('#home');
+  await turns();
+
+  const callsBefore = ctl.calls;
+  assert.ok(callsBefore > 1, 'the new session started a scan of its own');
+
+  staleSettle(OLD_ACTIVITY); // the previous wallet's scan finally answers
+  await turns();
+  assert.doesNotMatch(root.textContent, /99/, "the previous wallet's balance is not shown");
+  assert.doesNotMatch(root.innerHTML, /rand1oldold/, "the previous wallet's activity is not shown");
+  assert.equal(ctl.calls, callsBefore, 'and no extra scan was started by the stale resolve');
+});
+
+test('a scan from before a lock never paints after unlocking', async (t) => {
+  const { b, ctl } = controlledScan();
+  const { app, root } = await mountApp(t, b, { hash: '#home' });
+  const staleSettle = ctl.settle;
+  assert.equal(ctl.calls, 1);
+
+  root.querySelector('.sidebar [data-action="lock"]').click();
+  await turns();
+  root.querySelector('input[name=password]').value = 'unlocked-password-1';
+  root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await turns();
+  assert.equal(location.hash, '#home');
+  assert.equal(ctl.calls, 2, 'the unlocked session starts its own scan, it does not attach');
+
+  staleSettle(OLD_ACTIVITY);
+  await turns();
+  assert.doesNotMatch(root.textContent, /99/);
+  assert.doesNotMatch(root.innerHTML, /rand1oldold/);
+});
+
+test('sync.scan is given the session signal, and an abort is not reported as a node failure', async (t) => {
+  const { b, ctl } = controlledScan();
+  const { app, root } = await mountApp(t, b, { hash: '#home' });
+  const signal = ctl.signals[0];
+  assert.ok(signal, 'sync.scan receives { signal } as its second argument');
+  assert.equal(signal.aborted, false);
+
+  const staleFail = ctl.fail;
+  root.querySelector('.sidebar [data-action="lock"]').click();
+  await turns();
+  assert.equal(signal.aborted, true, 'ending the session aborts the scan');
+
+  const err = new Error('The operation was aborted.');
+  err.name = 'AbortError';
+  staleFail(err);
+  await turns();
+  assert.equal(root.querySelector('.banner.negative'), null, 'an aborted scan is not an error to show');
+});
+
+test('the fake backend honours an aborted signal on sync.scan', async () => {
+  const b = unlockedBackend();
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(() => b.sync.scan(undefined, { signal: ac.signal }), (err) => err.name === 'AbortError');
+  const fine = await b.sync.scan(undefined, { signal: new AbortController().signal });
+  assert.ok(Array.isArray(fine.activity));
+});
+
+// --------------------------------------------------------------------------- read-only data ----
+test('the tx detail screen never mutates the object the backend returned', async (t) => {
+  const cached = await unlockedBackend().sync.cached();
+  const item = cached.activity.find((a) => a.hash === OUT_HASH);
+  assert.ok(item.txKey, 'the fixture has a key to begin with');
+  const before = { ...item };
+  // The same object identity every call, the way a caching backend would answer.
+  const b = unlockedBackend({ sync: { cached: () => cached, scan: () => cached } });
+  const { root } = await at(t, `#tx/${OUT_HASH}`, b);
+  assert.ok(root.querySelector('[data-role="txkey"]'));
+  root.querySelector('[data-role="reveal-key"]').click();
+  assert.deepEqual({ ...item }, before, 'the backend’s own object is untouched');
+  assert.equal(item.txKey, before.txKey);
+});
+
+// ------------------------------------------------------------------------------ explorer URL ---
+test('explorerLink refuses plain http except on a local explorer', () => {
+  const hash = OUT_HASH;
+  assert.equal(explorerLink('https://randscan.org', hash).label, 'Open in randscan');
+  assert.equal(explorerLink('http://randscan.org', hash), null, 'no plaintext to a remote host');
+  assert.equal(explorerLink('http://explorer.example', hash), null);
+  assert.equal(explorerLink('http://localhost:3000', hash).url, `http://localhost:3000/tx/${hash}`);
+  assert.equal(explorerLink('http://127.0.0.1:3000', hash).url, `http://127.0.0.1:3000/tx/${hash}`);
+  assert.equal(explorerLink('http://localhost:3000', hash).label, 'Open in explorer');
+  assert.equal(explorerLink('javascript:alert(1)', hash), null);
+  assert.equal(explorerLink('', hash), null);
+  assert.equal(explorerLink('https://randscan.org', 'not-a-hash'), null);
 });

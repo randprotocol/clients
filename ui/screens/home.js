@@ -96,25 +96,43 @@ function shellMarkup() {
  * that outlives a render) rather than in this screen's closure. Nothing secret goes in it.
  */
 function scanStore(ctx) {
-  if (!ctx.state.scan) ctx.state.scan = { inFlight: null, progress: null, listeners: new Set() };
+  if (!ctx.state.scan) ctx.state.scan = { sessionId: null, inFlight: null, progress: null, listeners: new Set() };
   return ctx.state.scan;
 }
 
-/** Starts the app's one scan if none is running; returns the promise either way. */
+/** An error that means "this was cancelled", not "the node failed" — see ui/backend.js. */
+function isAbortError(err) {
+  return !!err && (err.name === 'AbortError' || err.code === 'ABORT_ERR' || err.code === 20);
+}
+
+/**
+ * Starts the session's one scan if none is running, and returns `{promise, sessionId}`.
+ *
+ * Every scan is stamped with the wallet session it belongs to. `ctx.state` is emptied when a
+ * session ends, so in practice the store is already fresh — but the id is recorded and checked
+ * anyway, because "a scan may only ever be attached to, progress-reported to, or painted from,
+ * within the session that started it" is the rule that keeps one wallet's history off the next
+ * wallet's screen, and it should not depend on a second mechanism being remembered.
+ */
 function startScan(ctx, store) {
-  if (store.inFlight) return store.inFlight;
+  const session = ctx.session;
+  if (store.inFlight && store.sessionId === session.id) {
+    return { promise: store.inFlight, sessionId: store.sessionId, alreadyRunning: true };
+  }
+  store.sessionId = session.id;
   store.progress = null;
   const fanout = (p) => {
+    if (ctx.session.id !== session.id) return; // a tick from a wallet nobody is looking at
     store.progress = p;
     for (const fn of [...store.listeners]) {
       try { fn(p); } catch (err) { console.error('rand-wallet: sync progress listener failed', err); }
     }
   };
-  const p = Promise.resolve(ctx.backend.sync.scan(fanout));
+  const p = Promise.resolve(ctx.backend.sync.scan(fanout, { signal: session.signal }));
   store.inFlight = p;
-  const done = () => { if (store.inFlight === p) store.inFlight = null; };
+  const done = () => { if (store.inFlight === p && store.sessionId === session.id) store.inFlight = null; };
   p.then(done, done); // also marks `p` handled: every consumer attaches its own reactions after
-  return p;
+  return { promise: p, sessionId: session.id, alreadyRunning: false };
 }
 
 registerScreen('home', {
@@ -239,29 +257,36 @@ registerScreen('home', {
         </div>`;
     }
 
-    // ---- the app's single scan ----
+    // ---- this session's single scan ----
+    // `mySession` is the session this render belongs to; every reaction below checks it as well as
+    // `ctx.isCurrent()`, because a screen can be current under a *different* wallet (lock → wipe →
+    // create → home is all one mount) and a result from the previous wallet must never paint.
+    const mySession = ctx.session.id;
+    const live = () => ctx.isCurrent() && ctx.session.id === mySession;
     const store = scanStore(ctx);
-    const onProgress = (p) => { if (ctx.isCurrent()) showProgress(p); };
+    const onProgress = (p) => { if (live()) showProgress(p); };
     store.listeners.add(onProgress);
 
     function attachScan() {
-      const running = !!store.inFlight;
-      const p = startScan(ctx, store);
+      const { promise, alreadyRunning } = startScan(ctx, store);
       setScanning(true);
-      showProgress(running ? store.progress : null);
-      p.then(
+      showProgress(alreadyRunning ? store.progress : null);
+      promise.then(
         async (fresh) => {
-          if (!ctx.isCurrent()) return;
+          if (!live()) return;
           let freshAssets = assets;
           try { freshAssets = await ctx.backend.assets.list(); } catch { /* keep the assets we had */ }
-          if (!ctx.isCurrent()) return;
+          if (!live()) return;
           el.banner.innerHTML = '';
           setScanning(false);
           applyData(1, freshAssets, fresh);
         },
         (err) => {
-          if (!ctx.isCurrent()) return;
+          if (!live()) return;
           setScanning(false);
+          // An abort means the wallet session ended under us (lock/wipe/unlock/teardown). That is
+          // not a node failure and must not be reported as one.
+          if (isAbortError(err)) return;
           showBanner((err && err.message) || 'The node could not be reached.');
         },
       );
@@ -274,7 +299,7 @@ registerScreen('home', {
     (async () => {
       try {
         const info = await ctx.backend.wallet.info();
-        if (!ctx.isCurrent()) return;
+        if (!live()) return;
         address = info.address || '';
         paintAddress();
       } catch { /* no address to show; the rest of the screen still works */ }
@@ -283,17 +308,19 @@ registerScreen('home', {
       try {
         [cachedAssets, cachedSync] = await Promise.all([ctx.backend.assets.list(), ctx.backend.sync.cached()]);
       } catch (err) {
-        if (!ctx.isCurrent()) return;
+        if (!live()) return;
+        if (isAbortError(err)) return;
         showBanner((err && err.message) || 'Something went wrong.');
         return;
       }
-      if (!ctx.isCurrent()) return;
+      if (!live()) return;
       applyData(0, cachedAssets, cachedSync);
     })();
 
     const offSync = on(root, '[data-action="sync"]', 'click', (evt) => {
       evt.preventDefault();
-      if (store.inFlight) return; // one scan at a time, however many times this is tapped
+      // One scan at a time per session, however many times this is tapped.
+      if (store.inFlight && store.sessionId === ctx.session.id) return;
       el.banner.innerHTML = '';
       attachScan();
     });
@@ -301,7 +328,7 @@ registerScreen('home', {
       evt.preventDefault();
       if (!address) return;
       await ctx.backend.platform.copy(address);
-      if (!ctx.isCurrent()) return;
+      if (!live()) return;
       ctx.toast('Address copied', { kind: 'positive' });
     });
 

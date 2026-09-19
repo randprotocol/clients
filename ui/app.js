@@ -27,6 +27,15 @@ const TABS = [
 ];
 const WIDE_AT = 900; // keep in sync with tokens.css --wide-at
 
+// The only `ctx.state` keys that survive the end of a wallet session: device-level UI preferences
+// that are not derived from any wallet. Everything else in `ctx.state` is wallet data by default
+// and is dropped — a new key is only added here if it is genuinely account-independent.
+const SESSION_SAFE_STATE_KEYS = ['theme', 'locale'];
+
+// Wallet methods after which a different wallet (or none) is being looked at. Each one ends the
+// wallet session; see the interception in mount() and `ctx.session` below.
+const SESSION_ENDING_WALLET_METHODS = ['lock', 'wipe', 'unlock', 'create', 'import'];
+
 /**
  * The network chip's text, derived from `settings.get().chainId` — never a chain number written
  * into a screen. A numeric id reads as "Chain 13"; anything else (a named network some other
@@ -175,6 +184,43 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   // render at its commit point, and by destroy().
   let currentToken = null;
 
+  // ---- wallet session ----
+  // One session is one stretch of one wallet being looked at. It ends the moment *who is looking*
+  // changes — lock, wipe, unlock, create, import, destroy — and everything derived from the
+  // previous wallet has to end with it: `ctx.state` is emptied and `ctx.session.signal` aborts, so
+  // an in-flight scan started under the old wallet can neither be attached to nor painted under
+  // the new one. Screens never end a session themselves: the shell intercepts the five wallet
+  // methods that change who is looking (see SESSION_ENDING_WALLET_METHODS below), so a screen
+  // added later cannot forget to — the `ctx.lockWallet()`-style helpers are naming, not the
+  // mechanism.
+  let sessionSeq = 0;
+  let session = null;
+  let abortSession = () => {};
+  function startSession() {
+    sessionSeq += 1;
+    const ac = typeof AbortController === 'function' ? new AbortController() : null;
+    abortSession = ac ? () => ac.abort() : () => {};
+    // Frozen and minimal: a screen may hold on to the object it was given and compare its `id`
+    // with `ctx.session.id` later, so it must not be something a screen can quietly change.
+    session = Object.freeze({ id: sessionSeq, signal: ac ? ac.signal : undefined });
+    return session;
+  }
+  startSession();
+
+  function endSession() {
+    try { abortSession(); } catch { /* an already-aborted controller */ }
+    closeSheet(); // a dialog belongs to the session that opened it
+    const carried = {};
+    for (const key of SESSION_SAFE_STATE_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(ctx.state, key)) carried[key] = ctx.state[key];
+    }
+    // Empty the old object as well as replacing it: a screen may already be holding a reference
+    // to it, and that reference must not keep the previous wallet's data reachable.
+    for (const key of Object.keys(ctx.state)) delete ctx.state[key];
+    ctx.state = carried;
+    return startSession();
+  }
+
   const mainEl = document.createElement('main');
   mainEl.className = 'app';
   const sidebarEl = document.createElement('nav');
@@ -299,7 +345,35 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     state: {},
     mode,
     canProve: backendApi.send.canProve,
+    // The current session, read fresh every time: a screen that captured `ctx.session` at render
+    // time keeps the object it was given, and comparing its `.id` with `ctx.session.id` later is
+    // how it tells that the wallet underneath it changed.
+    get session() { return session; },
+    endSession,
+    // The names screens should use for a wallet transition. They read better than
+    // `ctx.backend.wallet.lock()` and they document the side effect — but the session is ended by
+    // the interception above, not by these, so a screen that reaches for `ctx.backend.wallet.*`
+    // anyway still cannot leave a session behind.
+    lockWallet: () => backendApi.wallet.lock(),
+    wipeWallet: () => backendApi.wallet.wipe(),
+    unlockWallet: (password) => backendApi.wallet.unlock(password),
+    createWallet: (password) => backendApi.wallet.create(password),
+    importWallet: (secret, password) => backendApi.wallet.import(secret, password),
   };
+
+  // One place, not five call sites: every wallet method that changes *who is looking* ends the
+  // session the moment it succeeds — before the caller's `await` resumes, so a handler that
+  // navigates straight afterwards (create → #backup) is already inside the new session. A failure
+  // (a wrong password) changes nothing.
+  for (const method of SESSION_ENDING_WALLET_METHODS) {
+    const orig = backendApi.wallet[method];
+    if (typeof orig !== 'function') continue;
+    backendApi.wallet[method] = async (...args) => {
+      const result = await orig(...args);
+      endSession();
+      return result;
+    };
+  }
 
   function navLink(tab, activeName, variant) {
     const active = tab.name === activeName;
@@ -338,6 +412,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   };
 
   async function doRender() {
+    if (destroyed) return;
     const mySeq = ++renderSeq;
     // Handed to this render's screen in place of the base ctx. Before the commit point below a
     // screen has not been mounted yet, so "superseded" is still `mySeq !== renderSeq`; after it,
@@ -356,10 +431,10 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     } catch (err) {
       console.error('rand-wallet: failed to read wallet state', err);
     }
-    if (mySeq !== renderSeq) { retireToken(token); return; }
+    if (destroyed || mySeq !== renderSeq) { retireToken(token); return; }
 
     const r = resolveRoute({ exists, unlocked }, location.hash || '');
-    if (mySeq !== renderSeq) { retireToken(token); return; }
+    if (destroyed || mySeq !== renderSeq) { retireToken(token); return; }
 
     // If the requested hash actually resolved somewhere else (e.g. #create once a wallet already
     // exists — see ONBOARDING_ONLY_SCREENS above — refuses and lands on home), keep location.hash
@@ -372,7 +447,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       // The assignment above may have synchronously re-entered this function (this test
       // environment dispatches `hashchange` synchronously; see dom-env.mjs) and started a newer
       // render — if so, let that one finish the job instead of doubling up on it.
-      if (mySeq !== renderSeq) { retireToken(token); return; }
+      if (destroyed || mySeq !== renderSeq) { retireToken(token); return; }
     }
 
     // A real browser fires `hashchange` asynchronously (a task, not a microtask), so go()'s own
@@ -462,11 +537,20 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     // Await the current render and any backend call in flight (including ones kicked off by a
     // screen's own event handlers, e.g. a form submit), looping in case settling one spawns
     // another — never a timeout, per the app.idle() contract.
+    //
+    // The queue going empty is not the same as the work being finished: a handler that awaited one
+    // of these promises resumes on a *later* microtask, and what it does next (call another
+    // backend method, navigate) has not been queued yet at the instant the last promise settles.
+    // So an empty pass is only believed after draining the microtask queue and finding it empty
+    // again — which terminates as soon as nothing new appears, and still never gives up early.
+    let emptyPasses = 0;
     for (;;) {
       const pending = [...inflight];
       if (renderPromise) pending.push(renderPromise);
-      if (pending.length === 0) return;
-      await Promise.allSettled(pending);
+      if (pending.length > 0) { emptyPasses = 0; await Promise.allSettled(pending); continue; }
+      if (emptyPasses >= 4) return;
+      emptyPasses += 1;
+      await Promise.resolve();
     }
   }
 
@@ -483,7 +567,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
 
   const offLockClicks = on(container, '[data-action="lock"]', 'click', async (evt) => {
     evt.preventDefault();
-    await ctx.backend.wallet.lock();
+    await ctx.lockWallet();
     go('#lock');
   });
 
@@ -492,6 +576,8 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   return {
     go,
     idle,
+    /** The current wallet session, `{ id, signal }` — the same object screens get as `ctx.session`. */
+    get session() { return session; },
     destroy() {
       destroyed = true;
       retireToken(currentToken);
@@ -503,8 +589,10 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
         if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', mqlListener);
         else if (typeof mql.removeListener === 'function') mql.removeListener(mqlListener);
       }
-      closeSheet();
       if (currentCleanup) { try { currentCleanup(); } catch { /* ignore */ } currentCleanup = null; }
+      // Ends the session last, so the screen's own cleanup has already run: aborts the signal,
+      // closes any sheet and empties ctx.state, exactly as a lock would.
+      endSession();
       container.textContent = '';
       document.body.classList.remove('compact', 'wide', 'popup', 'nav-on');
     },

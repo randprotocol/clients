@@ -10,7 +10,15 @@
  * more than `RPL#<index>`.
  *  - `name?` — OPTIONAL. A display name ("Wrapped Ether"). Screens fall back to `symbol`.
  *
- * `sync.cached()` / `sync.scan(onProgress)` → `{notes, activity, scannedHeight, head, lastSyncMs}`.
+ * Screens treat returned objects as read-only; backends may return cached objects.
+ *
+ * `sync.cached()` / `sync.scan(onProgress, options?)` → `{notes, activity, scannedHeight, head,
+ * lastSyncMs}`. `options` is OPTIONAL and today carries one OPTIONAL field:
+ *  - `signal?` — an `AbortSignal` that aborts when the wallet session the scan was started under
+ *    ends (a lock, a wipe, an unlock, a new wallet, or the UI being torn down). A backend that
+ *    honours it should stop the work and reject with an `AbortError` (an error whose `name` is
+ *    `'AbortError'`); the UI treats that as "no longer wanted", never as a node failure. A backend
+ *    that ignores it is still correct — the UI discards the result either way.
  * An **activity item** is `{kind, asset, amount, time, hash?, index?}` where `kind` is one of
  * `'in' | 'out' | 'faucet' | 'pending'`, `asset` is an asset index, `amount` is a units string and
  * `time` is a unix timestamp in **seconds** (`lastSyncMs` and every other `*Ms` field is
