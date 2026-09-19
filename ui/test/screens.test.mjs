@@ -304,6 +304,35 @@ test('every list of rows is a real <ul>/<li>, not bare buttons under role=list',
   }
 });
 
+test('an activity item with no hash renders a real row that goes nowhere', async (t) => {
+  // `hash` is OPTIONAL in the Backend contract (ui/backend.js), and the real wasm backend leaves
+  // it out whenever it found a note by scanning the commitment tree without also reading the
+  // header of the block it landed in. The row used to be a `<button data-go="tx/undefined">`: a
+  // control in the tab order whose only answer was "This transaction was not found."
+  const now = Math.floor(Date.now() / 1000);
+  const b = unlockedBackend({
+    sync: {
+      cached: () => ({
+        notes: [],
+        activity: [{ kind: 'in', asset: 0, amount: '1000000000', time: now - 90 }],
+        scannedHeight: 1, head: 1, lastSyncMs: Date.now(),
+      }),
+      scan: () => new Promise(() => {}),
+    },
+  });
+  const { root } = await at(t, '#activity', b);
+  const rows = [...root.querySelectorAll('.row')];
+  assert.equal(rows.length, 1, 'the item is still listed');
+  const row = rows[0];
+  assert.equal(row.tagName, 'DIV', 'a row with nowhere to go is not a button');
+  assert.equal(row.hasAttribute('data-go'), false);
+  assert.doesNotMatch(root.innerHTML, /tx\/undefined/);
+  // …and it still reads as the payment it is.
+  assert.match(row.querySelector('.row-title').textContent, /Received/);
+  assert.match(row.querySelector('.row-end .amount').textContent, /^\+1 RAND/);
+  assert.ok(row.querySelector('.avatar.in'), 'tinted like any other received row');
+});
+
 test('activity rows render all four contract kinds, and an unknown kind neutrally', async (t) => {
   const now = Math.floor(Date.now() / 1000);
   const b = unlockedBackend({

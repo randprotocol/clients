@@ -87,9 +87,18 @@ export function kindOf(item) {
   return { kind, icon: 'activity', title: known ? kind : 'Transaction', sign: '', tint: '' };
 }
 
-/** One `<li>` + `.row` for an activity-list entry, tinted by `item.kind`. Sign is carried in the
- *  text itself, not colour alone (amendment 11). `assetsByIndex` maps asset index -> the asset
- *  object (for symbol/decimals), from `assets.list()`. */
+/**
+ * One `<li>` + `.row` for an activity-list entry, tinted by `item.kind`. Sign is carried in the
+ * text itself, not colour alone (amendment 11). `assetsByIndex` maps asset index -> the asset
+ * object (for symbol/decimals), from `assets.list()`.
+ *
+ * `item.hash` is OPTIONAL in the Backend contract, and a real one leaves it out more often than
+ * the fake does: the chain serves commitment-tree *leaves*, so a received note only gains a
+ * transaction hash if the wallet also happened to read the header of the block it landed in. A
+ * row with no hash has no `#tx/…` page to open, so it is rendered as a plain `<div>` rather than
+ * as a button pointing at `#tx/undefined` — a dead control in the tab order that would answer
+ * "This transaction was not found." The payment itself is perfectly real and reads identically.
+ */
 export function activityRowMarkup(item, assetsByIndex) {
   const asset = assetsByIndex.get(item.asset) || { symbol: `RPL#${item.asset}`, decimals: 9 };
   const k = kindOf(item);
@@ -99,9 +108,7 @@ export function activityRowMarkup(item, assetsByIndex) {
     ? h`<span class="row-sub mono">${shortAddress(item.address)}</span>`
     : h`<span class="row-sub">${asset.symbol}</span>`);
   const meta = k.kind === 'pending' ? k.title : timeAgo(item.time * 1000);
-  return h`
-    <li>
-      <button class="row" type="button" data-go="tx/${item.hash}">
+  const body = h`
         <span class="avatar ${k.tint}">${raw(icons[k.icon]())}</span>
         <span class="row-main">
           <span class="row-title"><span class="truncate">${k.title}</span></span>
@@ -110,7 +117,12 @@ export function activityRowMarkup(item, assetsByIndex) {
         <span class="row-end">
           <span class="${amountCls}">${amount}</span>
           <span class="row-meta">${meta}</span>
-        </span>
-      </button>
+        </span>`;
+  const row = item.hash
+    ? h`<button class="row" type="button" data-go="tx/${item.hash}">${raw(body)}</button>`
+    : h`<div class="row">${raw(body)}</div>`;
+  return h`
+    <li>
+      ${raw(row)}
     </li>`;
 }

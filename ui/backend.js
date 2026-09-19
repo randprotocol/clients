@@ -110,6 +110,15 @@
  *    (a shielded address is pasted, never typed). Optional because reading the clipboard needs a
  *    permission some shells will not have: where it is missing, no Paste button is offered at all
  *    rather than one that does nothing. May resolve to `''`.
+ *  - `wallet.onLocked?(cb)` → an unsubscribe function. For a backend that can lock the wallet **on
+ *    its own** — every real shell does, on an idle timer built from `settings.autoLockMin`. The
+ *    shell subscribes at mount and, when `cb` fires, ends the wallet session and routes to
+ *    `#lock`, exactly as it does for a lock the user asked for. Without it a backend-initiated
+ *    lock would leave the previous wallet's screen on display, with its data on it, until
+ *    something happened to re-render.
+ *    `cb` is called with no arguments the UI reads (a backend may pass a `{reason}` object for a
+ *    log). It is **not** called for a lock the shell itself asked for: the shell already knows.
+ *    Unsubscribed on `destroy()`.
  */
 export const BACKEND_SHAPE = {
   wallet: ['exists', 'create', 'import', 'unlock', 'verifyPassword', 'lock', 'isUnlocked', 'info', 'parseAddress', 'viewingKey', 'exportSpendKey', 'wipe'],

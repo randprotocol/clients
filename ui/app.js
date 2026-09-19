@@ -753,6 +753,34 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     go('#lock');
   });
 
+  // A lock the *backend* decided on — every real shell locks on an idle timer built from
+  // `settings.autoLockMin`. The five wallet methods the shell intercepts cover locks the user
+  // asked for; this covers the ones nobody asked for. Optional in the contract (see
+  // ui/backend.js): a backend that cannot lock itself simply has no `onLocked`.
+  const offLocked = (() => {
+    // Deliberately the *raw* backend, not `backendApi`: `trackGroup` turns every method into one
+    // that returns a promise (so `app.idle()` can wait on it), which is right for a wallet
+    // operation and wrong for registering a listener — the unsubscribe function would come back
+    // wrapped in a Promise and could never be called. Subscribing is not a backend call.
+    const subscribe = backend.wallet && backend.wallet.onLocked;
+    if (typeof subscribe !== 'function') return () => {};
+    let unsubscribe;
+    try {
+      unsubscribe = subscribe.call(backend.wallet, () => {
+        if (destroyed) return;
+        // The same two steps as an intercepted `lock()`: everything derived from that wallet ends,
+        // then the lock screen. `resolveRoute` would send us there anyway, but only at the next
+        // render — and the screen on display is showing the previous wallet's data until then.
+        endSession();
+        go('#lock');
+      });
+    } catch (err) {
+      console.error('rand-wallet: backend.wallet.onLocked failed', err);
+      return () => {};
+    }
+    return typeof unsubscribe === 'function' ? unsubscribe : () => {};
+  })();
+
   await scheduleRender();
 
   return {
@@ -767,6 +795,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       offHashchange();
       offGoClicks();
       offLockClicks();
+      try { offLocked(); } catch { /* a backend that dropped its own listener */ }
       if (mql && mqlListener) {
         if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', mqlListener);
         else if (typeof mql.removeListener === 'function') mql.removeListener(mqlListener);

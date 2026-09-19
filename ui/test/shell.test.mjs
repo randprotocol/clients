@@ -293,6 +293,47 @@ test('a scan from an ended session never touches the next session’s counters',
   assert.ok(unknownOutcome(ctx), 'the unknown-outcome record was lifted by a scan from another wallet');
 });
 
+// ------------------------------------------------------------------------------------- 1.6 ----
+test('wallet.onLocked: a lock the backend decided on ends the session and shows the lock screen', async (t) => {
+  // Every real backend locks on an idle timer of its own (`settings.autoLockMin`). Without this
+  // hook the previous wallet's screen — and its data — would stay on display until something
+  // happened to re-render.
+  visits.length = 0;
+  let fire = null;
+  let unsubscribed = 0;
+  const b = unlockedBackend();
+  let locked = false;
+  b.wallet.isUnlocked = async () => !locked;
+  b.wallet.onLocked = (cb) => { fire = cb; return () => { unsubscribed += 1; }; };
+
+  const { app, root } = await mountApp(t, b, { hash: '#spy' });
+  await app.idle();
+  const ctx = visits[0];
+  ctx.state.somethingFromThisWallet = 'balance';
+  const before = app.session.id;
+  assert.ok(typeof fire === 'function', 'the shell subscribed');
+
+  locked = true;
+  fire({ reason: 'idle' });
+  await app.idle();
+
+  assert.ok(app.session.id > before, 'the wallet session ended');
+  assert.equal(ctx.state.somethingFromThisWallet, undefined, 'and everything derived from it went');
+  assert.equal(location.hash, '#lock');
+  assert.ok(root.querySelector('input[name=password]'), 'the lock screen is on display');
+
+  app.destroy();
+  assert.equal(unsubscribed, 1, 'destroy() unsubscribes');
+});
+
+test('wallet.onLocked: a backend without one still mounts (it is optional)', async (t) => {
+  const b = unlockedBackend();
+  assert.equal(typeof b.wallet.onLocked, 'undefined');
+  const { app } = await mountApp(t, b, { hash: '#home' });
+  await app.idle();
+  assert.equal(location.hash, '#home');
+});
+
 test('a backend whose wrapped methods are accessors still mounts and works', async (t) => {
   // `trackGroup` forwards an accessor property with a getter and *no setter*. The shell then
   // re-wraps `sync.scan` and the five session-ending `wallet.*` methods by assignment — which on

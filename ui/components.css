@@ -370,6 +370,14 @@ body.wide .hero .amount { font-size: var(--fs-balance); }
 .list > li > .caption { padding: 0 var(--s-3) var(--s-3); }
 .list > li + li { border-top: 1px solid var(--border-soft); }
 
+/* A row with nowhere to go: an activity item the node gave this wallet no transaction hash for
+   (`hash` is optional in the Backend contract — a received note found by scanning the commitment
+   tree may have no transaction page at all). It is a real payment, not a disabled control, so it
+   keeps full contrast and simply drops the press affordances a button has. */
+div.row { cursor: default; }
+div.row:hover { background: transparent; }
+div.row:active { transform: none; }
+
 /* A row that is listed but cannot be chosen — a registry asset in the send flow's asset picker.
    `aria-disabled`, never `disabled`, so it keeps its place in the tab order and the sentence
    explaining why (tied on with aria-describedby) can actually be announced; same reasoning as
