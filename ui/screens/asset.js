@@ -8,12 +8,13 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits } from '../lib/format.js';
 import { avatarMarkup, activityRowMarkup, listMarkup } from '../lib/rows.js';
+import { detailTopbar, wireSelection } from '../lib/panes.js';
 
 export const RPL_SEND_DISABLED_TEXT = 'RPL transfers are not available on this network.';
 
-function skeletonMarkup() {
+function skeletonMarkup(ctx) {
   return h`
-    <div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="home" aria-label="Back">${raw(icons.chevron())}</button><span class="topbar-title">Asset</span><span class="spacer"></span></div>
+    ${raw(detailTopbar(ctx, 'Asset', 'home'))}
     <div class="skeleton hero"></div>`;
 }
 
@@ -36,7 +37,7 @@ function actionsMarkup(asset) {
     ${hint}`);
 }
 
-function bodyMarkup({ asset, activity, assetsByIndex }) {
+function bodyMarkup(ctx, { asset, activity, assetsByIndex }) {
   const rplChip = raw(asset.index >= 1 ? h`<span class="chip xs">RPL</span>` : '');
   const pending = raw(asset.pending && asset.pending !== '0'
     ? h`<span class="sub">+${formatUnits(asset.pending, 6, asset.decimals)} ${asset.symbol} pending</span>`
@@ -45,11 +46,7 @@ function bodyMarkup({ asset, activity, assetsByIndex }) {
     ? h`<div class="card"><div class="empty"><span class="empty-title">No activity yet</span><span>Transfers in this asset will appear here.</span></div></div>`
     : h`<div class="card flush">${listMarkup(activity.map((item) => activityRowMarkup(item, assetsByIndex)))}</div>`);
   return h`
-    <div class="topbar">
-      <button class="btn-icon icon-flip" type="button" data-go="home" aria-label="Back">${raw(icons.chevron())}</button>
-      <span class="topbar-title">${asset.symbol}</span>
-      <span class="spacer"></span>
-    </div>
+    ${raw(detailTopbar(ctx, asset.symbol, 'home'))}
     <div class="card stack">
       <div class="cluster">${avatarMarkup(asset)}<h1 class="title">${asset.name || asset.symbol}</h1>${rplChip}</div>
       <span class="amount">${formatUnits(asset.balance ?? '0', 6, asset.decimals)}<span class="unit">${asset.symbol}</span></span>
@@ -61,7 +58,13 @@ function bodyMarkup({ asset, activity, assetsByIndex }) {
 }
 
 registerScreen('asset', {
-  render: () => skeletonMarkup(),
+  // An asset is a detail of the home asset list, so on a wide screen it opens beside home (task
+  // 1.7). Its parent is always home — unlike a transaction it is never reached from somewhere
+  // else — and it is itself a list, so a transaction opened from *it* keeps it in the content
+  // pane (see `PARENT_ROUTES` in lib/panes.js).
+  pane: 'detail',
+  parent: () => '#home',
+  render: (ctx) => skeletonMarkup(ctx),
   async after(ctx, root, arg) {
     const index = Number(arg);
 
@@ -83,7 +86,11 @@ registerScreen('asset', {
     const assetsByIndex = new Map(assets.map((a) => [a.index, a]));
     const activity = (sync.activity || []).filter((a) => a.asset === index).sort((a, b) => b.time - a.time);
 
-    root.innerHTML = bodyMarkup({ asset, activity, assetsByIndex });
+    root.innerHTML = bodyMarkup(ctx, { asset, activity, assetsByIndex });
     for (const el of root.querySelectorAll('.avatar[data-hue]')) el.style.setProperty('--hue', el.dataset.hue);
+    // When this screen is the content pane's list (a transaction opened from it on a wide
+    // screen), its rows carry the selection marker like any other list's.
+    const selection = wireSelection(ctx, root);
+    return () => { selection.destroy(); };
   },
 });

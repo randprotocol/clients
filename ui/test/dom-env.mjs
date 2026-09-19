@@ -29,7 +29,13 @@ window.location = location;
 document.location = location;
 
 // ---- matchMedia: a tiny MediaQueryList backed by a mutable `window.innerWidth` ----
+// Every list this factory hands out is remembered (weakly) so `setViewportWidth()` can re-evaluate
+// all of them and fire their `change` listeners, exactly as a real browser does on a resize. That
+// is what lets a test cross the 900 px breakpoint live — `ui/app.js` switches between the compact
+// and the wide (two-pane) layout on that event, and the app under test holds the only reference to
+// its own MediaQueryList.
 window.innerWidth = window.innerWidth || 375;
+const mediaLists = new Set();
 function matchMedia(query) {
   const m = /min-width:\s*(\d+)px/.exec(String(query));
   const minWidth = m ? Number(m[1]) : 0;
@@ -43,9 +49,25 @@ function matchMedia(query) {
     removeListener(fn) { mql._listeners = mql._listeners.filter((f) => f !== fn); },
     _check() { const now = mql.matches; for (const fn of mql._listeners.slice()) fn({ matches: now }); },
   };
+  mediaLists.add(mql);
   return mql;
 }
 window.matchMedia = matchMedia;
+
+/**
+ * Resizes the fake viewport and notifies every live MediaQueryList, the way a browser resize does.
+ * Set it *before* mounting to choose the layout an app starts in; call it after mounting to cross
+ * the breakpoint under a running app.
+ */
+export function setViewportWidth(width) {
+  window.innerWidth = width;
+  for (const mql of mediaLists) mql._check();
+}
+
+/** The compact default every other test file relies on. */
+export const COMPACT_WIDTH = 375;
+/** Comfortably past `--wide-at` (900 px). */
+export const WIDE_WIDTH = 1200;
 
 // ---- KeyboardEvent: linkedom has no key-aware event class; Escape/Tab handling needs `.key` ----
 class KeyboardEvent extends window.Event {

@@ -446,6 +446,43 @@
     <p class="g-note">The send flow's asset picker. Hiding the assets a user can see everywhere else in the wallet would read as a bug, so they are listed, dimmed, and carry the reason — <code>aria-disabled</code> rather than <code>disabled</code>, so the row keeps its place in the tab order and its <code>aria-describedby</code> sentence can be announced.</p>
   </section>
 
+  <!-- ============================ selected row & empty detail column ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">The row whose detail is open (wide), and an empty detail column</h2>
+    <div class="stack">
+      <div class="card flush">
+        <ul class="list" role="list">
+          <li>
+            <button class="row" type="button">
+              <span class="avatar out"><svg><use href="#i-send"/></svg></span>
+              <span class="row-main"><span class="row-title"><span class="truncate">Sent</span></span><span class="row-sub mono">rand1p4r…9v3d</span></span>
+              <span class="row-end"><span class="amount">−8.25 RAND</span><span class="row-meta">2h ago</span></span>
+            </button>
+          </li>
+          <li>
+            <button class="row" type="button" aria-current="true">
+              <span class="avatar in"><svg><use href="#i-receive"/></svg></span>
+              <span class="row-main"><span class="row-title"><span class="truncate">Received</span></span><span class="row-sub mono">rand1s7k…2m4q</span></span>
+              <span class="row-end"><span class="amount in">+120.00 RAND</span><span class="row-meta">4h ago</span></span>
+            </button>
+          </li>
+          <li>
+            <button class="row" type="button">
+              <span class="avatar faucet"><svg><use href="#i-faucet"/></svg></span>
+              <span class="row-main"><span class="row-title"><span class="truncate">Faucet</span></span><span class="row-sub">RAND</span></span>
+              <span class="row-end"><span class="amount in">+10.00 RAND</span><span class="row-meta">yesterday</span></span>
+            </button>
+          </li>
+        </ul>
+      </div>
+      <div class="detail-empty">
+        <span class="ic"><svg><use href="#i-clock"/></svg></span>
+        <span>Select a transaction</span>
+      </div>
+    </div>
+    <p class="g-note">At ≥ 900 px a list keeps its place while the row you pick opens in the third column. The open row is marked with <code>aria-current="true"</code> — one attribute that is both the style hook and the announcement — kept quiet (a 10 % accent wash and a short rail) because it points at the pane, it is not the thing to press. <code>.detail-empty</code> holds that column open for the activity list while nothing is picked, so opening a transaction never shoves the list sideways.</p>
+  </section>
+
   <!-- ============================ proving ring ============================ -->
   <section class="g-section">
     <h2 class="g-h">Proving ring</h2>
@@ -707,9 +744,14 @@
 
 <!-- Wide layout column 3. Hidden under body.compact. -->
 <aside class="detail">
+  <div class="topbar">
+    <span class="topbar-title">Transaction</span>
+    <span class="grow"></span>
+    <button class="btn-icon" type="button" aria-label="Close"><svg class="g-i"><use href="#i-close"/></svg></button>
+  </div>
   <div class="card stack">
     <div class="card-head">
-      <h3>Transaction</h3>
+      <h3>Sent</h3>
       <span class="chip positive"><svg class="g-i"><use href="#i-check"/></svg>Confirmed</span>
     </div>
     <span class="amount">−8.25<span class="unit">RAND</span></span>

@@ -25,6 +25,10 @@ export const icons = {
   refresh: () => svg('<path d="M21.9 4.8v5.4h-5.4"/><path d="M2.1 19.2v-5.4h5.4"/><path d="M4.36 9.3a8.1 8.1 0 0 1 13.37-3.02l4.17 3.92"/><path d="m2.1 13.8 4.18 3.92a8.1 8.1 0 0 0 13.36-3.02"/>'),
   check: () => svg('<path d="m5 12.5 4.5 4.5L19 7"/>', { strokeWidth: 2.4 }),
   chevron: () => svg('<path d="m9 5 7 7-7 7"/>'),
+  // Dismiss the pane you are in — the wide layout's detail column. Deliberately not the chevron:
+  // a back arrow promises the previous screen, and closing a detail leaves its list exactly where
+  // it already is.
+  close: () => svg('<path d="m6 6 12 12"/><path d="M18 6 6 18"/>'),
   warning: () => svg('<path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17.2h.01"/>'),
   // The neutral counterpart of `warning`: something is being said, not something is wrong.
   info: () => svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/>'),

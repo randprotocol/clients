@@ -20,24 +20,30 @@ import { kindOf } from '../lib/rows.js';
 // here because that is where they were, and where the tests import them from.
 import { explorerLink } from '../lib/explorer.js';
 import { wireSecretReveal } from '../lib/reveal.js';
+import { detailTopbar, listParent } from '../lib/panes.js';
 
 export { explorerLink };
 
-function skeletonMarkup(title, backGo) {
+function skeletonMarkup(ctx, title, backGo) {
   return h`
-    <div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="${backGo}" aria-label="Back">${raw(icons.chevron())}</button><span class="topbar-title">${title}</span><span class="spacer"></span></div>
+    ${raw(detailTopbar(ctx, title, backGo))}
     <div class="skeleton block"></div>`;
 }
 
-function notFoundMarkup(title, backGo, message) {
+function notFoundMarkup(ctx, title, backGo, message) {
   return h`
-    <div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="${backGo}" aria-label="Back">${raw(icons.chevron())}</button><span class="topbar-title">${title}</span><span class="spacer"></span></div>
+    ${raw(detailTopbar(ctx, title, backGo))}
     <div class="card"><div class="empty"><span class="empty-title">${message}</span></div></div>`;
 }
 
 // ------------------------------------------------------------------------------------ tx ------
 registerScreen('tx', {
-  render: () => skeletonMarkup('Transaction', 'activity'),
+  // On a wide screen a transaction opens *beside* the list it came from rather than replacing it
+  // (task 1.7). Which list: whichever of home/activity/an asset the user was last on, and
+  // activity when there is nothing to go on — a deep link, a fresh session.
+  pane: 'detail',
+  parent: (_arg, from) => listParent(from, '#activity'),
+  render: (ctx) => skeletonMarkup(ctx, 'Transaction', 'activity'),
   async after(ctx, root, hash) {
     let assets, sync, settings;
     try {
@@ -53,7 +59,7 @@ registerScreen('tx', {
 
     const item = (sync.activity || []).find((a) => a.hash === hash);
     if (!item) {
-      root.innerHTML = notFoundMarkup('Transaction', 'activity', 'This transaction was not found.');
+      root.innerHTML = notFoundMarkup(ctx, 'Transaction', 'activity', 'This transaction was not found.');
       return;
     }
 
@@ -90,7 +96,7 @@ registerScreen('tx', {
 
     root.innerHTML = h`
       <h1 class="sr-only">Transaction</h1>
-      <div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="activity" aria-label="Back">${raw(icons.chevron())}</button><span class="topbar-title">Transaction</span><span class="spacer"></span></div>
+      ${raw(detailTopbar(ctx, 'Transaction', 'activity'))}
       <div class="card stack">
         <div class="card-head"><h3>${k.title}</h3>${statusChip}</div>
         <span class="amount ${k.sign === '+' ? 'in' : ''}">${k.sign}${formatUnits(item.amount, 6, asset.decimals)}<span class="unit">${asset.symbol}</span></span>
@@ -130,7 +136,11 @@ registerScreen('tx', {
 
 // ---------------------------------------------------------------------------------- note ------
 registerScreen('note', {
-  render: () => skeletonMarkup('Note', 'home'),
+  // Same rule as a transaction: beside whichever list the user came from, home by default — a
+  // note is reached from home's note-bearing rows or from a received transaction.
+  pane: 'detail',
+  parent: (_arg, from) => listParent(from, '#home'),
+  render: (ctx) => skeletonMarkup(ctx, 'Note', 'home'),
   async after(ctx, root, indexArg) {
     let assets, sync;
     try {
@@ -144,7 +154,7 @@ registerScreen('note', {
 
     const note = (sync.notes || []).find((n) => String(n.index) === String(indexArg));
     if (!note) {
-      root.innerHTML = notFoundMarkup('Note', 'home', 'This note was not found.');
+      root.innerHTML = notFoundMarkup(ctx, 'Note', 'home', 'This note was not found.');
       return;
     }
     const asset = assets.find((a) => a.index === note.asset) || { symbol: `RPL#${note.asset}`, decimals: 9 };
@@ -161,7 +171,7 @@ registerScreen('note', {
 
     root.innerHTML = h`
       <h1 class="sr-only">Note</h1>
-      <div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="home" aria-label="Back">${raw(icons.chevron())}</button><span class="topbar-title">Note</span><span class="spacer"></span></div>
+      ${raw(detailTopbar(ctx, 'Note', 'home'))}
       <div class="card stack">
         <div class="card-head"><h3>Shielded note</h3>${statusChip}</div>
         <span class="amount">${formatUnits(note.amount, 6, asset.decimals)}<span class="unit">${asset.symbol}</span></span>

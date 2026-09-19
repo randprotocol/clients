@@ -20,6 +20,7 @@ import { registerScreen } from '../app.js';
 import { formatUnits, shortAddress, timeAgo } from '../lib/format.js';
 import { totalInRand } from '../lib/assets.js';
 import { assetRowMarkup, activityRowMarkup, listMarkup } from '../lib/rows.js';
+import { wireSelection } from '../lib/panes.js';
 
 const ACTIONS = [
   { go: 'receive', icon: 'arrowDownLeft', label: 'Receive' },
@@ -159,6 +160,10 @@ registerScreen('home', {
     let sync = null;
     let scanning = false;
     let dataStamp = -1; // 0 = from sync.cached(), 1 = from sync.scan(): never go backwards
+    // Home is a list (of assets, and of recent activity), so on a wide screen a row of it can be
+    // open in the detail pane beside it. The shell notifies this when the selection moves, so
+    // opening another row costs one attribute — never a repaint of these lists.
+    const selection = wireSelection(ctx, root);
 
     // ---- painters: each one owns exactly one container ----
     function paintAddress() {
@@ -193,6 +198,8 @@ registerScreen('home', {
     function paintAssets() {
       el.assets.innerHTML = h`${listMarkup(assets.map((a) => assetRowMarkup(a)))}`;
       for (const node of el.assets.querySelectorAll('.avatar[data-hue]')) node.style.setProperty('--hue', node.dataset.hue);
+      // Fresh row nodes: the wide layout's "this one is open beside you" marker goes back on.
+      selection.apply();
     }
 
     function paintActivity() {
@@ -201,6 +208,7 @@ registerScreen('home', {
       el.activity.innerHTML = recent.length === 0
         ? emptyActivityMarkup()
         : h`<div class="card flush">${listMarkup(recent.map((item) => activityRowMarkup(item, byIndex)))}</div>`;
+      selection.apply();
     }
 
     function applyData(stamp, nextAssets, nextSync) {
@@ -344,6 +352,6 @@ registerScreen('home', {
       ctx.toast('Address copied', { kind: 'positive' });
     });
 
-    return () => { store.listeners.delete(onProgress); offSync(); offCopy(); };
+    return () => { store.listeners.delete(onProgress); offSync(); offCopy(); selection.destroy(); };
   },
 });

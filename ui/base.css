@@ -32,6 +32,10 @@
   --id-bg-a: .18;
   --id-bd-a: .34;
   --id-fg-l: 74%;
+  /* A pane header's height. Named because two things have to agree on it: the header itself, and
+     the empty detail column, which offsets itself by exactly one header so its placeholder lines
+     up with the list beside it rather than floating above it. */
+  --topbar-h: 56px;
 }
 :root[data-theme="light"] {
   --shadow-1: 0 1px 2px rgba(20, 26, 46, .06);
@@ -258,7 +262,7 @@ hr { border: 0; border-top: 1px solid var(--border-soft); margin: var(--s-4) 0; 
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  min-height: 56px;
+  min-height: var(--topbar-h);
   padding: var(--s-2) var(--s-1);
 }
 .topbar .topbar-title {
@@ -348,6 +352,15 @@ body.wide .app {
   margin: 0 auto;
   align-self: start;
 }
+/* With a pane beside it the content column stops floating in the middle of its track and hugs
+   that pane instead. The gutter between the two is then the content column's own right padding —
+   the same 32 px at 1200 px as at 2000 px — and the slack goes to the left of the content, where
+   it reads as breathing room after the sidebar rather than as a gap down the middle of what is
+   meant to be one surface. Without a detail pane nothing changes: the column stays centred. */
+body.wide:has(.detail) .app { margin-right: 0; }
+/* The third column scrolls on its own, pinned to the top of the window, so a long transaction
+   never drags the list beside it out of view — and both columns start at the same y, which is
+   what makes the pair read as one surface rather than two stacked cards. */
 body.wide .detail {
   grid-column: 3;
   position: sticky;
@@ -355,6 +368,18 @@ body.wide .detail {
   align-self: start;
   max-height: 100vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
   padding: var(--s-5) var(--s-6) var(--s-8) 0;
 }
+/* Two columns, one row: with a pane header on each side, the two titles should sit on the same
+   baseline at the same left edge, not as two captions centred in tracks of different widths. A
+   centred title is the compact/phone convention (it balances a back button against a spacer) and
+   it stays there. */
+body.wide .topbar .topbar-title { text-align: left; }
+/* …and the empty column starts one pane header down, so its placeholder is level with the list's
+   own first card rather than floating level with the list's title. The offset belongs to the pane
+   (which knows there is a header beside it), not to `.detail-empty` itself. */
+body.wide .detail > .detail-empty { margin-top: var(--topbar-h); }
 body.compact .detail { display: none; }

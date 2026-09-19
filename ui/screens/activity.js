@@ -5,6 +5,7 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { groupByDay } from '../lib/assets.js';
 import { activityRowMarkup, listMarkup } from '../lib/rows.js';
+import { wireSelection } from '../lib/panes.js';
 
 function skeletonMarkup() {
   return h`
@@ -40,6 +41,9 @@ function groupsMarkup(items, assetsByIndex, now) {
 
 registerScreen('activity', {
   tab: 'activity',
+  // On a wide screen this list keeps its detail column even with nothing open, so opening a
+  // transaction does not shove the list sideways — and the empty column says what it is for.
+  detailEmpty: 'Select a transaction',
   render: () => skeletonMarkup(),
   async after(ctx, root) {
     let assets, sync;
@@ -63,8 +67,16 @@ registerScreen('activity', {
         <div class="topbar"><span class="topbar-title">Activity</span></div>
         ${raw(filterChipsMarkup(assets, active))}
         ${raw(groupsMarkup(items, assetsByIndex, Date.now()))}`;
+      // These rows are brand new nodes, so the marker has to be put back on whichever of them is
+      // the transaction currently open in the detail pane.
+      if (selection) selection.apply();
     }
+    // Wired before the first paint so `selection.apply()` above is always callable; the shell
+    // notifies it on every selection change, which is what lets another row be opened without
+    // this list re-rendering at all.
+    let selection = null;
     paint();
+    selection = wireSelection(ctx, root);
     // Event delegation (see lib/dom.js's `on`) matches `[data-filter]` at click time, not bind
     // time, so one listener bound once, before the first paint(), keeps working across every
     // paint()'s full innerHTML replacement — no rebinding, so no listener leak from re-adding one
@@ -75,6 +87,6 @@ registerScreen('activity', {
       paint();
     });
 
-    return () => { offFilter(); };
+    return () => { offFilter(); selection.destroy(); };
   },
 });

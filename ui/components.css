@@ -386,6 +386,30 @@ div.row:active { transform: none; }
 .row[aria-disabled="true"]:hover { background: transparent; }
 .row[aria-disabled="true"]:active { transform: none; }
 
+/* The row whose detail is open in the wide layout's second pane.
+   Quiet on purpose: this is a "you are here" marker in a list the user is still scanning, not a
+   call to action, so it is a faint accent wash plus a short rail — never a filled row, which at
+   `--accent` strength would out-shout the pane it points at. `aria-current="true"` is both the
+   hook and the announcement, so the marker cannot exist for sighted users only; `.row` is only
+   made a containing block while it is marked, so nothing else about a row changes. */
+.row[aria-current="true"] {
+  position: relative;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.row[aria-current="true"]:hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+.row[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 26px;
+  margin-top: -13px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+.row[aria-current="true"] .row-title { color: var(--text-strong); }
+
 /* Placeholder rows while the wallet scans. */
 .row .row-main > .skeleton + .skeleton { margin-top: var(--s-2); }
 
@@ -1203,3 +1227,34 @@ body.wide .narrow { max-width: 440px; margin: 0 auto; }
   font-size: 14px;
 }
 .empty .empty-title { font-weight: 650; color: var(--text); }
+
+/* ------------------------------------------------------------------ the empty detail column --- */
+/* The wide layout's third column while nothing is selected. Kept (rather than collapsed) only by
+   the lists that would otherwise jump sideways the moment a row is opened — see `detailEmpty` in
+   ui/app.js — so it has to be quiet enough to read as a reserved space rather than as content: a
+   dashed outline, one muted line, no colour of its own. */
+.detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  min-height: 260px;
+  padding: var(--s-7) var(--s-5);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-lg);
+  color: var(--text-mute);
+  font-size: 14px;
+  text-align: center;
+}
+.detail-empty .ic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-pill);
+  background: var(--bg-soft);
+  color: var(--text-mute);
+}
+.detail-empty .ic svg { width: 20px; height: 20px; }
