@@ -13,13 +13,26 @@
  * Screens treat returned objects as read-only; backends may return cached objects.
  *
  * `sync.cached()` / `sync.scan(onProgress, options?)` → `{notes, activity, scannedHeight, head,
- * lastSyncMs, recovered?}`.
+ * lastSyncMs, recovered?, behind?, wrongChain?, otherTab?}`.
  *  - `recovered?` — OPTIONAL, and `true` at most once. The backend found its local note store
  *    unusable (a cursor that was not a block height — `NaN`, `null`, a string) and reset it for a
  *    full rescan, keeping the notes it already had. Nothing was lost that the chain cannot supply
  *    again, but the wallet is re-reading from the start, so the UI says so quietly (home shows an
  *    informational banner) rather than silently looking slow. A backend that cannot detect this
  *    simply never sets it.
+ *  - `wrongChain?` — OPTIONAL, `{expected: {chainId, genesis}, got: {chainId, genesis}}`. The node
+ *    is not on the chain this wallet's notes came from, so **nothing was read and nothing was
+ *    merged** — a note store is a cache of one chain's tree, and merging another chain's into it
+ *    invents history. The rest of the reply is the cached data, unchanged. Home shows a blocking
+ *    banner offering the two real ways out: change the node in Settings, or `sync.rescan({forChain:
+ *    true})`. Every field of it is node-controlled text and is escaped like any other.
+ *  - `behind?` — OPTIONAL, `{tip, wallet}`. The node's tip is *below* what this wallet has already
+ *    read, on the same chain: a lagging replica, or one restored from a snapshot. Not an error and
+ *    not a reason to move any cursor — the reply is the cached data and scanning resumes by itself
+ *    once the node catches up. Home says so quietly.
+ *  - `otherTab?` — OPTIONAL, `true`. Another tab of the same wallet is scanning and this one chose
+ *    to wait rather than race it; the wait ran out, so this is the cached data. Purely
+ *    informational: the scanning tab's result arrives on its own.
  * `options` is OPTIONAL and today carries one OPTIONAL field:
  *  - `signal?` — an `AbortSignal` that aborts when the wallet session the scan was started under
  *    ends (a lock, a wipe, an unlock, a new wallet, or the UI being torn down). A backend that
@@ -120,6 +133,23 @@
  *  - `rand_status`   → `{height, …}` — `height` the node's current block height.
  *  - `rand_chainId`  → the chain's own id (a number or a string).
  *
+ * `sync.rescan?(options?)` → the same shape as `sync.scan`. OPTIONAL. Forgets how far the wallet
+ * has read and reads it again — **without touching the keys**: the vault, the address and the
+ * settings all survive, so this is a cache reset, not a wipe. `options.forChain === true` also
+ * drops the notes and history, which is what a `wrongChain` answer needs (they describe a chain
+ * this wallet is no longer pointed at). `options.signal` and `options.onProgress` behave as
+ * `sync.scan`'s. Settings offers it behind a confirmation; the `wrongChain` banner calls it with
+ * `forChain: true`. Where it is missing, neither control is rendered.
+ *
+ * ---- what a failed unlock costs, across tabs ----
+ *
+ * The backoff counter is *shared*: it is one number in the wallet's own storage, so a second tab
+ * does not get a fresh budget, and each tab pays the delay the shared count has earned. Where the
+ * shell's storage offers a conditional write the increment uses it, so two tabs failing at the
+ * same instant still count as two. What it is not is a global rate limit across processes: N tabs
+ * can each have one attempt in flight, so the *rate* scales with open tabs even though the delay
+ * does not reset. The at-rest security is the KDF; this is there to make bulk guessing tedious.
+ *
  * ---- optional, per shell ----
  * These are NOT in BACKEND_SHAPE and are not required; screens feature-detect them.
  *  - `platform.version?` — a version string for the About section. Omitted → no version is shown.
@@ -140,6 +170,10 @@
  *    fire-and-forget — the shell ignores whatever it returns and never waits on it.
  *    A backend may still postpone a lock it has decided on while a *user-initiated* operation is
  *    in flight (a transfer being proved), so a proof is never cut in half; a scan does not count.
+ *  - `dispose?()` — OPTIONAL, on the **backend itself**, not a group. Releases whatever it holds
+ *    outside its own object (a BroadcastChannel, a port, a watcher). The shell calls it from
+ *    `destroy()`, last, after the wallet session has ended; it must be idempotent and must not
+ *    throw. A disposed backend is not required to keep working.
  *  - `wallet.onLocked?(cb)` → an unsubscribe function. For a backend that can lock the wallet **on
  *    its own** — every real shell does, on an idle timer built from `settings.autoLockMin`. The
  *    shell subscribes at mount and, when `cb` fires, ends the wallet session and routes to

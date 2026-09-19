@@ -185,7 +185,15 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   // either explicitly is how the tests drive both paths without a browser; passing `null` turns
   // that half off.
   const locksApi = locks !== undefined ? locks : (typeof navigator !== 'undefined' && navigator.locks) || null;
-  const channel = broadcast !== undefined ? broadcast : defaultChannel();
+  let channel = broadcast !== undefined ? broadcast : defaultChannel();
+
+  /** Closes the BroadcastChannel, if there is one and it can be closed. Idempotent. */
+  function closeChannel() {
+    const open = channel;
+    channel = null;
+    if (!open || typeof open.close !== 'function') return;
+    try { open.close(); } catch { /* already closed */ }
+  }
 
   // ---------------------------------------------------------------- the core's own constants ---
   let constantsPromise = null;
@@ -315,7 +323,11 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       if (released) return;
       released = true;
       unlockHolds -= 1;
-      if (unlockHolds === 0 && lockDeferred) autoLockNow();
+      if (unlockHolds !== 0) return;
+      if (lockDeferred) { autoLockNow(); return; }
+      // No deferred lock left (the user was active during the hold, which cleared it): start the
+      // idle clock again from *now*, not from whenever the operation began.
+      Promise.resolve(rearmAutoLock()).catch(() => {});
     };
   }
 
@@ -350,10 +362,45 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     return run.finally(() => { pendingAttempts -= 1; });
   }
 
-  async function failureCount() {
+  /**
+   * The persisted failure count, with the revision it was read at.
+   *
+   * It is shared by every tab of this wallet, which is the point — a second tab must not get a
+   * fresh backoff budget. Where the storage can write conditionally the increment goes through
+   * `compareAndSet`, so two tabs guessing at once cannot both read `n` and both write `n + 1`,
+   * counting one attempt for two. (Each tab still runs its own serial queue and still pays the
+   * delay the shared count earns; what this fixes is the count itself being lost.)
+   */
+  async function failureRecord() {
     const rec = await storage.get(K.failures);
     const n = Number(rec && rec.count);
-    return Number.isSafeInteger(n) && n >= 0 ? n : 0;
+    return { count: Number.isSafeInteger(n) && n >= 0 ? n : 0, rev: rec && rec.rev };
+  }
+
+  async function failureCount() {
+    return (await failureRecord()).count;
+  }
+
+  /** Records one more failed attempt. Never lost to a race with another tab where storage allows. */
+  async function bumpFailures(rec) {
+    const stamp = (count) => ({ count, atMs: Date.now() });
+    if (typeof storage.compareAndSet === 'function') {
+      try {
+        await storage.compareAndSet(K.failures, rec.rev, stamp(rec.count + 1));
+        return;
+      } catch (err) {
+        if (!err || err.name !== 'StaleStoreError') throw err;
+      }
+      // Another tab counted first. Re-read and count on top of theirs, once.
+      const fresh = await failureRecord();
+      try {
+        await storage.compareAndSet(K.failures, fresh.rev, stamp(fresh.count + 1));
+        return;
+      } catch (err) {
+        if (!err || err.name !== 'StaleStoreError') throw err;
+      }
+    }
+    await storage.set(K.failures, stamp(rec.count + 1));
   }
   async function clearFailures() {
     await storage.remove(K.failures);
@@ -374,10 +421,10 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       const vault = await storage.get(K.vault);
       if (!vault) throw new Error('no wallet on this device');
       checkVault(vault); // VaultVersionError / VaultDamagedError — not an attempt
-      const n = await failureCount();
-      await sleep(unlockDelayMs(n));
+      const rec = await failureRecord();
+      await sleep(unlockDelayMs(rec.count));
       // Persisted before the KDF runs, not after it resolves.
-      await storage.set(K.failures, { count: n + 1, atMs: Date.now() });
+      await bumpFailures(rec);
       let key;
       try {
         key = await decryptSecret(password, vault);
@@ -481,10 +528,13 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     },
 
     async wipe() {
-      clearAutoLock();
+      // `forgetSession` and not just `clearAutoLock`: a lock that was deferred behind a hold must
+      // be forgotten too, or releasing that hold after the wipe fires `onLocked({reason:'idle'})`
+      // at a shell that has already moved on to the welcome screen.
+      await forgetSession();
       rpcCache = null;
       constantsPromise = null;
-      try { await storage.session.remove(K.unlocked); } catch { /* nothing to remove */ }
+      closeChannel();
       await storage.clear();
     },
 
@@ -496,9 +546,17 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      * is safe to call on every event the shell throttles down to.
      */
     noteActivity() {
-      // Only while there is a timer to restart: this must not arm one on a locked wallet, and it
-      // must not cost a settings read on every keystroke when auto-lock is off.
-      if (autoLockTimer !== null) rearmAutoLock();
+      // A lock that came due while a transfer was being proved is waiting for that transfer. If
+      // the user is *here*, typing, that lock is stale the moment they touch the keyboard — and
+      // without this it would fire the instant the send settled, however active they had been.
+      // The timer is null while a lock is deferred, so this is also the only place that can say so.
+      if (lockDeferred) lockDeferred = false;
+      // Only while there is a timer to restart, or a deferral to re-arm after: this must not arm
+      // one on a locked wallet, and must not cost a settings read per keystroke when it is off.
+      if (autoLockTimer === null && unlockHolds === 0) return;
+      // Fire and forget, and never a rejection: this is on the keystroke path, and an unhandled
+      // rejection from a storage hiccup must not surface as an error to the user.
+      Promise.resolve(rearmAutoLock()).catch(() => { /* the timer simply stays as it was */ });
     },
 
     /**
@@ -520,7 +578,10 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   // a BroadcastChannel; the others wait for that and then simply read what it wrote. Both are
   // feature-detected and both are injectable, so this is testable without a browser — and a shell
   // with neither (a Node test, an older browser, a service worker) scans exactly as it did before.
-  const OTHER_TAB_WAIT_MS = 90_000;
+  // Long enough for another tab's scan of a few pages, short enough that nobody stares at a
+  // spinner: past it this tab simply shows what is cached and says another tab is syncing, and the
+  // broadcast still arrives later to refresh it.
+  const OTHER_TAB_WAIT_MS = 8_000;
   const SCAN_LOCK = 'rand-wallet-scan';
 
   function scanListeners() {
@@ -528,10 +589,13 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     return channel;
   }
 
-  /** Resolves when another tab says it finished scanning, or after `OTHER_TAB_WAIT_MS`. */
+  /**
+   * Resolves `true` when another tab says it finished scanning, `false` if the wait ran out.
+   * Rejects (AbortError) if the session ends underneath it.
+   */
   function waitForOtherTab(signal) {
     const bus = scanListeners();
-    if (!bus) return Promise.resolve();
+    if (!bus) return Promise.resolve(false);
     return new Promise((resolve, reject) => {
       const done = (fn, arg) => {
         clearTimeout(timer);
@@ -541,10 +605,10 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       };
       const onMessage = (event) => {
         const data = event && event.data;
-        if (data && data.type === 'scan-done') done(resolve);
+        if (data && data.type === 'scan-done') done(resolve, true);
       };
       const onAbort = () => done(reject, abortError());
-      const timer = setTimeout(() => done(resolve), OTHER_TAB_WAIT_MS);
+      const timer = setTimeout(() => done(resolve, false), OTHER_TAB_WAIT_MS);
       if (timer && typeof timer.unref === 'function') timer.unref();
       bus.addEventListener('message', onMessage);
       if (signal) {
@@ -563,14 +627,8 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     async scan(onProgress, options = {}) {
       const { spend_key: key } = await requireUnlocked();
       const signal = options && options.signal;
-      const report = (p) => {
-        if (typeof onProgress !== 'function') return;
-        // The contract's progress shape is `{scanned, head}`; the engine reports the phase too,
-        // which the UI ignores but a log would not.
-        onProgress({ phase: p.phase, scanned: Number(p.scanned) || 0, head: Number(p.total) || 0 });
-      };
       const runScan = async () => {
-        const st = await engine.scan(key, { signal, onProgress: report });
+        const st = await engine.scan(key, { signal, onProgress: (p) => report(p, onProgress) });
         try { channel?.postMessage({ type: 'scan-done' }); } catch { /* a closed channel */ }
         return shape(st);
       };
@@ -585,15 +643,40 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       if (result) return result;
 
       // Another tab is scanning this same wallet. Wait for it to say it is done and read what it
-      // wrote, rather than racing it to the node.
-      await waitForOtherTab(signal);
+      // wrote, rather than racing it to the node — but not for long: past the wait this tab shows
+      // what is cached and says so, and the broadcast still arrives later to refresh it.
+      const announced = await waitForOtherTab(signal);
       throwIfAborted(signal);
-      return shape(await loadNotes());
+      const cached = shape(await loadNotes());
+      if (!announced) cached.otherTab = true;
+      return cached;
+    },
+
+    /**
+     * OPTIONAL in the contract: forget what has been read and read it again, without touching the
+     * keys. `{forChain: true}` also drops the notes, because they describe a chain this wallet is
+     * no longer pointed at. The vault and the settings survive either way — this is a cache reset,
+     * never a wipe.
+     */
+    async rescan(options = {}) {
+      const { spend_key: key } = await requireUnlocked();
+      const st = await engine.rescan(key, {
+        forChain: options.forChain === true,
+        signal: options.signal,
+        onProgress: (p) => report(p, options.onProgress),
+      });
+      return shape(st);
     },
   };
 
   function throwIfAborted(signal) {
     if (signal && signal.aborted) throw abortError();
+  }
+
+  /** The contract's progress shape is `{scanned, head}`; the engine reports a phase too. */
+  function report(p, onProgress) {
+    if (typeof onProgress !== 'function') return;
+    onProgress({ phase: p.phase, scanned: Number(p.scanned) || 0, head: Number(p.total) || 0 });
   }
 
   function shape(st) {
@@ -607,6 +690,10 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     // OPTIONAL in the contract, and set exactly once: the store's cursors were unusable and have
     // been reset for a full rescan (see makeWallet's loadStore). The UI says so, quietly.
     if (st.recovered) out.recovered = true;
+    // This node is not on the chain this wallet's notes came from. Nothing was read or merged.
+    if (st.wrongChain) out.wrongChain = st.wrongChain;
+    // This node's tip is below what this wallet has already read. Also nothing read or merged.
+    if (st.behind) out.behind = st.behind;
     return out;
   }
 
@@ -797,5 +884,16 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     async set(patch) { return setSettings(patch); },
   };
 
-  return { wallet, sync, assets, send, faucet, rpc, settings, platform };
+  /**
+   * OPTIONAL in the contract, and on the **backend itself** rather than in a group: release what
+   * this backend holds outside its own object — here the BroadcastChannel it listens on, and the
+   * idle timer. The shell calls it from `destroy()`. Idempotent, and never throws.
+   */
+  function dispose() {
+    clearAutoLock();
+    lockedListeners.clear();
+    closeChannel();
+  }
+
+  return { wallet, sync, assets, send, faucet, rpc, settings, platform, dispose };
 }

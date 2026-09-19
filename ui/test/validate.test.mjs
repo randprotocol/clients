@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import {
   NodeReplyError, checkHead, checkTreeInfo, checkCommitments, checkNullifiers, checkAnchor,
   checkWitness, checkFee, checkAssets, checkBlockHeader, checkSubmitted, checkBridgeState,
-  intField, hexField, unitsField,
+  intField, hexField, unitsField, checkGenesisHash, checkBlockActions, checkTransaction,
+  ENVELOPE_LIMITS,
 } from '../engine/validate.js';
 
 const HEX64 = 'ab'.repeat(32);
@@ -134,4 +135,63 @@ test('the primitives are usable on their own', () => {
   assert.equal(hexField('m', 'x', HEX64, 64), HEX64);
   assert.equal(unitsField('m', 'x', '0'), '0');
   rejects(() => intField('m', 'x', 5, { max: 4 }), /m: x is not a non-negative integer/);
+});
+
+// ------------------------------------------------------------------------- fix round 2 --------
+test('an envelope is bounded by what the chain actually produces', () => {
+  // `randprotocol-core`'s MAX_ENVELOPE_BYTES is 2048 for all four parts, and its own fixture is
+  // ML-KEM-768's 1088-byte ciphertext plus 60 + 60 + 140. The old bound (65 536 chars per field)
+  // let one 500-row page claim ~128 MB, which a wallet would buffer before checking any of it.
+  const real = { kem_ct: 'ab'.repeat(1088), to_receiver: 'cd'.repeat(60), to_sender: 'ef'.repeat(60), body: '01'.repeat(140) };
+  const row = (env) => [{ index: 0, cm: HEX64, height: 1, envelope: env }];
+  assert.equal(checkCommitments(row(real), 500).length, 1, 'a real envelope must still pass');
+
+  assert.ok(ENVELOPE_LIMITS.kem_ct < 5000);
+  assert.ok(ENVELOPE_LIMITS.total <= 2 * 2 * 2048);
+  rejects(() => checkCommitments(row({ ...real, kem_ct: 'a'.repeat(ENVELOPE_LIMITS.kem_ct + 2) }), 500), /envelope\.kem_ct/);
+  rejects(() => checkCommitments(row({ ...real, body: 'a'.repeat(ENVELOPE_LIMITS.body + 2) }), 500), /envelope\.body/);
+
+  // …and a page of individually-legal rows that adds up to too much is refused as a page.
+  const fat = Array.from({ length: 500 }, (_, i) => ({
+    index: i, cm: HEX64, height: 1,
+    envelope: { kem_ct: 'a'.repeat(ENVELOPE_LIMITS.kem_ct), to_receiver: 'b'.repeat(ENVELOPE_LIMITS.to_receiver), to_sender: 'c'.repeat(ENVELOPE_LIMITS.to_sender), body: 'd'.repeat(ENVELOPE_LIMITS.body) },
+  }));
+  const perRow = ENVELOPE_LIMITS.kem_ct + ENVELOPE_LIMITS.to_receiver + ENVELOPE_LIMITS.to_sender + ENVELOPE_LIMITS.body;
+  if (perRow > ENVELOPE_LIMITS.total) {
+    rejects(() => checkCommitments(fat, 500), /envelope is \d+ characters/);
+  } else {
+    assert.ok(perRow * 500 < 8_000_000, 'the whole-page bound should still be reachable in principle');
+  }
+});
+
+test('genesis hash: hex of a plausible length, normalised', () => {
+  assert.equal(checkGenesisHash('AB'.repeat(32)), 'ab'.repeat(32));
+  assert.equal(checkGenesisHash(`0x${'ab'.repeat(32)}`), 'ab'.repeat(32));
+  rejects(() => checkGenesisHash(null), /not a string/);
+  rejects(() => checkGenesisHash('nope'), /not hex of a plausible length/);
+  rejects(() => checkGenesisHash('ab'.repeat(200)), /plausible length/);
+});
+
+test('block actions: plain, bounded objects, and nothing else', () => {
+  assert.deepEqual(checkBlockActions(null), []);
+  assert.deepEqual(checkBlockActions({ transactions: [] }), []);
+  assert.deepEqual(checkBlockActions({ transactions: ['x', {}, { action: 7 }, { action: {} }] }), [],
+    'anything without a string `kind` is dropped');
+
+  const out = checkBlockActions({ transactions: [{ action: { kind: 'bridge_attest', amount: 5 } }] });
+  assert.deepEqual(out, [{ kind: 'bridge_attest', amount: 5 }]);
+  assert.equal(Object.getPrototypeOf(out[0]), Object.prototype, 'the core must get a plain object');
+
+  rejects(
+    () => checkBlockActions({ transactions: [{ action: { kind: 'bridge_attest', blob: 'x'.repeat(20000) } }] }),
+    /an action is \d+ characters/,
+  );
+  rejects(() => checkBlockActions({ transactions: new Array(5000).fill({ action: { kind: 'a' } }) }), /transactions/);
+});
+
+test('a transaction record yields only a validated height', () => {
+  assert.equal(checkTransaction(null), null);
+  assert.deepEqual(checkTransaction({ height: 7, tx: { anything: true } }), { height: 7 });
+  rejects(() => checkTransaction({ height: '7' }), /height/);
+  rejects(() => checkTransaction({}), /height/);
 });

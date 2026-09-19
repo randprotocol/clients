@@ -59,6 +59,28 @@ export function hexField(method, what, value, length) {
   return value;
 }
 
+/**
+ * What one note envelope may be, taken from the chain rather than guessed.
+ *
+ * `randprotocol-core`'s `MAX_ENVELOPE_BYTES` is 2048 for all four parts together, and its own
+ * fixture is ML-KEM-768's 1088-byte ciphertext plus 60 + 60 + 140 bytes of sealed material
+ * (`core/vendor/fullnode/crates/randprotocol-core/src/notes.rs`). Each field is bounded here at
+ * roughly twice its real encoded length — hex, so two characters per byte — and the whole
+ * envelope at twice the chain's own cap.
+ *
+ * The previous bound (65 536 characters per field) let a single 500-row page claim ~128 MB, which
+ * a wallet would dutifully buffer and hand to `JSON.parse` before any of it was checked.
+ */
+export const ENVELOPE_LIMITS = Object.freeze({
+  kem_ct: 2 * 2 * 1088,   // ML-KEM-768 ciphertext
+  to_receiver: 2 * 2 * 256,
+  to_sender: 2 * 2 * 256,
+  body: 2 * 2 * 512,
+  total: 2 * 2 * 2048,    // 2 × MAX_ENVELOPE_BYTES
+});
+/** No single page of leaves may be larger than this, in characters, however many rows it has. */
+export const MAX_PAGE_CHARS = 8_000_000;
+
 /** Hex of an unknown length (an envelope field), bounded so a reply cannot be a memory attack. */
 export function hexBlob(method, what, value, { max = 65536 } = {}) {
   if (typeof value !== 'string' || value.length > max || !/^[0-9a-fA-F]*$/.test(value)) {
@@ -115,6 +137,7 @@ export function checkTreeInfo(reply) {
 export function checkCommitments(reply, limit) {
   const m = 'rand_getCommitments';
   const rows = arrayReply(m, reply, limit);
+  let pageChars = 0;
   rows.forEach((row, i) => {
     if (!row || typeof row !== 'object') fail(m, `row ${i} is not an object`, row);
     intField(m, `row ${i} index`, row.index);
@@ -122,9 +145,14 @@ export function checkCommitments(reply, limit) {
     hexField(m, `row ${i} cm`, row.cm, 64);
     const env = row.envelope;
     if (!env || typeof env !== 'object') fail(m, `row ${i} envelope is not an object`, env);
+    let envChars = 0;
     for (const part of ['kem_ct', 'to_receiver', 'to_sender', 'body']) {
-      hexBlob(m, `row ${i} envelope.${part}`, env[part]);
+      hexBlob(m, `row ${i} envelope.${part}`, env[part], { max: ENVELOPE_LIMITS[part] });
+      envChars += env[part].length;
     }
+    if (envChars > ENVELOPE_LIMITS.total) fail(m, `row ${i} envelope is ${envChars} characters, over the chain's own limit`);
+    pageChars += envChars;
+    if (pageChars > MAX_PAGE_CHARS) fail(m, `the page is over ${MAX_PAGE_CHARS} characters of envelope`);
   });
   return rows;
 }
@@ -207,6 +235,59 @@ export function checkBlockHeader(reply) {
   // `fail` is never reached above; the method name is kept for symmetry with the others.
   void m;
   return out;
+}
+
+/**
+ * `rand_getGenesisHash` → the chain's genesis hash, hex.
+ *
+ * Chain id alone is not enough on a project that cuts chains as often as this one (the node's own
+ * docs say so): two chains can carry the same id on a misconfigured node. This is what tells a
+ * wallet that the node it is now pointed at is not the chain its note store was built from.
+ */
+export function checkGenesisHash(reply) {
+  const m = 'rand_getGenesisHash';
+  if (typeof reply !== 'string') fail(m, 'the reply is not a string', reply);
+  const value = reply.trim().replace(/^0x/i, '');
+  if (value.length < 32 || value.length > 128 || !/^[0-9a-fA-F]+$/.test(value)) {
+    fail(m, 'the genesis hash is not hex of a plausible length', reply);
+  }
+  return value.toLowerCase();
+}
+
+/**
+ * `rand_getBlockByHeight`, as `rebuildableDeposits` needs it: the *actions* of the block's
+ * transactions, each a plain object of bounded size, because every one of them is handed to the
+ * wasm core (`rebuilt_deposit`). Nothing raw from a node reaches the core.
+ */
+export function checkBlockActions(reply, { maxTransactions = 4096, maxActionChars = 8192 } = {}) {
+  const m = 'rand_getBlockByHeight';
+  if (reply === null || reply === undefined) return [];
+  if (typeof reply !== 'object' || Array.isArray(reply)) fail(m, 'the reply is not an object', reply);
+  const list = Array.isArray(reply.transactions) ? reply.transactions : [];
+  if (list.length > maxTransactions) fail(m, `the block has ${list.length} transactions`);
+  const actions = [];
+  for (const tx of list) {
+    if (!tx || typeof tx !== 'object') continue;
+    const action = tx.action;
+    if (!action || typeof action !== 'object' || Array.isArray(action)) continue;
+    if (typeof action.kind !== 'string' || action.kind.length > 64) continue;
+    let encoded;
+    try { encoded = JSON.stringify(action); } catch { continue; } // a cycle, or something unserialisable
+    if (typeof encoded !== 'string' || encoded.length > maxActionChars) {
+      fail(m, `an action is ${encoded ? encoded.length : '?'} characters, more than ${maxActionChars}`);
+    }
+    // Re-parsed, so what reaches the core is a plain object with no prototype tricks or getters.
+    actions.push(JSON.parse(encoded));
+  }
+  return actions;
+}
+
+/** `rand_getTransaction` → `null` until committed, else the record; only `height` is read. */
+export function checkTransaction(reply) {
+  const m = 'rand_getTransaction';
+  if (reply === null || reply === undefined) return null;
+  const record = objectReply(m, reply);
+  return { height: intField(m, 'height', record.height) };
 }
 
 /** `rand_sendTransaction` / `rand_mint` → the transaction hash. */

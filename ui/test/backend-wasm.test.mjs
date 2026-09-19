@@ -1115,3 +1115,169 @@ test('maxSendable follows the core when it reports how many notes a bundle spend
   await seed(three.backend, three.storage);
   assert.equal((await three.backend.send.maxSendable({ asset: 0 })).amount, '5999000000');
 });
+
+// =============================================================== fix round 2 ====================
+
+test('wipe forgets a deferred lock, so releasing a hold afterwards is silent', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { backend } = build();
+  await backend.settings.set({ autoLockMin: 1 });
+  await backend.wallet.create(PASSWORD);
+  const locked = [];
+  backend.wallet.onLocked(() => locked.push('locked'));
+
+  // A send in flight, the idle timer comes due (deferred), then the wallet is wiped.
+  const inFlight = backend.send.send({ asset: 0, to: ADDRESS, amount: '1' }, () => {});
+  t.mock.timers.tick(61_000);
+  await backend.wallet.wipe();
+  await assert.rejects(() => inFlight, (err) => err.definite === true);
+  await drain();
+
+  assert.deepEqual(locked, [], 'a wiped wallet fired onLocked at a shell that had moved on');
+});
+
+test('noteActivity never rejects, even when storage is broken', async () => {
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.settings.set({ autoLockMin: 5 });
+  await backend.wallet.create(PASSWORD);
+
+  const rejections = [];
+  const onUnhandled = (err) => rejections.push(err);
+  process.on('unhandledRejection', onUnhandled);
+  storage.get = async () => { throw new Error('the database is gone'); };
+  try {
+    assert.doesNotThrow(() => backend.wallet.noteActivity(), 'it threw on the keystroke path');
+    await drain(50);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+  assert.deepEqual(rejections, [], 'a keystroke produced an unhandled rejection');
+});
+
+test('user activity during a hold cancels the deferred lock and restarts the clock', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { backend } = build();
+  await backend.settings.set({ autoLockMin: 1 });
+  await backend.wallet.create(PASSWORD);
+  const locked = [];
+  backend.wallet.onLocked(() => locked.push('locked'));
+
+  const inFlight = backend.send.send({ asset: 0, to: ADDRESS, amount: '1' }, () => {});
+  t.mock.timers.tick(61_000);            // the lock comes due, and waits for the send
+  backend.wallet.noteActivity();          // …but the user is right here, typing
+  await drain();
+  await assert.rejects(() => inFlight, (err) => err.definite === true);
+  await drain();
+
+  assert.deepEqual(locked, [], 'it locked the moment the send settled, despite the user being active');
+  assert.equal(await backend.wallet.isUnlocked(), true);
+
+  // …and the clock restarted from the activity, so it still locks once they really do stop.
+  t.mock.timers.tick(61_000);
+  await drain();
+  assert.deepEqual(locked, ['locked'], 'the idle timer never came back');
+});
+
+test('the failure counter survives two tabs counting at once', async () => {
+  // One shared number. Without a conditional write both tabs read n, both write n + 1, and two
+  // wrong guesses cost one step of backoff between them.
+  const storage = casStorage();
+  const one = build({ storage }).backend;
+  await one.wallet.create(PASSWORD);
+  await one.wallet.lock();
+  const two = build({ storage }).backend;
+
+  await Promise.all([
+    one.wallet.unlock('nope-nope-nope').catch(() => {}),
+    two.wallet.unlock('nope-nope-nope').catch(() => {}),
+  ]);
+  assert.equal(storage.local.get('unlockFailures').count, 2, 'one tab’s attempt was lost');
+});
+
+test('dispose closes the broadcast channel and is idempotent', async () => {
+  let closed = 0;
+  const channel = {
+    postMessage() {}, addEventListener() {}, removeEventListener() {},
+    close() { closed += 1; },
+  };
+  const { backend } = build({ broadcast: channel });
+  await backend.wallet.create(PASSWORD);
+  backend.dispose();
+  backend.dispose();
+  assert.equal(closed, 1, 'the channel was left open, or closed twice');
+
+  // …and a wipe closes it too.
+  const second = build({ broadcast: { ...channel, close() { closed += 1; } } }).backend;
+  await second.wallet.create(PASSWORD);
+  await second.wallet.wipe();
+  assert.equal(closed, 2);
+});
+
+test('the wait for another tab is short, and says so rather than hanging', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const locks = { async request(_name, _opts, cb) { return cb(null); } }; // always taken
+  const listeners = new Set();
+  const channel = {
+    postMessage() {}, close() {},
+    addEventListener(_t, fn) { listeners.add(fn); },
+    removeEventListener(_t, fn) { listeners.delete(fn); },
+  };
+  const { backend } = build({ locks, broadcast: channel });
+  await backend.wallet.create(PASSWORD);
+
+  const p = backend.sync.scan(() => {});
+  let settled = false;
+  p.then(() => { settled = true; }, () => { settled = true; });
+  await drain(); // let the scan reach the wait, so there is a timer to advance
+  t.mock.timers.tick(7_000);
+  await drain();
+  assert.equal(settled, false, 'it gave up before the wait was over');
+  t.mock.timers.tick(2_000);
+  const answer = await p;
+  assert.equal(answer.otherTab, true, 'the UI was not told why this is cached data');
+});
+
+test('sync.rescan needs an unlocked wallet and re-reads from zero', async () => {
+  const { backend, storage } = build();
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+  storage.local.set('notes', { ...storage.local.get('notes'), scanned_index: 900, scanned_height: 900 });
+
+  const after = await backend.sync.rescan();
+  // Reset, then re-established from the node — so it is the node's height, never the 900 that was
+  // there before (which is the whole point: the wallet no longer claims to have read that far).
+  assert.ok(after.scannedHeight < 900, `the cursors were not reset: ${after.scannedHeight}`);
+  assert.ok(storage.local.get('notes').scanned_index < 900);
+  assert.ok(await backend.wallet.exists(), 'a rescan wiped the wallet');
+  assert.equal((await backend.wallet.exportSpendKey()), SPEND_KEY, 'a rescan touched the keys');
+
+  await backend.wallet.lock();
+  await assert.rejects(() => backend.sync.rescan(), /locked/);
+});
+
+test('a scan against a node on another chain reports it without scanning', async () => {
+  const fetch = stubFetch({ rand_getGenesisHash: () => 'aa'.repeat(32) });
+  const { backend, storage } = build({ fetch });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+  assert.equal(storage.local.get('notes').genesis, 'aa'.repeat(32));
+
+  const moved = build({
+    storage,
+    fetch: stubFetch({ rand_getGenesisHash: () => 'bb'.repeat(32), rand_chainId: () => 14 }),
+  }).backend;
+  const answer = await moved.sync.scan(() => {});
+  assert.ok(answer.wrongChain, 'the chain change went unnoticed');
+  assert.equal(answer.wrongChain.got.chainId, 14);
+});
+
+test('a node older than rand_getGenesisHash still works', async () => {
+  const fetch = stubFetch({ rand_getGenesisHash: () => { throw new Error('unknown method'); } });
+  const { backend, storage } = build({ fetch });
+  await backend.wallet.create(PASSWORD);
+  const answer = await backend.sync.scan(() => {});
+  assert.equal(answer.wrongChain, undefined);
+  assert.equal(storage.local.get('notes').genesis, null);
+  assert.equal(storage.local.get('notes').chain_id, 13);
+});

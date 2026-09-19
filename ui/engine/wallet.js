@@ -27,7 +27,8 @@
 //     covers.
 import {
   checkHead, checkTreeInfo, checkCommitments, checkNullifiers, checkAnchor, checkWitness,
-  checkBlockHeader, checkBridgeState, checkSubmitted, intField,
+  checkBlockHeader, checkBridgeState, checkSubmitted, checkGenesisHash, checkBlockActions,
+  checkTransaction, intField,
 } from './validate.js';
 
 const PAGE = 500;
@@ -46,10 +47,45 @@ const MAX_BLOCK_TIMES_PER_SCAN = 128;
  */
 export const BUNDLE_INPUTS = 2;
 
-/** The numeric cursors that must never be anything but safe non-negative integers. */
-const CURSORS = ['scanned_index', 'scanned_height', 'scanned_attest_height', 'head'];
+/**
+ * Every numeric field of the store that must be a safe non-negative integer, and the subset that
+ * is a **work cursor**.
+ *
+ * The distinction is the whole of fix round 2's headline. `head` is the node's *reported* tip — a
+ * mirror of something a remote server said, not a record of work this wallet did — and enforcing
+ * it as monotone bricked the wallet: a lagging replica, a node restored from a snapshot, a
+ * younger chain, or one hostile-but-valid `rand_getHead` near 2^53, and every later scan threw
+ * "head moved backwards" for ever, with no way out but a wipe. A tip that goes down is a fact
+ * about the node, not a corruption of the store.
+ *
+ * A **work cursor** is different: it says "this wallet has read the chain up to here", and it can
+ * only go backwards if something overwrote it. Those stay monotone.
+ */
+const NUMERIC_FIELDS = ['scanned_index', 'scanned_height', 'scanned_attest_height', 'head'];
+const WORK_CURSORS = ['scanned_index', 'scanned_height', 'scanned_attest_height'];
 /** Keys held on the in-memory store that must never be written to storage. */
-const TRANSIENT = ['recovered', 'rev'];
+const TRANSIENT = ['recovered', 'rev', 'behind', 'wrongChain'];
+
+/**
+ * How far one *empty* reply may advance a height cursor.
+ *
+ * An empty nullifier page means "nothing from here on, as far as I know" — and "as far as I know"
+ * is the node's tip, which is exactly the number that must not be trusted. So the cursor moves by
+ * at most one page span per reply: a wild tip can then poison one span, which the next honest
+ * scan re-reads, instead of jumping the cursor to 2^53 and locking the honest node out for ever.
+ */
+const HEIGHT_SPAN = PAGE;
+/**
+ * …and how many such replies one scan will take. Without it the loop is `tip / HEIGHT_SPAN`
+ * iterations, which for a hostile tip near 2^53 is not a slow scan but an infinite one (the first
+ * version of this fix exhausted the heap). With it, one scan advances a height cursor by at most
+ * `HEIGHT_SPAN * MAX_HEIGHT_PAGES_PER_SCAN` and the next scan carries on from there; a tip that is
+ * a lie costs re-reading that much, and `sync.rescan()` is the one-click cure if a wallet ever
+ * does end up ahead of an honest node.
+ */
+const MAX_HEIGHT_PAGES_PER_SCAN = 512;
+/** How many block headers `rebuildableDeposits` may examine in one scan (it is one call each). */
+const MAX_ATTEST_HEIGHTS_PER_SCAN = 512;
 
 export function emptyNoteStore() {
   return {
@@ -58,6 +94,11 @@ export function emptyNoteStore() {
     // height -> unix milliseconds, filled in as notes are found. The chain's own `time` word is a
     // block number, not a clock, so this is the only place a wallet can learn when a note landed.
     block_times: {},
+    // Which chain this store was built from, recorded on the first scan and checked on every one
+    // after: a note store is meaningless against a different chain, and merging one into the
+    // other silently invents history. `null` until the first scan learns them.
+    chain_id: null,
+    genesis: null,
     // note commitment -> the hash of the transaction that created it, learned from the same block
     // headers. `rand_getCommitments` serves leaves, not transactions, so without this a received
     // note has no hash and no transaction page to open.
@@ -169,11 +210,13 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
     if (!Array.isArray(s.notes)) s.notes = [];
     if (!Array.isArray(s.sent)) s.sent = [];
     if (!Array.isArray(s.submissions)) s.submissions = [];
-    const broken = CURSORS.filter((key) => !isCursor(s[key]));
+    const broken = NUMERIC_FIELDS.filter((key) => !isCursor(s[key]));
     if (broken.length) {
-      for (const key of CURSORS) s[key] = 0;
+      for (const key of NUMERIC_FIELDS) s[key] = 0;
       s.recovered = true;
     }
+    if (typeof s.genesis !== 'string' || s.genesis === '') s.genesis = null;
+    if (!isCursor(s.chain_id) && typeof s.chain_id !== 'string') s.chain_id = null;
     return s;
   }
 
@@ -188,8 +231,13 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
    * each other. On a lost race the other tab's store is merged in and the write retried once.
    */
   async function persist(st, previous) {
-    for (const key of CURSORS) {
+    for (const key of NUMERIC_FIELDS) {
       if (!isCursor(st[key])) throw new Error(`refusing to save the note store: ${key} is not a block cursor (${String(st[key])})`);
+    }
+    // Monotonicity is asserted for work cursors only. `head` is the node's reported tip, and a tip
+    // that goes down is an ordinary fact about a node (a lagging replica, a restore from snapshot,
+    // a different node in Settings) — not a reason to refuse every future write for ever.
+    for (const key of WORK_CURSORS) {
       if (previous && isCursor(previous[key]) && st[key] < previous[key]) {
         throw new Error(`refusing to save the note store: ${key} moved backwards, ${previous[key]} → ${st[key]}`);
       }
@@ -215,7 +263,10 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
       for (const sub of st.submissions) if (!fresh.submissions.some((x) => x.hash === sub.hash)) fresh.submissions.push(sub);
       Object.assign(fresh.block_times, st.block_times);
       Object.assign(fresh.note_tx, st.note_tx);
-      for (const key of CURSORS) fresh[key] = Math.max(isCursor(fresh[key]) ? fresh[key] : 0, st[key]);
+      for (const key of WORK_CURSORS) fresh[key] = Math.max(isCursor(fresh[key]) ? fresh[key] : 0, st[key]);
+      fresh.head = isCursor(st.head) ? st.head : (isCursor(fresh.head) ? fresh.head : 0);
+      fresh.chain_id = st.chain_id ?? fresh.chain_id ?? null;
+      fresh.genesis = st.genesis ?? fresh.genesis ?? null;
       fresh.last_sync_ms = Math.max(Number(fresh.last_sync_ms) || 0, Number(st.last_sync_ms) || 0);
       const merged = {};
       for (const [key, value] of Object.entries(fresh)) if (!TRANSIENT.includes(key)) merged[key] = value;
@@ -238,22 +289,34 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
    * abort between commitment pages persisted the cursor while the deposits gathered for that
    * range were dropped on the floor, and a bridge deposit could be missed permanently.
    */
-  async function rebuildableDeposits(client, spendKey, st, head, signal) {
+  async function rebuildableDeposits(client, spendKey, st, head, signal, onProgress) {
     const out = new Map();
-    if (st.scanned_attest_height > head) return { deposits: out, through: st.scanned_attest_height - 1 };
+    const start = st.scanned_attest_height;
+    if (start > head) return { deposits: out, through: start - 1 };
     let enabled = false;
     try { enabled = checkBridgeState(await client.bridgeState({ signal })).enabled; } catch { /* a node without the method */ }
-    if (!enabled) return { deposits: out, through: head };
-    for (let h = st.scanned_attest_height; h <= head; h++) {
+    // A chain with no bridge has no attestations, so the range is read by reading nothing — but
+    // the cursor still moves only as far as one scan's worth, for the same reason every other
+    // cursor does: `head` is the node's claim, and a claim near 2^53 must not become a cursor.
+    if (!enabled) return { deposits: out, through: Math.min(head, start + MAX_ATTEST_HEIGHTS_PER_SCAN - 1) };
+    // One `rand_getBlockByHeight` per height, so this is capped: a wallet that has been away for
+    // 50 000 blocks catches up over several scans instead of making 50 000 calls in one, and the
+    // cursor advances only as far as the blocks actually examined (the same rule as every other
+    // cursor here).
+    const last = Math.min(head, start + MAX_ATTEST_HEIGHTS_PER_SCAN - 1);
+    let examined = start - 1;
+    for (let h = start; h <= last; h++) {
       throwIfAborted(signal);
-      const block = await client.blockByHeight(h, { signal });
-      for (const tx of (block && Array.isArray(block.transactions) ? block.transactions : [])) {
-        if (tx?.action?.kind !== 'bridge_attest') continue;
-        const note = await c.rebuiltDeposit(spendKey, tx.action);
+      // Every action is re-parsed into a plain, size-bounded object before it reaches the core.
+      for (const action of checkBlockActions(await client.blockByHeight(h, { signal }))) {
+        if (action.kind !== 'bridge_attest') continue;
+        const note = await c.rebuiltDeposit(spendKey, action);
         if (note) out.set(note.cm, note);
       }
+      examined = h;
+      if ((h - start) % 64 === 63) onProgress?.({ phase: 'deposits', scanned: h, total: head });
     }
-    return { deposits: out, through: head };
+    return { deposits: out, through: examined };
   }
 
   /**
@@ -296,6 +359,71 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
   }
 
   /**
+   * Which chain is at the other end of this RPC URL: the chain id and the genesis hash.
+   *
+   * Both, because the node's own documentation says id alone is not enough — "chain 11 and chain
+   * 12 could carry the same id on a misconfigured node". A node too old to answer
+   * `rand_getGenesisHash` yields `genesis: null`, and the check then falls back to the id alone
+   * rather than refusing to work with it.
+   */
+  async function chainIdentity(client, s, signal) {
+    let genesis = null;
+    try { genesis = checkGenesisHash(await client.rpc('rand_getGenesisHash', [], { signal })); } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
+      genesis = null; // an older node, or one that does not serve it
+    }
+    let chainId = s && s.chainId !== undefined ? s.chainId : null;
+    try { chainId = await client.chainId({ signal }); } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
+    }
+    return { chainId: chainId ?? null, genesis };
+  }
+
+  /** The store's chain and the node's, compared on whichever identifiers both of them have. */
+  function sameChain(st, identity) {
+    if (st.genesis && identity.genesis) return st.genesis === identity.genesis;
+    if (st.chain_id !== null && identity.chainId !== null) return String(st.chain_id) === String(identity.chainId);
+    return true; // nothing to compare on: not evidence of a mismatch
+  }
+
+  /**
+   * The cached store, plus one transient marker for the caller. Used for the two outcomes that are
+   * neither a successful scan nor an error — a node on another chain, and a node that is behind.
+   * Nothing is persisted and nothing is merged: the marker is stripped before any write (TRANSIENT).
+   */
+  function withMarker(st, key, value) {
+    const out = { ...st };
+    out[key] = value;
+    return out;
+  }
+
+  /**
+   * The way out that is not a wipe. Clears the work cursors so the chain is re-read from the
+   * start; with `{ forChain: true }` (a chain change) it also drops the notes, the sent rows, the
+   * submissions and the block annotations, because they describe a chain this wallet is no longer
+   * on. The vault, the settings and the keys are untouched — this is a cache reset, not a wipe.
+   */
+  async function rescan(spendKey, { forChain = false, onProgress, signal } = {}, settingsOverride) {
+    const st = await loadStore();
+    for (const key of WORK_CURSORS) st[key] = 0;
+    st.head = 0;
+    st.chain_id = null;
+    st.genesis = null;
+    if (forChain) {
+      st.notes = [];
+      st.sent = [];
+      st.submissions = [];
+      st.block_times = {};
+      st.note_tx = {};
+    }
+    st.last_sync_ms = 0;
+    // `previous` is deliberately omitted: resetting the cursors IS the point, so the monotonicity
+    // check that protects every other write must not apply to this one.
+    await persist(st);
+    return scan(spendKey, { onProgress, signal }, settingsOverride);
+  }
+
+  /**
    * Trial-decrypt every new leaf, then mark spent notes from the nullifier set. `onProgress`
    * receives `{phase, scanned, total}`. Saves the store and returns it. `signal` aborts the paging
    * and rejects with an AbortError.
@@ -307,7 +435,31 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
     const st = await loadStore();
     const before = { ...st };
     const head0 = checkHead(await client.head({ signal })).height;
-    const { deposits, through: attestThrough } = await rebuildableDeposits(client, spendKey, st, head0, signal);
+
+    // ---- is this the chain this store was built from? ----
+    // A note store is a cache of ONE chain's tree. Merged into another chain's it invents history
+    // — leaf indexes mean something else, heights mean something else, and nothing says so. The
+    // identity is read on the first scan and checked on every one after; a mismatch scans nothing,
+    // persists nothing, and hands the caller something the UI can act on.
+    const identity = await chainIdentity(client, s, signal);
+    const known = st.chain_id !== null || st.genesis !== null;
+    if (known && !sameChain(st, identity)) {
+      return withMarker(st, 'wrongChain', {
+        expected: { chainId: st.chain_id, genesis: st.genesis },
+        got: { chainId: identity.chainId, genesis: identity.genesis },
+      });
+    }
+
+    // ---- is this node behind this wallet? ----
+    // Not an error and not a reason to move anything: a replica that has not caught up, or a node
+    // restored from a snapshot. Scanning resumes by itself once its tip passes what we have read.
+    if (st.scanned_height > 0 && head0 < st.scanned_height - 1) {
+      return withMarker(st, 'behind', { tip: head0, wallet: st.scanned_height - 1 });
+    }
+
+    if (!known) { st.chain_id = identity.chainId; st.genesis = identity.genesis; }
+
+    const { deposits, through: attestThrough } = await rebuildableDeposits(client, spendKey, st, head0, signal, onProgress);
     let total = 0;
     try { total = checkTreeInfo(await client.treeInfo({ signal })).next_index; } catch { /* a node without it */ }
 
@@ -347,24 +499,40 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
     }
     // Every deposit found for [scanned_attest_height, attestThrough] is now in `st.notes`, so the
     // cursor may move — and it is written in the same save as the notes it covers, below.
+    // `attestThrough` is the last height actually EXAMINED, never the node's claimed tip.
     st.scanned_attest_height = Math.max(st.scanned_attest_height, attestThrough + 1);
 
     // Head read *before* paging nullifiers, so every block up to it is covered by the pages.
     const headBefore = checkHead(await client.head({ signal })).height;
     let cursor = st.scanned_height;
-    for (;;) {
+    for (let page = 0; ; page += 1) {
       throwIfAborted(signal);
+      if (cursor > headBefore) break; // caught up with what this node claims to have
+      if (page >= MAX_HEIGHT_PAGES_PER_SCAN) break; // enough for one scan; the next one continues
       const rows = checkNullifiers(await client.nullifiers(cursor, PAGE, { signal }), PAGE);
-      if (rows.length === 0) break;
+      if (rows.length === 0) {
+        // "Nothing from here on" — true only as far as this node has read, and its tip is exactly
+        // the number that must not be trusted. So the cursor takes one page span of that claim at
+        // a time: a wild tip costs one more span of re-reading next scan instead of jumping the
+        // cursor past the real chain and refusing every honest node afterwards.
+        const next = Math.min(cursor + HEIGHT_SPAN, headBefore + 1);
+        if (next <= cursor) { cursor = headBefore + 1; break; }
+        cursor = next;
+        onProgress?.({ phase: 'spends', scanned: cursor, total: headBefore });
+        continue;
+      }
       const maxHeight = Math.max(...rows.map((r) => r.height)); // every height validated above
       const set = new Set(rows.map((r) => r.nullifier));
       for (const n of st.notes) if (set.has(n.nf)) n.spent = true;
-      if (rows.length < PAGE) { cursor = maxHeight + 1; break; }
+      // A short page is the end of the nullifiers, but it is still only evidence up to the last
+      // row's height — the rest of the way to the tip is claim, taken one span at a time above.
+      if (rows.length < PAGE) { cursor = Math.max(cursor, maxHeight + 1); continue; }
       if (maxHeight === cursor) throw new Error(`block ${cursor} published more than ${PAGE} nullifiers`);
       cursor = maxHeight;
       onProgress?.({ phase: 'spends', scanned: cursor, total: headBefore });
     }
-    st.scanned_height = Math.max(st.scanned_height, cursor, headBefore + 1);
+    // Only as far as the pages actually read. Never `headBefore + 1` on the node's say-so.
+    st.scanned_height = Math.max(st.scanned_height, Math.min(cursor, headBefore + 1));
     const readThrough = st.scanned_height - 1;
     for (const n of st.notes) {
       if (n.pending != null && (await c.pendingCleared(n, readThrough))) n.pending = null;
@@ -476,13 +644,14 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
     return hash;
   }
 
-  return { scan, send, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable };
+  return { scan, rescan, send, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable };
 }
 
 export async function waitForTransaction(client, hash, timeoutMs) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const r = await client.getTransaction(hash);
+    // Validated: its `height` ends up on a submission record, and from there in the UI.
+    const r = checkTransaction(await client.getTransaction(hash));
     if (r) return r;
     await new Promise((r2) => setTimeout(r2, 1500));
   }

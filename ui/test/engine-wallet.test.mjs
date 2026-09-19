@@ -48,15 +48,28 @@ function stubClient(table = {}) {
     anchor: () => ({ height: 20, root: HEX64('ab') }),
     bridgeState: () => ({ enabled: false }),
     blockByHeight: (h) => ({ height: h, timestamp_ms: 1788000000000, transactions: [] }),
+    chainId: () => 13,
+    getTransaction: () => null,
+    genesis: () => GENESIS_A,
   };
   const impl = { ...d, ...table };
   const client = {};
   for (const name of Object.keys(impl)) {
+    if (name === 'genesis') continue;
     client[name] = async (...args) => { calls.push([name, ...args]); return impl[name](...args); };
   }
+  // The engine asks for the genesis hash through the raw `rpc(method, params)` escape hatch.
+  client.rpc = async (method, params) => {
+    calls.push(['rpc', method, params]);
+    if (method === 'rand_getGenesisHash') return impl.genesis();
+    throw new Error(`stub node has no ${method}`);
+  };
   client.calls = calls;
   return client;
 }
+
+const GENESIS_A = 'aa'.repeat(32);
+const GENESIS_B = 'bb'.repeat(32);
 
 test('BUNDLE_INPUTS is the chain rule, written down once', () => {
   assert.equal(BUNDLE_INPUTS, 2);
@@ -237,4 +250,195 @@ test('a lost conditional write is merged with the other writer, and a second los
     assert.match(err.message, /another tab changed this wallet/);
     return true;
   });
+});
+
+// =============================================================== fix round 2 ====================
+
+test('persist accepts a tip that went down, and still refuses a work cursor that did', async () => {
+  // `head` is the node's REPORTED tip — a mirror of something a remote server said, not work this
+  // wallet did. Enforcing it as monotone bricked the wallet: one lagging replica, or one node
+  // restored from a snapshot, and every later save threw for ever with no way out but a wipe.
+  const store = memoryStore();
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({}) });
+  const st = await wallet.loadStore();
+  const high = { ...st, head: 5000, scanned_height: 100 };
+
+  await assert.doesNotReject(
+    () => wallet.persist({ ...high, head: 10 }, high),
+    'a tip that moved down was refused — this is the bricking regression',
+  );
+  await assert.rejects(
+    () => wallet.persist({ ...high, scanned_height: 1 }, high),
+    /scanned_height moved backwards/,
+    'a WORK cursor going backwards must still be refused',
+  );
+});
+
+test('a node whose tip is behind the wallet yields `behind`, changes nothing, and recovers', async () => {
+  const store = memoryStore();
+  const settings = async () => ({ chainId: 13 });
+
+  // First scan against a healthy node at height 20.
+  const healthy = stubClient();
+  await makeWallet({ core: stubCore(), store, rpc: () => healthy, settings }).scan(SPEND_KEY, {});
+  const afterFirst = JSON.parse(JSON.stringify(store.current));
+  assert.ok(afterFirst.scanned_height > 0);
+
+  // Now the same wallet against a replica that has only reached height 4.
+  const lagging = stubClient({ head: () => ({ height: 4, hash: HEX64('ab') }) });
+  const laggingWallet = makeWallet({ core: stubCore(), store, rpc: () => lagging, settings });
+  const answer = await laggingWallet.scan(SPEND_KEY, {});
+  assert.deepEqual(answer.behind, { tip: 4, wallet: afterFirst.scanned_height - 1 });
+  assert.deepEqual(store.current, afterFirst, 'a node that is behind changed the store');
+  assert.equal(lagging.calls.some(([name]) => name === 'nullifiers'), false, 'it scanned anyway');
+
+  // And when the node catches up, scanning simply resumes — no rescan, no wipe.
+  const caughtUp = stubClient({ head: () => ({ height: 30, hash: HEX64('ab') }) });
+  const after = await makeWallet({ core: stubCore(), store, rpc: () => caughtUp, settings }).scan(SPEND_KEY, {});
+  assert.equal(after.behind, undefined);
+  assert.equal(store.current.head, 30);
+  assert.ok(store.current.scanned_height >= afterFirst.scanned_height);
+});
+
+test('a hostile tip near 2^53 advances a cursor by at most one page span, and the honest node still works', async () => {
+  // The other half of the regression: one `rand_getHead` of 9_007_199_254_000_000 passes
+  // `intField`, and the old code wrote it straight into `scanned_height`/`scanned_attest_height`,
+  // after which every honest node was "behind" for ever.
+  const HOSTILE = 9_007_199_254_000_000;
+  const store = memoryStore();
+  const settings = async () => ({ chainId: 13 });
+  const hostile = stubClient({ head: () => ({ height: HOSTILE, hash: HEX64('ab') }) });
+  await makeWallet({ core: stubCore(), store, rpc: () => hostile, settings }).scan(SPEND_KEY, {});
+
+  assert.equal(store.current.head, HOSTILE, 'the tip is recorded for display…');
+  // One scan advances a height cursor by at most one page span per reply, capped per scan — so
+  // the claim costs a bounded amount of re-reading instead of jumping the cursor to 2^53.
+  const CAP = 500 * 512;
+  assert.ok(store.current.scanned_height <= CAP + 1,
+    `…but a work cursor took the claim whole: scanned_height is ${store.current.scanned_height}`);
+  assert.ok(store.current.scanned_attest_height <= 512,
+    `the attest cursor took the claim whole: ${store.current.scanned_attest_height}`);
+
+  // And the honest node is *recoverable*, not locked out for ever: it reports `behind` — a
+  // non-destructive state with a one-click cure — rather than throwing on every future save.
+  const honest = stubClient({ head: () => ({ height: 20, hash: HEX64('ab') }) });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => honest, settings });
+  const answer = await wallet.scan(SPEND_KEY, {});
+  assert.equal(answer.wrongChain, undefined);
+  assert.ok(answer.behind, 'a wallet ahead of an honest node should say so');
+  await assert.doesNotReject(() => wallet.rescan(SPEND_KEY, {}), 'and rescan must be the way out');
+  assert.equal(store.current.head, 20, 'after the rescan the honest tip is what is recorded');
+  assert.ok(store.current.scanned_height <= 21);
+});
+
+test('a node on another chain yields `wrongChain` and touches nothing', async () => {
+  const store = memoryStore();
+  const settings = async () => ({ chainId: 13 });
+  await makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings }).scan(SPEND_KEY, {});
+  const before = JSON.parse(JSON.stringify(store.current));
+  assert.equal(before.genesis, GENESIS_A, 'the first scan did not record the chain identity');
+
+  const other = stubClient({ genesis: () => GENESIS_B, chainId: () => 14 });
+  const answer = await makeWallet({ core: stubCore(), store, rpc: () => other, settings }).scan(SPEND_KEY, {});
+  assert.deepEqual(answer.wrongChain, {
+    expected: { chainId: 13, genesis: GENESIS_A },
+    got: { chainId: 14, genesis: GENESIS_B },
+  });
+  assert.deepEqual(store.current, before, 'a wrong-chain node changed the store');
+  assert.equal(other.calls.some(([name]) => name === 'commitments'), false, 'it scanned the wrong chain anyway');
+});
+
+test('a chain id that differs is caught even when the node serves no genesis hash', async () => {
+  const store = memoryStore();
+  const older = (id) => stubClient({ chainId: () => id, genesis: () => { throw new Error('no such method'); } });
+  await makeWallet({ core: stubCore(), store, rpc: () => older(13), settings: async () => ({}) }).scan(SPEND_KEY, {});
+  assert.equal(store.current.genesis, null);
+  assert.equal(store.current.chain_id, 13);
+
+  const answer = await makeWallet({ core: stubCore(), store, rpc: () => older(14), settings: async () => ({}) }).scan(SPEND_KEY, {});
+  assert.equal(answer.wrongChain.got.chainId, 14);
+});
+
+test('rescan re-reads from the start, and for a chain change drops the old chain history', async () => {
+  const note = {
+    index: 3, note: '00'.repeat(112), cm: HEX64('0b'), nf: HEX64('0c'),
+    amount: '5', asset: 0, time: 4, from: '00'.repeat(32), height: 4, spent: false, pending: null,
+  };
+  const core = stubCore({
+    scan_page: ({ rows }) => ({ received: rows.length ? [note] : [], sent: [], next_index: rows.length ? 1 : 0, rows: rows.length }),
+  });
+  const page = (from) => (from === 0 ? [{ index: 0, cm: HEX64('0b'), height: 4, envelope: envelope() }] : []);
+  const store = memoryStore();
+  const client = stubClient({ commitments: page });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({ chainId: 13 }) });
+  await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.current.notes.length, 1);
+  assert.equal(store.current.scanned_index, 1);
+
+  // A plain rescan: cursors reset, the chain read again, the note found again.
+  const plain = await wallet.rescan(SPEND_KEY, {});
+  assert.equal(plain.notes.length, 1);
+  assert.equal(plain.scanned_index, 1);
+
+  // A chain rescan against the other chain: the old chain's history goes, the identity is renewed.
+  const other = stubClient({ commitments: () => [], genesis: () => GENESIS_B, chainId: () => 14 });
+  const moved = makeWallet({ core, store, rpc: () => other, settings: async () => ({ chainId: 14 }) });
+  const fresh = await moved.rescan(SPEND_KEY, { forChain: true });
+  assert.equal(fresh.notes.length, 0, "the old chain's notes survived a chain rescan");
+  assert.equal(store.current.genesis, GENESIS_B);
+  assert.equal(store.current.chain_id, 14);
+  assert.equal(fresh.wrongChain, undefined, 'the rescan did not adopt the new chain');
+});
+
+test('the attest scan is capped per scan and advances only as far as it examined', async () => {
+  const store = memoryStore();
+  const seen = [];
+  const client = stubClient({
+    head: () => ({ height: 5000, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    blockByHeight: (h) => { seen.push(h); return { height: h, timestamp_ms: 1788000000000, transactions: [] }; },
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await wallet.scan(SPEND_KEY, {});
+
+  assert.ok(seen.length <= 512, `${seen.length} block headers in one scan — the loop is uncapped`);
+  assert.equal(store.current.scanned_attest_height, 512, 'the cursor ran past the blocks examined');
+
+  // The next scan carries on from there rather than starting again.
+  seen.length = 0;
+  await wallet.scan(SPEND_KEY, {});
+  assert.equal(seen[0], 512);
+  assert.equal(store.current.scanned_attest_height, 1024);
+});
+
+test('a block action is size-bounded and re-parsed before it reaches the core', async () => {
+  const given = [];
+  const core = stubCore({ rebuilt_deposit: ({ action }) => { given.push(action); return null; } });
+  const store = memoryStore();
+
+  // A getter that would run inside the core binding, and a prototype trick, are both gone by the
+  // time the action is handed over — it is JSON that came back through `JSON.parse`.
+  const nasty = { kind: 'bridge_attest', get trap() { throw new Error('a getter ran'); } };
+  const client = stubClient({
+    head: () => ({ height: 1, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    blockByHeight: () => ({ height: 0, transactions: [{ action: { kind: 'bridge_attest', amount: 5 } }, { action: nasty }] }),
+  });
+  await makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false }).scan(SPEND_KEY, {});
+  assert.ok(given.length >= 1);
+  for (const action of given) {
+    assert.equal(Object.getPrototypeOf(action), Object.prototype, 'the core was handed a non-plain object');
+  }
+
+  // An action larger than the cap fails the scan rather than being passed on.
+  const huge = { kind: 'bridge_attest', blob: 'x'.repeat(20000) };
+  const big = stubClient({
+    head: () => ({ height: 1, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    blockByHeight: () => ({ height: 0, transactions: [{ action: huge }] }),
+  });
+  await assert.rejects(
+    () => makeWallet({ core, store: memoryStore(), rpc: () => big, settings: async () => ({}) }).scan(SPEND_KEY, {}),
+    (err) => err.name === 'NodeReplyError',
+  );
 });
