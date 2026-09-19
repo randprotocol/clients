@@ -402,13 +402,21 @@ fn knuth_divrem(n: &[u32], d: &[u32; 8]) -> ([u32; 8], [u32; 8]) {
     let mut dv = [0u32; 8];
     for i in (0..dn).rev() {
         let hi = d[i] << s;
-        let lo = if s > 0 && i > 0 { d[i - 1] >> (32 - s) } else { 0 };
+        let lo = if s > 0 && i > 0 {
+            d[i - 1] >> (32 - s)
+        } else {
+            0
+        };
         dv[i] = hi | lo;
     }
     let mut un = [0u32; 17]; // the numerator, normalised, with one extra high limb
     for i in (0..m).rev() {
         let hi = n[i] << s;
-        let lo = if s > 0 && i > 0 { n[i - 1] >> (32 - s) } else { 0 };
+        let lo = if s > 0 && i > 0 {
+            n[i - 1] >> (32 - s)
+        } else {
+            0
+        };
         un[i] = hi | lo;
     }
     un[m] = if s > 0 { n[m - 1] >> (32 - s) } else { 0 };
@@ -418,9 +426,7 @@ fn knuth_divrem(n: &[u32], d: &[u32; 8]) -> ([u32; 8], [u32; 8]) {
         let mut qhat = num / dv[dn - 1] as u64;
         let mut rhat = num % dv[dn - 1] as u64;
         // Correct the estimate down (at most twice) against the next divisor limb.
-        while qhat >> 32 != 0
-            || qhat * dv[dn - 2] as u64 > ((rhat << 32) | un[j + dn - 2] as u64)
-        {
+        while qhat >> 32 != 0 || qhat * dv[dn - 2] as u64 > ((rhat << 32) | un[j + dn - 2] as u64) {
             qhat -= 1;
             rhat += dv[dn - 1] as u64;
             if rhat >> 32 != 0 {

@@ -82,7 +82,12 @@ impl Sha256 {
             buf[16 + i] = SHA256_IV[i];
             i += 1;
         }
-        Sha256 { buf, block: [0; 64], fill: 0, len: 0 }
+        Sha256 {
+            buf,
+            block: [0; 64],
+            fill: 0,
+            len: 0,
+        }
     }
 
     /// Absorbs `bytes`, compressing every whole block it completes.
@@ -113,7 +118,9 @@ impl Sha256 {
         // the compression still runs, or a block would be hashed twice and the digest would be
         // quietly wrong. (This crate cannot `unwrap`: a panicking guest produces no proof at all.)
         while off + 64 <= bytes.len() {
-            let Ok(block) = <&[u8; 64]>::try_from(&bytes[off..off + 64]) else { break };
+            let Ok(block) = <&[u8; 64]>::try_from(&bytes[off..off + 64]) else {
+                break;
+            };
             self.pack(block);
             h.sha256_compress(&mut self.buf);
             off += 64;
@@ -154,8 +161,12 @@ impl Sha256 {
     /// caller's own bytes straight in.
     fn pack(&mut self, block: &[u8; 64]) {
         for i in 0..16 {
-            self.buf[i] =
-                u32::from_be_bytes([block[4 * i], block[4 * i + 1], block[4 * i + 2], block[4 * i + 3]]);
+            self.buf[i] = u32::from_be_bytes([
+                block[4 * i],
+                block[4 * i + 1],
+                block[4 * i + 2],
+                block[4 * i + 3],
+            ]);
         }
     }
 
@@ -198,7 +209,11 @@ const DHASH_MAX_WORDS: usize = 32;
 /// is truncated rather than panicking, which no call site here can reach (the one caller passes a
 /// fixed 24-word array).
 pub fn dhash<H: Host>(h: &mut H, domain: u32, msg: &[u32]) -> [u32; 8] {
-    let n = if 1 + msg.len() > DHASH_MAX_WORDS { DHASH_MAX_WORDS } else { 1 + msg.len() };
+    let n = if 1 + msg.len() > DHASH_MAX_WORDS {
+        DHASH_MAX_WORDS
+    } else {
+        1 + msg.len()
+    };
     debug_assert_eq!(n, 1 + msg.len());
     let mut buf = [0u32; DHASH_MAX_WORDS];
     buf[0] = domain;

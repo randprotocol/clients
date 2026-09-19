@@ -153,7 +153,12 @@ pub struct InputCursor<F: FnMut(u32) -> u32> {
 
 impl<F: FnMut(u32) -> u32> InputCursor<F> {
     pub fn new(read: F, len: u32) -> Self {
-        InputCursor { read, pos: 0, len, truncated: false }
+        InputCursor {
+            read,
+            pos: 0,
+            len,
+            truncated: false,
+        }
     }
 
     /// The next word, or 0 with the truncation flag set once the vector is exhausted.
@@ -231,8 +236,11 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub const ZERO: Workspace =
-        Workspace { input: CallInput::ZERO, stack: [0; STACK_BYTES], heap: [0; HEAP_BYTES] };
+    pub const ZERO: Workspace = Workspace {
+        input: CallInput::ZERO,
+        stack: [0; STACK_BYTES],
+        heap: [0; HEAP_BYTES],
+    };
 }
 
 /// Decodes the two input vectors into `dst`, in place — the ELF from the **public** cursor, the
@@ -395,7 +403,10 @@ impl<'a> AccountWalk<'a> {
             }
             // The realloc headroom, then padding to the next eight-byte boundary, then
             // `rent_epoch`.
-            let after = (data_end.checked_add(MAX_PERMITTED_DATA_INCREASE)?.checked_add(7)?) & !7;
+            let after = (data_end
+                .checked_add(MAX_PERMITTED_DATA_INCREASE)?
+                .checked_add(7)?)
+                & !7;
             let rent_epoch = read_u64(input, after)?;
             if self.check_pinned {
                 // The `original_data_len` slot and the realloc headroom plus the alignment padding:
@@ -415,7 +426,15 @@ impl<'a> AccountWalk<'a> {
                 self.check_bools(flags_at, flags_at + 3);
             }
             self.off = after.checked_add(8)?;
-            Entry { marker: dup, flags_at, key_at, lamports, data_at, data_len, rent_epoch }
+            Entry {
+                marker: dup,
+                flags_at,
+                key_at,
+                lamports,
+                data_at,
+                data_len,
+                rent_epoch,
+            }
         } else {
             // A duplicate: the index, then seven bytes of padding, and nothing else.
             if dup as usize >= self.n_entries {
@@ -537,8 +556,14 @@ pub fn check_region(input: &[u8]) -> Result<(), ParseError> {
 /// panicking guest aborts without producing a proof at all, and every offset here began as a
 /// prover-supplied length.
 fn entry_key_owner<'a>(input: &'a [u8], e: &Entry) -> &'a [u8] {
-    debug_assert!(e.key_at + 64 <= input.len(), "the walk bounds-checks past key ‖ owner");
-    e.key_at.checked_add(64).and_then(|end| input.get(e.key_at..end)).unwrap_or(&[])
+    debug_assert!(
+        e.key_at + 64 <= input.len(),
+        "the walk bounds-checks past key ‖ owner"
+    );
+    e.key_at
+        .checked_add(64)
+        .and_then(|end| input.get(e.key_at..end))
+        .unwrap_or(&[])
 }
 
 /// An entry's `data`, exactly `data_len` bytes and no realloc headroom.
@@ -546,8 +571,14 @@ fn entry_key_owner<'a>(input: &'a [u8], e: &Entry) -> &'a [u8] {
 /// **Precondition**: as [`entry_key_owner`] — the walk checked `data_at + data_len <= input.len()`
 /// before producing `e`, so the `&[]` fallback is unreachable.
 fn entry_data<'a>(input: &'a [u8], e: &Entry) -> &'a [u8] {
-    debug_assert!(e.data_at + e.data_len <= input.len(), "the walk bounds-checks the data");
-    e.data_at.checked_add(e.data_len).and_then(|end| input.get(e.data_at..end)).unwrap_or(&[])
+    debug_assert!(
+        e.data_at + e.data_len <= input.len(),
+        "the walk bounds-checks the data"
+    );
+    e.data_at
+        .checked_add(e.data_len)
+        .and_then(|end| input.get(e.data_at..end))
+        .unwrap_or(&[])
 }
 
 /// An entry's three flag bytes, normalised to 0 or 1 — `deserialize` reads them as `!= 0`, and this
@@ -566,7 +597,9 @@ fn entry_flags(input: &[u8], e: &Entry) -> [u8; 3] {
 /// hashed either way, so two regions that disagree about it cannot collide.
 fn instruction_tail<'a>(input: &'a [u8], end: Option<usize>) -> (u64, &'a [u8]) {
     let Some(off) = end else { return (0, &[]) };
-    let Some(n) = read_u64(input, off) else { return (0, &[]) };
+    let Some(n) = read_u64(input, off) else {
+        return (0, &[]);
+    };
     let start = off + 8; // `read_u64` succeeded, so this is within the region
     let data = usize::try_from(n)
         .ok()
@@ -672,7 +705,9 @@ fn program_id_opt(input: &[u8]) -> Option<[u8; 32]> {
 
 fn read_u64(b: &[u8], off: usize) -> Option<u64> {
     let s = b.get(off..off.checked_add(8)?)?;
-    Some(u64::from_le_bytes([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]]))
+    Some(u64::from_le_bytes([
+        s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7],
+    ]))
 }
 
 /// The eight public output words: `out[0] = status`, `out[1..8]` = words 0..6 of
@@ -737,15 +772,24 @@ pub fn run_call_with<H: Host, FP: FnMut(u32) -> u32, FS: FnMut(u32) -> u32>(
     // Now split the workspace into its fields: the ELF buffer is borrowed by the loaded program for
     // as long as the run lasts, while the instruction region, the stack and the heap are the memory
     // it runs over.
-    let Workspace { input: CallInput { elf, elf_len, input, input_len }, stack, heap } = ws;
+    let Workspace {
+        input:
+            CallInput {
+                elf,
+                elf_len,
+                input,
+                input_len,
+            },
+        stack,
+        heap,
+    } = ws;
     let elf_len = *elf_len;
     let input_len = *input_len;
 
     // No `program_hash`: the ELF came from the public segment, so `H_PUB` binds it (and the chain
     // checks `H_PUB` against the ELF it published) — hashing 108 600 bytes again in-circuit was
     // 1 698 of the guest's 2 368 SHA-256 compressions and bought nothing.
-    let input_hash =
-        canonical_input_hash(h, &input[..input_len], &program_id(&input[..input_len]));
+    let input_hash = canonical_input_hash(h, &input[..input_len], &program_id(&input[..input_len]));
     // The pre-state digest, taken before a single instruction runs: this is what a status of 0 or 2
     // binds, so a run that changed accounts and then failed publishes no change at all.
     let pre_output = output_hash(h, &input[..input_len]);
@@ -782,7 +826,88 @@ pub fn run_call_with<H: Host, FP: FnMut(u32) -> u32, FS: FnMut(u32) -> u32>(
         Ok(_) => 0,
         Err(_) => 2,
     };
-    let post_output =
-        if status == 1 { output_hash(h, &input[..input_len]) } else { pre_output };
+    let post_output = if status == 1 {
+        output_hash(h, &input[..input_len])
+    } else {
+        pre_output
+    };
+    (public_output(h, status, &input_hash, &post_output), result)
+}
+
+/// What runs the loaded program over the interpreter's memory: `Vm::run` for the interpreter, a
+/// translated program's entry point for `sbpf2rv`. Gets the loaded program (text, rodata, entry)
+/// and the memory it runs over; returns what `Vm::run` returns.
+pub type Executor<'a, H> =
+    &'a mut dyn FnMut(&mut H, &elf::Program<'_>, Memory<'_>) -> Result<u64, Halt>;
+
+/// [`run_call_with`], but the thing that runs the loaded program over the interpreter's `Memory` is
+/// supplied by the caller instead of being `Vm::run` — the hook a translated `sbpf2rv` program's
+/// entry point uses to run over this same harness (decode, the two digests, the stack/heap zeroing,
+/// the status mapping) without going through the interpreter at all. The guest keeps using
+/// [`run_call`]/[`run_call_with`], and their body is untouched and duplicated below rather than
+/// factored through this function, so the pinned `sbpf` guest image cannot move by adding this.
+pub fn run_call_with_executor<H: Host, FP: FnMut(u32) -> u32, FS: FnMut(u32) -> u32>(
+    h: &mut H,
+    ws: &mut Workspace,
+    read_public: FP,
+    n_public: u32,
+    read_private: FS,
+    n_private: u32,
+    exec: Executor<'_, H>,
+) -> ([u32; 8], Result<u64, Halt>) {
+    let mut elf_c = InputCursor::new(read_public, n_public);
+    let mut in_c = InputCursor::new(read_private, n_private);
+    if decode_input(&mut ws.input, &mut elf_c, &mut in_c).is_err() {
+        // Same malformed-vector answer as `run_call_with`: status 2, both digests zero, nothing to
+        // bind.
+        let z = [0u8; 32];
+        return (public_output(h, 2, &z, &z), Err(Halt::BadElf));
+    }
+    let Workspace {
+        input:
+            CallInput {
+                elf,
+                elf_len,
+                input,
+                input_len,
+            },
+        stack,
+        heap,
+    } = ws;
+    let elf_len = *elf_len;
+    let input_len = *input_len;
+
+    let input_hash = canonical_input_hash(h, &input[..input_len], &program_id(&input[..input_len]));
+    let pre_output = output_hash(h, &input[..input_len]);
+
+    stack.fill(0);
+    heap.fill(0);
+
+    let result = match elf::load(&mut elf[..elf_len]) {
+        Ok(program) => {
+            let mem = Memory {
+                text: program.text,
+                text_va: program.text_va,
+                rodata: program.rodata,
+                rodata_base: program.rodata_va,
+                stack,
+                heap,
+                input: &mut input[..input_len],
+            };
+            exec(h, &program, mem)
+        }
+        Err(e) => Err(e),
+    };
+
+    let status = match result {
+        Ok(0) => 1,
+        Ok(_) => 0,
+        Err(_) => 2,
+    };
+    let post_output = if status == 1 {
+        output_hash(h, &input[..input_len])
+    } else {
+        pre_output
+    };
     (public_output(h, status, &input_hash, &post_output), result)
 }

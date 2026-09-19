@@ -148,9 +148,15 @@ pub fn dispatch<H: Host>(vm: &mut Vm<H>, hash: u32) -> Result<(), Halt> {
             let mut done = 0usize;
             while done < n {
                 let k = core::cmp::min(CHUNK, n - done);
-                let at = if backwards { (n - done - k) as u64 } else { done as u64 };
+                let at = if backwards {
+                    (n - done - k) as u64
+                } else {
+                    done as u64
+                };
                 buf[..k].copy_from_slice(vm.mem.slice(src.wrapping_add(at), k)?);
-                vm.mem.slice_mut(dst.wrapping_add(at), k)?.copy_from_slice(&buf[..k]);
+                vm.mem
+                    .slice_mut(dst.wrapping_add(at), k)?
+                    .copy_from_slice(&buf[..k]);
                 done += k;
             }
             vm.regs[0] = 0;
@@ -180,7 +186,9 @@ pub fn dispatch<H: Host>(vm: &mut Vm<H>, hash: u32) -> Result<(), Halt> {
                 }
                 done += k;
             }
-            vm.mem.slice_mut(d, 4)?.copy_from_slice(&result.to_le_bytes());
+            vm.mem
+                .slice_mut(d, 4)?
+                .copy_from_slice(&result.to_le_bytes());
             vm.regs[0] = 0;
         }
 

@@ -115,7 +115,12 @@ pub struct InputCursor<F: FnMut(u32) -> u32> {
 
 impl<F: FnMut(u32) -> u32> InputCursor<F> {
     pub fn new(read: F, len: u32) -> Self {
-        InputCursor { read, pos: 0, len, truncated: false }
+        InputCursor {
+            read,
+            pos: 0,
+            len,
+            truncated: false,
+        }
     }
 
     /// The next word, or 0 with the truncation flag set once the vector is exhausted.
@@ -227,7 +232,10 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub const ZERO: Workspace = Workspace { input: CallInput::ZERO, bufs: Buffers::ZERO };
+    pub const ZERO: Workspace = Workspace {
+        input: CallInput::ZERO,
+        bufs: Buffers::ZERO,
+    };
 }
 
 /// Decode the input vector into `dst`, in place. The host is needed because each witness's leaf
@@ -247,7 +255,9 @@ pub fn decode_input<H: Host, F: FnMut(u32) -> u32>(
     c: &mut InputCursor<F>,
 ) -> Result<(), ParseError> {
     dst.code_len = c.bytes(&mut dst.code).ok_or(ParseError::CodeTooLong)?;
-    dst.calldata_len = c.bytes(&mut dst.calldata).ok_or(ParseError::CalldataTooLong)?;
+    dst.calldata_len = c
+        .bytes(&mut dst.calldata)
+        .ok_or(ParseError::CalldataTooLong)?;
     dst.env = Env {
         address: c.u256(),
         caller: c.u256(),
@@ -287,7 +297,9 @@ pub fn decode_input<H: Host, F: FnMut(u32) -> u32>(
 /// `word[i] = LE(bytes[4i..4i+4])` — how a 32-byte Keccak digest enters a sponge message, the
 /// packing `guest_sdk::keccak256`'s test guest uses.
 pub fn hash_words(h: &[u8; 32]) -> [u32; 8] {
-    core::array::from_fn(|i| u32::from_le_bytes([h[4 * i], h[4 * i + 1], h[4 * i + 2], h[4 * i + 3]]))
+    core::array::from_fn(|i| {
+        u32::from_le_bytes([h[4 * i], h[4 * i + 1], h[4 * i + 2], h[4 * i + 3]])
+    })
 }
 
 /// `keccak256(be32(n_logs) ‖ per log: be32(n_topics) ‖ topics as 32 big-endian bytes each)` — the
@@ -331,7 +343,11 @@ pub fn public_output<H: Host>(
 ) -> [u32; 8] {
     let status = o.status();
     let post = if status == 1 { post_root } else { pre_root };
-    let ret: &[u8] = if status == 2 { &[] } else { &o.ret[..o.ret_len] };
+    let ret: &[u8] = if status == 2 {
+        &[]
+    } else {
+        &o.ret[..o.ret_len]
+    };
     let mut msg = [0u32; OUT_WORDS];
     msg[0..8].copy_from_slice(&hash_words(&keccak256(h, code)));
     msg[8..16].copy_from_slice(pre_root);
@@ -402,5 +418,78 @@ pub fn run_call_with<H: Host, F: FnMut(u32) -> u32>(
     // failure — `public_output` is the single place that rule is applied, so the root handed over
     // here is simply whatever the run left behind.
     let out = public_output(h, &i.code[..i.code_len], &i.pre_root, &i.storage.root(), &o);
+    (out, o)
+}
+
+// ---- The executor path (`evm2rv`) ----------------------------------------------------------
+//
+// Everything below is new code that the interpreter's guest never calls, appended *after* the
+// interpreter's path rather than woven into it, and the module docs above are left as they were:
+// the `evm` guest's image embeds this file's source lines (each bounds-check panic location), so
+// moving any line above this point moves the pinned `bin/evm.bin` with no code change at all —
+// measured: a twelve-line module-doc addition at the top did exactly that.
+//
+// The executor path takes the interpreter's input vector exactly — no extra words. The environment
+// values the interpreter lacks are not inputs at all: a `READ_INPUT` word is bound only to the
+// salted `H_IN`, which a verifier cannot open, so it cannot carry a chain fact (a timestamp, a
+// chain id) a prover could not forge. `evm2rv` bakes `CHAINID` into the translated code (bound by
+// the image hash), reads `ORIGIN` as `CALLER`, and traps on the rest as the interpreter does.
+
+/// What runs the decoded call in place of the interpreter: given the host, the code, the calldata,
+/// the environment, the witness tree and the working buffers, produce the [`Outcome`]. It must
+/// leave the post-state in the tree, as the interpreter does — the public output binds
+/// `tree.root()` after it returns.
+pub type Executor<'a, H> =
+    &'a mut dyn FnMut(&mut H, &[u8], &[u8], Env, &mut StorageTree, &mut Buffers) -> Outcome;
+
+/// [`run_call_with`] with the interpreter replaced by `exec`: decode the same input vector, run
+/// `exec` over it, and produce the eight public output words by the same [`public_output`] rules
+/// (the code hash in `EVM_OUT` is the hash of the vector's code, as for the interpreter). With
+/// `Interpreter::new(h, code, calldata, env, tree, bufs).run()` as `exec` the result is exactly
+/// [`run_call_with`]'s.
+///
+/// A vector that does not parse never reaches `exec` and gives the canonical malformed output, as
+/// in [`run_call_with`].
+///
+/// This is `evm2rv`'s entry point: a translated contract's shim calls it with the compiled code as
+/// the executor. The interpreter's guest calls [`run_call`], and [`run_call_with`] is deliberately
+/// left as it was rather than rewritten over this function, so the pinned `evm` image is untouched.
+pub fn run_call_with_executor<H: Host, F: FnMut(u32) -> u32>(
+    h: &mut H,
+    w: &mut Workspace,
+    read: F,
+    len: u32,
+    exec: Executor<'_, H>,
+) -> ([u32; 8], Outcome) {
+    let mut c = InputCursor::new(read, len);
+    if decode_input(h, &mut w.input, &mut c).is_err() {
+        return malformed(h);
+    }
+    let i = &mut w.input;
+    let o = exec(
+        h,
+        &i.code[..i.code_len],
+        &i.calldata[..i.calldata_len],
+        i.env,
+        &mut i.storage,
+        &mut w.bufs,
+    );
+    let out = public_output(h, &i.code[..i.code_len], &i.pre_root, &i.storage.root(), &o);
+    (out, o)
+}
+
+/// The canonical malformed output and its outcome — [`run_call_with`]'s parse-failure branch,
+/// repeated here for [`run_call_with_executor`] rather than shared, so the interpreter's function
+/// (and the pinned image built from it) stays exactly as it was.
+fn malformed<H: Host>(h: &mut H) -> ([u32; 8], Outcome) {
+    let o = Outcome {
+        halt: Halt::OutOfBounds,
+        gas_used: 0,
+        ret: [0; MAX_RETURN_BYTES],
+        ret_len: 0,
+        logs: [Log::EMPTY; MAX_LOGS],
+        n_logs: 0,
+    };
+    let out = public_output(h, &[], &[0; 8], &[0; 8], &o);
     (out, o)
 }

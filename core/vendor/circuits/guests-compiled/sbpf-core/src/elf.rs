@@ -86,7 +86,9 @@ fn u32_at(b: &[u8], off: usize) -> Result<u32, Halt> {
 
 fn u64_at(b: &[u8], off: usize) -> Result<u64, Halt> {
     let s = b.get(off..off.wrapping_add(8)).ok_or(Halt::BadElf)?;
-    Ok(u64::from_le_bytes([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]]))
+    Ok(u64::from_le_bytes([
+        s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7],
+    ]))
 }
 
 fn put_u32(b: &mut [u8], off: usize, v: u32) -> Result<(), Halt> {
@@ -121,7 +123,9 @@ const SHDR_SIZE: usize = 64;
 const PHDR_SIZE: usize = 56;
 
 fn shdr_at(elf: &[u8], shoff: usize, i: usize) -> Result<Shdr, Halt> {
-    let b = shoff.checked_add(i.checked_mul(SHDR_SIZE).ok_or(Halt::BadElf)?).ok_or(Halt::BadElf)?;
+    let b = shoff
+        .checked_add(i.checked_mul(SHDR_SIZE).ok_or(Halt::BadElf)?)
+        .ok_or(Halt::BadElf)?;
     Ok(Shdr {
         name: u32_at(elf, b)?,
         kind: u32_at(elf, b + 4)?,
@@ -134,11 +138,10 @@ fn shdr_at(elf: &[u8], shoff: usize, i: usize) -> Result<Shdr, Halt> {
 
 /// A NUL-terminated name out of a string table section, capped so a missing NUL cannot run away.
 fn name_in<'a>(elf: &'a [u8], strtab: &Shdr, off: u32) -> Result<&'a [u8], Halt> {
-    let start = idx(strtab.offset)?.checked_add(off as usize).ok_or(Halt::BadElf)?;
-    let end = core::cmp::min(
-        elf.len(),
-        start.checked_add(256).ok_or(Halt::BadElf)?,
-    );
+    let start = idx(strtab.offset)?
+        .checked_add(off as usize)
+        .ok_or(Halt::BadElf)?;
+    let end = core::cmp::min(elf.len(), start.checked_add(256).ok_or(Halt::BadElf)?);
     let span = elf.get(start..end).ok_or(Halt::BadElf)?;
     let n = span.iter().position(|&c| c == 0).ok_or(Halt::BadElf)?;
     Ok(&span[..n])
@@ -476,9 +479,15 @@ fn section_at_addr(elf: &[u8], shoff: usize, shnum: usize, addr: u64) -> Result<
 
 /// Symbol `i`'s `(st_name, st_value, st_info)`, or [`Halt::BadElf`] if the table has no such entry.
 fn symbol(elf: &[u8], start: usize, end: usize, i: usize) -> Result<(u32, u64, u8), Halt> {
-    let at = start.checked_add(i.checked_mul(24).ok_or(Halt::BadElf)?).ok_or(Halt::BadElf)?;
+    let at = start
+        .checked_add(i.checked_mul(24).ok_or(Halt::BadElf)?)
+        .ok_or(Halt::BadElf)?;
     if at.checked_add(24).ok_or(Halt::BadElf)? > end {
         return Err(Halt::BadElf);
     }
-    Ok((u32_at(elf, at)?, u64_at(elf, at + 8)?, *elf.get(at + 4).ok_or(Halt::BadElf)?))
+    Ok((
+        u32_at(elf, at)?,
+        u64_at(elf, at + 8)?,
+        *elf.get(at + 4).ok_or(Halt::BadElf)?,
+    ))
 }

@@ -157,7 +157,9 @@ impl<'a, H: Host> Vm<'a, H> {
             _ => return Err(Halt::BadJump),
         };
         match self.program.text.get(start..start.wrapping_add(8)) {
-            Some(b) => Ok(u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]])),
+            Some(b) => Ok(u64::from_le_bytes([
+                b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+            ])),
             None => Err(Halt::BadJump),
         }
     }
@@ -216,8 +218,14 @@ impl<'a, H: Host> Vm<'a, H> {
             }
 
             // ---- stores -----------------------------------------------------------------------
-            opc::ST_B_IMM | opc::ST_H_IMM | opc::ST_W_IMM | opc::ST_DW_IMM | opc::ST_B_REG
-            | opc::ST_H_REG | opc::ST_W_REG | opc::ST_DW_REG => {
+            opc::ST_B_IMM
+            | opc::ST_H_IMM
+            | opc::ST_W_IMM
+            | opc::ST_DW_IMM
+            | opc::ST_B_REG
+            | opc::ST_H_REG
+            | opc::ST_W_REG
+            | opc::ST_DW_REG => {
                 let size = match i.opc {
                     opc::ST_B_IMM | opc::ST_B_REG => 1,
                     opc::ST_H_IMM | opc::ST_H_REG => 2,
@@ -235,15 +243,21 @@ impl<'a, H: Host> Vm<'a, H> {
 
             // ---- 32-bit arithmetic ------------------------------------------------------------
             // The three that sign-extend their 32-bit result.
-            opc::ADD32_IMM => self.regs[d] = (self.regs[d] as i32).wrapping_add(i.imm) as i64 as u64,
+            opc::ADD32_IMM => {
+                self.regs[d] = (self.regs[d] as i32).wrapping_add(i.imm) as i64 as u64
+            }
             opc::ADD32_REG => {
                 self.regs[d] = (self.regs[d] as i32).wrapping_add(self.regs[s] as i32) as i64 as u64
             }
-            opc::SUB32_IMM => self.regs[d] = (self.regs[d] as i32).wrapping_sub(i.imm) as i64 as u64,
+            opc::SUB32_IMM => {
+                self.regs[d] = (self.regs[d] as i32).wrapping_sub(i.imm) as i64 as u64
+            }
             opc::SUB32_REG => {
                 self.regs[d] = (self.regs[d] as i32).wrapping_sub(self.regs[s] as i32) as i64 as u64
             }
-            opc::MUL32_IMM => self.regs[d] = (self.regs[d] as i32).wrapping_mul(i.imm) as i64 as u64,
+            opc::MUL32_IMM => {
+                self.regs[d] = (self.regs[d] as i32).wrapping_mul(i.imm) as i64 as u64
+            }
             opc::MUL32_REG => {
                 self.regs[d] = (self.regs[d] as i32).wrapping_mul(self.regs[s] as i32) as i64 as u64
             }
@@ -382,21 +396,29 @@ impl<'a, H: Host> Vm<'a, H> {
             opc::JSET_IMM => taken(self.regs[d] & imm64 != 0, &mut next_pc, jump_to),
             opc::JSET_REG => taken(self.regs[d] & self.regs[s] != 0, &mut next_pc, jump_to),
             opc::JSGT_IMM => taken((self.regs[d] as i64) > i.imm as i64, &mut next_pc, jump_to),
-            opc::JSGT_REG => {
-                taken((self.regs[d] as i64) > self.regs[s] as i64, &mut next_pc, jump_to)
-            }
+            opc::JSGT_REG => taken(
+                (self.regs[d] as i64) > self.regs[s] as i64,
+                &mut next_pc,
+                jump_to,
+            ),
             opc::JSGE_IMM => taken((self.regs[d] as i64) >= i.imm as i64, &mut next_pc, jump_to),
-            opc::JSGE_REG => {
-                taken((self.regs[d] as i64) >= self.regs[s] as i64, &mut next_pc, jump_to)
-            }
+            opc::JSGE_REG => taken(
+                (self.regs[d] as i64) >= self.regs[s] as i64,
+                &mut next_pc,
+                jump_to,
+            ),
             opc::JSLT_IMM => taken((self.regs[d] as i64) < i.imm as i64, &mut next_pc, jump_to),
-            opc::JSLT_REG => {
-                taken((self.regs[d] as i64) < self.regs[s] as i64, &mut next_pc, jump_to)
-            }
+            opc::JSLT_REG => taken(
+                (self.regs[d] as i64) < self.regs[s] as i64,
+                &mut next_pc,
+                jump_to,
+            ),
             opc::JSLE_IMM => taken((self.regs[d] as i64) <= i.imm as i64, &mut next_pc, jump_to),
-            opc::JSLE_REG => {
-                taken((self.regs[d] as i64) <= self.regs[s] as i64, &mut next_pc, jump_to)
-            }
+            opc::JSLE_REG => taken(
+                (self.regs[d] as i64) <= self.regs[s] as i64,
+                &mut next_pc,
+                jump_to,
+            ),
 
             opc::CALL_IMM => {
                 if i.src == 1 {

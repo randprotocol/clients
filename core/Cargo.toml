@@ -11,11 +11,8 @@ license = "Apache-2.0"
 authors = ["RandProtocol Contributors"]
 
 [workspace.dependencies]
-# The chain's own crates, pinned by the submodule at core/vendor/fullnode (commit a00c88c, the
-# build chain 10 runs). Bump the submodule to move the wallet to a new chain build.
-# randprotocol-zkvm also needs the sibling `circuits` checkout at ../../../circuits relative to the
-# crate: the cuda backend (optional, stubbed) and the evm-core / sbpf-core guest crates (required,
-# vendored as-is), all under core/vendor/circuits.
+# The chain's own crates, pinned by the submodule at core/vendor/fullnode (commit 142e1f7, the
+# build chain 13 runs). Bump the submodule to move the wallet to a new chain build.
 randprotocol-core = { path = "vendor/fullnode/crates/randprotocol-core" }
 randprotocol-zkvm = { path = "vendor/fullnode/crates/randprotocol-zkvm" }
 wallet-core = { path = "crates/wallet-core" }

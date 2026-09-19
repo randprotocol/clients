@@ -63,8 +63,12 @@ pub struct Witness {
 impl Witness {
     /// The padding a [`StorageTree`]'s unused slots hold. Never verified and never found by
     /// `find`, which only searches the first `n`.
-    const EMPTY: Witness =
-        Witness { slot: U256::ZERO, value: U256::ZERO, siblings: [[0; 8]; DEPTH], verified: false };
+    const EMPTY: Witness = Witness {
+        slot: U256::ZERO,
+        value: U256::ZERO,
+        siblings: [[0; 8]; DEPTH],
+        verified: false,
+    };
 }
 
 /// Why a storage access failed. Every variant is an exceptional halt for the interpreter.
@@ -111,7 +115,12 @@ impl StorageTree {
     };
 
     pub fn new(pre_root: [u32; 8]) -> Self {
-        StorageTree { root: pre_root, witnesses: [Witness::EMPTY; MAX_WITNESSES], n: 0, indices: [0; MAX_WITNESSES] }
+        StorageTree {
+            root: pre_root,
+            witnesses: [Witness::EMPTY; MAX_WITNESSES],
+            n: 0,
+            indices: [0; MAX_WITNESSES],
+        }
     }
 
     /// Re-arm a tree in place for a new call: the given pre-state root, no witnesses. The witness
@@ -182,7 +191,11 @@ impl StorageTree {
         let mut cur = leaf_hash(h, &self.witnesses[i].slot, &self.witnesses[i].value);
         for l in 0..DEPTH {
             let sib = self.witnesses[i].siblings[l];
-            cur = if (idx >> l) & 1 == 0 { node_hash(h, &cur, &sib) } else { node_hash(h, &sib, &cur) };
+            cur = if (idx >> l) & 1 == 0 {
+                node_hash(h, &cur, &sib)
+            } else {
+                node_hash(h, &sib, &cur)
+            };
         }
         if cur != self.root {
             return Err(StorageError::BadWitness);
@@ -202,7 +215,12 @@ impl StorageTree {
     /// `SSTORE`: load (which verifies), set the value, recompute the root along the path, and
     /// refresh the sibling every other witness holds at the level where its path diverges from
     /// this one. Returns the previous value (the gas schedule needs it).
-    pub fn store<H: Host>(&mut self, h: &mut H, slot: &U256, value: U256) -> Result<U256, StorageError> {
+    pub fn store<H: Host>(
+        &mut self,
+        h: &mut H,
+        slot: &U256,
+        value: U256,
+    ) -> Result<U256, StorageError> {
         let i = self.find(slot).ok_or(StorageError::NoWitness)?;
         self.verify(h, i)?;
         let prev = self.witnesses[i].value;
@@ -229,7 +247,11 @@ impl StorageTree {
                 }
             }
             let sib = self.witnesses[i].siblings[l];
-            cur = if (idx >> l) & 1 == 0 { node_hash(h, &cur, &sib) } else { node_hash(h, &sib, &cur) };
+            cur = if (idx >> l) & 1 == 0 {
+                node_hash(h, &cur, &sib)
+            } else {
+                node_hash(h, &sib, &cur)
+            };
         }
         self.root = cur;
         Ok(prev)

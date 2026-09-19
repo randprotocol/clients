@@ -15,40 +15,44 @@
 //! Wire conventions match `docs/rpc.md` of the fullnode: `Word8` values (keys, commitments,
 //! nullifiers, roots, witness levels) are 64 lowercase hex characters, little-endian word by
 //! word; amounts are decimal strings of units (1 RAND = 10^9 units); addresses are
-//! `shrugg1` + base58.
+//! `rand1` + base58.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use shrugg_core::gas;
-use shrugg_core::ledger::TIME_WINDOW;
-use shrugg_core::notes::{word8_from_hex, word8_to_hex, Bundle, Envelope, ShieldedAddress, Word8, DEPTH};
-use shrugg_core::{format_amount, parse_amount, Action, Transaction, FAUCET_MAX_UNITS};
-use shrugg_zkvm::address::{address_of, envelope_from_core, seal_note};
-use shrugg_zkvm::executor::prove_bundle;
-use shrugg_zkvm::machine::{Backend, FriProfile};
-use shrugg_zkvm::notes::{bundle_inputs, expected_bundle_outputs, Note, SpendKey, ViewingKey};
-use shrugg_zkvm::viewing::TxKey;
+use randprotocol_core::gas;
+use randprotocol_core::ledger::TIME_WINDOW;
+use randprotocol_core::notes::{word8_from_hex, word8_to_hex, Bundle, Envelope, ShieldedAddress, Word8, DEPTH};
+use randprotocol_core::{format_amount, parse_amount, Action, Transaction, FAUCET_MAX_UNITS};
+use randprotocol_zkvm::address::{address_of, envelope_from_core, seal_note};
+use randprotocol_zkvm::executor::prove_bundle;
+use randprotocol_zkvm::machine::{Backend, FriProfile};
+use randprotocol_zkvm::notes::{bundle_inputs, expected_bundle_outputs, Note, SpendKey, ViewingKey};
+use randprotocol_zkvm::viewing::TxKey;
 
-/// The RPC namespace the fullnode defines (`shrugg_getCommitments`, …). A wire name: never
-/// renamed, whatever this wallet or its token are called.
-pub const RPC_NAMESPACE: &str = "shrugg";
-/// The address human-readable part the fullnode defines. A wire name: never renamed.
-pub const ADDRESS_HRP: &str = "shrugg1";
-/// Units per whole token. Upstream calls the token SHRUGG; our code says RAND everywhere else. (rename-guard: allow)
-pub use shrugg_core::UNITS_PER_SHRUGG as UNITS_PER_RAND;
+/// The RPC namespace the fullnode defines (`rand_getCommitments`, …). A wire name: it follows
+/// the node, never this wallet.
+pub const RPC_NAMESPACE: &str = "rand";
+/// The address human-readable part, taken from the fullnode rather than restated here, so the
+/// two can never drift.
+pub const ADDRESS_HRP: &str = randprotocol_core::notes::ADDRESS_PREFIX;
+/// Units per whole token, as the chain defines it.
+pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode).
-pub const CHAIN_BUILD: &str = "a00c88c";
-/// The chain the defaults below describe: chain 10, the shielded pool with staking and the
-/// bridge (phases S1+S2+S3), zkVM constraint set 6, production FRI profile.
-pub const DEFAULT_CHAIN_ID: u64 = 10;
+pub const CHAIN_BUILD: &str = "142e1f7";
+/// The chain the defaults below describe: chain 13, the live testnet at this fullnode commit
+/// (`deploy/README.md`, genesis `8123ccac…`, cut 2026-09-19) — the shielded pool with staking
+/// and the call limits, zkVM constraint set 6, production FRI profile.
+pub const DEFAULT_CHAIN_ID: u64 = 13;
 pub const DEFAULT_RPC_URL: &str = "https://rpc.randprotocol.org";
 pub const EXPLORER_URL: &str = "https://randscan.org";
 /// Peak resident memory of one bundle proof, measured on this crate's own fixture
-/// (`examples/prove_fixture.rs`, Apple M-series, 2026-09-13): the prover materialises every
-/// table's low-degree extension at once. Clients compare it with the device's memory before
-/// proving, and wasm32 (4 GiB address space) cannot prove at all until this drops.
+/// (`examples/prove_fixture.rs`, Apple M-series): the prover materialises every table's
+/// low-degree extension at once. Clients compare it with the device's memory before proving,
+/// and wasm32 (4 GiB address space) cannot prove at all until this drops. Re-measured on
+/// constraint set 6 (2026-09-19): 97.6 s, 5 634 113 536 bytes — within 0.6% of the chain-8
+/// figure below, so the published requirement is unchanged.
 pub const PROVER_PEAK_MEMORY_BYTES: u64 = 5_600_000_000;
 
 // ------------------------------------------------------------------ errors
@@ -407,7 +411,7 @@ pub struct ProveRequest {
     pub anchor_root: String,
     /// One or two inputs; the witness roots must equal `anchor_root`.
     pub inputs: Vec<ProveInput>,
-    /// `"production"` (chain 10) or `"test"`.
+    /// `"production"` (chain 13) or `"test"`.
     #[serde(default = "default_profile")]
     pub profile: String,
 }
@@ -590,7 +594,7 @@ pub fn fixture_prove_request(profile: &str) -> Result<Value> {
     profile_from_str(profile)?;
     let sender = Wallet::generate();
     let recipient = Wallet::generate();
-    let exec = shrugg_zkvm::executor::ZkExecutor::new(FriProfile::Test);
+    let exec = randprotocol_zkvm::executor::ZkExecutor::new(FriProfile::Test);
     let note = Note::new(sender.vk.pk(), [0; 8], 3 * UNITS_PER_RAND, 0, 1);
     let tree = FullTree::new(vec![Note::new([1; 8], [0; 8], 1, 0, 1).commitment(), note.commitment()], &exec);
     let path: Vec<String> = tree.path(1).ok_or("fixture tree")?.iter().map(word8_to_hex).collect();
@@ -764,7 +768,10 @@ mod tests {
         let info = wallet_info(&w);
         assert_eq!(info.spend_key.len(), 64);
         assert_eq!(info.viewing_key.len(), 64);
-        assert!(info.address.starts_with("rand1"));
+        assert!(info.address.starts_with(ADDRESS_HRP));
+        // `rand1` + base58(32-byte pk || 1184-byte ML-KEM encapsulation key). base58 of 1216
+        // bytes is 1661 characters unless the leading bytes are small, so the length is pinned
+        // per key rather than in general.
         assert_eq!(info.address.len(), 1666);
         assert!(parse_address(&info.address).valid);
         assert!(!parse_address("rand1nope").valid);
@@ -857,22 +864,25 @@ mod tests {
         assert_eq!(v["token_symbol"], "RAND");
         assert_eq!(v["rpc_namespace"], RPC_NAMESPACE);
         assert_eq!(v["address_hrp"], ADDRESS_HRP);
-        assert_eq!(RPC_NAMESPACE, "shrugg");
-        assert_eq!(ADDRESS_HRP, "shrugg1");
-        assert!(v.get("units_per_rand").is_some() && v.get("units_per_shrugg").is_none()); // rename-guard: allow
+        assert_eq!(RPC_NAMESPACE, "rand");
+        assert_eq!(ADDRESS_HRP, "rand1");
+        // The wire names come from upstream, not from a second literal here.
+        assert_eq!(ADDRESS_HRP, randprotocol_core::notes::ADDRESS_PREFIX);
+        assert_eq!(v["default_chain_id"], 13);
+        assert!(v.get("units_per_rand").is_some());
     }
 
     #[test]
     fn user_facing_errors_say_rand() {
         let err = select_inputs(&[], 0, 1).unwrap_err().to_string();
-        assert!(err.contains("RAND") && !err.contains("SHRUGG"), "{err}"); // rename-guard: allow
+        assert!(err.contains("RAND"), "{err}");
     }
 
     #[test]
     fn json_entry_point_reports_errors_as_json() {
         let v: Value = serde_json::from_str(&call("version", "{}")).unwrap();
         assert_eq!(v["ok"], true);
-        assert_eq!(v["value"]["default_chain_id"], 10);
+        assert_eq!(v["value"]["default_chain_id"], 13);
         assert_eq!(v["value"]["bundle_base_fee"], "1000000");
         let v: Value = serde_json::from_str(&call("wallet_info", r#"{"spend_key":"zz"}"#)).unwrap();
         assert_eq!(v["ok"], false);
@@ -900,7 +910,7 @@ mod tests {
         let owned = owned_note(&alice, 1, 1, note.commitment(), note);
         let req = ProveRequest {
             spend_key: alice.spend_key_hex(),
-            chain_id: 8,
+            chain_id: DEFAULT_CHAIN_ID,
             to: bob.address.to_string(),
             amount: "1000000000".into(),
             fee: gas::BUNDLE_BASE.to_string(),
