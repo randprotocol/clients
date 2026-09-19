@@ -143,6 +143,14 @@ echo "rename clean"
 
 Added mid-run on the owner's instruction; full brief in the SDD workspace (`task-0.4-brief.md`): bump `core/vendor/fullnode` 03c9fb9 → 142e1f7, port `wallet-core` to `randprotocol-*`, `rand_` RPC strings and `rand1` addresses in every client, rebuild and re-verify wasm / desktop / iOS / Android, empty the guard's allow list.
 
+### Task 0.5: Licence — GPL-3.0-only (owner's decision, 2026-09-19)
+
+Upstream's crates are `GPL-3.0-only` and every binary here links them. Add the verbatim GPL-3.0 text as `LICENSE` at the repo root (from https://www.gnu.org/licenses/gpl-3.0.txt; do not retype it); set `license = "GPL-3.0-only"` in `core/Cargo.toml` (workspace) and every crate that declares its own, `desktop/Cargo.toml` (and later `desktop/src-tauri/Cargo.toml`), `ui/package.json` (`"license": "GPL-3.0-only"`); fix `firefox/STORE.md`, `chrome/STORE.md`, the READMEs, `web/clients.astro`, the Android/iOS metadata and any source-file header that says Apache-2.0. Third-party licences stay as they are (`ui/fonts/*` OFL, `core/vendor/*`). Verify: `grep -rniE 'apache' . --exclude-dir={.git,vendor,target,node_modules,build,dist}` returns only third-party notices; `cargo metadata` parses; commit `licence: GPL-3.0-only, matching the node's crates this links`.
+
+### Task 0.6: `text_mute` reaches AA in every client (owner's decision, 2026-09-19)
+
+`design/tokens.json` `dark.text_mute` and `light.text_mute` measure 3.5–4.4:1 on `bg`/`surface`. Pick the closest values in the same hue that reach ≥ 4.5:1 on both `bg` and `surface` in each theme (the Task 1.1 report proposes values); extend `ui/test/tokens.test.mjs`'s contrast test to cover `text_mute`; regenerate `ui/tokens.css`; mirror the two values in the hand-copied palettes — iOS (`ios/RandWallet/**` colour definitions / asset catalog), Android (`android/app/src/main/res/values*/colors.xml`), desktop (`desktop/src/theme.rs` until Task 3.1 deletes it). Rebuild desktop, iOS and Android to prove nothing broke. Commit `design: text_mute meets AA; palettes in sync`.
+
 ---
 
 ## Phase 1 — `ui/` and the web wallet
@@ -647,6 +655,14 @@ Runs after Task 4.3 and Task 3.1 (it needs the desktop backend).
 ---
 
 ## Phase 5 — Full RPC set and Explore
+
+### Task 5.0: Default RPC endpoints with failover (owner's decision, 2026-09-19)
+
+The default endpoint set is `https://rpc1.randprotocol.org`, `https://rpc2.randprotocol.org`, `https://rpc3.randprotocol.org` (replacing the single `https://rpc.randprotocol.org`). Settings keeps one user-editable "RPC URL" that, when set, overrides the list.
+
+**Interfaces:** `ui/engine/rpc.js` `makeRpc(urls: string | string[], opts)` — tries endpoints in order starting from the last one that worked; on a transport failure (unreachable, timeout, HTTP 5xx, non-JSON body) moves to the next and retries the same request once per remaining endpoint; a JSON-RPC *error reply* is an answer and is never retried elsewhere; `rand_sendTransaction` and `rand_mint` are retried on another endpoint only when the failure happened before any response bytes arrived (connection refused / DNS / TLS), never after a timeout — a timed-out submit may have landed. Every endpoint must answer `rand_chainId` with the expected chain id before it is used for anything else; one that reports a different chain or genesis (`rand_getGenesisHash`) is skipped and named in the error. The same policy in `desktop/src-tauri/src/rpc.rs`, Swift `RpcClient` and Java `RpcClient`. `settings.get()` gains `rpcUrls: string[]` (defaults) alongside `rpcUrl` (override, empty by default).
+**Tests:** stub transports — first endpoint down → second answers; error reply not retried; timed-out `sendTransaction` not resubmitted; wrong-chain endpoint skipped with a clear message; override URL disables the list. Extension manifests: `host_permissions` for the three hosts. CSP `connect-src` in the web wallet and Tauri stays as designed (web: `*`; Tauri: RPC goes through Rust).
+**Docs:** `docs/rpc-endpoints.md` — what a node operator must run for an endpoint to work (the Caddy recipe from the README with CORS, `POST`-only, request-size and rate limits, and the advice to front full nodes/observers rather than validators, and to think about whether `rand_mint` should be reachable publicly). The DNS records and the proxies themselves are infrastructure outside this repository.
 
 ### Task 5.1: Typed RPC client, all 27 methods
 
