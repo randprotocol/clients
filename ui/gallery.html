@@ -375,6 +375,41 @@
     </div>
   </section>
 
+  <!-- ============================ kv.wrap ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Key/value row that wraps (kv.wrap)</h2>
+    <div class="card">
+      <div class="kv"><span class="k">Block</span><span class="v amount">1,402,918</span></div>
+      <div class="kv wrap">
+        <span class="k">Transaction key</span>
+        <span class="v cluster">
+          <span class="mono truncate">tk1x8f4k…2d9a</span>
+          <button class="btn-icon" type="button" aria-label="Reveal the full transaction key"><svg class="g-i"><use href="#i-eye"/></svg></button>
+          <button class="btn-icon" type="button" aria-label="Copy the transaction key"><svg class="g-i"><use href="#i-copy"/></svg></button>
+        </span>
+      </div>
+    </div>
+    <p class="g-note">A plain .kv value (Block) stays on the label's line at any width. A value that is itself a cluster of controls (mono text plus one or two icon buttons) can't always fit beside a two-word label on a 360 px popup; .kv.wrap gives it its own full-width line instead of an accidental narrow sliver on the right.</p>
+  </section>
+
+  <!-- ============================ sync progress ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Sync progress</h2>
+    <div class="stack">
+      <div class="hero">
+        <span class="label">Balance</span>
+        <span class="amount">3.5<span class="unit">RAND</span></span>
+        <div class="progress" data-pct="0.62"><span class="progress-bar"></span></div>
+      </div>
+      <div class="hero">
+        <span class="label">Balance</span>
+        <span class="amount">3.5<span class="unit">RAND</span></span>
+        <div class="progress" data-indeterminate="true"><span class="progress-bar"></span></div>
+      </div>
+    </div>
+    <p class="g-note">A thin bar under the hero balance while sync.scan() is running: determinate once the scan reports a head height (--pct written through the CSSOM, same as the .ring above), indeterminate before that.</p>
+  </section>
+
   <!-- ============================ sheet / modal ============================ -->
   <section class="g-section">
     <h2 class="g-h">Sheet (compact) and modal (wide)</h2>

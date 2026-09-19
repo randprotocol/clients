@@ -161,6 +161,20 @@ hr { border: 0; border-top: 1px solid var(--border-soft); margin: var(--s-4) 0; 
 .muted { color: var(--text-soft); }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
+/* Visually hidden but present for assistive tech — the page's real <h1> on a tab-root screen
+   (home, activity) whose visible heading is a brand mark or a topbar title, not text. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* --------------------------------------------------------------------------------- focus --- */
 /* One ring, on everything focusable, in both themes. Pointer clicks never show it; keyboard
    always does. Components that draw their own inner glow keep this outline on top of it. */
@@ -187,7 +201,12 @@ hr { border: 0; border-top: 1px solid var(--border-soft); margin: var(--s-4) 0; 
 .input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: inherit;
+  /* No `border-radius` override here (a previous version set `border-radius: inherit`, which —
+     since `border-radius` is not an inherited property — pulled `.field`'s own radius (0: it is a
+     plain <label>), snapping every one of these elements' corners square the moment they gained
+     keyboard focus, ring included. Each already carries its correct radius from its own base rule
+     (.btn/.field input/etc all set --r-md or --r-sm); leaving it alone here keeps both the field
+     and the ring the field's own rounded shape.) */
 }
 
 /* --------------------------------------------------------------------------------- motion --- */

@@ -107,7 +107,16 @@ let sheetIdSeq = 0;
 let screensLoaded = null;
 function ensureBuiltinScreensLoaded() {
   if (!screensLoaded) {
-    screensLoaded = Promise.all([import('./screens/onboarding.js'), import('./screens/lock.js')]);
+    screensLoaded = Promise.all([
+      import('./screens/onboarding.js'),
+      import('./screens/lock.js'),
+      import('./screens/home.js'),
+      import('./screens/asset.js'),
+      import('./screens/activity.js'),
+      import('./screens/detail.js'),
+      import('./screens/receive.js'),
+      import('./screens/faucet.js'),
+    ]);
   }
   return screensLoaded;
 }
@@ -366,7 +375,12 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
 
     if (typeof screen.after === 'function') {
       try {
-        const cleanup = await screen.after(ctx, mainEl);
+        // `r.arg` (the `#name/arg` suffix, e.g. the index in `#asset/1` or the hash in `#tx/0x…`)
+        // is a third, optional argument — added in task 1.4 for the asset/tx/note detail screens,
+        // which need to know which one they are showing once their markup is already in the DOM
+        // (`render(ctx, arg)` already gets it; `after` didn't). Purely additive: every screen
+        // registered before this task takes only `(ctx, root)` and ignores the third argument.
+        const cleanup = await screen.after(ctx, mainEl, r.arg);
         if (mySeq !== renderSeq) { if (typeof cleanup === 'function') { try { cleanup(); } catch { /* stale */ } } return; }
         if (typeof cleanup === 'function') currentCleanup = cleanup;
       } catch (err) {

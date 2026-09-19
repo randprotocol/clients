@@ -3,21 +3,7 @@ import assert from 'node:assert/strict';
 import './dom-env.mjs';
 import { mount, resolveRoute } from '../app.js';
 import { fakeBackend, unlockedBackend } from './fake-backend.mjs';
-
-// Every test that mounts an app uses this: it resets location.hash (so no test depends on
-// whatever an earlier one left behind), creates and attaches a fresh root, and — via `t.after` —
-// destroys the app and detaches the root once the test finishes, however it finishes. Without
-// this, an undestroyed mount leaks a window-level `hashchange` listener and DOM nodes into the
-// shared document for the rest of the suite (see the 'destroy()' isolation test below, which
-// exists because this was exactly the bug: two tests mounted without ever destroying).
-async function mountApp(t, backend, opts = {}) {
-  location.hash = '';
-  const root = document.createElement('div');
-  document.body.append(root);
-  const app = await mount(root, backend, opts);
-  t.after(() => { app.destroy(); root.remove(); });
-  return { app, root };
-}
+import { mountApp } from './helpers.mjs';
 
 test('route gating', () => {
   assert.equal(resolveRoute({ exists: false, unlocked: false }, '#home').name, 'welcome');
@@ -174,11 +160,17 @@ test('create screen: password field restores aria-describedby to the hint once v
   assert.equal(pw.getAttribute('aria-describedby'), 'password-hint');
 });
 
-test("destroy() unhooks the app: a later hashchange does not re-render, and body classes it added are cleared", async () => {
+test("destroy() unhooks the app: a later hashchange does not re-render, and body classes it added are cleared", async (t) => {
   location.hash = '';
   const root = document.createElement('div');
   document.body.append(root);
   const app = await mount(root, unlockedBackend());
+  // Safety net, same as mountApp() gives every other test: this test calls destroy() itself
+  // partway through (it is the thing under test), but a failed assertion between that call and
+  // the manual root.remove() at the end must not leak the mount into the rest of the suite.
+  // destroy() and root.remove() are both idempotent, so re-running them here is harmless whether
+  // the test's own cleanup already ran or not.
+  t.after(() => { try { app.destroy(); } catch { /* already torn down */ } root.remove(); });
   assert.ok(document.body.classList.contains('compact') || document.body.classList.contains('wide'));
   assert.ok(root.querySelector('.tabbar, .sidebar'));
 

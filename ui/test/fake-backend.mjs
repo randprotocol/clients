@@ -102,18 +102,21 @@ function createBackend(initial = {}, overrides = {}) {
   };
 
   const syncDefs = {
+    // Return copies, not live references, so a caller mutating the result (or a later state
+    // change) can never reach back into this backend's own arrays — the same convention
+    // assets.list() already follows below.
     cached: () => ({
-      notes: state.notes,
-      activity: state.activity,
+      notes: state.notes.map((n) => ({ ...n })),
+      activity: state.activity.map((a) => ({ ...a })),
       scannedHeight: state.scannedHeight,
       head: state.head,
       lastSyncMs: state.lastSyncMs,
     }),
     scan: (onProgress) => {
-      if (typeof onProgress === 'function') onProgress(1);
+      if (typeof onProgress === 'function') onProgress({ scanned: state.scannedHeight, head: state.head });
       return {
-        notes: state.notes,
-        activity: state.activity,
+        notes: state.notes.map((n) => ({ ...n })),
+        activity: state.activity.map((a) => ({ ...a })),
         scannedHeight: state.scannedHeight,
         head: state.head,
         lastSyncMs: state.lastSyncMs,
@@ -178,16 +181,37 @@ export function fakeBackend(overrides = {}) {
   return createBackend({}, overrides);
 }
 
-/** A fake backend that already has a wallet and is unlocked, with three activity items. */
+/**
+ * A fake backend that already has a wallet and is unlocked, with three activity items and the
+ * two notes ('in' activity items 1/3 reference them by `index`) behind them.
+ *
+ * `activity[].time` and `notes[].time` are unix seconds (the chain's convention — see
+ * `groupByDay` in lib/assets.js, whose own test fixes this contract), not milliseconds; every
+ * other `*Ms` field in this file (`lastSyncMs`, `Date.now()`) stays milliseconds, as named.
+ */
 export function unlockedBackend(overrides = {}) {
   const now = Date.now();
+  const nowSec = Math.floor(now / 1000);
   const initial = {
     wallet: { address: fixedAddress(), pk: fixedPk(), password: 'unlocked-password-1' },
     unlocked: true,
     activity: [
-      { kind: 'in', asset: 0, amount: '1000000000', time: now - 3600_000, hash: `0x${'aa'.repeat(32)}`, index: 3 },
-      { kind: 'out', asset: 0, amount: '500000000', time: now - 1800_000, hash: `0x${'bb'.repeat(32)}` },
-      { kind: 'in', asset: 1, amount: '20000000', time: now - 600_000, hash: `0x${'cc'.repeat(32)}`, index: 7 },
+      {
+        kind: 'in', asset: 0, amount: '1000000000', time: nowSec - 3600, hash: `0x${'aa'.repeat(32)}`,
+        index: 3, address: 'rand1' + 's'.repeat(40), block: 1402914,
+      },
+      {
+        kind: 'out', asset: 0, amount: '500000000', time: nowSec - 1800, hash: `0x${'bb'.repeat(32)}`,
+        address: 'rand1' + 'p'.repeat(40), block: 1402918, fee: '2100000', txKey: `tk-${'cd'.repeat(16)}`,
+      },
+      {
+        kind: 'in', asset: 1, amount: '20000000', time: nowSec - 600, hash: `0x${'cc'.repeat(32)}`,
+        index: 7, address: 'rand1' + 'w'.repeat(40), block: 1402918,
+      },
+    ],
+    notes: [
+      { index: 3, asset: 0, amount: '1000000000', blockHeight: 1402914, spent: false, commitment: `0x${'a1'.repeat(32)}`, time: nowSec - 3600 },
+      { index: 7, asset: 1, amount: '20000000', blockHeight: 1402918, spent: false, commitment: `0x${'c3'.repeat(32)}`, time: nowSec - 600 },
     ],
   };
   return createBackend(initial, overrides);

@@ -55,6 +55,11 @@ document.addEventListener('DOMContentLoaded', () => {
     avatar.style.setProperty('--hue', avatar.dataset.hue);
   }
 
+  // Sync progress bar: same CSSOM convention as the ring above, --pct written from data-pct.
+  for (const bar of document.querySelectorAll('.progress[data-pct]')) {
+    bar.style.setProperty('--pct', bar.dataset.pct);
+  }
+
   // Live overlay demo, so the slide-up and the scrim fade can be seen for real.
   const overlay = document.getElementById('live-sheet');
   const scrim = document.getElementById('live-scrim');

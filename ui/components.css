@@ -266,6 +266,15 @@ body.wide .hero .amount { font-size: var(--fs-balance); }
 .kv:first-child { padding-top: 0; }
 .kv .k { color: var(--text-soft); }
 .kv .v { color: var(--text-strong); font-weight: 600; text-align: right; min-width: 0; }
+/* A value that is itself a cluster of controls (a truncated mono value plus one or two icon
+   buttons, e.g. the transaction key's reveal/copy row) can't always fit beside its label on a
+   360 px popup — left to `.kv`'s plain flex row, the cluster's own flex-wrap shrinks it into a
+   narrow, left-hugging column that reads as broken rather than intentional. `.kv.wrap` makes that
+   deliberate: label on its own line, the value's cluster on the next, left-aligned and given the
+   full row's width, instead of an accidental few-px sliver on the right. */
+.kv.wrap { flex-wrap: wrap; }
+.kv.wrap .v { flex-basis: 100%; text-align: left; }
+.kv.wrap .v.cluster { justify-content: flex-start; }
 
 /* ============================================================================== row ========= */
 /* 64 px list row: avatar, two lines of text, a trailing amount. Used for assets and activity. */
@@ -789,6 +798,41 @@ body.wide .toast-area { bottom: var(--s-6); }
 .ring.spin .ring-bar { stroke-dasharray: 82 245; animation: ring-spin 1.2s linear infinite; }
 @keyframes ring-spin { to { stroke-dashoffset: -326.73px; } }
 
+/* ============================================================================ progress ========= */
+/* A thin sync progress bar, shown under the hero balance while a scan is running. Determinate
+   once the scan reports a `head` height — `--pct` (0..1) is written through the CSSOM exactly
+   like `.ring`'s own --pct, never an inline style attribute; indeterminate (a short bar sliding
+   end to end) before that. Only ever appears on the hero's gradient background, so the track/bar
+   are fixed white alphas rather than surface tokens, the same reasoning as .qr's fixed white. */
+.progress {
+  position: relative;
+  height: 3px;
+  margin-top: var(--s-3);
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, .22);
+  overflow: hidden;
+  --pct: 0;
+}
+.progress .progress-bar {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: var(--r-pill);
+  background: var(--on-accent);
+  transform-origin: left;
+  transform: scaleX(var(--pct));
+  transition: transform 300ms var(--ease);
+}
+.progress[data-indeterminate] .progress-bar {
+  width: 40%;
+  transform: none;
+  animation: progress-slide 1.1s var(--ease) infinite;
+}
+@keyframes progress-slide {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(360%); }
+}
+
 /* ================================================================================ qr ========= */
 /* A QR code must be dark-on-white in both themes, so the card keeps a real white background.
    The hairline keeps it from dissolving into the white surface of the light theme. */
@@ -898,6 +942,10 @@ body.wide .toast-area { bottom: var(--s-6); }
 }
 .hold-reveal .key-mask.masked { color: var(--text-mute); letter-spacing: .35em; user-select: none; }
 .hold-btn {
+  /* `.btn.block` already sets width: 100%, but `.hold-btn` renders a few px narrower than the
+     rest of its column without an explicit width of its own — set it directly rather than lean on
+     `.block`'s specificity ordering. */
+  width: 100%;
   position: relative;
   overflow: hidden;
   isolation: isolate;
