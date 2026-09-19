@@ -36,6 +36,13 @@ const SESSION_SAFE_STATE_KEYS = ['theme', 'locale'];
 // wallet session; see the interception in mount() and `ctx.session` below.
 const SESSION_ENDING_WALLET_METHODS = ['lock', 'wipe', 'unlock', 'create', 'import'];
 
+// Optional backend methods that are *not* operations and must be forwarded synchronously, exactly
+// as the backend defined them, rather than wrapped into promise-returning tracked calls:
+//   wallet.onLocked(cb)   returns the unsubscribe function — a Promise instead of it is useless
+//   wallet.noteActivity() fire-and-forget, called on every (throttled) user event
+// See `trackGroup`.
+const SYNC_PASSTHROUGH = { wallet: ['onLocked', 'noteActivity'] };
+
 /**
  * The network chip's text, derived from `settings.get().chainId` — never a chain number written
  * into a screen. A numeric id reads as "Chain 13"; anything else (a named network some other
@@ -108,7 +115,7 @@ export function resolveRoute({ exists, unlocked }, hash) {
  * "no wallet unlocked") becomes a rejected promise, so every caller can rely on the one failure
  * channel the Backend contract describes.
  */
-function trackGroup(orig, declared, onCall) {
+function trackGroup(orig, declared, onCall, passthrough = []) {
   const g = {};
   const track = (fn) => (...args) => {
     let p;
@@ -116,6 +123,12 @@ function trackGroup(orig, declared, onCall) {
     onCall(p);
     return p;
   };
+  // A subscription is not an operation: `wallet.onLocked(cb)` answers with the *unsubscribe
+  // function*, and `wallet.noteActivity()` answers with nothing and must cost nothing. Wrapping
+  // either in `Promise.resolve` hands the caller a Promise where it expected a function — a
+  // screen that took the result and called it would throw — and makes `app.idle()` wait on a
+  // registration that was never work. These are bound to the original and returned untouched.
+  const wrap = (key, fn) => (passthrough.includes(key) ? fn.bind(orig) : track(fn));
   const add = (key, descriptor) => {
     if (key === 'constructor' || Object.prototype.hasOwnProperty.call(g, key)) return;
     if (descriptor.get || descriptor.set) {
@@ -127,12 +140,12 @@ function trackGroup(orig, declared, onCall) {
         enumerable: true,
         get() {
           const value = orig[key];
-          return typeof value === 'function' ? track(value) : value;
+          return typeof value === 'function' ? wrap(key, value) : value;
         },
       });
       return;
     }
-    if (typeof descriptor.value === 'function') g[key] = track(descriptor.value);
+    if (typeof descriptor.value === 'function') g[key] = wrap(key, descriptor.value);
     else if (descriptor.value !== undefined) g[key] = descriptor.value;
   };
   for (let o = orig; o && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
@@ -144,7 +157,7 @@ function trackGroup(orig, declared, onCall) {
     if (Object.prototype.hasOwnProperty.call(g, key)) continue;
     let value;
     try { value = orig[key]; } catch { continue; }
-    if (typeof value === 'function') g[key] = track(value);
+    if (typeof value === 'function') g[key] = wrap(key, value);
   }
   return g;
 }
@@ -173,7 +186,7 @@ function trackedBackend(backend, onCall) {
   for (const group of groups) {
     const orig = backend[group];
     if (!orig || typeof orig !== 'object') continue;
-    wrapped[group] = trackGroup(orig, BACKEND_SHAPE[group] || [], onCall);
+    wrapped[group] = trackGroup(orig, BACKEND_SHAPE[group] || [], onCall, SYNC_PASSTHROUGH[group] || []);
   }
   return wrapped;
 }
@@ -753,6 +766,32 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     go('#lock');
   });
 
+  // ---- telling the backend the user is still here ----
+  // A backend's idle timer has to measure *the user being away*, and the only thing that knows
+  // about the user is the shell. Backend traffic is not evidence of a person: a screen that
+  // re-scans on a timer, a poll, a background refresh would all keep an abandoned wallet unlocked
+  // for ever if they counted. So the backend restarts its timer on exactly this and nothing else.
+  //
+  // Throttled hard (once per 5 s) because these fire continuously while someone types or scrolls,
+  // and taken off the *raw* backend so it is the backend's own synchronous, fire-and-forget method
+  // rather than a tracked call `app.idle()` would then have to wait on.
+  const ACTIVITY_THROTTLE_MS = 5000;
+  const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
+  const offActivity = (() => {
+    const note = backend.wallet && backend.wallet.noteActivity;
+    if (typeof note !== 'function') return () => {};
+    let lastAt = 0;
+    const handler = () => {
+      const now = Date.now();
+      if (now - lastAt < ACTIVITY_THROTTLE_MS) return;
+      lastAt = now;
+      // Fire and forget: a backend that throws here must not break the user's keystroke.
+      try { note.call(backend.wallet); } catch (err) { console.error('rand-wallet: noteActivity failed', err); }
+    };
+    for (const type of ACTIVITY_EVENTS) container.addEventListener(type, handler, { passive: true });
+    return () => { for (const type of ACTIVITY_EVENTS) container.removeEventListener(type, handler); };
+  })();
+
   // A lock the *backend* decided on — every real shell locks on an idle timer built from
   // `settings.autoLockMin`. The five wallet methods the shell intercepts cover locks the user
   // asked for; this covers the ones nobody asked for. Optional in the contract (see
@@ -795,6 +834,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       offHashchange();
       offGoClicks();
       offLockClicks();
+      offActivity();
       try { offLocked(); } catch { /* a backend that dropped its own listener */ }
       if (mql && mqlListener) {
         if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', mqlListener);

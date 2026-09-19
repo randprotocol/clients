@@ -362,10 +362,78 @@ test('a backend whose wrapped methods are accessors still mounts and works', asy
 
   await ctx.backend.sync.scan(() => {});
   assert.equal(scans, 1, 'the accessor-backed scan ran');
-  assert.equal(ctx.state.scansConfirmed, 1, 'and it was still counted by the shell');
+  assert.equal(ctx.state.scansConfirmed, 1, 'and the shell still counted it');
 
   const before = app.session.id;
   await ctx.lockWallet();
   assert.equal(locks, 1, 'the accessor-backed lock ran');
   assert.ok(app.session.id > before, 'and the shell still ended the session around it');
+});
+
+// ------------------------------------------------------------------------- fix round 1 --------
+test('wallet.onLocked and wallet.noteActivity are forwarded synchronously, not promise-wrapped', async (t) => {
+  // `trackGroup` turns every backend method into one that returns a Promise, which is right for an
+  // operation and wrong for a subscription: `onLocked(cb)` answers with the *unsubscribe function*,
+  // and a screen that called the Promise it got back instead would throw.
+  visits.length = 0;
+  const b = unlockedBackend();
+  let unsubscribed = 0;
+  let noted = 0;
+  b.wallet.onLocked = () => () => { unsubscribed += 1; };
+  b.wallet.noteActivity = () => { noted += 1; return undefined; };
+
+  const { app } = await mountApp(t, b, { hash: '#spy' });
+  await app.idle();
+  const ctx = visits[0];
+
+  const off = ctx.backend.wallet.onLocked(() => {});
+  assert.equal(typeof off, 'function', 'onLocked came back wrapped in a Promise');
+  off();
+  assert.equal(unsubscribed, 1);
+
+  const before = noted;
+  const answer = ctx.backend.wallet.noteActivity();
+  assert.equal(answer, undefined, 'noteActivity came back wrapped in a Promise');
+  assert.equal(noted, before + 1);
+
+  // …and an ordinary method is still tracked.
+  const p = ctx.backend.wallet.exists();
+  assert.equal(typeof p.then, 'function');
+  await p;
+});
+
+test('the shell tells the backend about user input, throttled, and stops on destroy', async (t) => {
+  // The backend's idle timer keys off this and nothing else (ui/backend.js), so the shell has to
+  // actually send it — and must not send one per keystroke.
+  visits.length = 0;
+  const b = unlockedBackend();
+  const events = [];
+  b.wallet.noteActivity = () => { events.push(Date.now()); };
+  const { app, root } = await mountApp(t, b, { hash: '#spy' });
+  await app.idle();
+
+  const fire = (type) => root.dispatchEvent(new window.Event(type, { bubbles: true }));
+  fire('pointerdown');
+  assert.equal(events.length, 1, 'a pointer event was not reported');
+  for (let i = 0; i < 20; i += 1) fire('keydown');
+  assert.equal(events.length, 1, 'every keystroke was reported — the throttle is missing');
+
+  // A different event type on a child node still bubbles up to the container.
+  const child = root.querySelector('[data-role="spy"]');
+  child.dispatchEvent(new window.Event('wheel', { bubbles: true }));
+  assert.equal(events.length, 1, 'still inside the throttle window');
+
+  app.destroy();
+  const after = events.length;
+  fire('pointerdown');
+  fire('keydown');
+  assert.equal(events.length, after, 'the shell kept reporting activity after destroy()');
+});
+
+test('a backend with no noteActivity is fine, and user input costs nothing', async (t) => {
+  const b = unlockedBackend();
+  assert.equal(typeof b.wallet.noteActivity, 'undefined');
+  const { app, root } = await mountApp(t, b, { hash: '#spy' });
+  await app.idle();
+  assert.doesNotThrow(() => root.dispatchEvent(new window.Event('pointerdown', { bubbles: true })));
 });

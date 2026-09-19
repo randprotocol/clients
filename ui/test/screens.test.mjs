@@ -896,3 +896,66 @@ test('no markup uses a button variant that needs .btn without it', async () => {
   }
   assert.deepEqual(offenders, [], 'a variant that only re-colours needs .btn for its box');
 });
+
+// ------------------------------------------------------------------------- fix round 1 --------
+test('lock: a damaged vault is not reported as a wrong password', async (t) => {
+  // A structurally broken vault, or one from a newer build, can never be opened by any password
+  // (ui/backend.js). Saying "Incorrect password" leaves the user typing into a box that cannot
+  // work while the backend's backoff grows.
+  const damaged = Object.assign(new Error('wallet data is damaged'), {
+    name: 'VaultDamagedError', code: 'VAULT_DAMAGED', recoverable: true,
+  });
+  const b = fakeBackend({ wallet: { unlock: async () => { throw damaged; } } });
+  await b.wallet.create('a-long-enough-password');
+  await b.wallet.lock();
+
+  const { app, root } = await at(t, '#lock', b);
+  root.querySelector('input[name=password]').value = 'anything-at-all';
+  root.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+
+  const banner = root.querySelector('[data-role="damaged-slot"] .banner.negative');
+  assert.ok(banner, 'no explanation was shown');
+  assert.match(banner.textContent, /cannot be opened/);
+  assert.match(banner.textContent, /wallet data is damaged/, "the backend's own words are shown");
+  assert.match(banner.textContent, /recovery key/, 'the way out is not offered');
+  assert.equal(root.querySelector('input[name=password]').getAttribute('aria-invalid'), null,
+    'the password field was blamed for something that is not its fault');
+  assert.match(root.querySelector('[data-action="wipe"]').textContent, /Wipe and restore/);
+});
+
+test('lock: a genuinely wrong password still says so', async (t) => {
+  const b = fakeBackend();
+  await b.wallet.create('a-long-enough-password');
+  await b.wallet.lock();
+  const { app, root } = await at(t, '#lock', b);
+  root.querySelector('input[name=password]').value = 'not-the-password';
+  root.querySelector('form').dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+
+  assert.equal(root.querySelector('input[name=password]').getAttribute('aria-invalid'), 'true');
+  assert.equal(root.querySelector('[data-role="damaged-slot"]').innerHTML, '', 'a wrong password offered a wipe');
+  assert.match(root.querySelector('#lock-password-error').textContent, /Incorrect password/);
+});
+
+test('home: a scan that reports `recovered` explains the long rescan', async (t) => {
+  // OPTIONAL in the contract, at most once: the backend found its cursors unusable and reset them.
+  const b = unlockedBackend({
+    sync: {
+      scan: async () => ({
+        notes: [], activity: [], scannedHeight: 0, head: 10, lastSyncMs: Date.now(), recovered: true,
+      }),
+    },
+  });
+  const { root } = await at(t, '#home', b);
+  const banner = root.querySelector('[data-role="banner-slot"] .banner');
+  assert.ok(banner, 'nothing was said about the reset');
+  assert.match(banner.textContent, /Rescanning from the start after a storage problem/);
+  assert.equal(banner.classList.contains('negative'), false, 'a recovery is not an error');
+  assert.match(banner.textContent, /safe on chain/);
+});
+
+test('home: an ordinary scan leaves the banner empty', async (t) => {
+  const { root } = await at(t, '#home');
+  assert.equal(root.querySelector('[data-role="banner-slot"]').innerHTML, '');
+});

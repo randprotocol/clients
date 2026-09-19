@@ -2,17 +2,25 @@
 // wallet (web/wallet) and, from task 2.1, the browser extension. It is the first real
 // implementation of the contract — until now only ui/test/fake-backend.mjs existed.
 //
-//     makeWasmBackend({ core, storage, platform, fetch })
+//     makeWasmBackend({ core, storage, platform, fetch, locks, broadcast })
 //
-//   core      `{ call(method, params) -> Promise }` — the wasm core, however this shell reaches it
-//             (a Web Worker in both browser shells, `initSync` directly under Node in a test).
-//   storage   `{ get(key), set(key, value), remove(key), clear(), session: {get, set, remove} }`,
-//             all async. The persistent half survives a reload; **`session` is memory only** and
-//             is the one place the plaintext spend key is ever written.
-//   platform  the `platform` group, passed through as given: `{name, openExternal, copy}` plus
-//             whatever optional members this shell has (`version`, `paste`, `openFlowInTab`,
-//             `ensureHostPermission`).
-//   fetch     optional; defaults to the global. Only the JSON-RPC client uses it.
+//   core       `{ call(method, params) -> Promise }` — the wasm core, however this shell reaches it
+//              (a Web Worker in both browser shells, `initSync` directly under Node in a test).
+//   storage    `{ get(key), set(key, value), remove(key), clear(), session: {get, set, remove},
+//               compareAndSet?(key, expectedRev, value) }`, all async. The persistent half survives
+//              a reload; **`session` is memory only** and is the one place the plaintext spend key
+//              is ever written. `compareAndSet` is OPTIONAL: where a shell's storage can write
+//              conditionally on a revision (web/wallet/idb.js does it in one IndexedDB
+//              transaction) the note store uses it so two tabs cannot overwrite each other; where
+//              it is missing, a plain `set`.
+//   platform   the `platform` group, passed through as given: `{name, openExternal, copy}` plus
+//              whatever optional members this shell has (`version`, `paste`, `openFlowInTab`,
+//              `ensureHostPermission`).
+//   fetch      optional; defaults to the global. Only the JSON-RPC client uses it.
+//   locks      optional; defaults to `navigator.locks`. Used with `ifAvailable` so only one tab
+//              scans at a time. `null` turns it off.
+//   broadcast  optional; defaults to `new BroadcastChannel('rand-wallet')`. How the scanning tab
+//              tells the others it has finished. `null` turns it off.
 //
 // ---- where the plaintext spend key can exist ----
 //
@@ -30,9 +38,10 @@
 // at 4 GiB, so `send.canProve()` is `{ok: false}` and `send.send()` rejects before anything is
 // selected. Everything else — keys, addresses, scanning, the note store, assets, fee estimates,
 // the faucet — is real.
-import { encryptSecret, decryptSecret } from './crypto.js';
+import { encryptSecret, decryptSecret, checkVault, isVaultRecordError } from './crypto.js';
 import { makeRpc, isAllowedRpcMethod } from './rpc.js';
-import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable } from './wallet.js';
+import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, BUNDLE_INPUTS } from './wallet.js';
+import { checkFee, checkAssets, checkSubmitted } from './validate.js';
 
 // Storage keys. `unlocked` is the only session one.
 const K = Object.freeze({
@@ -46,7 +55,14 @@ const K = Object.freeze({
 });
 
 const MIN_PASSWORD_LEN = 10;
-/** Kept in step with `extension/shared/lib/store.js`'s DEFAULTS; the core's own constants win. */
+/**
+ * Used **only** where the core's `version` reply is unavailable (it failed, or a stub core in a
+ * test does not implement it). Every one of these is normally read from the core, which is built
+ * against exactly one chain and says which — in particular `chainId` is never a number this file
+ * decides. `rpcUrl` and `explorerUrl` match what `extension/shared/lib/store.js` ships today; its
+ * `chainId` says 8, which is the stale chain-8 default the rename left behind and is deliberately
+ * NOT copied here.
+ */
 const FALLBACK = Object.freeze({
   rpcUrl: 'https://rpc.randprotocol.org',
   explorerUrl: 'https://randscan.org',
@@ -79,6 +95,21 @@ export function unlockDelayMs(failures) {
 }
 
 const sleep = (ms) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
+
+/**
+ * The BroadcastChannel the scanning tab announces itself on, or `null` where there is none.
+ *
+ * **`unref()` matters.** Node has a real `BroadcastChannel`, and a ref'd one keeps the event loop
+ * alive for ever — a test process in which every test passed would simply never exit, which is
+ * exactly what it did. Node's has `unref()`; the browser's does not need one and does not have it.
+ */
+function defaultChannel() {
+  if (typeof BroadcastChannel !== 'function') return null;
+  let channel;
+  try { channel = new BroadcastChannel('rand-wallet'); } catch { return null; }
+  if (typeof channel.unref === 'function') channel.unref();
+  return channel;
+}
 
 function lockedError() {
   return new Error('the wallet is locked');
@@ -142,12 +173,19 @@ function uiActivity(row, st) {
   return base;
 }
 
-export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = {}) {
+export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, locks, broadcast } = {}) {
   if (!core || typeof core.call !== 'function') throw new Error('makeWasmBackend needs a core with call()');
   if (!storage || typeof storage.get !== 'function' || !storage.session) throw new Error('makeWasmBackend needs a storage');
   if (!platform || typeof platform.name !== 'string' || !platform.name) throw new Error('makeWasmBackend needs a platform with a name');
 
   const c = coreApi(core);
+
+  // Both optional and both feature-detected, so this file runs unchanged under Node: the Web Locks
+  // API (one scanning tab) and a BroadcastChannel (telling the other tabs it finished). Passing
+  // either explicitly is how the tests drive both paths without a browser; passing `null` turns
+  // that half off.
+  const locksApi = locks !== undefined ? locks : (typeof navigator !== 'undefined' && navigator.locks) || null;
+  const channel = broadcast !== undefined ? broadcast : defaultChannel();
 
   // ---------------------------------------------------------------- the core's own constants ---
   let constantsPromise = null;
@@ -192,10 +230,17 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
   }
 
   // -------------------------------------------------------------------------- the note store ---
+  // `compareAndSet` is optional in the storage contract: where a shell's storage can do a
+  // conditional write (web/wallet/idb.js, in one IndexedDB transaction) the engine uses it, so two
+  // tabs scanning the same wallet cannot silently overwrite one another. Where it is missing the
+  // engine falls back to a plain `set`, exactly as before.
   const noteStore = {
     async getNoteStore() { return (await storage.get(K.notes)) || emptyNoteStore(); },
     async setNoteStore(s) { await storage.set(K.notes, s); },
   };
+  if (typeof storage.compareAndSet === 'function') {
+    noteStore.compareAndSet = (value, expectedRev) => storage.compareAndSet(K.notes, expectedRev, value);
+  }
   const engine = makeWallet({ core, store: noteStore, rpc: rpcClient, settings: getSettings });
 
   async function loadNotes() { return engine.loadStore(); }
@@ -212,12 +257,24 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
   }
 
   // ---------------------------------------------------------------------------- the auto-lock --
-  // A timer in this module, rearmed by every backend call that happens while unlocked, because
-  // "inactivity" means "the user is not using the wallet" and every screen reaches the wallet
-  // through here. The shell observes it through `wallet.onLocked` (optional in the contract), so
-  // a lock the *backend* decided on still routes the user to the lock screen.
+  // The idle timer measures **the user being away**, not the wallet being quiet.
+  //
+  // It used to be rearmed by every backend call, which is wrong in a way that quietly disables it:
+  // a home screen that re-scans, a poll, anything on a timer keeps calling the backend, so an
+  // unlocked wallet on an abandoned desk would never lock. Only `wallet.noteActivity()` — which
+  // the shell calls on real user input (ui/app.js) — and a fresh unlock/create/import restart it.
+  //
+  // The one thing that may postpone a lock is a **user-initiated operation still running**.
+  // Locking in the middle of a transfer would drop the spend key while the prover is using it;
+  // `holdUnlock()` marks such a stretch and the lock waits for it to end. Scans deliberately do
+  // not hold: a scan can be started by the app itself, and it is resumable.
+  //
+  // The shell observes the lock through `wallet.onLocked` (optional in the contract), so a lock
+  // the *backend* decided on still routes the user to the lock screen.
   const lockedListeners = new Set();
   let autoLockTimer = null;
+  let unlockHolds = 0;
+  let lockDeferred = false;
 
   function clearAutoLock() {
     if (autoLockTimer !== null) { clearTimeout(autoLockTimer); autoLockTimer = null; }
@@ -237,34 +294,66 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
 
   async function autoLockNow() {
     clearAutoLock();
+    if (unlockHolds > 0) { lockDeferred = true; return; } // finish what the user started first
+    lockDeferred = false;
     await forgetSession();
     for (const fn of [...lockedListeners]) {
       try { fn({ reason: 'idle' }); } catch { /* a listener's failure is not the wallet's */ }
     }
   }
 
+  /**
+   * Marks a stretch the auto-lock must not interrupt. Returns the release function; a lock that
+   * came due meanwhile happens the moment the last hold is released. Generic on purpose: in this
+   * shell only `send.send` uses it (and it never gets far), but the desktop backend's minutes-long
+   * proof is exactly the case it exists for.
+   */
+  function holdUnlock() {
+    unlockHolds += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      unlockHolds -= 1;
+      if (unlockHolds === 0 && lockDeferred) autoLockNow();
+    };
+  }
+
   async function forgetSession() {
     clearAutoLock();
+    lockDeferred = false;
     try { await storage.session.remove(K.unlocked); } catch { /* nothing to remove */ }
   }
 
-  /** Called by every method that needs an unlocked wallet: using the wallet is not being idle. */
-  function touch() {
-    if (autoLockTimer !== null) rearmAutoLock();
+  // ------------------------------------------------------------------- unlock attempt throttle --
+  // **Every password attempt runs alone.** Read the count, wait, write count + 1, *then* run the
+  // KDF. Without the queue, N simultaneous `unlock()` calls all read the same count, all wait the
+  // same (zero, for the first two) and all run their KDF in parallel — so a scripted batch of
+  // guesses paid one delay for the whole batch and the backoff bought nothing. Writing the
+  // increment *before* the KDF is the other half: an attempt abandoned half-way (a reload, a
+  // crash) still counts, so a reload cannot be used to skip the delay either.
+  //
+  // The chain is capped so a flood cannot build an unbounded list of pending promises; the cap is
+  // generous enough that a human, or a UI with a couple of password prompts open, never meets it.
+  const MAX_PENDING_ATTEMPTS = 8;
+  let attemptChain = Promise.resolve();
+  let pendingAttempts = 0;
+
+  function enqueueAttempt(work) {
+    if (pendingAttempts >= MAX_PENDING_ATTEMPTS) {
+      return Promise.reject(new Error('too many attempts in progress'));
+    }
+    pendingAttempts += 1;
+    // `then(work, work)` so one attempt's failure never strands the queue behind it.
+    const run = attemptChain.then(work, work);
+    attemptChain = run.then(() => {}, () => {});
+    return run.finally(() => { pendingAttempts -= 1; });
   }
 
-  // ------------------------------------------------------------------- unlock attempt throttle --
   async function failureCount() {
     const rec = await storage.get(K.failures);
-    return Number(rec && rec.count) || 0;
-  }
-  async function throttle() {
-    const n = await failureCount();
-    await sleep(unlockDelayMs(n));
-  }
-  async function noteFailure() {
-    const n = (await failureCount()) + 1;
-    await storage.set(K.failures, { count: n, atMs: Date.now() });
+    const n = Number(rec && rec.count);
+    return Number.isSafeInteger(n) && n >= 0 ? n : 0;
   }
   async function clearFailures() {
     await storage.remove(K.failures);
@@ -274,19 +363,31 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
    * Runs the real KDF over the real vault. Resolves with the plaintext spend key, or `null` for a
    * wrong password — and *either way* costs one PBKDF2-SHA256 at 600 000 iterations plus one
    * AES-GCM open, because a cheaper negative answer is an oracle.
+   *
+   * Throws rather than answering `null` for the two failures that are not password failures: a
+   * vault from a newer build, and a structurally damaged record. Those are checked **before** the
+   * count is touched, so a user whose storage got corrupted is not also locked out by a backoff
+   * that grows every time they try.
    */
-  async function openVault(password) {
-    const vault = await storage.get(K.vault);
-    if (!vault) throw new Error('no wallet on this device');
-    await throttle();
-    try {
-      const key = await decryptSecret(password, vault);
+  function openVault(password) {
+    return enqueueAttempt(async () => {
+      const vault = await storage.get(K.vault);
+      if (!vault) throw new Error('no wallet on this device');
+      checkVault(vault); // VaultVersionError / VaultDamagedError — not an attempt
+      const n = await failureCount();
+      await sleep(unlockDelayMs(n));
+      // Persisted before the KDF runs, not after it resolves.
+      await storage.set(K.failures, { count: n + 1, atMs: Date.now() });
+      let key;
+      try {
+        key = await decryptSecret(password, vault);
+      } catch (err) {
+        if (isVaultRecordError(err)) throw err; // cannot happen after checkVault, but do not count it
+        return null;
+      }
       await clearFailures();
       return key;
-    } catch {
-      await noteFailure();
-      return null;
-    }
+    });
   }
 
   /** Records a freshly created/imported/unlocked wallet. The vault is written first. */
@@ -358,7 +459,6 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
     async info() {
       const w = await storage.get(K.wallet);
       if (!w) throw new Error('no wallet on this device');
-      touch();
       return { address: w.address, pk: w.pk };
     },
 
@@ -372,13 +472,11 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
 
     async viewingKey() {
       const u = await requireUnlocked();
-      touch();
       return u.viewing_key;
     },
 
     async exportSpendKey() {
       const u = await requireUnlocked();
-      touch();
       return u.spend_key;
     },
 
@@ -388,6 +486,19 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
       constantsPromise = null;
       try { await storage.session.remove(K.unlocked); } catch { /* nothing to remove */ }
       await storage.clear();
+    },
+
+    /**
+     * OPTIONAL in the contract: the shell calls this on real user input (a pointer, a key, a
+     * scroll — see ui/app.js), and it is the **only** thing that restarts the idle timer. Backend
+     * traffic deliberately does not: a screen that re-scans on a timer would otherwise keep an
+     * abandoned, unlocked wallet unlocked for ever. Cheap and fire-and-forget by contract, so it
+     * is safe to call on every event the shell throttles down to.
+     */
+    noteActivity() {
+      // Only while there is a timer to restart: this must not arm one on a locked wallet, and it
+      // must not cost a settings read on every keystroke when auto-lock is off.
+      if (autoLockTimer !== null) rearmAutoLock();
     },
 
     /**
@@ -402,6 +513,47 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
     },
   };
 
+  // ------------------------------------------------------------------- one scanning tab -------
+  // Two tabs of the same wallet scanning at once is wasted work at best and a write race at worst
+  // (the conditional note-store write catches the race; this avoids it). Where the Web Locks API
+  // exists, whichever tab takes `rand-wallet-scan` does the scanning and announces it finished on
+  // a BroadcastChannel; the others wait for that and then simply read what it wrote. Both are
+  // feature-detected and both are injectable, so this is testable without a browser — and a shell
+  // with neither (a Node test, an older browser, a service worker) scans exactly as it did before.
+  const OTHER_TAB_WAIT_MS = 90_000;
+  const SCAN_LOCK = 'rand-wallet-scan';
+
+  function scanListeners() {
+    if (!channel || typeof channel.addEventListener !== 'function') return null;
+    return channel;
+  }
+
+  /** Resolves when another tab says it finished scanning, or after `OTHER_TAB_WAIT_MS`. */
+  function waitForOtherTab(signal) {
+    const bus = scanListeners();
+    if (!bus) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const done = (fn, arg) => {
+        clearTimeout(timer);
+        try { bus.removeEventListener('message', onMessage); } catch { /* a fake without removal */ }
+        if (signal) signal.removeEventListener('abort', onAbort);
+        fn(arg);
+      };
+      const onMessage = (event) => {
+        const data = event && event.data;
+        if (data && data.type === 'scan-done') done(resolve);
+      };
+      const onAbort = () => done(reject, abortError());
+      const timer = setTimeout(() => done(resolve), OTHER_TAB_WAIT_MS);
+      if (timer && typeof timer.unref === 'function') timer.unref();
+      bus.addEventListener('message', onMessage);
+      if (signal) {
+        if (signal.aborted) { done(reject, abortError()); return; }
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+  }
+
   const sync = {
     async cached() {
       const st = await loadNotes();
@@ -410,30 +562,52 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
 
     async scan(onProgress, options = {}) {
       const { spend_key: key } = await requireUnlocked();
-      touch();
       const signal = options && options.signal;
-      const st = await engine.scan(key, {
-        signal,
-        onProgress: (p) => {
-          if (typeof onProgress !== 'function') return;
-          // The contract's progress shape is `{scanned, head}`; the engine reports the phase too,
-          // which the UI ignores but a log would not.
-          onProgress({ phase: p.phase, scanned: Number(p.scanned) || 0, head: Number(p.total) || 0 });
-        },
+      const report = (p) => {
+        if (typeof onProgress !== 'function') return;
+        // The contract's progress shape is `{scanned, head}`; the engine reports the phase too,
+        // which the UI ignores but a log would not.
+        onProgress({ phase: p.phase, scanned: Number(p.scanned) || 0, head: Number(p.total) || 0 });
+      };
+      const runScan = async () => {
+        const st = await engine.scan(key, { signal, onProgress: report });
+        try { channel?.postMessage({ type: 'scan-done' }); } catch { /* a closed channel */ }
+        return shape(st);
+      };
+
+      if (!locksApi || typeof locksApi.request !== 'function') return runScan();
+
+      let result = null;
+      await locksApi.request(SCAN_LOCK, { ifAvailable: true }, async (lock) => {
+        if (!lock) return; // another tab has it
+        result = await runScan();
       });
-      touch();
-      return shape(st);
+      if (result) return result;
+
+      // Another tab is scanning this same wallet. Wait for it to say it is done and read what it
+      // wrote, rather than racing it to the node.
+      await waitForOtherTab(signal);
+      throwIfAborted(signal);
+      return shape(await loadNotes());
     },
   };
 
+  function throwIfAborted(signal) {
+    if (signal && signal.aborted) throw abortError();
+  }
+
   function shape(st) {
-    return {
+    const out = {
       notes: (st.notes || []).map((n) => uiNote(n, st.block_times || {})),
       activity: activityRows(st).map((row) => uiActivity(row, st)),
       scannedHeight: Math.max(0, (Number(st.scanned_height) || 0) - 1),
       head: Number(st.head) || 0,
       lastSyncMs: Number(st.last_sync_ms) || 0,
     };
+    // OPTIONAL in the contract, and set exactly once: the store's cursors were unusable and have
+    // been reset for a full rescan (see makeWallet's loadStore). The UI says so, quietly.
+    if (st.recovered) out.recovered = true;
+    return out;
   }
 
   const assets = {
@@ -444,7 +618,6 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
      * has no display name at all until a known-token table exists.
      */
     async list() {
-      touch();
       const k = await constants();
       const st = await loadNotes();
       const decimals = Number(k.token_decimals) || FALLBACK.decimals;
@@ -452,11 +625,9 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
       let registry = (await storage.get(K.assets)) || [];
       try {
         const client = await rpcClient();
-        const fresh = await client.assets();
-        if (Array.isArray(fresh)) {
-          registry = fresh;
-          await storage.set(K.assets, fresh);
-        }
+        const fresh = checkAssets(await client.assets());
+        registry = fresh;
+        await storage.set(K.assets, fresh);
       } catch { /* offline, or a chain with no bridge: whatever was cached still answers */ }
 
       const balances = new Map();
@@ -509,7 +680,7 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
 
   async function bundleFee() {
     const client = await rpcClient();
-    const answer = await client.estimateFee({ kind: 'bundle' });
+    const answer = checkFee(await client.estimateFee({ kind: 'bundle' }));
     const fee = toUnits(answer);
     if (fee > 0n) return fee;
     const k = await constants();
@@ -527,7 +698,6 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
      * which is written for the user (it is what tells them to consolidate).
      */
     async estimate(req = {}) {
-      touch();
       const asset = Number(req.asset) || 0;
       if (asset !== 0) throw new Error(RPL_SEND_DISABLED_TEXT);
       const fee = await bundleFee();
@@ -542,18 +712,25 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
       };
     },
 
-    /** The largest amount this wallet can actually send: a bundle spends at most two notes. */
+    /**
+     * The largest amount this wallet can actually send: the fee taken off the largest notes one
+     * bundle can spend. How many that is belongs to the chain, not to this file — it is read from
+     * the core's `version` constants when the core reports it, and otherwise from the engine's one
+     * named `BUNDLE_INPUTS`, which `core.integration.test.mjs` cross-checks against the real core's
+     * `select_inputs` rather than taking on trust.
+     */
     async maxSendable({ asset = 0 } = {}) {
-      touch();
       const fee = await bundleFee();
       const index = Number(asset) || 0;
       if (index !== 0) return { amount: '0', fee: fee.toString() };
+      const k = await constants();
+      const inputs = Number.isSafeInteger(k.bundle_inputs) && k.bundle_inputs > 0 ? k.bundle_inputs : BUNDLE_INPUTS;
       const st = await loadNotes();
       const spendable = (st.notes || [])
         .filter((n) => isSpendable(n) && (Number(n.asset) || 0) === index)
         .map((n) => toUnits(n.amount))
         .sort((a, b) => (b > a ? 1 : b < a ? -1 : 0))
-        .slice(0, 2);
+        .slice(0, inputs);
       const have = spendable.reduce((a, b) => a + b, 0n);
       const amount = have > fee ? have - fee : 0n;
       return { amount: amount.toString(), fee: fee.toString() };
@@ -566,9 +743,18 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
      * trap, after the user had watched a progress bar for it.
      */
     async send() {
-      const err = new Error(CANNOT_PROVE_REASON);
-      err.definite = true;
-      throw err;
+      // The hold is taken even though this shell gives up immediately: it is the rule, not the
+      // special case — a transfer is user-initiated work the idle timer must never cut in half,
+      // and the desktop backend's minutes-long proof reuses this exact wrapper.
+      const release = holdUnlock();
+      try {
+        const { reason } = await send.canProve();
+        const err = new Error(reason);
+        err.definite = true;
+        throw err;
+      } finally {
+        release();
+      }
     },
   };
 
@@ -581,11 +767,10 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
      */
     async request() {
       await requireUnlocked();
-      touch();
       const w = await storage.get(K.wallet);
       if (!w || !w.address) throw new Error('no wallet on this device');
       const client = await rpcClient();
-      const hash = await client.mint(w.address);
+      const hash = checkSubmitted('rand_mint', await client.mint(w.address));
       const st = await loadNotes();
       const k = await constants();
       st.submissions.unshift({
@@ -602,7 +787,6 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl } = 
     /** The raw escape hatch — but only into this chain's own namespaces. */
     async call(method, params = []) {
       if (!isAllowedRpcMethod(method)) throw new Error(`${method} is not allowed from this wallet`);
-      touch();
       const client = await rpcClient();
       return client.rpc(method, Array.isArray(params) ? params : [params]);
     },

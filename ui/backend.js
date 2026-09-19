@@ -13,7 +13,14 @@
  * Screens treat returned objects as read-only; backends may return cached objects.
  *
  * `sync.cached()` / `sync.scan(onProgress, options?)` → `{notes, activity, scannedHeight, head,
- * lastSyncMs}`. `options` is OPTIONAL and today carries one OPTIONAL field:
+ * lastSyncMs, recovered?}`.
+ *  - `recovered?` — OPTIONAL, and `true` at most once. The backend found its local note store
+ *    unusable (a cursor that was not a block height — `NaN`, `null`, a string) and reset it for a
+ *    full rescan, keeping the notes it already had. Nothing was lost that the chain cannot supply
+ *    again, but the wallet is re-reading from the start, so the UI says so quietly (home shows an
+ *    informational banner) rather than silently looking slow. A backend that cannot detect this
+ *    simply never sets it.
+ * `options` is OPTIONAL and today carries one OPTIONAL field:
  *  - `signal?` — an `AbortSignal` that aborts when the wallet session the scan was started under
  *    ends (a lock, a wipe, an unlock, a new wallet, or the UI being torn down). A backend that
  *    honours it should stop the work and reject with an `AbortError` (an error whose `name` is
@@ -82,6 +89,21 @@
  * subtracting that from the balance, which is why `send.estimate` must answer for a one-unit
  * request even when the balance could not cover a real one. `amount` may be `'0'`.
  *
+ * ---- what a failed unlock can mean ----
+ *
+ * `wallet.unlock(password)` rejects three different ways, and the lock screen tells them apart by
+ * `err.code` (or `err.name`), never by matching the message:
+ *  - no code — **wrong password**. Always exactly `'wrong password'`, one shape whatever was
+ *    wrong, and the only one that counts as an attempt against the backend's backoff.
+ *  - `code: 'VAULT_DAMAGED'` (`VaultDamagedError`) — the stored record is not a usable vault at
+ *    all. No password can ever open it, so it is **not** counted as an attempt (otherwise the
+ *    backoff grows for someone who can do nothing about it) and the UI offers wipe-and-restore
+ *    instead of another password box.
+ *  - `code: 'VAULT_VERSION'` (`VaultVersionError`) — a vault written by a newer build of this
+ *    wallet. Also not counted, also recoverable by restoring from the recovery key.
+ * Both carry `recoverable: true`. `wallet.verifyPassword` answers `false` for a wrong password but
+ * **rejects** with these two, for the same reason.
+ *
  * `wallet.verifyPassword(password)` → boolean. Re-authentication *without* unlocking: the screens
  * put the viewing key and the spend-key export behind it. `wallet.unlock()` cannot be used for
  * this — the shell treats every `unlock` as a new wallet session and tears the current one down
@@ -110,6 +132,14 @@
  *    (a shielded address is pasted, never typed). Optional because reading the clipboard needs a
  *    permission some shells will not have: where it is missing, no Paste button is offered at all
  *    rather than one that does nothing. May resolve to `''`.
+ *  - `wallet.noteActivity?()` — **the shell calls this on user input** (a pointer, a key, a scroll
+ *    or a touch on the app container, throttled to at most once every 5 s). Backends use it, and
+ *    only it, to restart their idle timer; **nothing else restarts it**. Deliberately not "any
+ *    backend call": a screen that re-scans on a timer, or any background refresh, would otherwise
+ *    keep an abandoned, unlocked wallet unlocked indefinitely. It must be cheap, synchronous and
+ *    fire-and-forget — the shell ignores whatever it returns and never waits on it.
+ *    A backend may still postpone a lock it has decided on while a *user-initiated* operation is
+ *    in flight (a transfer being proved), so a proof is never cut in half; a scan does not count.
  *  - `wallet.onLocked?(cb)` → an unsubscribe function. For a backend that can lock the wallet **on
  *    its own** — every real shell does, on an idle timer built from `settings.autoLockMin`. The
  *    shell subscribes at mount and, when `cb` fires, ends the wallet session and routes to

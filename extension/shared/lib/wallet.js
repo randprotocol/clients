@@ -23,6 +23,10 @@ const engine = makeWallet({
   store: { getNoteStore, setNoteStore },
   rpc: rpcFor,
   settings: getSettings,
+  // The old extension UI shows block heights, never dates, and has no transaction page for a
+  // received note — so the engine's block-header pass (up to 128 extra `rand_getBlockByHeight`
+  // calls per scan) would buy it nothing at all. It is for the new UI, which shows both.
+  annotate: false,
 });
 
 export const scan = (spendKey, options, settings) => engine.scan(spendKey, options, settings);

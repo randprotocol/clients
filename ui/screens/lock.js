@@ -24,6 +24,7 @@ registerScreen('lock', {
           </label>
           <button class="btn btn-primary block" type="submit">Unlock</button>
         </form>
+        <div data-role="damaged-slot"></div>
         <button class="btn btn-ghost sm" type="button" data-action="wipe">Forgot? Wipe and restore</button>
       </div>`;
   },
@@ -32,6 +33,30 @@ registerScreen('lock', {
     const input = form.querySelector('input[name=password]');
     const wrap = input.closest('.field');
     const wipeBtn = root.querySelector('[data-action="wipe"]');
+
+    const errorEl = root.querySelector('#lock-password-error');
+    const damagedSlot = root.querySelector('[data-role="damaged-slot"]');
+
+    /**
+     * Not every failed unlock is a wrong password. A vault that is structurally broken, or one
+     * written by a newer build, can never be opened by *any* password — so telling the user
+     * "Incorrect password" leaves them typing into a box that cannot work while the backend's
+     * backoff grows. Those two say what happened and point at the one way out, which is the
+     * wipe-and-restore this screen already offers. See ui/backend.js.
+     */
+    function showDamaged(err) {
+      damagedSlot.innerHTML = h`
+        <div class="banner negative">
+          <span class="ic">${raw(icons.warning())}</span>
+          <span>
+            <span class="banner-title">This wallet cannot be opened</span>
+            ${(err && err.message) || 'The stored wallet data could not be read.'}
+            Your funds are on chain: wipe this device and restore with your recovery key.
+          </span>
+        </div>`;
+      wipeBtn.classList.add('btn-primary');
+      wipeBtn.textContent = 'Wipe and restore from your recovery key';
+    }
 
     async function onSubmit(evt) {
       evt.preventDefault();
@@ -42,9 +67,17 @@ registerScreen('lock', {
         markValid(wrap, input, 'lock-password-hint');
         input.value = '';
         ctx.go('#home');
-      } catch {
-        markInvalid(wrap, input, 'lock-password-error');
+      } catch (err) {
         input.value = '';
+        // `recoverable` is the contract's flag for "no password will ever work here".
+        if (err && err.recoverable === true) {
+          markValid(wrap, input, 'lock-password-hint');
+          showDamaged(err);
+          if (ctx.isCurrent()) wipeBtn.focus();
+          return;
+        }
+        errorEl.textContent = 'Incorrect password.';
+        markInvalid(wrap, input, 'lock-password-error');
         input.focus();
       }
     }

@@ -257,6 +257,17 @@ registerScreen('home', {
         </div>`;
     }
 
+    /** `sync.scan()` reported `recovered` (ui/backend.js): the local cache had to be reset, so the
+     *  wallet is re-reading the chain from the start. Informational, not an error — nothing is
+     *  lost that the chain cannot supply again — but it explains why this sync is a long one. */
+    function showRecoveredBanner() {
+      el.banner.innerHTML = h`
+        <div class="banner">
+          <span class="ic">${raw(icons.info())}</span>
+          <span><span class="banner-title">Rescanning from the start after a storage problem</span>Your notes are safe on chain; this sync will take longer than usual.</span>
+        </div>`;
+    }
+
     // ---- this session's single scan ----
     // `mySession` is the session this render belongs to; every reaction below checks it as well as
     // `ctx.isCurrent()`, because a screen can be current under a *different* wallet (lock → wipe →
@@ -277,7 +288,8 @@ registerScreen('home', {
           let freshAssets = assets;
           try { freshAssets = await ctx.backend.assets.list(); } catch { /* keep the assets we had */ }
           if (!live()) return;
-          el.banner.innerHTML = '';
+          if (fresh && fresh.recovered) showRecoveredBanner();
+          else el.banner.innerHTML = '';
           setScanning(false);
           applyData(1, freshAssets, fresh);
         },

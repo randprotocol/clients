@@ -6,18 +6,50 @@
 // `./core.js` it now takes them, so the browser extension and the local web wallet share one
 // implementation of the chain protocol and differ only in where the bytes are kept.
 //
-//     makeWallet({ core, store, rpc, settings })
+//     makeWallet({ core, store, rpc, settings, annotate })
 //       core     { call(method, params) -> Promise }   the wasm core, however it is reached
-//       store    { getNoteStore(), setNoteStore(s) }   the note cache (rescannable from leaf 0)
+//       store    { getNoteStore(), setNoteStore(s), compareAndSet?(value, expectedRev) }
 //       rpc      (settings?) -> RpcClient | Promise    a client for the node in force right now
 //       settings () -> Promise<{rpcUrl, chainId, …}>   the current settings
+//       annotate  default true — read block headers to date notes and link them to transactions
 //
 // Nothing in here persists a key: a spend key arrives as an argument and leaves with the call.
+//
+// Two invariants this file is responsible for, both learned the hard way (task 1.6 review):
+//
+//   * **Nothing a node said reaches arithmetic, a cursor or the store unchecked.** Every reply
+//     goes through `./validate.js` first. One row with a string `height` used to make the scan
+//     cursor `NaN`, and `NaN` persists perfectly well through IndexedDB's structured clone, so
+//     every later scan paged from `NaN` for ever. See `persist()` for the last line of defence.
+//   * **A cursor and the data it covers move together.** A cursor persisted for work that was
+//     then thrown away (an abort, a failed page) silently skips that range for ever. The
+//     bridge-attest cursor in particular now advances only in the same write as the deposits it
+//     covers.
+import {
+  checkHead, checkTreeInfo, checkCommitments, checkNullifiers, checkAnchor, checkWitness,
+  checkBlockHeader, checkBridgeState, checkSubmitted, intField,
+} from './validate.js';
 
 const PAGE = 500;
 export const COMMIT_TIMEOUT_MS = 180_000;
-/** How many block headers one scan will fetch to date the notes it found (see `datesFor`). */
+/** How many block headers one scan will fetch to date the notes it found (see `annotateBlocks`). */
 const MAX_BLOCK_TIMES_PER_SCAN = 128;
+
+/**
+ * How many notes one bundle can spend. It is the chain's rule, not this file's: the zkVM's bundle
+ * shape is 2-in-2-out, and the core's `select_inputs` refuses a `need` that would take a third
+ * note ("need more than two notes; …consolidate first"). It is a named constant here, and only
+ * here, so that the one place JavaScript has to know it is greppable — and
+ * `web/wallet/test/core.integration.test.mjs` cross-checks it against the real wasm core rather
+ * than trusting this line. A core that ever reports `bundle_inputs` in its `version` constants
+ * wins over it (see `backend-wasm.js`'s `maxSendable`).
+ */
+export const BUNDLE_INPUTS = 2;
+
+/** The numeric cursors that must never be anything but safe non-negative integers. */
+const CURSORS = ['scanned_index', 'scanned_height', 'scanned_attest_height', 'head'];
+/** Keys held on the in-memory store that must never be written to storage. */
+const TRANSIENT = ['recovered', 'rev'];
 
 export function emptyNoteStore() {
   return {
@@ -69,6 +101,26 @@ function throwIfAborted(signal) {
   if (signal && signal.aborted) throw abortError();
 }
 
+/**
+ * A write that lost a race with another tab. `storage.compareAndSet` raises it (by `name`, not by
+ * class, so `web/wallet/idb.js` does not have to import from `ui/engine/`); the scan catches it,
+ * merges what the other tab wrote and retries once.
+ */
+export function isStaleStoreError(err) {
+  return !!err && err.name === 'StaleStoreError';
+}
+
+function staleAfterRetry() {
+  const err = new Error('another tab changed this wallet while it was syncing; try again');
+  err.retryable = true;
+  return err;
+}
+
+/** True only for a safe non-negative integer. */
+function isCursor(value) {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
 /** The core's methods by name, over the one `call(method, params)` entry point every binding has. */
 export function coreApi(core) {
   const call = (method, params) => core.call(method, params || {});
@@ -90,7 +142,7 @@ export function coreApi(core) {
   };
 }
 
-export function makeWallet({ core, store, rpc, settings }) {
+export function makeWallet({ core, store, rpc, settings, annotate = true }) {
   if (!core || typeof core.call !== 'function') throw new Error('makeWallet needs a core with call()');
   if (!store || typeof store.getNoteStore !== 'function') throw new Error('makeWallet needs a note store');
   const c = coreApi(core);
@@ -100,31 +152,108 @@ export function makeWallet({ core, store, rpc, settings }) {
     return client && typeof client.then === 'function' ? await client : client;
   };
 
+  /**
+   * Reads the note store, and **self-heals a poisoned one**. A cursor that is not a safe
+   * non-negative integer — `NaN`, `null`, a string, `Infinity` — can only have come from a bug or
+   * from a node reply that got through before `validate.js` existed, and there is no way to reason
+   * about how far such a store has read. The notes are kept (they are real, and re-deriving them
+   * costs a full scan) and every cursor is reset to 0, so the next scan re-reads the tree from
+   * leaf 0 and re-establishes them. `recovered` rides back on the scan result exactly once, for
+   * the UI to say so (ui/backend.js).
+   */
   async function loadStore() {
-    const s = { ...emptyNoteStore(), ...((await store.getNoteStore()) || {}) };
+    const raw = (await store.getNoteStore()) || {};
+    const s = { ...emptyNoteStore(), ...raw };
     if (!s.block_times || typeof s.block_times !== 'object') s.block_times = {};
     if (!s.note_tx || typeof s.note_tx !== 'object') s.note_tx = {};
+    if (!Array.isArray(s.notes)) s.notes = [];
+    if (!Array.isArray(s.sent)) s.sent = [];
+    if (!Array.isArray(s.submissions)) s.submissions = [];
+    const broken = CURSORS.filter((key) => !isCursor(s[key]));
+    if (broken.length) {
+      for (const key of CURSORS) s[key] = 0;
+      s.recovered = true;
+    }
     return s;
   }
 
-  /** Bridge deposits this wallet can rebuild from committed blocks it has not read yet. */
+  /**
+   * The last line of defence in front of storage. Refuses to write a store whose cursors are not
+   * safe non-negative integers, or that has moved **backwards** — a cursor only ever advances, so
+   * a regression means something overwrote it with stale or corrupt data, and persisting that
+   * would lose every leaf in between. Throwing keeps whatever is already there.
+   *
+   * With `store.compareAndSet` (a shell whose storage can do it — see web/wallet/idb.js) the write
+   * is conditional on the revision this store was loaded at, so two tabs cannot silently overwrite
+   * each other. On a lost race the other tab's store is merged in and the write retried once.
+   */
+  async function persist(st, previous) {
+    for (const key of CURSORS) {
+      if (!isCursor(st[key])) throw new Error(`refusing to save the note store: ${key} is not a block cursor (${String(st[key])})`);
+      if (previous && isCursor(previous[key]) && st[key] < previous[key]) {
+        throw new Error(`refusing to save the note store: ${key} moved backwards, ${previous[key]} → ${st[key]}`);
+      }
+    }
+    const clean = {};
+    for (const [key, value] of Object.entries(st)) if (!TRANSIENT.includes(key)) clean[key] = value;
+
+    if (typeof store.compareAndSet !== 'function') {
+      await store.setNoteStore(clean);
+      return st;
+    }
+    try {
+      st.rev = await store.compareAndSet(clean, st.rev);
+      return st;
+    } catch (err) {
+      if (!isStaleStoreError(err)) throw err;
+      // Another tab wrote while this scan was running. Take its store, re-apply this scan's own
+      // findings onto it (every merge here is by index, so doing it twice is a no-op) and try
+      // once more. A second loss means the tabs are fighting; that is the user's to retry.
+      const fresh = await loadStore();
+      mergeNotes(fresh, st.notes);
+      mergeSent(fresh, st.sent);
+      for (const sub of st.submissions) if (!fresh.submissions.some((x) => x.hash === sub.hash)) fresh.submissions.push(sub);
+      Object.assign(fresh.block_times, st.block_times);
+      Object.assign(fresh.note_tx, st.note_tx);
+      for (const key of CURSORS) fresh[key] = Math.max(isCursor(fresh[key]) ? fresh[key] : 0, st[key]);
+      fresh.last_sync_ms = Math.max(Number(fresh.last_sync_ms) || 0, Number(st.last_sync_ms) || 0);
+      const merged = {};
+      for (const [key, value] of Object.entries(fresh)) if (!TRANSIENT.includes(key)) merged[key] = value;
+      try {
+        const rev = await store.compareAndSet(merged, fresh.rev);
+        Object.assign(st, fresh, { rev });
+        return st;
+      } catch (again) {
+        if (isStaleStoreError(again)) throw staleAfterRetry();
+        throw again;
+      }
+    }
+  }
+
+  /**
+   * Bridge deposits this wallet can rebuild from committed blocks it has not read yet.
+   *
+   * It deliberately does **not** move `st.scanned_attest_height`: the caller advances it only once
+   * the deposits it found have actually been placed and persisted. Advancing it here meant an
+   * abort between commitment pages persisted the cursor while the deposits gathered for that
+   * range were dropped on the floor, and a bridge deposit could be missed permanently.
+   */
   async function rebuildableDeposits(client, spendKey, st, head, signal) {
     const out = new Map();
-    if (st.scanned_attest_height > head) return out;
+    if (st.scanned_attest_height > head) return { deposits: out, through: st.scanned_attest_height - 1 };
     let enabled = false;
-    try { enabled = !!(await client.bridgeState({ signal }))?.enabled; } catch { /* a node without the method */ }
-    if (!enabled) { st.scanned_attest_height = head + 1; return out; }
+    try { enabled = checkBridgeState(await client.bridgeState({ signal })).enabled; } catch { /* a node without the method */ }
+    if (!enabled) return { deposits: out, through: head };
     for (let h = st.scanned_attest_height; h <= head; h++) {
       throwIfAborted(signal);
       const block = await client.blockByHeight(h, { signal });
-      for (const tx of block?.transactions || []) {
+      for (const tx of (block && Array.isArray(block.transactions) ? block.transactions : [])) {
         if (tx?.action?.kind !== 'bridge_attest') continue;
         const note = await c.rebuiltDeposit(spendKey, tx.action);
         if (note) out.set(note.cm, note);
       }
     }
-    st.scanned_attest_height = head + 1;
-    return out;
+    return { deposits: out, through: head };
   }
 
   /**
@@ -140,32 +269,28 @@ export function makeWallet({ core, store, rpc, settings }) {
    * Bounded and best-effort: at most `MAX_BLOCK_TIMES_PER_SCAN` headers per scan, newest blocks
    * first, and a node that will not answer simply leaves those notes undated and unlinked — the
    * UI renders an activity item with no time and no transaction page rather than a wrong one.
+   * Off (`annotate: false`) for the old extension UI, which shows block heights and never asked
+   * for this.
    */
   async function annotateBlocks(client, st, signal) {
     const wanted = new Set();
-    for (const n of st.notes) if (n.height && st.block_times[n.height] === undefined) wanted.add(n.height);
-    for (const s of st.sent) if (s.height && st.block_times[s.height] === undefined) wanted.add(s.height);
+    for (const n of st.notes) if (isCursor(n.height) && st.block_times[n.height] === undefined) wanted.add(n.height);
+    for (const s of st.sent) if (isCursor(s.height) && st.block_times[s.height] === undefined) wanted.add(s.height);
     let budget = MAX_BLOCK_TIMES_PER_SCAN;
     for (const height of [...wanted].sort((a, b) => b - a)) {
       if (budget-- <= 0) break;
       throwIfAborted(signal);
-      let block;
+      let header;
       try {
-        block = await client.blockByHeight(height, { signal });
+        header = checkBlockHeader(await client.blockByHeight(height, { signal }));
       } catch (err) {
         if (err && err.name === 'AbortError') throw err;
         break; // a node that cannot serve one header will not serve the rest either
       }
-      const ms = Number(block && block.timestamp_ms);
-      if (Number.isFinite(ms) && ms > 0) st.block_times[height] = ms;
-      // `transactions` is `rand_getTransaction.tx`'s shape: `{hash, bundle: {commitments: […]}}`.
-      // Everything here is node-controlled, so every step is guarded rather than assumed.
-      for (const tx of (block && block.transactions) || []) {
-        const hash = tx && typeof tx.hash === 'string' ? tx.hash : null;
-        if (!hash) continue;
-        for (const cm of (tx.bundle && tx.bundle.commitments) || []) {
-          if (typeof cm === 'string') st.note_tx[cm] = hash;
-        }
+      if (!header) continue;
+      if (header.timestamp_ms !== undefined) st.block_times[height] = header.timestamp_ms;
+      for (const tx of header.transactions) {
+        for (const cm of tx.commitments) st.note_tx[cm] = tx.hash;
       }
     }
   }
@@ -180,10 +305,11 @@ export function makeWallet({ core, store, rpc, settings }) {
     const s = settingsOverride || (await currentSettings());
     const client = await rpcFor(s);
     const st = await loadStore();
-    const head0 = (await client.head({ signal })).height;
-    const deposits = await rebuildableDeposits(client, spendKey, st, head0, signal);
+    const before = { ...st };
+    const head0 = checkHead(await client.head({ signal })).height;
+    const { deposits, through: attestThrough } = await rebuildableDeposits(client, spendKey, st, head0, signal);
     let total = 0;
-    try { total = (await client.treeInfo({ signal })).next_index; } catch { /* a node without it */ }
+    try { total = checkTreeInfo(await client.treeInfo({ signal })).next_index; } catch { /* a node without it */ }
 
     const placePage = async (rows) => {
       const res = await c.scanPage(spendKey, rows);
@@ -194,40 +320,43 @@ export function makeWallet({ core, store, rpc, settings }) {
       }
       mergeNotes(st, res.received);
       mergeSent(st, res.sent);
-      return res.next_index;
+      return intField('scan_page', 'next_index', res.next_index);
     };
 
     for (;;) {
       throwIfAborted(signal);
-      const rows = await client.commitments(st.scanned_index, PAGE, { signal });
-      if (!rows || rows.length === 0) break;
-      const before = st.scanned_index;
+      const rows = checkCommitments(await client.commitments(st.scanned_index, PAGE, { signal }), PAGE);
+      if (rows.length === 0) break;
+      const cursorBefore = st.scanned_index;
       const next = await placePage(rows);
       st.scanned_index = Math.max(st.scanned_index, next);
-      if (st.scanned_index <= before) throw new Error(`rand_getCommitments returned ${rows.length} rows from ${before} without advancing`);
+      if (st.scanned_index <= cursorBefore) throw new Error(`rand_getCommitments returned ${rows.length} rows from ${cursorBefore} without advancing`);
       onProgress?.({ phase: 'notes', scanned: st.scanned_index, total });
-      await store.setNoteStore(st);
+      await persist(st, before);
     }
     // A deposit whose leaf sits below the cursor: re-offer the leaves from the start, once.
     let from = 0;
     while (deposits.size > 0) {
       throwIfAborted(signal);
-      const rows = await client.commitments(from, PAGE, { signal });
-      if (!rows || rows.length === 0) throw new Error(`${deposits.size} rebuilt deposit(s) match no leaf of the tree`);
-      const before = from;
+      const rows = checkCommitments(await client.commitments(from, PAGE, { signal }), PAGE);
+      if (rows.length === 0) throw new Error(`${deposits.size} rebuilt deposit(s) match no leaf of the tree`);
+      const cursorBefore = from;
       await placePage(rows);
       from = Math.max(from, rows[rows.length - 1].index + 1);
-      if (from <= before) throw new Error('rand_getCommitments did not advance');
+      if (from <= cursorBefore) throw new Error('rand_getCommitments did not advance');
     }
+    // Every deposit found for [scanned_attest_height, attestThrough] is now in `st.notes`, so the
+    // cursor may move — and it is written in the same save as the notes it covers, below.
+    st.scanned_attest_height = Math.max(st.scanned_attest_height, attestThrough + 1);
 
     // Head read *before* paging nullifiers, so every block up to it is covered by the pages.
-    const headBefore = (await client.head({ signal })).height;
+    const headBefore = checkHead(await client.head({ signal })).height;
     let cursor = st.scanned_height;
     for (;;) {
       throwIfAborted(signal);
-      const rows = await client.nullifiers(cursor, PAGE, { signal });
-      if (!rows || rows.length === 0) break;
-      const maxHeight = Math.max(...rows.map((r) => r.height));
+      const rows = checkNullifiers(await client.nullifiers(cursor, PAGE, { signal }), PAGE);
+      if (rows.length === 0) break;
+      const maxHeight = Math.max(...rows.map((r) => r.height)); // every height validated above
       const set = new Set(rows.map((r) => r.nullifier));
       for (const n of st.notes) if (set.has(n.nf)) n.spent = true;
       if (rows.length < PAGE) { cursor = maxHeight + 1; break; }
@@ -247,11 +376,11 @@ export function makeWallet({ core, store, rpc, settings }) {
       if (spent.length && spent.every((n) => n.spent)) sub.status = 'committed';
       else if (readThrough > sub.time + 256) sub.status = 'expired';
     }
-    await annotateBlocks(client, st, signal);
+    if (annotate) await annotateBlocks(client, st, signal);
     st.head = headBefore;
     st.last_sync_ms = Date.now();
     throwIfAborted(signal);
-    await store.setNoteStore(st);
+    await persist(st, before);
     return st;
   }
 
@@ -259,11 +388,11 @@ export function makeWallet({ core, store, rpc, settings }) {
   async function anchorAndWitnesses(client, chosen, signal) {
     for (let attempt = 1; ; attempt++) {
       throwIfAborted(signal);
-      const anchor = await client.anchor({ signal });
+      const anchor = checkAnchor(await client.anchor({ signal }));
       const paths = [];
       let moved = false;
       for (const n of chosen) {
-        const w = await client.witness(n.index, { signal });
+        const w = checkWitness(await client.witness(n.index, { signal }));
         if (!w) throw new Error(`no leaf at index ${n.index}`);
         if (w.root !== anchor.root) { moved = true; break; }
         paths.push(w.path);
@@ -305,7 +434,7 @@ export function makeWallet({ core, store, rpc, settings }) {
     // unknown, not "not sent" (see ui/backend.js on `send.send`'s rejection fields).
     throwIfAborted(signal);
     onPhase?.('submit');
-    const hash = await client.sendTransaction(res.tx_hex);
+    const hash = checkSubmitted('rand_sendTransaction', await client.sendTransaction(res.tx_hex));
     const fresh = await loadStore();
     for (const n of fresh.notes) if (res.spent_indices.includes(n.index)) n.pending = res.time;
     const toInfo = await c.parseAddress(to);
@@ -315,7 +444,7 @@ export function makeWallet({ core, store, rpc, settings }) {
       spent_indices: res.spent_indices, status: 'pending', created_ms: Date.now(),
     };
     fresh.submissions.unshift(submission);
-    await store.setNoteStore(fresh);
+    await persist(fresh);
     if (wait) {
       onPhase?.('wait');
       const committed = await waitForTransaction(client, hash, COMMIT_TIMEOUT_MS);
@@ -323,7 +452,7 @@ export function makeWallet({ core, store, rpc, settings }) {
         const after = await loadStore();
         const sub = after.submissions.find((x) => x.hash === hash);
         if (sub) { sub.status = 'committed'; sub.height = committed.height; }
-        await store.setNoteStore(after);
+        await persist(after);
         await scan(spendKey, {}, s);
       }
     }
@@ -334,20 +463,20 @@ export function makeWallet({ core, store, rpc, settings }) {
   async function faucet(spendKey, address, settingsOverride) {
     const s = settingsOverride || (await currentSettings());
     const client = await rpcFor(s);
-    const hash = await client.mint(address);
+    const hash = checkSubmitted('rand_mint', await client.mint(address));
     const st = await loadStore();
     st.submissions.unshift({ hash, kind: 'faucet', amount: '100000000000', status: 'pending', created_ms: Date.now(), time: st.head || 0 });
-    await store.setNoteStore(st);
+    await persist(st);
     const committed = await waitForTransaction(client, hash, COMMIT_TIMEOUT_MS);
     const after = await loadStore();
     const sub = after.submissions.find((x) => x.hash === hash);
     if (sub) sub.status = committed ? 'committed' : 'pending';
-    await store.setNoteStore(after);
+    await persist(after);
     if (committed) await scan(spendKey, {}, s);
     return hash;
   }
 
-  return { scan, send, faucet, loadStore, core: c, rpcFor, activity, balanceOf, isSpendable };
+  return { scan, send, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable };
 }
 
 export async function waitForTransaction(client, hash, timeoutMs) {

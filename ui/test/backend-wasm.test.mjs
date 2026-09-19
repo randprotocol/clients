@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertBackend } from '../backend.js';
 import { makeWasmBackend, unlockDelayMs } from '../engine/backend-wasm.js';
+import { NodeReplyError } from '../engine/validate.js';
 
 const SPEND_KEY = 'a1'.repeat(32);
 const VIEWING_KEY = 'b2'.repeat(32);
@@ -138,8 +139,51 @@ function build(opts = {}) {
   const storage = opts.storage || mapStorage();
   const platform = opts.platform || stubPlatform();
   const fetch = opts.fetch || stubFetch();
-  const backend = makeWasmBackend({ core, storage, platform, fetch, ...(opts.extra || {}) });
+  // `locks`/`broadcast` are explicitly off unless a test asks for them: the defaults would pick up
+  // Node's own BroadcastChannel, and one left ref'd keeps the whole test process alive.
+  const backend = makeWasmBackend({
+    core, storage, platform, fetch,
+    locks: opts.locks ?? null,
+    broadcast: opts.broadcast ?? null,
+    ...(opts.extra || {}),
+  });
   return { backend, core, storage, platform, fetch };
+}
+
+/**
+ * Spies on WebCrypto for the duration of `fn`, recording when each PBKDF2 derivation *starts* and
+ * *ends* — which is how "the attempts ran one at a time" is asserted, rather than by timing.
+ */
+async function withKdfSpy(fn) {
+  const real = globalThis.crypto;
+  const order = [];
+  const derives = [];
+  let seq = 0;
+  const spy = {
+    getRandomValues: (a) => real.getRandomValues(a),
+    randomUUID: () => real.randomUUID(),
+    subtle: {
+      importKey: (...a) => real.subtle.importKey(...a),
+      encrypt: (...a) => real.subtle.encrypt(...a),
+      decrypt: (...a) => real.subtle.decrypt(...a),
+      deriveKey: async (algo, ...rest) => {
+        const id = ++seq;
+        derives.push(algo);
+        order.push(`start:${id}`);
+        try {
+          return await real.subtle.deriveKey(algo, ...rest);
+        } finally {
+          order.push(`end:${id}`);
+        }
+      },
+    },
+  };
+  Object.defineProperty(globalThis, 'crypto', { value: spy, configurable: true });
+  try {
+    return await fn({ order, derives });
+  } finally {
+    Object.defineProperty(globalThis, 'crypto', { value: real, configurable: true });
+  }
 }
 
 /** Everything any stub was ever handed, flattened to one searchable string. */
@@ -607,4 +651,467 @@ test('nothing secret ever reaches the network, persistent storage or the clipboa
   assertKeyNeverLeaked(env, VIEWING_KEY);
   // And the session is the only home of the plaintext.
   assert.equal((await storage.session.get('unlocked')).spend_key, SPEND_KEY);
+});
+
+// =============================================================== fix round 1 ====================
+
+// ---- 1. every password attempt runs alone -------------------------------------------------- //
+
+test('parallel wrong attempts run their KDFs one at a time, and each pays its own delay', async () => {
+  const env = build();
+  const { backend, storage } = env;
+  await backend.wallet.create(PASSWORD);
+  await backend.wallet.lock();
+
+  const spied = await withKdfSpy(async ({ order }) => {
+    // Five at once — a scripted batch, which used to read the same failure count, wait the same
+    // zero, and run five KDFs in parallel for the price of one delay.
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => backend.wallet.unlock('nope-nope-nope').then(() => 'ok', (e) => e.message)),
+    );
+    assert.deepEqual(results, Array(5).fill('wrong password'));
+    return order;
+  });
+
+  // Strictly sequential: every start is immediately followed by its own end.
+  assert.equal(spied.length, 10, `expected 5 derivations, saw ${spied.length / 2}`);
+  for (let i = 0; i < spied.length; i += 2) {
+    const id = spied[i].split(':')[1];
+    assert.equal(spied[i], `start:${id}`);
+    assert.equal(spied[i + 1], `end:${id}`, `derivation ${id} overlapped another: ${spied.join(' ')}`);
+  }
+  // …and all five were counted, so the backoff is where five sequential attempts would leave it.
+  assert.equal(storage.local.get('unlockFailures').count, 5);
+});
+
+test('the failure is persisted BEFORE the KDF, so an abandoned attempt still counts', async () => {
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+  await backend.wallet.lock();
+
+  // A reload mid-attempt is a second backend over the same storage. It must see the increment
+  // that the attempt made on its way in, not a count that only lands if the KDF finishes.
+  let seenDuringKdf;
+  await withKdfSpy(async () => {
+    const original = globalThis.crypto.subtle.deriveKey;
+    globalThis.crypto.subtle.deriveKey = async (...args) => {
+      if (seenDuringKdf === undefined) {
+        const reloaded = build({ storage }).backend;
+        seenDuringKdf = (await reloaded.settings.get()) && storage.local.get('unlockFailures');
+      }
+      return original(...args);
+    };
+    await assert.rejects(() => backend.wallet.unlock('wrong-wrong-wrong'), /wrong password/);
+  });
+  assert.equal(seenDuringKdf && seenDuringKdf.count, 1, 'the attempt was not counted before its KDF ran');
+});
+
+test('a flood of attempts is refused rather than queued without limit', async (t) => {
+  // Mocked timers, because the accepted attempts serve a real, growing backoff: eight of them in a
+  // row is half a minute of wall clock, and no test should ever wait on that.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { backend } = build();
+  await backend.wallet.create(PASSWORD);
+  await backend.wallet.lock();
+  const many = Array.from({ length: 12 }, () => backend.wallet.unlock('nope-nope-nope').then(() => 'ok', (e) => e.message));
+  // A *real* interval driving the *fake* clock: each accepted attempt runs a real 600 000-iteration
+  // KDF, so a fixed number of ticks cannot know when the next delay has been scheduled. Only
+  // `setTimeout` is mocked, so `setInterval` is still the host's.
+  const pump = setInterval(() => { try { t.mock.timers.tick(60_000); } catch { /* disabled */ } }, 2);
+  const results = await Promise.all(many);
+  clearInterval(pump);
+  const refused = results.filter((r) => r === 'too many attempts in progress');
+  const tried = results.filter((r) => r === 'wrong password');
+  assert.ok(refused.length > 0, 'nothing was refused, so the queue is unbounded');
+  assert.ok(tried.length > 0, 'everything was refused, so the queue is useless');
+  assert.equal(refused.length + tried.length, 12);
+});
+
+test('verifyPassword shares the one queue, and a success resets the count', async () => {
+  const env = build();
+  const { backend, storage } = env;
+  await backend.wallet.create(PASSWORD);
+
+  const order = await withKdfSpy(async ({ order: o }) => {
+    const answers = await Promise.all([
+      backend.wallet.verifyPassword('wrong-one-here'),
+      backend.wallet.verifyPassword('wrong-two-here'),
+    ]);
+    assert.deepEqual(answers, [false, false]);
+    return o;
+  });
+  assert.equal(order.length, 4);
+  assert.deepEqual(order.slice(0, 2), ['start:1', 'end:1'], 'verifyPassword jumped the queue');
+  assert.equal(storage.local.get('unlockFailures').count, 2);
+
+  assert.equal(await backend.wallet.verifyPassword(PASSWORD), true);
+  assert.equal(storage.local.get('unlockFailures'), undefined, 'a success did not reset the count');
+});
+
+// ---- 4 & 5. a vault that no password can open ---------------------------------------------- //
+
+test('a vault from a newer build says so, and is not a password attempt', async () => {
+  const { backend, storage } = build();
+  await backend.wallet.create(PASSWORD);
+  await backend.wallet.lock();
+  storage.local.set('vault', { ...storage.local.get('vault'), v: 99 });
+
+  for (let i = 0; i < 3; i += 1) {
+    await assert.rejects(() => backend.wallet.unlock(PASSWORD), (err) => {
+      assert.equal(err.name, 'VaultVersionError');
+      assert.equal(err.code, 'VAULT_VERSION');
+      assert.equal(err.recoverable, true);
+      assert.match(err.message, /newer version of Rand Wallet/);
+      return true;
+    });
+  }
+  assert.equal(storage.local.get('unlockFailures'), undefined, 'an unopenable vault grew the backoff');
+});
+
+test('a structurally damaged vault says so, and is not a password attempt', async () => {
+  const cases = {
+    'iter too low (the KDF turned off)': (v) => ({ ...v, iter: 1 }),
+    'iter absurdly high (a KDF denial of service)': (v) => ({ ...v, iter: 500_000_000 }),
+    'salt is not base64': (v) => ({ ...v, salt: 'not base64!!' }),
+    'iv is the wrong size': (v) => ({ ...v, iv: 'AA' }),
+    'ct is missing': (v) => ({ ...v, ct: undefined }),
+    'kdf is something else': (v) => ({ ...v, kdf: 'scrypt' }),
+    'not an object at all': () => 'rubbish',
+  };
+  for (const [what, damage] of Object.entries(cases)) {
+    const { backend, storage } = build();
+    await backend.wallet.create(PASSWORD);
+    await backend.wallet.lock();
+    storage.local.set('vault', damage(storage.local.get('vault')));
+    await assert.rejects(() => backend.wallet.unlock(PASSWORD), (err) => {
+      assert.equal(err.name, 'VaultDamagedError', what);
+      assert.equal(err.code, 'VAULT_DAMAGED', what);
+      assert.equal(err.recoverable, true, what);
+      assert.equal(err.message, 'wallet data is damaged', what);
+      return true;
+    });
+    assert.equal(storage.local.get('unlockFailures'), undefined, `${what}: counted as a password attempt`);
+    // verifyPassword rejects too, rather than answering a plain `false`.
+    await assert.rejects(() => backend.wallet.verifyPassword(PASSWORD), /damaged/);
+  }
+});
+
+test('a sound vault with a wrong password is still, and only, `wrong password`', async () => {
+  const { backend } = build();
+  await backend.wallet.create(PASSWORD);
+  await backend.wallet.lock();
+  await assert.rejects(() => backend.wallet.unlock('not-the-password'), (err) => {
+    assert.equal(err.message, 'wrong password');
+    assert.equal(err.recoverable, undefined, 'a wrong password must not offer a wipe');
+    return true;
+  });
+});
+
+// ---- 2. the idle timer measures the user, not the traffic ---------------------------------- //
+
+test('backend traffic does NOT restart the idle timer', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { backend } = build();
+  await backend.settings.set({ autoLockMin: 15 });
+  await backend.wallet.create(PASSWORD);
+  const locked = [];
+  backend.wallet.onLocked(() => locked.push('locked'));
+
+  // A screen that re-scans every minute — exactly the thing that used to keep an abandoned,
+  // unlocked wallet unlocked for ever.
+  for (let minute = 1; minute <= 20; minute += 1) {
+    t.mock.timers.tick(60_000);
+    await drain();
+    if (await backend.wallet.isUnlocked()) await backend.sync.scan(() => {}).catch(() => {});
+    await drain();
+    if (minute === 14) assert.equal(locked.length, 0, 'it locked early');
+  }
+  assert.deepEqual(locked, ['locked'], 'the wallet never locked despite 20 idle minutes');
+});
+
+test('noteActivity restarts the idle timer', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { backend } = build();
+  await backend.settings.set({ autoLockMin: 15 });
+  await backend.wallet.create(PASSWORD);
+  const locked = [];
+  backend.wallet.onLocked(() => locked.push('locked'));
+
+  for (let minute = 1; minute <= 20; minute += 1) {
+    t.mock.timers.tick(60_000);
+    await drain();
+    backend.wallet.noteActivity(); // the user is still here
+    await drain();
+  }
+  assert.deepEqual(locked, [], 'activity did not hold the lock off');
+  assert.equal(await backend.wallet.isUnlocked(), true);
+
+  // …and once they stop, it locks on schedule.
+  t.mock.timers.tick(15 * 60_000 + 1000);
+  await drain();
+  assert.deepEqual(locked, ['locked']);
+});
+
+test('noteActivity on a locked wallet does not arm a timer', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { backend } = build();
+  await backend.settings.set({ autoLockMin: 1 });
+  await backend.wallet.create(PASSWORD);
+  await backend.wallet.lock();
+  const locked = [];
+  backend.wallet.onLocked(() => locked.push('locked'));
+  backend.wallet.noteActivity();
+  t.mock.timers.tick(10 * 60_000);
+  await drain();
+  assert.deepEqual(locked, [], 'a locked wallet armed an idle timer');
+});
+
+test('a lock that comes due during a send waits for the send, then happens', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { backend } = build();
+  await backend.settings.set({ autoLockMin: 1 });
+  await backend.wallet.create(PASSWORD);
+  const locked = [];
+  backend.wallet.onLocked(() => locked.push('locked'));
+
+  // The send is in flight the instant this returns its promise: `send.send` takes the hold and
+  // then awaits. Firing the idle timer now is the race the hold exists for.
+  const inFlight = backend.send.send({ asset: 0, to: ADDRESS, amount: '1' }, () => {});
+  t.mock.timers.tick(61_000);
+  assert.deepEqual(locked, [], 'the wallet locked in the middle of a transfer');
+  assert.equal(await backend.wallet.isUnlocked(), true, 'the spend key was dropped mid-transfer');
+
+  await assert.rejects(() => inFlight, (err) => err.definite === true);
+  await drain();
+
+  // …and the moment the transfer settled, the lock that was due happened.
+  assert.deepEqual(locked, ['locked'], 'the deferred lock never happened');
+  assert.equal(await backend.wallet.isUnlocked(), false);
+});
+
+// ---- 3. a node reply never poisons the store ----------------------------------------------- //
+
+test('a malformed node reply is a typed error, and nothing is persisted', async () => {
+  const bad = {
+    'a nullifier row whose height is a string': {
+      rand_getNullifiers: () => [{ height: '9', nullifier: 'ab'.repeat(32) }],
+    },
+    'a head that is null': { rand_getHead: () => null },
+    'a head whose height is NaN-ish': { rand_getHead: () => ({ height: 'soon' }) },
+    'a commitment row with no envelope': {
+      rand_getCommitments: ([from]) => (from === 0 ? [{ index: 0, cm: 'ab'.repeat(32), height: 1 }] : []),
+    },
+    'a commitment row whose cm is not hex': {
+      rand_getCommitments: ([from]) => (from === 0 ? [{ index: 0, cm: 'zz', height: 1, envelope: { kem_ct: '', to_receiver: '', to_sender: '', body: '' } }] : []),
+    },
+    'a page longer than the one asked for': {
+      rand_getCommitments: () => Array.from({ length: 501 }, (_, i) => ({ index: i, cm: 'ab'.repeat(32), height: 1, envelope: { kem_ct: '', to_receiver: '', to_sender: '', body: '' } })),
+    },
+  };
+  for (const [what, table] of Object.entries(bad)) {
+    const { backend, storage } = build({ fetch: stubFetch(table) });
+    await backend.wallet.create(PASSWORD);
+    const before = JSON.stringify(storage.local.get('notes'));
+    await assert.rejects(() => backend.sync.scan(() => {}), (err) => {
+      assert.equal(err.name, 'NodeReplyError', `${what}: got ${err.name}: ${err.message}`);
+      assert.ok(err instanceof NodeReplyError, what);
+      assert.match(err.message, /^rand_/, what);
+      return true;
+    });
+    assert.equal(JSON.stringify(storage.local.get('notes')), before, `${what}: the store was written anyway`);
+  }
+});
+
+test('a bad fee or asset registry is refused rather than believed', async () => {
+  const feeEnv = build({ fetch: stubFetch({ rand_estimateFee: () => '1.5' }) });
+  await feeEnv.backend.wallet.create(PASSWORD);
+  await assert.rejects(
+    () => feeEnv.backend.send.estimate({ asset: 0, to: ADDRESS, amount: '1' }),
+    (err) => err.name === 'NodeReplyError',
+  );
+
+  // The registry is best-effort, so a bad one falls back to the cache and RAND still answers.
+  const assetEnv = build({ fetch: stubFetch({ rand_getAssets: () => [{ index: 'one' }] }) });
+  await assetEnv.backend.wallet.create(PASSWORD);
+  const list = await assetEnv.backend.assets.list();
+  assert.equal(list.length, 1);
+  assert.equal(list[0].symbol, 'RAND');
+  assert.equal(assetEnv.storage.local.get('assets'), undefined, 'a malformed registry was cached');
+});
+
+test('a note store poisoned with NaN cursors self-heals, keeps its notes, and says so once', async () => {
+  const { backend, storage } = build();
+  await backend.wallet.create(PASSWORD);
+  const note = {
+    index: 4, note: '00'.repeat(112), cm: '0b'.repeat(32), nf: '0c'.repeat(32),
+    amount: '2500000000', asset: 0, time: 7, from: '00'.repeat(32), height: 7, spent: false, pending: null,
+  };
+  // Exactly what the old nullifier loop used to leave behind.
+  storage.local.set('notes', {
+    ...storage.local.get('notes'), notes: [note],
+    scanned_index: Number.NaN, scanned_height: Number.NaN, scanned_attest_height: 0, head: 0,
+  });
+
+  const result = await backend.sync.scan(() => {});
+  assert.equal(result.recovered, true, 'the UI was not told the store had been reset');
+  assert.equal(result.notes.length, 1, 'the notes were thrown away with the cursors');
+  const saved = storage.local.get('notes');
+  for (const key of ['scanned_index', 'scanned_height', 'scanned_attest_height', 'head']) {
+    assert.ok(Number.isSafeInteger(saved[key]), `${key} is still ${String(saved[key])}`);
+  }
+  // Said once: the next scan is an ordinary one.
+  const again = await backend.sync.scan(() => {});
+  assert.equal(again.recovered, undefined);
+});
+
+test('the store writer refuses a cursor that is not a block height, or one that went backwards', async () => {
+  const { backend, storage } = build();
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+  const good = storage.local.get('notes');
+  assert.ok(Number.isSafeInteger(good.scanned_height));
+
+  // A store writer is the last line of defence, so it is asserted directly rather than through a
+  // node reply that (now) can no longer produce this.
+  const engine = makeWasmBackend({
+    core: stubCore(), storage, platform: stubPlatform(), fetch: stubFetch(), locks: null, broadcast: null,
+  });
+  void engine;
+  const { makeWallet } = await import('../engine/wallet.js');
+  const wallet = makeWallet({
+    core: stubCore(),
+    store: {
+      async getNoteStore() { return storage.local.get('notes'); },
+      async setNoteStore(s) { storage.local.set('notes', s); },
+    },
+    rpc: () => ({}),
+    settings: async () => ({}),
+  });
+  const st = await wallet.loadStore();
+  await assert.rejects(
+    () => wallet.persist({ ...st, scanned_height: Number.NaN }, st),
+    /refusing to save the note store: scanned_height is not a block cursor/,
+  );
+  await assert.rejects(
+    () => wallet.persist({ ...st, scanned_index: 0 }, { ...st, scanned_index: 50 }),
+    /moved backwards, 50 → 0/,
+  );
+  assert.deepEqual(storage.local.get('notes'), good, 'a refused write changed the store anyway');
+});
+
+// ---- 6. two tabs ---------------------------------------------------------------------------- //
+
+/** A Map-backed storage with the optional conditional write, as web/wallet/idb.js provides it. */
+function casStorage() {
+  const s = mapStorage();
+  s.compareAndSet = async (key, expectedRev, value) => {
+    const current = s.local.get(key);
+    const found = current && typeof current === 'object' ? current.rev : undefined;
+    if (found !== expectedRev) {
+      const err = new Error(`${key} changed underneath this write`);
+      err.name = 'StaleStoreError';
+      throw err;
+    }
+    const rev = Number.isSafeInteger(found) ? found + 1 : 1;
+    s.writes.push([key, value]);
+    s.local.set(key, JSON.parse(JSON.stringify({ ...value, rev })));
+    return rev;
+  };
+  return s;
+}
+
+test('the note store is written conditionally when storage can, and a lost race is merged', async () => {
+  const storage = casStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+  const afterFirst = storage.local.get('notes');
+  assert.ok(Number.isSafeInteger(afterFirst.rev) && afterFirst.rev >= 1, 'the conditional write did not stamp a revision');
+
+  // Another tab writes between this scan's load and its save: the note it added must survive.
+  const otherNote = {
+    index: 99, note: '00'.repeat(112), cm: '0e'.repeat(32), nf: '0f'.repeat(32),
+    amount: '7000000000', asset: 0, time: 3, from: '00'.repeat(32), height: 3, spent: false, pending: null,
+  };
+  const realGet = storage.get;
+  let interfered = false;
+  storage.get = async (key) => {
+    const value = await realGet.call(storage, key);
+    if (key === 'notes' && !interfered) {
+      interfered = true;
+      const current = storage.local.get('notes');
+      storage.local.set('notes', { ...current, notes: [...current.notes, otherNote], rev: current.rev + 1 });
+    }
+    return value;
+  };
+  const result = await backend.sync.scan(() => {});
+  storage.get = realGet;
+
+  assert.ok(result.notes.some((n) => n.index === 99), "the other tab's note was overwritten");
+  assert.ok(storage.local.get('notes').rev > afterFirst.rev);
+});
+
+test('only one tab scans: the other waits for the announcement and reads what it wrote', async () => {
+  // A fake Web Locks API and a fake BroadcastChannel — the two things the browser provides.
+  const held = new Set();
+  const locks = {
+    async request(name, opts, cb) {
+      if (held.has(name)) return cb(null); // `ifAvailable` hands back null
+      held.add(name);
+      try { return await cb({ name }); } finally { held.delete(name); }
+    },
+  };
+  const listeners = new Set();
+  const channel = {
+    postMessage(data) { for (const fn of [...listeners]) fn({ data }); },
+    addEventListener(_type, fn) { listeners.add(fn); },
+    removeEventListener(_type, fn) { listeners.delete(fn); },
+  };
+  const storage = casStorage();
+  const one = makeWasmBackend({ core: stubCore(), storage, platform: stubPlatform(), fetch: stubFetch(), locks, broadcast: channel });
+  await one.wallet.create(PASSWORD);
+
+  // Tab one holds the lock and is mid-scan; tab two asks at the same moment.
+  let releaseScan;
+  const scanGate = new Promise((r) => { releaseScan = r; });
+  const slowFetch = stubFetch({ rand_getHead: () => ({ height: 42, hash: 'ab'.repeat(32) }) });
+  const slow = async (...args) => { await scanGate; return slowFetch(...args); };
+  slow.requests = slowFetch.requests;
+  const two = makeWasmBackend({ core: stubCore(), storage, platform: stubPlatform(), fetch: slow, locks, broadcast: channel });
+
+  const first = two.sync.scan(() => {});
+  await drain();
+  const second = one.sync.scan(() => {}); // the lock is taken — this one must not hit the node
+  await drain();
+  releaseScan();
+  const [a, b] = await Promise.all([first, second]);
+
+  assert.equal(a.head, 42);
+  assert.equal(b.head, 42, 'the waiting tab did not pick up what the scanning tab wrote');
+  assert.equal(one.platform.name, 'test');
+});
+
+// ---- 8. the two-note rule belongs to the chain --------------------------------------------- //
+
+test('maxSendable follows the core when it reports how many notes a bundle spends', async () => {
+  const notes = [
+    { index: 0, amount: '3000000000', asset: 0, spent: false, pending: null, height: 1, cm: 'a', nf: 'b', time: 1 },
+    { index: 1, amount: '2000000000', asset: 0, spent: false, pending: null, height: 1, cm: 'c', nf: 'd', time: 1 },
+    { index: 2, amount: '1000000000', asset: 0, spent: false, pending: null, height: 1, cm: 'e', nf: 'f', time: 1 },
+  ];
+  const seed = async (backend, storage) => {
+    await backend.wallet.create(PASSWORD);
+    storage.local.set('notes', { ...storage.local.get('notes'), notes });
+  };
+
+  // Default: the engine's BUNDLE_INPUTS of two — the largest two, less the fee.
+  const plain = build();
+  await seed(plain.backend, plain.storage);
+  assert.equal((await plain.backend.send.maxSendable({ asset: 0 })).amount, '4999000000');
+
+  // A core that says three takes precedence over anything this JavaScript believes.
+  const three = build({ core: stubCore({ version: () => ({ ...stubCore().callDefaults, default_chain_id: 13, token_symbol: 'RAND', token_decimals: 9, bundle_inputs: 3 }) }) });
+  await seed(three.backend, three.storage);
+  assert.equal((await three.backend.send.maxSendable({ asset: 0 })).amount, '5999000000');
 });

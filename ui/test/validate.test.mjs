@@ -1,0 +1,137 @@
+// The node-reply validators. Each test is a shape a hostile or broken node can send, and the
+// assertion is that it is refused *before* it can reach arithmetic, a cursor or the store.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  NodeReplyError, checkHead, checkTreeInfo, checkCommitments, checkNullifiers, checkAnchor,
+  checkWitness, checkFee, checkAssets, checkBlockHeader, checkSubmitted, checkBridgeState,
+  intField, hexField, unitsField,
+} from '../engine/validate.js';
+
+const HEX64 = 'ab'.repeat(32);
+const envelope = { kem_ct: 'aa', to_receiver: 'bb', to_sender: 'cc', body: 'dd' };
+
+function rejects(fn, pattern) {
+  assert.throws(fn, (err) => {
+    assert.ok(err instanceof NodeReplyError, `expected a NodeReplyError, got ${err && err.name}`);
+    assert.match(err.message, pattern);
+    assert.ok(err.message.length < 200, `the message quotes too much of the payload: ${err.message}`);
+    return true;
+  });
+}
+
+test('an error names the method and what was wrong, and quotes at most 80 characters', () => {
+  const huge = 'z'.repeat(5000);
+  assert.throws(() => checkHead({ height: huge }), (err) => {
+    assert.match(err.message, /^rand_getHead: height is not a non-negative integer/);
+    // The excerpt is capped at 80 characters, so the whole message stays short enough to put in
+    // a banner — and 5 000 characters of a node's choosing never reach a log.
+    assert.ok(err.message.length <= 160, `${err.message.length} characters: ${err.message.slice(0, 120)}`);
+    assert.ok(!err.message.includes('z'.repeat(100)));
+    return true;
+  });
+});
+
+test('head: a height must be a safe non-negative integer', () => {
+  assert.equal(checkHead({ height: 10, hash: HEX64 }).height, 10);
+  rejects(() => checkHead(null), /the reply is not an object/);
+  rejects(() => checkHead({}), /height is not a non-negative integer/);
+  rejects(() => checkHead({ height: '10' }), /height/);
+  rejects(() => checkHead({ height: -1 }), /height/);
+  rejects(() => checkHead({ height: 1.5 }), /height/);
+  rejects(() => checkHead({ height: Number.NaN }), /height/);
+  rejects(() => checkHead({ height: 2 ** 53 }), /height/);
+});
+
+test('tree info: next_index is an integer', () => {
+  assert.equal(checkTreeInfo({ next_index: 0 }).next_index, 0);
+  rejects(() => checkTreeInfo({ next_index: null }), /next_index/);
+});
+
+test('commitments: every row is checked, and a page cannot exceed what was asked for', () => {
+  const good = [{ index: 0, cm: HEX64, height: 3, envelope }];
+  assert.equal(checkCommitments(good, 500).length, 1);
+  rejects(() => checkCommitments(good, 0), /more than the 0 asked for/);
+  rejects(() => checkCommitments({}, 500), /not an array/);
+  rejects(() => checkCommitments([{ index: '0', cm: HEX64, height: 3, envelope }], 500), /row 0 index/);
+  rejects(() => checkCommitments([{ index: 0, cm: 'nope', height: 3, envelope }], 500), /row 0 cm is not 64 hex/);
+  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: null, envelope }], 500), /row 0 height/);
+  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: 3 }], 500), /row 0 envelope/);
+  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: 3, envelope: { ...envelope, body: 'zz' } }], 500), /envelope\.body/);
+  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: 3, envelope: { ...envelope, body: 'a'.repeat(70000) } }], 500), /envelope\.body/);
+});
+
+test('nullifiers: the row that used to poison the cursor', () => {
+  assert.equal(checkNullifiers([{ height: 7, nullifier: HEX64 }], 500).length, 1);
+  // Exactly the shape that made `Math.max(...rows.map(r => r.height))` NaN.
+  rejects(() => checkNullifiers([{ height: 7, nullifier: HEX64 }, { height: 'nine', nullifier: HEX64 }], 500), /row 1 height/);
+  rejects(() => checkNullifiers([{ height: null, nullifier: HEX64 }], 500), /row 0 height/);
+  rejects(() => checkNullifiers([{ height: 7 }], 500), /row 0 nullifier/);
+  rejects(() => checkNullifiers('rows', 500), /not an array/);
+});
+
+test('anchor and witness', () => {
+  assert.deepEqual(checkAnchor({ height: 4, root: HEX64 }), { height: 4, root: HEX64 });
+  rejects(() => checkAnchor({ height: 4, root: 'short' }), /root is not 64 hex/);
+  assert.equal(checkWitness(null), null);
+  const path = Array.from({ length: 32 }, () => HEX64);
+  assert.equal(checkWitness({ index: 1, root: HEX64, path }).path.length, 32);
+  rejects(() => checkWitness({ index: 1, root: HEX64, path: path.slice(0, 31) }), /path is not 32 levels/);
+  rejects(() => checkWitness({ index: 1, root: HEX64, path: [...path.slice(0, 31), 'x'] }), /path\[31\]/);
+});
+
+test('fee: a decimal units string, never a float', () => {
+  assert.equal(checkFee('1000000'), '1000000');
+  assert.equal(checkFee(1000000), '1000000', 'an integer reply is accepted and normalised to a string');
+  rejects(() => checkFee('1.5'), /the fee is not a decimal amount/);
+  rejects(() => checkFee(-1), /the fee/);
+  rejects(() => checkFee('9'.repeat(31)), /the fee/);
+  rejects(() => checkFee(null), /the fee/);
+});
+
+test('assets: rows with an index, and an asset_id when present', () => {
+  assert.equal(checkAssets([]).length, 0);
+  assert.equal(checkAssets([{ index: 1, chain: 2, token: 'aa', asset_id: HEX64 }]).length, 1);
+  rejects(() => checkAssets([{ index: 'one' }]), /row 0 index/);
+  rejects(() => checkAssets([{ index: 1, asset_id: 'nope' }]), /row 0 asset_id/);
+});
+
+test('block header: best-effort, never an error, never a bad timestamp', () => {
+  assert.equal(checkBlockHeader(null), null);
+  assert.equal(checkBlockHeader('not a block'), null);
+  assert.deepEqual(checkBlockHeader({}), { transactions: [] });
+  assert.equal(checkBlockHeader({ timestamp_ms: 'soon' }).timestamp_ms, undefined);
+  assert.equal(checkBlockHeader({ timestamp_ms: -5 }).timestamp_ms, undefined);
+  assert.equal(checkBlockHeader({ timestamp_ms: 1788000000000 }).timestamp_ms, 1788000000000);
+
+  const header = checkBlockHeader({
+    timestamp_ms: 1788000000000,
+    transactions: [
+      { hash: `0x${HEX64}`, bundle: { commitments: [HEX64, 'bad'] } },
+      { hash: 'not-a-hash', bundle: { commitments: [HEX64] } },
+      'rubbish',
+    ],
+  });
+  assert.equal(header.transactions.length, 1, 'a transaction without a usable hash is dropped');
+  assert.deepEqual(header.transactions[0].commitments, [HEX64], 'and so is a commitment that is not one');
+});
+
+test('submitted: a transaction hash, with or without 0x', () => {
+  assert.equal(checkSubmitted('rand_mint', HEX64), HEX64);
+  assert.equal(checkSubmitted('rand_mint', `0x${HEX64}`), `0x${HEX64}`);
+  rejects(() => checkSubmitted('rand_mint', 'ok'), /rand_mint: the transaction hash/);
+  rejects(() => checkSubmitted('rand_sendTransaction', null), /rand_sendTransaction/);
+});
+
+test('bridge state: only `enabled`, and only when it is exactly true', () => {
+  assert.deepEqual(checkBridgeState({ enabled: true, extra: 1 }), { enabled: true });
+  assert.deepEqual(checkBridgeState({ enabled: 'yes' }), { enabled: false });
+  rejects(() => checkBridgeState(null), /not an object/);
+});
+
+test('the primitives are usable on their own', () => {
+  assert.equal(intField('m', 'x', 3), 3);
+  assert.equal(hexField('m', 'x', HEX64, 64), HEX64);
+  assert.equal(unitsField('m', 'x', '0'), '0');
+  rejects(() => intField('m', 'x', 5, { max: 4 }), /m: x is not a non-negative integer/);
+});
