@@ -121,8 +121,11 @@ function createBackend(initial = {}, overrides = {}) {
     }),
     // `options.signal` is the wallet session's AbortSignal (see ui/backend.js). This fake answers
     // immediately, so the only abort it can observe is one that already happened before the call;
-    // it rejects with an AbortError then, the way a real backend would mid-scan.
-    scan: (onProgress, options) => {
+    // it *rejects* with an AbortError then, the way a real backend would mid-scan. `async` on
+    // purpose, rather than leaning on buildGroup's wrapper: the contract says every backend method
+    // reports failure through a rejected promise, never a synchronous throw, and a fake that only
+    // happens to satisfy that because of how it is wrapped is not pinning the contract down.
+    scan: async (onProgress, options) => {
       const signal = options && options.signal;
       if (signal && signal.aborted) throw abortError();
       if (typeof onProgress === 'function') onProgress({ scanned: state.scannedHeight, head: state.head });

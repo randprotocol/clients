@@ -90,19 +90,61 @@ export function resolveRoute({ exists, unlocked }, hash) {
   return route(name, arg);
 }
 
-/** Wraps every BACKEND_SHAPE method so every call is visible to `onCall` (for `app.idle()`). */
+/**
+ * Wraps a backend group so every call is visible to `onCall` (for `app.idle()`).
+ *
+ * Two things this must not assume about `orig`, because a real shell's backend is not the
+ * object-literal the fake is:
+ *   * **its methods may live on a prototype.** A shell that writes `class ChromeWallet { async
+ *     exists() {…} }` has *no* own enumerable keys at all, so an `Object.keys(orig)` copy silently
+ *     produced an empty group and the app died on its first call. Every property on the whole
+ *     prototype chain (down to, but not including, `Object.prototype`) is considered.
+ *   * **it may carry more than BACKEND_SHAPE names.** `platform.name` is a plain string field;
+ *     `platform.ensureHostPermission` / `platform.openFlowInTab` are optional functions only some
+ *     shells have; a whole optional group (a future `bridge`) is not in BACKEND_SHAPE either.
+ *     Everything present is carried over, so a screen can feature-detect it the usual way.
+ *
+ * Calls are also normalised: a method that throws *synchronously* (a shell's guard clause, e.g.
+ * "no wallet unlocked") becomes a rejected promise, so every caller can rely on the one failure
+ * channel the Backend contract describes.
+ */
+function trackGroup(orig, declared, onCall) {
+  const g = {};
+  const add = (key) => {
+    if (key === 'constructor' || Object.prototype.hasOwnProperty.call(g, key)) return;
+    let value;
+    try { value = orig[key]; } catch { return; } // a getter that throws is not something to copy
+    if (typeof value === 'function') {
+      g[key] = (...args) => {
+        let p;
+        try { p = Promise.resolve(value.apply(orig, args)); } catch (err) { p = Promise.reject(err); }
+        onCall(p);
+        return p;
+      };
+    } else if (value !== undefined) {
+      g[key] = value;
+    }
+  };
+  for (const key of declared) add(key);
+  for (let o = orig; o && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
+    for (const key of Object.getOwnPropertyNames(o)) add(key);
+  }
+  return g;
+}
+
+/** Wraps every backend group (the BACKEND_SHAPE ones, plus any optional group a shell adds). */
 function trackedBackend(backend, onCall) {
   const wrapped = {};
-  for (const group of Object.keys(BACKEND_SHAPE)) {
+  const groups = new Set(Object.keys(BACKEND_SHAPE));
+  for (const [key, value] of Object.entries(backend)) {
+    // A group is an object of methods; `calls` (the fake's array of recorded calls) and any other
+    // non-group field on the backend itself is left alone.
+    if (value && typeof value === 'object' && !Array.isArray(value)) groups.add(key);
+  }
+  for (const group of groups) {
     const orig = backend[group];
-    const g = {};
-    for (const key of Object.keys(orig)) {
-      const val = orig[key];
-      g[key] = typeof val === 'function'
-        ? (...args) => { const p = Promise.resolve(val.apply(orig, args)); onCall(p); return p; }
-        : val;
-    }
-    wrapped[group] = g;
+    if (!orig || typeof orig !== 'object') continue;
+    wrapped[group] = trackGroup(orig, BACKEND_SHAPE[group] || [], onCall);
   }
   return wrapped;
 }
@@ -122,6 +164,36 @@ function retireToken(token) {
   if (!token || !token.alive) return;
   token.alive = false;
   try { token.abort(); } catch { /* an already-aborted controller */ }
+}
+
+// A screen's own heading, in the order the screens actually write one: an explicit
+// `[data-autofocus]` opt-in first, then the page title (`<h1>`, visible or `.sr-only`), then a
+// topbar's title, then the first focusable control.
+const SCREEN_START_SELECTOR = 'h1, .topbar-title, .title';
+
+/**
+ * Where focus goes after a route change that left it nowhere.
+ *
+ * A browser drops focus to `<body>` whenever the focused node is removed — which is exactly what
+ * happens when a wallet session ends under an open sheet (lock → Wipe → wipe: the sheet's button
+ * is torn down, then the app navigates). Focus on `<body>` means a keyboard or screen-reader user
+ * starts the next screen from the very top of the document, past the nav, with no announcement of
+ * where they now are. So: if focus is on `<body>` or on a node that is no longer in the document,
+ * move it to the new screen's start. If the user's focus is somewhere real, it is left alone.
+ */
+function focusScreenStart(mainEl) {
+  const active = document.activeElement;
+  if (active && active !== document.body && document.body.contains(active)) return;
+  const target = mainEl.querySelector('[data-autofocus]')
+    || mainEl.querySelector(SCREEN_START_SELECTOR)
+    || focusableIn(mainEl)[0];
+  if (!target || typeof target.focus !== 'function') return;
+  // A heading is not focusable on its own; `tabindex="-1"` makes it focusable programmatically
+  // without adding it to the tab order.
+  if (!target.hasAttribute('tabindex') && !/^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(target.tagName)) {
+    target.setAttribute('tabindex', '-1');
+  }
+  target.focus();
 }
 
 function focusableIn(root) {
@@ -368,10 +440,17 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   for (const method of SESSION_ENDING_WALLET_METHODS) {
     const orig = backendApi.wallet[method];
     if (typeof orig !== 'function') continue;
-    backendApi.wallet[method] = async (...args) => {
-      const result = await orig(...args);
-      endSession();
-      return result;
+    backendApi.wallet[method] = (...args) => {
+      const p = (async () => {
+        const result = await orig(...args);
+        endSession();
+        return result;
+      })();
+      // Tracked like any other backend call: this outer promise settles *after* the inner one (it
+      // still has to end the session), so `app.idle()` has to know about it too, or it can return
+      // in the window between the wallet method answering and the session actually ending.
+      trackTask(p);
+      return p;
     };
   }
 
@@ -518,6 +597,9 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
         console.error('rand-wallet: screen after() failed', err);
       }
     }
+
+    // Last, so a screen that placed focus itself (an `input.focus()` in its own `after()`) wins.
+    if (screenCtx.isCurrent()) focusScreenStart(mainEl);
   }
 
   function scheduleRender() {
@@ -541,16 +623,17 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     // The queue going empty is not the same as the work being finished: a handler that awaited one
     // of these promises resumes on a *later* microtask, and what it does next (call another
     // backend method, navigate) has not been queued yet at the instant the last promise settles.
-    // So an empty pass is only believed after draining the microtask queue and finding it empty
-    // again — which terminates as soon as nothing new appears, and still never gives up early.
-    let emptyPasses = 0;
+    // The previous version allowed for that with a fixed number of `await Promise.resolve()`
+    // passes — a magic number that silently decided how many hops a screen was allowed to take.
+    // Instead each pass ends with one macrotask hop (`setTimeout(…, 0)`), which by definition runs
+    // only once the whole microtask queue has drained, however deep it is; the loop ends the first
+    // time a full pass finds nothing new, and still never gives up early.
     for (;;) {
       const pending = [...inflight];
       if (renderPromise) pending.push(renderPromise);
-      if (pending.length > 0) { emptyPasses = 0; await Promise.allSettled(pending); continue; }
-      if (emptyPasses >= 4) return;
-      emptyPasses += 1;
-      await Promise.resolve();
+      if (pending.length > 0) await Promise.allSettled(pending);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (inflight.size === 0 && !renderPromise) return;
     }
   }
 

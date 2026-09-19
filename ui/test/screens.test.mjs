@@ -729,3 +729,36 @@ test('explorerLink refuses plain http except on a local explorer', () => {
   assert.equal(explorerLink('', hash), null);
   assert.equal(explorerLink('https://randscan.org', 'not-a-hash'), null);
 });
+
+// -------------------------------------------------------- abort while home is still on screen ---
+// The existing abort test locks the wallet first, which navigates away — home is unmounted by the
+// time the stale scan rejects, so `live()` short-circuits and the `isAbortError` guard below it is
+// never reached. This one aborts the scan *under a mounted, current home*, which is the only path
+// that actually exercises the guard (task 1.5, part A5).
+test('an abort that arrives while home is still on screen is not shown as a node failure', async (t) => {
+  const { b, ctl } = controlledScan();
+  const { root } = await mountApp(t, b, { hash: '#home' });
+  await turns();
+  assert.equal(ctl.calls, 1);
+  assert.ok(root.querySelector('.hero'), 'home is still the screen on display');
+
+  const aborted = new Error('The operation was aborted.');
+  aborted.name = 'AbortError';
+  ctl.fail(aborted);
+  await turns();
+  assert.ok(root.querySelector('.hero'), 'and still is');
+  assert.equal(root.querySelector('.banner.negative'), null, 'an abort is not a node failure');
+});
+
+test('a real scan failure while home is still on screen does show the banner', async (t) => {
+  // The counterpart to the test above: without it, "no banner" would also pass if home simply
+  // never rendered one.
+  const { b, ctl } = controlledScan();
+  const { root } = await mountApp(t, b, { hash: '#home' });
+  await turns();
+  ctl.fail(new Error('Cannot reach the fullnode.'));
+  await turns();
+  const banner = root.querySelector('.banner.negative');
+  assert.ok(banner);
+  assert.match(banner.textContent, /Cannot reach the fullnode/);
+});
