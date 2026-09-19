@@ -437,3 +437,32 @@ test('a backend with no noteActivity is fine, and user input costs nothing', asy
   await app.idle();
   assert.doesNotThrow(() => root.dispatchEvent(new window.Event('pointerdown', { bubbles: true })));
 });
+
+// ------------------------------------------------------------------------- fix round 2 --------
+test('destroy() disposes the backend, last, and survives one that throws', async (t) => {
+  // A real backend holds things outside its own object — a BroadcastChannel, a port. Without this
+  // they outlive the mount that opened them.
+  const order = [];
+  const b = unlockedBackend();
+  b.wallet.onLocked = () => () => order.push('unsubscribed');
+  b.dispose = () => order.push('disposed');
+  const { app } = await mountApp(t, b, { hash: '#spy' });
+  await app.idle();
+  app.destroy();
+  assert.deepEqual(order, ['unsubscribed', 'disposed']);
+  assert.doesNotThrow(() => app.destroy(), 'a second destroy must be harmless');
+
+  const noisy = unlockedBackend();
+  noisy.dispose = () => { throw new Error('the port was already closed'); };
+  const second = await mountApp(t, noisy, { hash: '#spy' });
+  await second.app.idle();
+  assert.doesNotThrow(() => second.app.destroy(), 'a failing dispose must not fail a teardown');
+});
+
+test('a backend with no dispose is fine', async (t) => {
+  const b = unlockedBackend();
+  assert.equal(typeof b.dispose, 'undefined');
+  const { app } = await mountApp(t, b, { hash: '#spy' });
+  await app.idle();
+  assert.doesNotThrow(() => app.destroy());
+});

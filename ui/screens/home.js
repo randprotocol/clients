@@ -276,6 +276,67 @@ registerScreen('home', {
         </div>`;
     }
 
+    /**
+     * The node is not on the chain this wallet's notes came from — so nothing was read and nothing
+     * was merged (ui/backend.js). Blocking, because carrying on would show one chain's balance
+     * under another chain's node, and offering both real ways out: point at a different node, or
+     * forget this chain's cache and read the new one.
+     *
+     * Every field of `info` came from a node, so all of it is interpolated, never `raw()`ed.
+     */
+    function showWrongChainBanner(info) {
+      const got = info && info.got ? info.got : {};
+      const expected = info && info.expected ? info.expected : {};
+      const name = (id) => (id === null || id === undefined || id === '' ? 'an unknown chain' : `chain ${id}`);
+      const rescanBtn = raw(typeof ctx.backend.sync.rescan === 'function'
+        ? h`<button class="btn sm" type="button" data-action="rescan-chain">Rescan</button>`
+        : '');
+      el.banner.innerHTML = h`
+        <div class="banner negative">
+          <span class="ic">${raw(icons.warning())}</span>
+          <span>
+            <span class="banner-title">This node is on a different chain (${name(got.chainId)})</span>
+            Your wallet's history was read from ${name(expected.chainId)}. Nothing has been changed.
+            Switch node in Settings, or rescan this wallet for the new chain.
+          </span>
+          <span class="banner-actions">
+            <a class="btn sm" href="#settings" data-go="settings">Settings</a>
+            ${rescanBtn}
+          </span>
+        </div>`;
+    }
+
+    /** The node's tip is below what this wallet has already read: a lagging replica, or one
+     *  restored from a snapshot. Nothing moved, and scanning resumes by itself when it catches
+     *  up — so this is a quiet notice, not a failure. */
+    function showBehindBanner(info) {
+      el.banner.innerHTML = h`
+        <div class="banner warn">
+          <span class="ic">${raw(icons.info())}</span>
+          <span><span class="banner-title">This node is behind your wallet</span>It is at block ${String((info && info.tip) ?? '?')}; your wallet has read to ${String((info && info.wallet) ?? '?')}. Try another node in Settings.</span>
+          <span class="grow"></span>
+          <a class="btn sm" href="#settings" data-go="settings">Settings</a>
+        </div>`;
+    }
+
+    /** Another tab of this wallet is doing the scanning; this one is showing what it has. */
+    function showOtherTabBanner() {
+      el.banner.innerHTML = h`
+        <div class="banner">
+          <span class="ic">${raw(icons.info())}</span>
+          <span><span class="banner-title">Another tab is syncing</span>This tab is showing what it has so far, and will refresh when that finishes.</span>
+        </div>`;
+    }
+
+    /** One place decides what a scan result has to say, so the branches cannot drift apart. */
+    function paintScanNotice(fresh) {
+      if (fresh && fresh.wrongChain) { showWrongChainBanner(fresh.wrongChain); return; }
+      if (fresh && fresh.behind) { showBehindBanner(fresh.behind); return; }
+      if (fresh && fresh.recovered) { showRecoveredBanner(); return; }
+      if (fresh && fresh.otherTab) { showOtherTabBanner(); return; }
+      el.banner.innerHTML = '';
+    }
+
     // ---- this session's single scan ----
     // `mySession` is the session this render belongs to; every reaction below checks it as well as
     // `ctx.isCurrent()`, because a screen can be current under a *different* wallet (lock → wipe →
@@ -296,8 +357,7 @@ registerScreen('home', {
           let freshAssets = assets;
           try { freshAssets = await ctx.backend.assets.list(); } catch { /* keep the assets we had */ }
           if (!live()) return;
-          if (fresh && fresh.recovered) showRecoveredBanner();
-          else el.banner.innerHTML = '';
+          paintScanNotice(fresh);
           setScanning(false);
           applyData(1, freshAssets, fresh);
         },
@@ -336,6 +396,43 @@ registerScreen('home', {
       if (!live()) return;
       applyData(0, cachedAssets, cachedSync);
     })();
+
+    // The wrong-chain banner's own way out: drop this chain's cache (never the keys) and read the
+    // node the user is now pointed at. Behind a confirmation, because it throws away history that
+    // takes a full scan to rebuild.
+    const offRescanChain = on(root, '[data-action="rescan-chain"]', 'click', (evt) => {
+      evt.preventDefault();
+      if (typeof ctx.backend.sync.rescan !== 'function') return;
+      const dialog = ctx.sheet(h`
+        <h3 class="sheet-title">Rescan for this chain?</h3>
+        <p class="sheet-sub">This forgets the notes and history read from the old chain and reads this node from the start. Your keys and your password are not touched.</p>
+        <div class="sheet-foot">
+          <button class="btn" type="button" data-role="cancel">Cancel</button>
+          <button class="btn btn-primary" type="button" data-role="confirm">Rescan</button>
+        </div>`);
+      on(dialog, '[data-role="cancel"]', 'click', () => ctx.closeSheet());
+      on(dialog, '[data-role="confirm"]', 'click', async () => {
+        ctx.closeSheet();
+        if (!live()) return;
+        el.banner.innerHTML = '';
+        setScanning(true);
+        try {
+          const fresh = await ctx.backend.sync.rescan({ forChain: true, signal: ctx.session.signal });
+          if (!live()) return;
+          let freshAssets = assets;
+          try { freshAssets = await ctx.backend.assets.list(); } catch { /* keep what we had */ }
+          if (!live()) return;
+          paintScanNotice(fresh);
+          setScanning(false);
+          applyData(1, freshAssets, fresh);
+        } catch (err) {
+          if (!live()) return;
+          setScanning(false);
+          if (isAbortError(err)) return;
+          showBanner((err && err.message) || 'The rescan could not be started.');
+        }
+      });
+    });
 
     const offSync = on(root, '[data-action="sync"]', 'click', (evt) => {
       evt.preventDefault();

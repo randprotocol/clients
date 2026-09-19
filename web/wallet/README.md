@@ -84,6 +84,21 @@ damaged*, or one written by a newer build of this wallet, can never be opened by
 it says that instead, does **not** count as a failed attempt, and points you at wipe-and-restore.
 Your funds are on chain; your recovery key is what brings them back.
 
+## Changing node, and rescanning
+
+A note store is a cache of **one chain's** tree, so the wallet records which chain it read (the
+chain id and the node's genesis hash) and checks it on every sync. Point Settings at a node on a
+different chain and nothing is merged: home says so and offers the two real ways out — go back to
+a node on your chain, or rescan for the new one. A node that is simply *behind* your wallet (a
+lagging replica, one restored from a snapshot, or a chain that is halted) is not an error either:
+the wallet says so quietly and carries on by itself once that node catches up.
+
+**Settings → Network → Rescan wallet** forgets how far the wallet has read and reads the node
+again from the start. It is not a wipe: your keys, your password and your settings are untouched,
+and nothing on chain changes. It is the cure for a wallet that has got ahead of the chain it is
+pointed at, and it is what the wrong-chain banner's *Rescan* uses (that one also drops the other
+chain's history, which no longer describes anything).
+
 ## More than one tab
 
 The wallet is a normal web page, so you can open two of them. They share one IndexedDB, and the

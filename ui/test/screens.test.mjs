@@ -959,3 +959,123 @@ test('home: an ordinary scan leaves the banner empty', async (t) => {
   const { root } = await at(t, '#home');
   assert.equal(root.querySelector('[data-role="banner-slot"]').innerHTML, '');
 });
+
+// ------------------------------------------------------------------------- fix round 2 --------
+function scanAnswering(extra, overrides = {}) {
+  return unlockedBackend({
+    sync: {
+      scan: async () => ({
+        notes: [], activity: [], scannedHeight: 40, head: 40, lastSyncMs: Date.now(), ...extra,
+      }),
+      ...overrides,
+    },
+  });
+}
+
+test('home: a node on another chain is a blocking banner with both ways out', async (t) => {
+  const b = scanAnswering({
+    wrongChain: { expected: { chainId: 13, genesis: 'aa' }, got: { chainId: 14, genesis: 'bb' } },
+  });
+  const { root } = await at(t, '#home', b);
+  const banner = root.querySelector('[data-role="banner-slot"] .banner.negative');
+  assert.ok(banner, 'a wrong chain was not reported');
+  assert.match(banner.textContent, /different chain \(chain 14\)/);
+  assert.match(banner.textContent, /chain 13/, "the wallet's own chain is not named");
+  assert.match(banner.textContent, /Nothing has been changed/);
+  assert.ok(banner.querySelector('[data-go="settings"]'), 'no way to change the node');
+  assert.ok(banner.querySelector('[data-action="rescan-chain"]'), 'no way to rescan');
+});
+
+test('home: the wrong-chain Rescan asks first, then calls sync.rescan({forChain: true})', async (t) => {
+  const b = scanAnswering({
+    wrongChain: { expected: { chainId: 13, genesis: 'aa' }, got: { chainId: 14, genesis: 'bb' } },
+  });
+  const { app, root } = await at(t, '#home', b);
+  root.querySelector('[data-action="rescan-chain"]').click();
+  await app.idle();
+
+  const dialog = root.querySelector('[role="dialog"]');
+  assert.ok(dialog, 'it rescanned without asking');
+  assert.match(dialog.textContent, /keys and your password are not touched/);
+  dialog.querySelector('[data-role="confirm"]').click();
+  await app.idle();
+
+  const call = b.calls.find(([name]) => name === 'sync.rescan');
+  assert.ok(call, 'the rescan never happened');
+  assert.equal(call[1].forChain, true, 'a chain change must drop the other chain’s history');
+});
+
+test('home: a node without sync.rescan offers Settings only, not a dead button', async (t) => {
+  const b = scanAnswering({
+    wrongChain: { expected: { chainId: 13, genesis: 'aa' }, got: { chainId: 14, genesis: 'bb' } },
+  });
+  delete b.sync.rescan;
+  const { root } = await at(t, '#home', b);
+  const banner = root.querySelector('[data-role="banner-slot"] .banner.negative');
+  assert.ok(banner.querySelector('[data-go="settings"]'));
+  assert.equal(banner.querySelector('[data-action="rescan-chain"]'), null);
+});
+
+test('home: a node behind the wallet is a quiet notice, not a failure', async (t) => {
+  const b = scanAnswering({ behind: { tip: 12, wallet: 400 } });
+  const { root } = await at(t, '#home', b);
+  const banner = root.querySelector('[data-role="banner-slot"] .banner');
+  assert.ok(banner, 'nothing was said');
+  assert.equal(banner.classList.contains('negative'), false, 'a lagging node is not an error');
+  assert.match(banner.textContent, /behind your wallet/);
+  assert.match(banner.textContent, /block 12/);
+  assert.match(banner.textContent, /read to 400/);
+});
+
+test('home: another tab syncing says so', async (t) => {
+  const b = scanAnswering({ otherTab: true });
+  const { root } = await at(t, '#home', b);
+  assert.match(root.querySelector('[data-role="banner-slot"] .banner').textContent, /Another tab is syncing/);
+});
+
+test('home: node-controlled chain text is escaped, never markup', async (t) => {
+  const b = scanAnswering({
+    wrongChain: { expected: { chainId: 13, genesis: 'aa' }, got: { chainId: '<img src=x onerror=alert(1)>', genesis: 'bb' } },
+  });
+  const { root } = await at(t, '#home', b);
+  const slot = root.querySelector('[data-role="banner-slot"]');
+  assert.equal(slot.querySelector('img'), null, 'a node put an element into the page');
+  assert.match(slot.textContent, /<img src=x onerror=alert\(1\)>/, 'it should be shown as text');
+});
+
+test('settings: Rescan wallet asks first, then calls sync.rescan without forChain', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await at(t, '#settings', b);
+  const btn = root.querySelector('[data-role="rescan"]');
+  assert.ok(btn, 'no rescan control');
+  btn.click();
+  await app.idle();
+
+  const dialog = root.querySelector('[role="dialog"]');
+  assert.ok(dialog, 'it rescanned without asking');
+  assert.match(dialog.textContent, /keys, your password and your settings are not touched/);
+  dialog.querySelector('[data-role="confirm"]').click();
+  await app.idle();
+
+  const call = b.calls.find(([name]) => name === 'sync.rescan');
+  assert.ok(call, 'the rescan never happened');
+  assert.notEqual(call[1] && call[1].forChain, true, 'a plain rescan must keep the notes');
+  assert.match(root.querySelector('[data-role="network-status"]').textContent, /Rescanned/);
+});
+
+test('settings: cancelling the rescan sheet does nothing at all', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await at(t, '#settings', b);
+  root.querySelector('[data-role="rescan"]').click();
+  await app.idle();
+  root.querySelector('[role="dialog"] [data-role="cancel"]').click();
+  await app.idle();
+  assert.equal(b.calls.some(([name]) => name === 'sync.rescan'), false);
+});
+
+test('settings: a backend without sync.rescan renders no rescan control', async (t) => {
+  const b = unlockedBackend();
+  delete b.sync.rescan;
+  const { root } = await at(t, '#settings', b);
+  assert.equal(root.querySelector('[data-role="rescan"]'), null);
+});

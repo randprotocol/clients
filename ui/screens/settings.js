@@ -87,8 +87,17 @@ function networkMarkup(settings) {
         <button class="btn" type="button" data-role="test-connection">Test connection</button>
       </div>
       <div data-role="network-status"></div>
-    </form>`);
+    </form>
+    <div data-role="rescan-slot"></div>`);
 }
+
+// Offered only where the backend has `sync.rescan` (optional in the contract). It is the
+// non-destructive way out of a wallet that has read the wrong chain, or has simply got itself
+// into a state a fresh read would fix — the alternative used to be a wipe, which loses the keys.
+const RESCAN_CONTROL = '<div class="stack tight">'
+  + '<p class="caption">Re-read this node from the start. Your keys, your password and your settings are not touched.</p>'
+  + '<button class="btn block" type="button" data-role="rescan">Rescan wallet</button>'
+  + '</div>';
 
 function appearanceMarkup(settings) {
   const current = settings.theme || 'system';
@@ -188,6 +197,9 @@ registerScreen('settings', {
       ${raw(appearanceMarkup(settings))}
       ${raw(securityMarkup(settings))}
       ${raw(aboutMarkup(platform, settings))}`;
+
+    const rescanSlot = body.querySelector('[data-role="rescan-slot"]');
+    if (rescanSlot && typeof ctx.backend.sync.rescan === 'function') rescanSlot.innerHTML = RESCAN_CONTROL;
 
     const statusEl = body.querySelector('[data-role="network-status"]');
     const rpcInput = body.querySelector('input[name=rpcUrl]');
@@ -299,6 +311,34 @@ registerScreen('settings', {
         return;
       }
       showStatus('positive', 'Connected', `Chain ${theirs || 'unknown'} · height ${heightText}.`);
+    });
+
+    const offRescan = on(body, '[data-role="rescan"]', 'click', (evt) => {
+      evt.preventDefault();
+      const dialog = ctx.sheet(h`
+        <h3 class="sheet-title">Rescan this wallet?</h3>
+        <p class="sheet-sub">The wallet forgets how far it has read and reads this node again from the start. It can take a while on a long chain. Your keys, your password and your settings are not touched, and nothing on chain changes.</p>
+        <div class="sheet-foot">
+          <button class="btn" type="button" data-role="cancel">Cancel</button>
+          <button class="btn btn-primary" type="button" data-role="confirm">Rescan</button>
+        </div>`);
+      on(dialog, '[data-role="cancel"]', 'click', () => ctx.closeSheet());
+      on(dialog, '[data-role="confirm"]', 'click', async () => {
+        ctx.closeSheet();
+        if (!live()) return;
+        showStatus('info', 'Rescanning…', 'Reading this node from the start. You can leave this screen.');
+        try {
+          // Not `forChain`: this is "read it again", not "this is a different chain" — the notes
+          // are kept and the scan re-establishes them.
+          await ctx.backend.sync.rescan({ signal: ctx.session.signal });
+        } catch (err) {
+          if (!live()) return;
+          showStatus('negative', 'The rescan did not finish', (err && err.message) || 'Something went wrong.');
+          return;
+        }
+        if (!live()) return;
+        showStatus('positive', 'Rescanned', 'This wallet has re-read the chain from the start.');
+      });
     });
 
     // ---- appearance ----
@@ -543,7 +583,7 @@ registerScreen('settings', {
     return () => {
       closePanel({ collapse: false });
       for (const mask of body.querySelectorAll('[data-role="mask"]')) mask.textContent = '';
-      offSaveNetwork(); offTest(); offTheme(); offAutoLock();
+      offSaveNetwork(); offTest(); offRescan(); offTheme(); offAutoLock();
       offViewingKey(); offSpendKey(); offUnderstand(); offDone();
       offWipeInput(); offWipe(); offExternal();
     };

@@ -65,6 +65,7 @@ function createBackend(initial = {}, overrides = {}) {
     scannedHeight: 1000,
     head: 1000,
     lastSyncMs: Date.now(),
+    rescans: [],
     ...initial,
   };
 
@@ -141,6 +142,20 @@ function createBackend(initial = {}, overrides = {}) {
         lastSyncMs: state.lastSyncMs,
       };
     },
+  };
+
+  // OPTIONAL in the contract (ui/backend.js), present here so the Settings control and the
+  // wrong-chain banner's action are exercised. A test deletes it to cover the other branch.
+  syncDefs.rescan = async (options = {}) => {
+    state.rescans.push(options || {});
+    if (options && options.forChain) { state.notes = []; state.activity = []; }
+    return {
+      notes: state.notes.map((n) => ({ ...n })),
+      activity: state.activity.map((a) => ({ ...a })),
+      scannedHeight: 0,
+      head: state.head,
+      lastSyncMs: Date.now(),
+    };
   };
 
   const assetsDefs = {

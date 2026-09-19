@@ -924,6 +924,11 @@ body.wide .toast-area { bottom: var(--s-6); }
   font-size: 13px;
   line-height: 1.5;
 }
+/* A banner with more than one action puts them on a row of their own. Beside the text they fit
+   at desktop width and ruin it at 360: two buttons leave the title one word per line. `.grow` +
+   a single button (the node-failure Retry) is unaffected and still sits on the first row. */
+.banner { flex-wrap: wrap; }
+.banner .banner-actions { display: flex; flex: 1 0 100%; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
 .banner .ic { flex: none; color: var(--accent); margin-top: 1px; }
 .banner .ic svg { width: 18px; height: 18px; }
 .banner .banner-title { display: block; font-weight: 650; color: var(--text-strong); margin-bottom: 2px; }

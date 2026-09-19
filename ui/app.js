@@ -1065,6 +1065,12 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       // Ends the session last, so the screen's own cleanup has already run: aborts the signal,
       // closes any sheet and empties ctx.state, exactly as a lock would.
       endSession();
+      // …and then the backend releases whatever it holds outside itself (a BroadcastChannel, a
+      // port, a watcher). Optional in the contract; taken off the raw backend, like the other
+      // lifecycle methods, and never allowed to fail a teardown.
+      if (typeof backend.dispose === 'function') {
+        try { backend.dispose(); } catch (err) { console.error('rand-wallet: backend.dispose() failed', err); }
+      }
       container.textContent = '';
       document.body.classList.remove('compact', 'wide', 'popup', 'nav-on');
     },
