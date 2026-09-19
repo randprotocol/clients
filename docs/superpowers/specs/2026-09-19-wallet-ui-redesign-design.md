@@ -1,6 +1,7 @@
 # Rand Wallet: shared UI, Tauri desktop, web wallet, RAND/RPL — design
 
-Date: 2026-09-19. Status: approved by the user in session. Builds on
+Date: 2026-09-19. Status: approved by the user in session; amended the same day (§11) when the
+owner confirmed the fullnode is already renamed. Builds on
 `2026-09-13-rand-wallet-clients-design.md`; iOS and Android get the rename of §10 and a rebuild,
 no UI work.
 
@@ -175,3 +176,26 @@ Native artefacts are rebuilt with `core/scripts/build-{wasm,ios,android}.sh` aft
 iOS and Android get the rename and a rebuild only, no UI work. Verification: `grep -ri shrugg`
 over our tree returns only the kept items above; core tests, the extension smoke test, the
 desktop build, `xcodebuild` and `gradlew assembleDebug` pass.
+
+## 11. Amendment: the node is already RAND (supersedes §2's last bullet and §10's "Kept")
+
+Fullnode `main` (142e1f7, chain 10) carries upstream commit ed96c39, "rename: SHRUGG/SESH → RAND,
+everywhere": crates `randprotocol-{core,zkvm,client,node,rvm}`, binary `rand-node`, RPC namespace
+`rand_`, address prefix `rand1`, new hash domains. The owner's instruction: no "shrugg" anywhere
+in this repository, in any case, including crate, file and directory names.
+
+So the submodule moves from `03c9fb9` to `main`, `wallet-core` is ported to the renamed crates,
+every client calls `rand_<method>` and validates `rand1…`, `RPC_NAMESPACE = "rand"`,
+`ADDRESS_HRP = "rand1"`, the default chain id is 10, and `core/scripts/check-rename.sh` allows
+nothing (only the inline `rename-guard: allow` marker, and these design records, are exempt).
+Wherever §3–§9 write `shrugg_…` or `shrugg1…`, read `rand_…` and `rand1…`. Keys and addresses
+made on chain 8 do not carry over: the hash domains changed.
+
+`main` also has RPC methods chain 8 lacked (`rand_getCompactBlocks`, `rand_getWitnesses`,
+`rand_getTransactionStatus`, `rand_getHealth`, `rand_getFinality`, `rand_getEmission`,
+`rand_getMempoolInfo`, `rand_getLimits`, `rand_getVersion`, …). §5's "every method the node
+dispatches" now means that larger set; the count is taken from the node's source by the test,
+not written here.
+
+Open, for the owner: upstream is now `GPL-3.0-only`; this repository declares Apache-2.0 and
+links those crates into every binary it ships.

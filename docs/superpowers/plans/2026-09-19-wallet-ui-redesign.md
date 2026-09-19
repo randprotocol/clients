@@ -14,7 +14,7 @@
 
 - No chain crypto outside `wallet-core`; new behaviour is a new `dispatch` method.
 - `ui/` and the extension: vanilla ES modules, no bundler, no framework, no network fonts, no `eval`; CSP `script-src 'self' 'wasm-unsafe-eval'`.
-- Wire names never change: the `shrugg_` RPC namespace, the `shrugg1` address prefix, vendored crate names (`shrugg-core`, `shrugg-zkvm`, `shrugg-client`, `shrugg-node`), `core/vendor/fullnode` untouched. They appear once per language as `RPC_NAMESPACE` / `ADDRESS_HRP`.
+- **Amended (spec §11):** the node is already renamed. Wire names are `rand_<method>` and `rand1…`, crates are `randprotocol-*`, the submodule tracks fullnode `main` (chain 10) and is never edited. No "shrugg" anywhere in any case; `core/scripts/check-rename.sh` allows nothing. The namespace and prefix still appear once per language as `RPC_NAMESPACE = "rand"` / `ADDRESS_HRP = "rand1"`. **Wherever a task below writes `shrugg_…`, `shrugg1…` or a `shrugg-*` crate, read `rand_…`, `rand1…`, `randprotocol-*`.**
 - Display symbol is `RAND`; RPL = registry assets with index ≥ 1. No balance RPC exists; balances come from the local scan.
 - A shell whose `send.canProve().ok` is false never shows a Prove button and never simulates a send.
 - Colours, radius, spacing only from `design/tokens.json`. Aurora gradient only on the balance hero and primary action. Motion 150–250 ms, off under `prefers-reduced-motion`. Targets ≥ 44 px, visible focus, WCAG AA in both themes. Breakpoint: 900 px.
@@ -136,6 +136,12 @@ echo "rename clean"
 - [ ] **Step 3:** Apply the renames listed under **Files**. Then `rm -rf ios/Frameworks/ShruggWalletCore.xcframework android/app/src/main/jniLibs/*/libshrugg_wallet.so && core/scripts/build-ios.sh && core/scripts/build-android.sh`.
 - [ ] **Step 4:** Run, all expected to pass: `core/scripts/check-rename.sh` → `rename clean`; `cd desktop && cargo build`; `cd ios && xcodegen && xcodebuild -scheme RandWallet -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' build CODE_SIGNING_ALLOWED=NO | tail -3` → `BUILD SUCCEEDED`; `cd android && JAVA_HOME=/opt/homebrew/opt/openjdk ./gradlew assembleDebug -q`.
 - [ ] **Step 5:** Commit `rename shrugg to rand across desktop, iOS, Android, web and docs`.
+
+---
+
+### Task 0.4: Move the vendored fullnode to `main` and remove every remaining "shrugg"
+
+Added mid-run on the owner's instruction; full brief in the SDD workspace (`task-0.4-brief.md`): bump `core/vendor/fullnode` 03c9fb9 → 142e1f7, port `wallet-core` to `randprotocol-*`, `rand_` RPC strings and `rand1` addresses in every client, rebuild and re-verify wasm / desktop / iOS / Android, empty the guard's allow list.
 
 ---
 
