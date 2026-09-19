@@ -1,0 +1,93 @@
+/* Developer chrome for ui/gallery.html only — never loaded by a shell.
+   Every class here is prefixed `g-` so nothing in it can be copied into a screen by accident.
+   The one exception is the `.g-stage` block, which re-anchors the fixed components (sheet, modal,
+   tab bar, sidebar, toasts) inside a framed box so they can be inspected side by side. */
+
+.g-bar {
+  position: fixed;
+  top: var(--s-2);
+  right: var(--s-2);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-2);
+}
+.g-bar label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-soft); }
+.g-bar select {
+  min-height: 32px;
+  padding: 0 var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-soft);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.g-spacer { height: 52px; flex: none; }
+body.wide .g-spacer { height: 12px; }
+/* Keep the toolbar from sitting on top of the detail pane in the wide layout. */
+body.wide .detail { padding-top: 64px; }
+
+.g-section { padding: var(--s-6) 0 0; }
+.g-h {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--text-soft);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: var(--s-4);
+}
+.g-note { font-size: 12px; color: var(--text-soft); margin-top: var(--s-2); }
+.g-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--s-3); }
+.g-center { display: flex; justify-content: center; }
+
+/* Framed box that turns fixed-position components into inspectable specimens. */
+.g-stage {
+  position: relative;
+  overflow: hidden;
+  height: 300px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+}
+.g-stage.short { height: 210px; }
+.g-stage.tall { height: 360px; }
+.g-stage .scrim,
+.g-stage .sheet,
+.g-stage .modal,
+.g-stage .tabbar,
+.g-stage .toast-area { position: absolute; }
+.g-stage .sheet { max-width: none; }
+.g-stage .toast-area { bottom: var(--s-4); }
+body.compact .g-stage .sidebar,
+body.wide .g-stage .sidebar { position: static; height: 100%; width: 240px; display: flex; }
+body.compact .g-stage .tabbar,
+body.wide .g-stage .tabbar { display: block; }
+.g-stage .g-stage-body { padding: var(--s-4); }
+
+/* Token swatches. */
+.g-sw { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) 0; font-size: 12px; }
+.g-sw .g-chipcolor { width: 34px; height: 34px; border-radius: var(--r-sm); border: 1px solid var(--border); flex: none; }
+.g-sw .g-name { font-family: var(--mono); font-size: 11px; color: var(--text-soft); }
+.g-c-bg { background: var(--bg); }
+.g-c-bg-soft { background: var(--bg-soft); }
+.g-c-surface { background: var(--surface); }
+.g-c-surface-2 { background: var(--surface-2); }
+.g-c-border { background: var(--border); }
+.g-c-accent { background: var(--accent); }
+.g-c-accent-2 { background: var(--accent-2); }
+.g-c-positive { background: var(--positive); }
+.g-c-negative { background: var(--negative); }
+.g-c-warning { background: var(--warning); }
+.g-c-gradient { background: var(--gradient); }
+
+.g-sprite { display: none; }
+.g-i { width: 18px; height: 18px; }

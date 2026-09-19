@@ -1,0 +1,18 @@
+Self-hosted variable fonts for Rand Wallet. No network fonts: every shell runs under a
+`style-src 'self'` content security policy, so the woff2 files ship with the app.
+
+Inter-Variable.woff2
+  Inter v4.1 — https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip
+  taken verbatim from `web/InterVariable.woff2` inside that archive.
+  Licence: Inter-OFL.txt (SIL Open Font License 1.1), the archive's LICENSE.txt.
+
+JetBrainsMono-Variable.woff2
+  JetBrains Mono v2.304 —
+  https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip
+  The release ships the variable face as TrueType only (`fonts/variable/JetBrainsMono[wght].ttf`),
+  so it was repackaged as woff2 with fontTools (no subsetting, no glyph changes):
+      python3 -c 'from fontTools.ttLib import TTFont; f=TTFont("JetBrainsMono[wght].ttf"); \
+                  f.flavor="woff2"; f.save("JetBrainsMono-Variable.woff2")'
+  Licence: JetBrainsMono-OFL.txt (SIL Open Font License 1.1), the archive's OFL.txt.
+
+Both faces are declared in ui/tokens.css (generated) and reached through --font / --mono.

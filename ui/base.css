@@ -1,0 +1,293 @@
+/* Rand Wallet — base layer: reset, typography, focus, motion, page layout.
+   Load after tokens.css and before components.css:
+
+     <link rel="stylesheet" href="tokens.css">
+     <link rel="stylesheet" href="base.css">
+     <link rel="stylesheet" href="components.css">
+
+   Every colour, radius and spacing step comes from a custom property in tokens.css. The only
+   literal colours anywhere in ui/ are rgba() black and white for shadows, scrims and highlights
+   (they must stay neutral over any surface) and #fff behind a QR code.
+
+   The three shells share this file: the extension popup (fixed 360x600), the web wallet and the
+   Tauri desktop window. `body.compact` is the single-column phone/popup layout; `body.wide` is the
+   desktop sidebar + two-pane layout, switched at --wide-at (900px) by the shell. */
+
+/* ---------------------------------------------------------------- theme-dependent effects --- */
+/* Shadows, scrims and shimmers are not in design/tokens.json: they are neutral black/white alphas
+   that have to be re-tuned per theme, otherwise light looks like an inverted dark. Deep, wide
+   shadows read as depth on near-black; on the light theme they become short and tight, so cards
+   feel like paper rather than like holes. */
+:root {
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .45);
+  --shadow-2: 0 10px 30px -14px rgba(0, 0, 0, .8);
+  --shadow-3: 0 24px 60px -24px rgba(0, 0, 0, .9);
+  --scrim: rgba(4, 6, 12, .62);
+  --hairline: rgba(255, 255, 255, .04);
+  --shimmer: rgba(255, 255, 255, .07);
+  --press: rgba(255, 255, 255, .05);
+}
+:root[data-theme="light"] {
+  --shadow-1: 0 1px 2px rgba(20, 26, 46, .06);
+  --shadow-2: 0 8px 24px -12px rgba(20, 26, 46, .18);
+  --shadow-3: 0 20px 48px -20px rgba(20, 26, 46, .22);
+  --scrim: rgba(20, 26, 46, .38);
+  --hairline: rgba(20, 26, 46, .03);
+  --shimmer: rgba(20, 26, 46, .06);
+  --press: rgba(20, 26, 46, .04);
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --shadow-1: 0 1px 2px rgba(20, 26, 46, .06);
+    --shadow-2: 0 8px 24px -12px rgba(20, 26, 46, .18);
+    --shadow-3: 0 20px 48px -20px rgba(20, 26, 46, .22);
+    --scrim: rgba(20, 26, 46, .38);
+    --hairline: rgba(20, 26, 46, .03);
+    --shimmer: rgba(20, 26, 46, .06);
+    --press: rgba(20, 26, 46, .04);
+  }
+}
+
+/* --------------------------------------------------------------------------------- reset --- */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-body);
+  line-height: 1.45;
+  letter-spacing: -0.006em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, p, figure, blockquote, dl, dd { margin: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+
+img, svg, canvas, video { display: block; max-width: 100%; }
+
+button, input, textarea, select {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  margin: 0;
+}
+button { background: none; border: 0; padding: 0; cursor: pointer; }
+button:disabled { cursor: default; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+hr { border: 0; border-top: 1px solid var(--border-soft); margin: var(--s-4) 0; }
+
+::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--text-strong); }
+
+[hidden] { display: none !important; }
+
+/* ---------------------------------------------------------------------------- typography --- */
+.title {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-title);
+  color: var(--text-strong);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.subtitle { font-size: var(--fs-body); color: var(--text-soft); }
+.caption { font-size: var(--fs-caption); font-weight: var(--fw-caption); color: var(--text-soft); }
+
+/* Small all-caps label above a group of cards or rows. */
+.section-title {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-soft);
+  margin: var(--s-5) var(--s-1) var(--s-2);
+}
+
+/* Addresses, hashes, keys. The variable mono face runs a touch large next to Inter. */
+.mono {
+  font-family: var(--mono);
+  font-size: .92em;
+  letter-spacing: 0;
+  font-variant-ligatures: none;
+  word-break: break-all;
+}
+
+/* Every number the user can compare: balances, amounts, fees, block heights. Tabular figures keep
+   digits from dancing while a balance updates. */
+.amount {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.015em;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.amount .unit {
+  font-size: .62em;
+  font-weight: 600;
+  opacity: .78;
+  margin-left: .32em;
+  letter-spacing: 0;
+}
+.amount.in { color: var(--positive); }
+.amount.out { color: var(--text-strong); }
+
+.muted { color: var(--text-soft); }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* --------------------------------------------------------------------------------- focus --- */
+/* One ring, on everything focusable, in both themes. Pointer clicks never show it; keyboard
+   always does. Components that draw their own inner glow keep this outline on top of it. */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+.btn:focus-visible,
+.btn-primary:focus-visible,
+.btn-ghost:focus-visible,
+.btn-round:focus-visible,
+.row:focus-visible,
+.chip:focus-visible,
+.card:focus-visible,
+.avatar:focus-visible,
+.tabbar .tab:focus-visible,
+.sidebar .nav-item:focus-visible,
+.field input:focus-visible,
+.field textarea:focus-visible,
+.field select:focus-visible,
+.input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* --------------------------------------------------------------------------------- motion --- */
+/* House curve: 150–250 ms, ease-out, nothing springy. */
+:root {
+  --ease: cubic-bezier(.2, .8, .3, 1);
+  --fast: 150ms;
+  --mid: 200ms;
+  --slow: 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------------ scroll surfaces --- */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.scroll::-webkit-scrollbar { width: 10px; }
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: var(--r-pill);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.scroll::-webkit-scrollbar-thumb:hover { background: var(--text-mute); background-clip: content-box; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* --------------------------------------------------------------------- layout primitives --- */
+.stack { display: flex; flex-direction: column; gap: var(--s-3); }
+.stack.tight { gap: var(--s-2); }
+.stack.loose { gap: var(--s-5); }
+.cluster { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.grow { flex: 1; min-width: 0; }
+
+/* Top bar of a screen: back button, title, one trailing action. */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 56px;
+  padding: var(--s-2) var(--s-1);
+}
+.topbar .topbar-title {
+  flex: 1;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.01em;
+}
+.topbar .spacer { width: var(--tap); flex: none; }
+
+.brand { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); }
+.brand .mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--accent);
+  flex: none;
+  box-shadow: var(--shadow-1);
+}
+.brand .name { font-weight: 700; font-size: 16px; color: var(--text-strong); letter-spacing: -0.02em; }
+
+/* ------------------------------------------------------------------------- page skeletons --- */
+/* Compact: the extension popup, the phone-width web wallet and the narrow desktop window. One
+   column, centred, with room at the bottom for the fixed tab bar. */
+body.compact {
+  min-height: 100vh;
+}
+body.compact .app {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 0 var(--s-4) calc(72px + var(--s-6));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+body.compact.popup {
+  width: var(--popup-w);
+  height: var(--popup-h);
+  overflow: hidden;
+}
+
+/* Wide: desktop. Sidebar | main | detail pane. minmax(0, …) so long hashes cannot push the grid. */
+body.wide {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) minmax(0, 420px);
+  align-items: start;
+}
+body.wide .app {
+  grid-column: 2;
+  padding: var(--s-5) var(--s-7) var(--s-8);
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+body.wide .detail {
+  grid-column: 3;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
+  overflow-y: auto;
+  padding: var(--s-5) var(--s-6) var(--s-8) 0;
+}
+body.compact .detail { display: none; }

@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rand Wallet — UI gallery</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="components.css">
+<link rel="stylesheet" href="gallery.css">
+<script src="gallery.js" type="module"></script>
+</head>
+<body class="compact">
+
+<!-- Icon sprite. Screens can copy the symbols they need; <use> keeps the markup readable. -->
+<svg class="g-sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></symbol>
+  <symbol id="i-receive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v6c0 4.2 2.8 7.6 7 9 4.2-1.4 7-4.8 7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3"/><path d="M20 16H7l3 3"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 11 8-7 8 7"/><path d="M6 10v9h12v-9"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 1.8"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="m15 9-2 4-4 2 2-4z"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10 1.4 1.4m0-12.8-1.4 1.4m-10 10-1.4 1.4"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5.5A1.5 1.5 0 0 0 13.5 4h-8A1.5 1.5 0 0 0 4 5.5v8A1.5 1.5 0 0 0 5.5 15"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17.2h.01"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></symbol>
+</svg>
+
+<!-- Developer toolbar (gallery only). ?theme=dark|light|system&layout=compact|wide also works. -->
+<div class="g-bar">
+  <label for="theme-select">Theme</label>
+  <select id="theme-select">
+    <option value="system">System</option>
+    <option value="dark">Dark</option>
+    <option value="light">Light</option>
+  </select>
+  <label for="layout-select">Layout</label>
+  <select id="layout-select">
+    <option value="compact">Compact</option>
+    <option value="wide">Wide</option>
+  </select>
+</div>
+
+<!-- Wide layout column 1. Hidden under body.compact. -->
+<aside class="sidebar">
+  <div class="brand">
+    <span class="mark"></span>
+    <span class="name">Rand Wallet</span>
+  </div>
+  <a class="nav-item on" href="#home"><svg class="g-i"><use href="#i-home"/></svg>Home</a>
+  <a class="nav-item" href="#activity"><svg class="g-i"><use href="#i-clock"/></svg>Activity</a>
+  <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
+  <a class="nav-item" href="#settings"><svg class="g-i"><use href="#i-settings"/></svg>Settings</a>
+  <div class="sidebar-foot">
+    <button class="chip" type="button"><span class="dot"></span>Chain 8 · synced</button>
+  </div>
+</aside>
+
+<main class="app">
+  <div class="g-spacer"></div>
+
+  <!-- ============================ mock home screen ============================ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark"></span>
+      <span class="name">Account 1</span>
+    </div>
+    <span class="grow"></span>
+    <button class="chip" type="button"><span class="mono">rand1q9x…7k2m</span><svg class="g-i"><use href="#i-copy"/></svg></button>
+  </header>
+
+  <section class="hero" id="home">
+    <span class="label">Shielded balance</span>
+    <span class="amount">1,284.5392<span class="unit">RAND</span></span>
+    <span class="fiat">≈ $3,918.41</span>
+    <div class="hero-foot">
+      <span class="dot"></span>
+      <span>Synced to block 1,402,918</span>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button class="btn-round" type="button">
+      <span class="ic"><svg><use href="#i-send"/></svg></span>
+      <span class="cap">Send</span>
+    </button>
+    <button class="btn-round" type="button">
+      <span class="ic"><svg><use href="#i-receive"/></svg></span>
+      <span class="cap">Receive</span>
+    </button>
+    <button class="btn-round" type="button">
+      <span class="ic"><svg><use href="#i-shield"/></svg></span>
+      <span class="cap">Shield</span>
+    </button>
+    <button class="btn-round" type="button">
+      <span class="ic"><svg><use href="#i-swap"/></svg></span>
+      <span class="cap">Swap</span>
+    </button>
+  </div>
+
+  <h2 class="section-title">Assets</h2>
+  <div class="card flush">
+    <div class="list">
+      <button class="row" type="button">
+        <span class="avatar accent">R</span>
+        <span class="row-main">
+          <span class="row-title">Rand</span>
+          <span class="row-sub">Shielded · RAND</span>
+        </span>
+        <span class="row-end">
+          <span class="amount">1,284.5392</span>
+          <span class="row-meta">$3,918.41</span>
+        </span>
+      </button>
+      <button class="row" type="button">
+        <span class="avatar">T</span>
+        <span class="row-main">
+          <span class="row-title">Test USD</span>
+          <span class="row-sub">Shielded · tUSD</span>
+        </span>
+        <span class="row-end">
+          <span class="amount">420.0000</span>
+          <span class="row-meta">$420.00</span>
+        </span>
+      </button>
+      <button class="row" type="button">
+        <span class="avatar">N</span>
+        <span class="row-main">
+          <span class="row-title">Notes pending</span>
+          <span class="row-sub">3 notes awaiting confirmation</span>
+        </span>
+        <span class="row-end">
+          <span class="amount">12.0500</span>
+          <span class="row-meta">2 blocks</span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <h2 class="section-title" id="activity">Activity</h2>
+  <div class="card flush">
+    <div class="list">
+      <button class="row" type="button">
+        <span class="avatar in"><svg><use href="#i-receive"/></svg></span>
+        <span class="row-main">
+          <span class="row-title">Received</span>
+          <span class="row-sub mono">rand1q9x…7k2m</span>
+        </span>
+        <span class="row-end">
+          <span class="amount in">+24.0000</span>
+          <span class="row-meta">2 min ago</span>
+        </span>
+      </button>
+      <button class="row" type="button">
+        <span class="avatar out"><svg><use href="#i-send"/></svg></span>
+        <span class="row-main">
+          <span class="row-title">Sent</span>
+          <span class="row-sub mono">rand1p4r…9v3d</span>
+        </span>
+        <span class="row-end">
+          <span class="amount">−8.2500</span>
+          <span class="row-meta">Today, 09:14</span>
+        </span>
+      </button>
+      <button class="row" type="button">
+        <span class="avatar pending"><svg><use href="#i-clock"/></svg></span>
+        <span class="row-main">
+          <span class="row-title">Proving</span>
+          <span class="row-sub">Bundle proof · 62 %</span>
+        </span>
+        <span class="row-end">
+          <span class="amount">−120.0000</span>
+          <span class="row-meta">Pending</span>
+        </span>
+      </button>
+      <button class="row" type="button">
+        <span class="avatar failed"><svg><use href="#i-close"/></svg></span>
+        <span class="row-main">
+          <span class="row-title">Failed</span>
+          <span class="row-sub">Insufficient shielded notes</span>
+        </span>
+        <span class="row-end">
+          <span class="amount">−60.0000</span>
+          <span class="row-meta">Yesterday</span>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================ buttons ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Buttons</h2>
+    <div class="stack">
+      <button class="btn btn-primary block" type="button"><svg class="g-i"><use href="#i-send"/></svg>Review send</button>
+      <div class="cluster">
+        <button class="btn" type="button">Secondary</button>
+        <button class="btn btn-ghost" type="button">Ghost</button>
+        <button class="btn danger" type="button">Remove</button>
+        <button class="btn sm" type="button">Max</button>
+        <button class="btn btn-icon" type="button" aria-label="Back"><svg class="g-i"><use href="#i-back"/></svg></button>
+      </div>
+      <div class="cluster">
+        <button class="btn btn-primary" type="button" disabled>Disabled primary</button>
+        <button class="btn" type="button" disabled>Disabled</button>
+      </div>
+    </div>
+    <p class="g-note">Press: scale .98 · hover: one step lighter · focus: 2 px accent ring, 2 px offset.</p>
+  </section>
+
+  <!-- ============================ fields ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Form fields</h2>
+    <div class="card">
+      <div class="stack loose">
+        <label class="field">
+          <span class="label">Recipient</span>
+          <input type="text" value="rand1q9x…7k2m" spellcheck="false">
+          <span class="hint">Shielded addresses start with rand1.</span>
+        </label>
+        <label class="field amount-field">
+          <span class="label">Amount</span>
+          <input type="text" inputmode="decimal" value="120.0000">
+          <span class="hint">Available 1,284.5392 RAND · fee 0.0021 RAND</span>
+        </label>
+        <label class="field invalid">
+          <span class="label">Memo</span>
+          <input type="text" value="rent for the loft in the old mill district" aria-invalid="true">
+          <span class="hint">Encrypted, visible only to the recipient.</span>
+          <span class="error">Memo is 512 bytes over the note limit.</span>
+        </label>
+        <label class="field">
+          <span class="label">Recovery phrase</span>
+          <textarea rows="3" spellcheck="false">abandon ability able about above absent absorb abstract absurd abuse access accident</textarea>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ chips & banners ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Chips</h2>
+    <div class="cluster">
+      <button class="chip on" type="button">All</button>
+      <button class="chip" type="button">Sent</button>
+      <button class="chip" type="button">Received</button>
+      <span class="chip positive"><svg class="g-i"><use href="#i-check"/></svg>Confirmed</span>
+      <span class="chip warn">Pending</span>
+      <span class="chip negative">Failed</span>
+      <button class="chip" type="button"><span class="mono">rand1q9x…7k2m</span><svg class="g-i"><use href="#i-copy"/></svg></button>
+    </div>
+  </section>
+
+  <section class="g-section">
+    <h2 class="g-h">Banners</h2>
+    <div class="stack">
+      <div class="banner">
+        <span class="ic"><svg><use href="#i-info"/></svg></span>
+        <span><span class="banner-title">Shielded by default</span>Every transfer is proved locally; nothing leaves this device unencrypted.</span>
+      </div>
+      <div class="banner warn">
+        <span class="ic"><svg><use href="#i-alert"/></svg></span>
+        <span><span class="banner-title">Proving needs memory</span>A bundle proof needs about 5.5 GB of RAM. Close heavy tabs first.</span>
+      </div>
+      <div class="banner negative">
+        <span class="ic"><svg><use href="#i-alert"/></svg></span>
+        <span><span class="banner-title">Node unreachable</span>Retrying the fullnode connection every 15 seconds.</span>
+      </div>
+      <div class="banner positive">
+        <span class="ic"><svg><use href="#i-check"/></svg></span>
+        <span><span class="banner-title">Backed up</span>Your recovery phrase was confirmed on this device.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ proving ring ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Proving ring</h2>
+    <div class="card">
+      <div class="g-grid">
+        <div class="g-center">
+          <div class="ring lg" data-pct="0.6" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Generating proof">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="ring-track" cx="60" cy="60" r="52"/>
+              <circle class="ring-bar" cx="60" cy="60" r="52"/>
+            </svg>
+            <div class="ring-label">
+              <span class="ring-pct amount">60%</span>
+              <span class="ring-cap">Proving</span>
+            </div>
+          </div>
+        </div>
+        <div class="g-center">
+          <div class="ring spin" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle class="ring-track" cx="60" cy="60" r="52"/>
+              <circle class="ring-bar" cx="60" cy="60" r="52"/>
+            </svg>
+            <div class="ring-label">
+              <span class="ring-cap">Building<br>witness</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="kv"><span class="k">Elapsed</span><span class="v amount mono">00:41</span></div>
+      <div class="kv"><span class="k">Circuit</span><span class="v">bundle · 5.5 GB</span></div>
+    </div>
+  </section>
+
+  <!-- ============================ receive / QR ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Receive</h2>
+    <div class="card">
+      <div class="stack">
+        <div class="qr">
+          <svg viewBox="0 0 29 29" shape-rendering="crispEdges" aria-label="QR code placeholder" xmlns="http://www.w3.org/2000/svg">
+            <rect width="29" height="29" fill="#fff"/>
+            <path fill="#000" d="M0 0h7v7H0zM22 0h7v7h-7zM0 22h7v7H0zM2 2h3v3H2zM24 2h3v3h-3zM2 24h3v3H2zM9 0h2v2H9zM13 1h2v2h-2zM17 0h2v3h-2zM9 4h3v2H9zM14 4h2v2h-2zM18 5h2v2h-2zM0 9h2v2H0zM4 9h2v2H4zM9 9h2v2H9zM13 9h3v2h-3zM18 9h2v2h-2zM22 9h2v2h-2zM26 9h3v2h-3zM2 12h3v2H2zM7 12h2v3H7zM11 12h2v2h-2zM15 12h2v3h-2zM19 12h3v2h-3zM24 12h2v2h-2zM0 16h2v2H0zM5 16h3v2H5zM10 16h2v2h-2zM14 16h2v2h-2zM18 16h2v3h-2zM22 16h2v2h-2zM26 16h2v2h-2zM3 19h2v2H3zM9 19h3v2H9zM13 19h2v2h-2zM17 19h2v2h-2zM21 19h2v2h-2zM25 19h3v2h-3zM9 22h2v3H9zM13 23h3v2h-3zM18 22h2v2h-2zM22 23h2v2h-2zM26 22h2v3h-2zM10 26h3v2h-3zM15 26h2v2h-2zM19 26h3v2h-3zM24 26h2v2h-2z"/>
+          </svg>
+        </div>
+        <div class="cluster">
+          <button class="chip" type="button"><span class="mono">rand1q9x…7k2m</span><svg class="g-i"><use href="#i-copy"/></svg></button>
+          <button class="chip" type="button">Set amount</button>
+        </div>
+        <button class="btn block" type="button"><svg class="g-i"><use href="#i-copy"/></svg>Copy address</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ sheet / modal ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Sheet (compact) and modal (wide)</h2>
+    <div class="g-stage tall">
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <h3 class="sheet-title">Confirm send</h3>
+        <p class="sheet-sub">This spends 3 shielded notes and creates a new change note.</p>
+        <div class="kv"><span class="k">To</span><span class="v mono">rand1p4r…9v3d</span></div>
+        <div class="kv"><span class="k">Amount</span><span class="v amount">120.0000 RAND</span></div>
+        <div class="kv"><span class="k">Network fee</span><span class="v amount">0.0021 RAND</span></div>
+        <div class="sheet-foot">
+          <button class="btn" type="button">Cancel</button>
+          <button class="btn btn-primary" type="button">Prove &amp; send</button>
+        </div>
+      </div>
+    </div>
+    <div class="g-stage short">
+      <div class="scrim"></div>
+      <div class="modal">
+        <h3 class="modal-title">Remove this account?</h3>
+        <p class="modal-sub">The account stays on chain. You will need its recovery phrase to restore it here.</p>
+        <div class="modal-foot">
+          <button class="btn" type="button">Keep</button>
+          <button class="btn danger" type="button">Remove</button>
+        </div>
+      </div>
+    </div>
+    <div class="cluster">
+      <button class="btn" id="open-sheet" type="button">Open the real overlay</button>
+      <button class="btn" id="show-toast" type="button">Show a toast</button>
+    </div>
+  </section>
+
+  <!-- ============================ toasts ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Toasts</h2>
+    <div class="g-stage short">
+      <div class="toast-area">
+        <div class="toast"><span class="ic"><svg class="g-i"><use href="#i-info"/></svg></span>Scanning 412 blocks…</div>
+        <div class="toast positive"><span class="ic"><svg class="g-i"><use href="#i-check"/></svg></span>Address copied</div>
+        <div class="toast negative"><span class="ic"><svg class="g-i"><use href="#i-alert"/></svg></span>Transaction rejected by the node</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ navigation ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Tab bar (compact) and sidebar (wide)</h2>
+    <div class="g-stage short">
+      <nav class="tabbar">
+        <div class="tabbar-inner">
+          <a class="tab on" href="#home"><svg><use href="#i-home"/></svg>Home</a>
+          <a class="tab" href="#activity"><svg><use href="#i-clock"/></svg>Activity</a>
+          <a class="tab" href="#explore"><svg><use href="#i-compass"/></svg>Explore</a>
+          <a class="tab" href="#settings"><svg><use href="#i-settings"/></svg>Settings</a>
+        </div>
+      </nav>
+    </div>
+    <div class="g-stage">
+      <aside class="sidebar">
+        <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
+        <a class="nav-item on" href="#home"><svg class="g-i"><use href="#i-home"/></svg>Home</a>
+        <a class="nav-item" href="#activity"><svg class="g-i"><use href="#i-clock"/></svg>Activity</a>
+        <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
+        <a class="nav-item" href="#settings"><svg class="g-i"><use href="#i-settings"/></svg>Settings</a>
+        <div class="sidebar-foot">
+          <button class="chip" type="button"><svg class="g-i"><use href="#i-plus"/></svg>Add account</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ skeletons ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Loading</h2>
+    <div class="stack">
+      <div class="skeleton hero"></div>
+      <div class="card flush">
+        <div class="list">
+          <div class="row">
+            <span class="skeleton circle"></span>
+            <span class="row-main">
+              <span class="skeleton line lg"></span>
+              <span class="skeleton line sm"></span>
+            </span>
+          </div>
+          <div class="row">
+            <span class="skeleton circle"></span>
+            <span class="row-main">
+              <span class="skeleton line lg"></span>
+              <span class="skeleton line sm"></span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ empty state ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Empty state</h2>
+    <div class="card">
+      <div class="empty">
+        <span class="avatar lg"><svg><use href="#i-clock"/></svg></span>
+        <span class="empty-title">No activity yet</span>
+        <span>Transactions you send or receive will appear here.</span>
+        <button class="btn sm" type="button">Receive RAND</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ type & tokens ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Type</h2>
+    <div class="card stack">
+      <span class="title">Send RAND</span>
+      <span class="subtitle">Body text at 15 px sits on --text; secondary lines use --text-soft.</span>
+      <span class="amount">1,284.5392<span class="unit">RAND</span></span>
+      <span class="mono">rand1q9x8f4k2m0p7z3v6n9c1b4a7s2d5f8g1h4j7k2m</span>
+      <span class="caption">Caption · 12 px · --text-soft</span>
+    </div>
+  </section>
+
+  <section class="g-section">
+    <h2 class="g-h">Tokens</h2>
+    <div class="card">
+      <div class="g-grid">
+        <div>
+          <div class="g-sw"><span class="g-chipcolor g-c-bg"></span><span class="g-name">--bg</span></div>
+          <div class="g-sw"><span class="g-chipcolor g-c-bg-soft"></span><span class="g-name">--bg-soft</span></div>
+          <div class="g-sw"><span class="g-chipcolor g-c-surface"></span><span class="g-name">--surface</span></div>
+          <div class="g-sw"><span class="g-chipcolor g-c-surface-2"></span><span class="g-name">--surface-2</span></div>
+        </div>
+        <div>
+          <div class="g-sw"><span class="g-chipcolor g-c-border"></span><span class="g-name">--border</span></div>
+          <div class="g-sw"><span class="g-chipcolor g-c-accent"></span><span class="g-name">--accent</span></div>
+          <div class="g-sw"><span class="g-chipcolor g-c-accent-2"></span><span class="g-name">--accent-2</span></div>
+          <div class="g-sw"><span class="g-chipcolor g-c-gradient"></span><span class="g-name">--gradient</span></div>
+        </div>
+        <div>
+          <div class="g-sw"><span class="g-chipcolor g-c-positive"></span><span class="g-name">--positive</span></div>
+          <div class="g-sw"><span class="g-chipcolor g-c-negative"></span><span class="g-name">--negative</span></div>
+          <div class="g-sw"><span class="g-chipcolor g-c-warning"></span><span class="g-name">--warning</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Wide layout column 3. Hidden under body.compact. -->
+<aside class="detail">
+  <div class="card stack">
+    <div class="card-head">
+      <h3>Transaction</h3>
+      <span class="chip positive"><svg class="g-i"><use href="#i-check"/></svg>Confirmed</span>
+    </div>
+    <span class="amount">−8.2500<span class="unit">RAND</span></span>
+    <div class="kv"><span class="k">To</span><span class="v mono">rand1p4r…9v3d</span></div>
+    <div class="kv"><span class="k">Block</span><span class="v amount">1,402,914</span></div>
+    <div class="kv"><span class="k">Fee</span><span class="v amount">0.0021 RAND</span></div>
+    <div class="kv"><span class="k">Memo</span><span class="v">Rent, September</span></div>
+    <button class="btn block" type="button">View in explorer</button>
+  </div>
+</aside>
+
+<!-- Real overlay, opened by the button above (or ?overlay=sheet). -->
+<div class="scrim" id="live-scrim" hidden></div>
+<div class="sheet" id="live-sheet" hidden role="dialog" aria-modal="true" aria-label="Confirm send">
+  <div class="grab"></div>
+  <h3 class="sheet-title">Confirm send</h3>
+  <p class="sheet-sub">Sliding up over a fading scrim, 220 ms, ease-out.</p>
+  <div class="kv"><span class="k">To</span><span class="v mono">rand1p4r…9v3d</span></div>
+  <div class="kv"><span class="k">Amount</span><span class="v amount">120.0000 RAND</span></div>
+  <div class="sheet-foot">
+    <button class="btn" id="close-sheet" type="button">Cancel</button>
+    <button class="btn btn-primary" type="button">Prove &amp; send</button>
+  </div>
+</div>
+
+<div class="toast-area" id="live-toasts"></div>
+
+<!-- Real tab bar. Hidden under body.wide. -->
+<nav class="tabbar">
+  <div class="tabbar-inner">
+    <a class="tab on" href="#home"><svg><use href="#i-home"/></svg>Home</a>
+    <a class="tab" href="#activity"><svg><use href="#i-clock"/></svg>Activity</a>
+    <a class="tab" href="#explore"><svg><use href="#i-compass"/></svg>Explore</a>
+    <a class="tab" href="#settings"><svg><use href="#i-settings"/></svg>Settings</a>
+  </div>
+</nav>
+
+</body>
+</html>
