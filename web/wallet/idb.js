@@ -49,6 +49,19 @@ function run(db, mode, fn) {
 }
 
 /**
+ * A conditional write lost its race. Identified by `name`, not by class, so `ui/engine/` can
+ * recognise it (`isStaleStoreError`) without this file and that one having to share a module.
+ */
+export class StaleStoreError extends Error {
+  constructor(key, expected, found) {
+    super(`${key} changed underneath this write (expected revision ${expected}, found ${found})`);
+    this.name = 'StaleStoreError';
+    this.expectedRev = expected;
+    this.foundRev = found;
+  }
+}
+
+/**
  * `idbStorage(dbName = 'rand-wallet')` → the `storage` object `makeWasmBackend` takes:
  * `{get, set, remove, clear, session: {get, set, remove}}`, all async.
  */
@@ -68,6 +81,47 @@ export function idbStorage(dbName = 'rand-wallet') {
     async remove(key) {
       const db = await openDb(dbName);
       await run(db, 'readwrite', (store) => store.delete(key));
+    },
+
+    /**
+     * OPTIONAL in the storage contract (see ui/engine/backend-wasm.js): writes `value` at `key`
+     * **only if** what is stored there is still at revision `expectedRev`, and resolves with the
+     * new revision. The read and the write happen in **one** IndexedDB readwrite transaction,
+     * which the database serialises against every other one on this store, so nothing can slip in
+     * between them.
+     *
+     * This is what stops two tabs of the same wallet from silently overwriting each other's note
+     * store. Without it the last writer wins and one tab's whole scan disappears — including,
+     * potentially, a cursor that had moved further than the surviving tab's.
+     *
+     * `expectedRev === undefined` means "there was nothing stored when I loaded it".
+     * A mismatch rejects with `StaleStoreError`; the engine merges and retries once.
+     */
+    async compareAndSet(key, expectedRev, value) {
+      const db = await openDb(dbName);
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        const store = tx.objectStore(STORE);
+        let nextRev;
+        let stale = null;
+        const read = store.get(key);
+        read.onsuccess = () => {
+          const current = read.result;
+          const found = current && typeof current === 'object' ? current.rev : undefined;
+          if (found !== expectedRev) {
+            stale = new StaleStoreError(key, expectedRev, found);
+            // Aborting is what makes this atomic: the put below never happens.
+            try { tx.abort(); } catch { /* already finishing */ }
+            return;
+          }
+          nextRev = Number.isSafeInteger(found) ? found + 1 : 1;
+          store.put({ ...value, rev: nextRev }, key);
+        };
+        tx.oncomplete = () => resolve(nextRev);
+        // An explicit `abort()` leaves `tx.error` null, so the stale error is carried across.
+        tx.onabort = () => reject(stale || tx.error || new Error('transaction aborted'));
+        tx.onerror = () => reject(stale || tx.error);
+      });
     },
     async clear() {
       session.clear();

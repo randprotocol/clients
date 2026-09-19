@@ -63,6 +63,35 @@ function statusOf(response) {
   return Number(String(response).split('\r\n')[0].split(' ')[1]);
 }
 
+/** The header set every response must carry — a 403 and a 404 are served to a browser too. */
+const REQUIRED_HEADERS = {
+  'content-security-policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; "
+    + "img-src 'self' data:; font-src 'self'; connect-src *; worker-src 'self'; base-uri 'none'; "
+    + "form-action 'none'; frame-ancestors 'none'",
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer',
+  'cross-origin-opener-policy': 'same-origin',
+  'cross-origin-embedder-policy': 'require-corp',
+  'cache-control': 'no-store',
+};
+
+/** Parses a raw HTTP/1.1 response's headers into a lower-cased map. */
+function headersOf(response) {
+  const head = String(response).split('\r\n\r\n')[0].split('\r\n').slice(1);
+  const out = {};
+  for (const line of head) {
+    const i = line.indexOf(':');
+    if (i > 0) out[line.slice(0, i).trim().toLowerCase()] = line.slice(i + 1).trim();
+  }
+  return out;
+}
+
+function assertSecurityHeaders(headers, what) {
+  for (const [name, value] of Object.entries(REQUIRED_HEADERS)) {
+    assert.equal(headers[name], value, `${what}: ${name}`);
+  }
+}
+
 test('serve.mjs: headers, MIME, binding, traversal and Host', async (t) => {
   const { base, root } = await fixture();
   const server = await start(root);
@@ -127,6 +156,27 @@ test('serve.mjs: headers, MIME, binding, traversal and Host', async (t) => {
   await t.test('only GET and HEAD', async () => {
     const res = await fetch(`${origin}/`, { method: 'POST' });
     assert.equal(res.status, 405);
+  });
+
+  await t.test('a refusal carries the same headers as a success', async () => {
+    // A 403 or a 404 is rendered by the browser in this origin too, so dropping the CSP on the
+    // error path would leave exactly the responses an attacker can most easily provoke unprotected.
+    const forbidden = await raw(server.port, ['GET / HTTP/1.1', 'Host: evil.example', 'Connection: close']);
+    assert.equal(statusOf(forbidden), 403);
+    assertSecurityHeaders(headersOf(forbidden), 'a 403 (bad Host)');
+
+    const missing = await raw(server.port, [`GET /nope.js HTTP/1.1`, `Host: 127.0.0.1:${server.port}`, 'Connection: close']);
+    assert.equal(statusOf(missing), 404);
+    assertSecurityHeaders(headersOf(missing), 'a 404');
+
+    const traversal = await raw(server.port, ['GET /../SECRET.txt HTTP/1.1', `Host: 127.0.0.1:${server.port}`, 'Connection: close']);
+    assert.ok([403, 404].includes(statusOf(traversal)));
+    assertSecurityHeaders(headersOf(traversal), 'a refused traversal');
+
+    const wrongMethod = await raw(server.port, ['POST / HTTP/1.1', `Host: 127.0.0.1:${server.port}`, 'Content-Length: 0', 'Connection: close']);
+    assert.equal(statusOf(wrongMethod), 405);
+    assertSecurityHeaders(headersOf(wrongMethod), 'a 405');
+    assert.equal(headersOf(wrongMethod).allow, 'GET, HEAD');
   });
 
   await t.test('an unknown path is 404, and a directory serves its index', async () => {

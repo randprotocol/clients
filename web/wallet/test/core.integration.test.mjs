@@ -9,6 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { makeWasmBackend } from '../../../ui/engine/backend-wasm.js';
+import { BUNDLE_INPUTS } from '../../../ui/engine/wallet.js';
 import { assertBackend } from '../../../ui/backend.js';
 
 const CORE_JS = new URL('../../../extension/shared/core/rand_wallet.js', import.meta.url);
@@ -61,6 +62,9 @@ async function build() {
     platform: { name: 'node-integration', openExternal() {}, copy() {} },
     // No node is reachable from a test machine; nothing below asks for one.
     fetch: async () => { throw new Error('this test does not talk to a node'); },
+    // Node has a real BroadcastChannel and a ref'd one would keep this process alive for ever.
+    locks: null,
+    broadcast: null,
   });
   return { backend, storage, core };
 }
@@ -171,4 +175,49 @@ test('an empty wallet has one asset, no notes and cannot prove', { skip }, async
   assert.equal(prove.ok, false);
   assert.match(prove.reason, /5\.5 GB/);
   await assert.rejects(() => backend.send.send({ asset: 0, to: 'rand1x', amount: '1' }, () => {}), (err) => err.definite === true);
+});
+
+test('BUNDLE_INPUTS matches what the real core will actually select', { skip }, async () => {
+  // `maxSendable` takes "the largest N spendable notes" from `BUNDLE_INPUTS`, which is a chain
+  // rule written down in JavaScript. This is the cross-check that it is the *right* number: the
+  // core is asked to select for a need that N notes can cover and for one that needs N + 1.
+  const core = await realCore();
+  const call = (m, p) => core.call(m, p);
+  const note = (index, units) => ({
+    index, note: '00'.repeat(112), cm: `${index}`.padStart(2, '0').repeat(32),
+    nf: `${index + 50}`.padStart(2, '0').repeat(32), amount: String(units), asset: 0,
+    time: 1, from: '00'.repeat(32), height: 1, spent: false, pending: null,
+  });
+  const ONE = 1_000_000_000;
+  const notes = Array.from({ length: BUNDLE_INPUTS + 1 }, (_, i) => note(i, ONE));
+
+  // Exactly BUNDLE_INPUTS notes' worth: selectable.
+  const fits = await call('select_inputs', { notes, asset: 0, need: String(BUNDLE_INPUTS * ONE) });
+  assert.equal(fits.chosen.length, BUNDLE_INPUTS, `the core chose ${fits.chosen.length}, not ${BUNDLE_INPUTS}`);
+
+  // One unit more than BUNDLE_INPUTS notes hold, with a further note available: refused, which is
+  // what proves the limit is BUNDLE_INPUTS and not something larger.
+  await assert.rejects(
+    () => call('select_inputs', { notes, asset: 0, need: String(BUNDLE_INPUTS * ONE + 1) }),
+    /more than two notes|consolidate/i,
+    `the core accepted a selection needing ${BUNDLE_INPUTS + 1} notes, so BUNDLE_INPUTS is wrong`,
+  );
+
+  // And the constant is not reported by the core today — if it ever is, maxSendable prefers it.
+  const constants = await call('version', {});
+  if (constants.bundle_inputs !== undefined) {
+    assert.equal(constants.bundle_inputs, BUNDLE_INPUTS, 'the core now reports a different input count');
+  }
+});
+
+test('the real core refuses a vault this build cannot understand, without a KDF', { skip }, async () => {
+  const { backend, storage } = await build();
+  await backend.wallet.create(PASSWORD);
+  await backend.wallet.lock();
+  storage.local.set('vault', { ...storage.local.get('vault'), v: 2 });
+  await assert.rejects(() => backend.wallet.unlock(PASSWORD), (err) => {
+    assert.equal(err.code, 'VAULT_VERSION');
+    return true;
+  });
+  assert.equal(storage.local.get('unlockFailures'), undefined);
 });

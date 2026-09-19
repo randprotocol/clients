@@ -78,6 +78,25 @@ use of the wallet. When it fires, the session is dropped and the lock screen app
 the note store (a cache of public chain data, rebuildable from leaf 0) and the bridge's asset
 registry. Nothing there is a secret.
 
+**If the password stops working.** Three things can go wrong, and the lock screen tells them
+apart. A wrong password says so and costs you the next backoff step. A vault that is *structurally
+damaged*, or one written by a newer build of this wallet, can never be opened by any password — so
+it says that instead, does **not** count as a failed attempt, and points you at wipe-and-restore.
+Your funds are on chain; your recovery key is what brings them back.
+
+## More than one tab
+
+The wallet is a normal web page, so you can open two of them. They share one IndexedDB, and the
+wallet is built for it:
+
+- **One tab scans at a time.** Whichever takes the `rand-wallet-scan` Web Lock does the paging; the
+  others wait for its "done" on a `BroadcastChannel` and then simply read what it wrote, rather
+  than racing it to the node. Both APIs are feature-detected — without them every tab scans, which
+  is wasteful but still correct, because of the next point.
+- **The note store is written conditionally.** Each save carries the revision it was loaded at and
+  lands only if nothing else has written since; a tab that loses the race merges in what the other
+  one wrote and retries. Without this the last writer would silently erase the other's whole scan.
+
 **The server.** `serve.mjs` is deliberately small and deliberately rude:
 
 - binds **127.0.0.1 only** — never `0.0.0.0`, so it is not on your Wi-Fi;
