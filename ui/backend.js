@@ -54,7 +54,9 @@
  *
  * `send.send(req, onPhase, options?)` → `{hash, txKey}`.
  *  - `onPhase(phase)` is called as the transfer moves through
- *    `'selecting' | 'witness' | 'proving' | 'submitting' | 'confirming'`.
+ *    `'selecting' | 'witness' | 'proving' | 'submitting' | 'confirming'`. **The phase is how the UI
+ *    decides what a failure means** (see the rejection fields below), so a backend must report
+ *    `'submitting'` before it hands the transaction to the node, not after.
  *  - `options` is OPTIONAL and today carries one OPTIONAL field:
  *    - `signal?` — an `AbortSignal`. It aborts when the wallet session ends (a lock, a wipe, an
  *      unlock, a new wallet, the UI being torn down) and when the user cancels, which the UI only
@@ -63,12 +65,33 @@
  *      UI simply keeps waiting. A backend must never abandon a transfer it has already submitted.
  *  - `txKey` is the per-transaction key. A secret, exactly like an activity item's: it must never
  *    reach a URL, storage, the console, `ctx.state` or a DOM attribute.
+ *  - **On rejection**, two OPTIONAL fields on the error change what the user is told, because a
+ *    failure after the transaction left this device may mean it *landed*:
+ *    - `definite?` — `true` when the backend knows the transfer did not happen: the node answered
+ *      and refused it (a JSON-RPC error reply to the submit), or nothing was ever broadcast. The
+ *      UI then says "not sent" and offers a retry. Without it, a failure at `'submitting'` or
+ *      `'confirming'` is treated as an **unknown outcome**: the UI refuses to offer a resend and
+ *      sends the user to Activity first, because sending twice would pay twice.
+ *    - `hash?` — the transaction hash, when the backend got far enough to have one before failing.
+ *      Node-controlled, so the UI validates it before it reaches a URL.
+ *
+ * `send.maxSendable?({asset, to?})` → `{amount, fee}` — OPTIONAL. The largest amount that can
+ * actually be sent, and the fee that would be paid, both units strings. A backend that knows how
+ * it selects notes can answer this exactly; the UI's "Max" button uses it when it is there. Where
+ * it is missing the UI falls back to estimating a one-unit transfer to learn the fee and
+ * subtracting that from the balance, which is why `send.estimate` must answer for a one-unit
+ * request even when the balance could not cover a real one. `amount` may be `'0'`.
  *
  * `wallet.verifyPassword(password)` → boolean. Re-authentication *without* unlocking: the screens
  * put the viewing key and the spend-key export behind it. `wallet.unlock()` cannot be used for
  * this — the shell treats every `unlock` as a new wallet session and tears the current one down
  * (see ui/app.js) — so a shell implements this as "does this password decrypt the vault?" and
  * changes no state at all. It returns `false` for a wrong password rather than throwing.
+ * **It must cost exactly what `unlock` costs**: the same KDF, with the same parameters, over the
+ * real vault. A cheaper check — a stored hash, a fast comparison, an early exit — turns this into
+ * an oracle that tests passwords far faster than unlocking ever could, which is the whole of the
+ * wallet's at-rest security. Backends apply the same attempt throttling and backoff they apply to
+ * `unlock`; the UI deliberately implements no lockout of its own.
  *
  * `rpc.call(method, params?)` is the raw JSON-RPC escape hatch. The settings screen uses exactly
  * two methods, and treats every field of either answer as untrusted text:

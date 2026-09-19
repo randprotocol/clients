@@ -15,9 +15,12 @@
 //   ?address=long              — a realistic ~1.6 kB shielded address, for the Receive screen
 //   ?canProve=0|1              — send.canProve(): 1 = this shell proves natively (desktop),
 //                                0 = it cannot (the wasm shells), with the real reason string
-//   ?prove=ok|fail|slow        — send.send(): resolves at once / fails with a wasm OOM /
-//                                walks a phase every 1.5 s and never finishes (for the ring)
-//   ?assets=one                — assets.list() returns only RAND, so #send skips the picker
+//   ?prove=ok|fail|slow|unknown — send.send(): resolves at once / fails with a wasm OOM while
+//                                still proving (nothing broadcast) / walks a phase every 1.5 s and
+//                                never finishes (for the ring) / fails at 'submitting' with a hash,
+//                                which is the outcome-unknown screen
+//   ?assets=one|none|rpl       — assets.list(): only RAND (the picker is skipped) / no RAND at all
+//                                (the empty state) / a single RPL asset (the explanation)
 //   ?chain=wrong               — the node answers rand_chainId with a different chain
 //   ?rpc=down                  — rpc.call() rejects, for the Test-connection failure state
 //   #hash                      — an initial route, same as any real navigation
@@ -129,6 +132,12 @@ async function init() {
   if (assetsMode === 'one') {
     const [rand] = await backend.assets.list();
     backend.assets.list = async () => [rand];
+  } else if (assetsMode === 'none') {
+    const all = await backend.assets.list();
+    backend.assets.list = async () => all.filter((a) => a.index !== 0);
+  } else if (assetsMode === 'rpl') {
+    const all = await backend.assets.list();
+    backend.assets.list = async () => all.filter((a) => a.index === 1);
   }
   if (prove === 'ok') {
     backend.send.send = async (_req, onPhase) => {
@@ -143,13 +152,30 @@ async function init() {
       await new Promise((r) => setTimeout(r, 400));
       throw new Error('RuntimeError: unreachable');
     };
+  } else if (prove === 'unknown') {
+    // The dangerous case: the transaction left this device and then the answer did not come back.
+    backend.send.send = async (_req, onPhase) => {
+      for (const phase of ['selecting', 'witness', 'proving', 'submitting']) onPhase(phase);
+      await new Promise((r) => setTimeout(r, 400));
+      const err = new Error('Timed out waiting for the node to acknowledge the transaction.');
+      err.hash = `0x${'ab'.repeat(32)}`; // the backend got far enough to have one
+      throw err;
+    };
   } else if (prove === 'slow') {
-    // Walks a phase every 1.5 s and never finishes: the state a screenshot of the ring needs.
-    backend.send.send = (_req, onPhase) => new Promise(() => {
+    // Walks a phase every 1.5 s and never finishes on its own: the state a screenshot of the ring
+    // needs. `window.__finish()` ends it, so a screenshot can also catch what happens when a proof
+    // lands while the user is somewhere else.
+    backend.send.send = (_req, onPhase) => new Promise((resolve) => {
       const phases = ['selecting', 'witness', 'proving'];
       let i = 0;
       onPhase(phases[0]);
-      setInterval(() => { i = Math.min(i + 1, phases.length - 1); onPhase(phases[i]); }, 1500);
+      const ticking = setInterval(() => { i = Math.min(i + 1, phases.length - 1); onPhase(phases[i]); }, 1500);
+      window.__finish = () => {
+        clearInterval(ticking);
+        onPhase('submitting');
+        onPhase('confirming');
+        resolve({ hash: `0x${'ab'.repeat(32)}`, txKey: `tk1${'x8f4k2m0p7z3v6n9c1b4a7s2d5f8g1h4j7'.repeat(2)}` });
+      };
     });
   }
 

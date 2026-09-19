@@ -147,9 +147,19 @@ function createBackend(initial = {}, overrides = {}) {
     list: () => state.assets.map((a) => ({ ...a })),
   };
 
+  const FEE = 10000n;
+
   const sendDefs = {
     canProve: () => ({ ok: false, reason: 'test' }),
-    estimate: (_req) => ({ fee: '10000', inputs: 1, change: '0', proofs: 1 }),
+    estimate: (_req) => ({ fee: FEE.toString(), inputs: 1, change: '0', proofs: 1 }),
+    // Optional in the contract (see ui/backend.js). Exact here because this fake knows its own
+    // arithmetic: the whole balance less the fee, floored at zero.
+    maxSendable: ({ asset = 0 } = {}) => {
+      const entry = state.assets.find((a) => a.index === asset);
+      const balance = BigInt((entry && entry.balance) || '0');
+      const amount = balance > FEE ? balance - FEE : 0n;
+      return { amount: amount.toString(), fee: FEE.toString() };
+    },
     // `options.signal` is the session-linked AbortSignal (see ui/backend.js). This fake answers
     // immediately, so the only abort it can observe is one that happened before the call; it
     // rejects with an AbortError then, the way a real prover would mid-proof.

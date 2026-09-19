@@ -91,15 +91,24 @@
 .btn-ghost:hover { background: var(--press); border-color: transparent; color: var(--text-strong); }
 .btn-ghost.accent { color: var(--accent); }
 
-/* Square icon button for top bars — 44 px, so it is a legal touch target on its own. */
+/* Square icon button for top bars — 44 px, so it is a legal touch target on its own.
+   Standalone: unlike `.btn-primary`/`.btn-ghost`, which only re-colour and need `.btn` underneath
+   them for their box, this declares its own — it is used as `class="btn-icon"` throughout the app
+   and has to hold up on its own. (The button-variant guard in ui/test/screens.test.mjs reads that
+   distinction back out of this file, so the two cannot drift.) */
 .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: var(--tap);
   min-height: var(--tap);
   padding: 0;
+  border: 0;
   border-radius: var(--r-md);
   background: transparent;
   border-color: transparent;
   color: var(--text-soft);
+  transition: background var(--mid) var(--ease), color var(--mid) var(--ease);
 }
 .btn-icon:hover { background: var(--press); color: var(--text-strong); border-color: transparent; }
 
@@ -290,6 +299,9 @@ body.wide .hero .amount { font-size: var(--fs-balance); }
    narrow, left-hugging column that reads as broken rather than intentional. `.kv.wrap` makes that
    deliberate: label on its own line, the value's cluster on the next, left-aligned and given the
    full row's width, instead of an accidental few-px sliver on the right. */
+/* A value that is a cluster (a truncated mono value plus an icon button) still belongs on the
+   right-hand side of its row — `text-align` does nothing to a flex container, so say it. */
+.kv .v.cluster { justify-content: flex-end; flex-wrap: nowrap; }
 .kv.wrap { flex-wrap: wrap; }
 .kv.wrap .v { flex-basis: 100%; text-align: left; }
 .kv.wrap .v.cluster { justify-content: flex-start; }

@@ -201,3 +201,27 @@ test('A4: a route change leaves focus alone when it is already somewhere real', 
   await app.idle();
   assert.ok(document.activeElement === outside, 'the shell did not steal focus');
 });
+
+// ------------------------------------------------------------------------------------- A1b ----
+test('trackGroup copies accessor properties without invoking them at mount', async (t) => {
+  visits.length = 0;
+  let reads = 0;
+  const b = unlockedBackend();
+  const plain = b.platform;
+  b.platform = Object.create(Object.getPrototypeOf(plain), Object.getOwnPropertyDescriptors(plain));
+  Object.defineProperty(b.platform, 'version', {
+    configurable: true,
+    enumerable: true,
+    get() { reads += 1; return '9.9.9'; },
+  });
+
+  const { app } = await mountApp(t, b, { hash: '#spy' });
+  await app.idle();
+  assert.equal(reads, 0, 'mounting a backend must not run its getters');
+
+  const ctx = visits[0];
+  assert.equal(ctx.backend.platform.version, '9.9.9', 'but reading through the wrapper works');
+  assert.equal(reads, 1, 'and forwards to the original, once per read');
+  assert.equal(ctx.backend.platform.version, '9.9.9');
+  assert.equal(reads, 2);
+});

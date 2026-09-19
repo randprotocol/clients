@@ -110,24 +110,41 @@ export function resolveRoute({ exists, unlocked }, hash) {
  */
 function trackGroup(orig, declared, onCall) {
   const g = {};
-  const add = (key) => {
-    if (key === 'constructor' || Object.prototype.hasOwnProperty.call(g, key)) return;
-    let value;
-    try { value = orig[key]; } catch { return; } // a getter that throws is not something to copy
-    if (typeof value === 'function') {
-      g[key] = (...args) => {
-        let p;
-        try { p = Promise.resolve(value.apply(orig, args)); } catch (err) { p = Promise.reject(err); }
-        onCall(p);
-        return p;
-      };
-    } else if (value !== undefined) {
-      g[key] = value;
-    }
+  const track = (fn) => (...args) => {
+    let p;
+    try { p = Promise.resolve(fn.apply(orig, args)); } catch (err) { p = Promise.reject(err); }
+    onCall(p);
+    return p;
   };
-  for (const key of declared) add(key);
+  const add = (key, descriptor) => {
+    if (key === 'constructor' || Object.prototype.hasOwnProperty.call(g, key)) return;
+    if (descriptor.get || descriptor.set) {
+      // An accessor is *forwarded*, never read here. Reading it at mount would run a getter that
+      // may be expensive, may throw, or may be lazily constructing the very thing it guards — and
+      // the copy would then be a stale snapshot of a value the shell meant to compute per read.
+      Object.defineProperty(g, key, {
+        configurable: true,
+        enumerable: true,
+        get() {
+          const value = orig[key];
+          return typeof value === 'function' ? track(value) : value;
+        },
+      });
+      return;
+    }
+    if (typeof descriptor.value === 'function') g[key] = track(descriptor.value);
+    else if (descriptor.value !== undefined) g[key] = descriptor.value;
+  };
   for (let o = orig; o && o !== Object.prototype; o = Object.getPrototypeOf(o)) {
-    for (const key of Object.getOwnPropertyNames(o)) add(key);
+    for (const key of Object.getOwnPropertyNames(o)) add(key, Object.getOwnPropertyDescriptor(o, key));
+  }
+  // Anything BACKEND_SHAPE names that no descriptor turned up — a Proxy-backed backend, say —
+  // still has to be wrapped, even though that does mean reading it.
+  for (const key of declared) {
+    if (Object.prototype.hasOwnProperty.call(g, key)) continue;
+    let value;
+    try { value = orig[key]; } catch { continue; }
+    if (typeof value === 'function') g[key] = track(value);
   }
   return g;
 }
@@ -492,8 +509,9 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   let pinnedChip = null;
 
   function paintPinnedChip() {
+    const done = pinnedChip && pinnedChip.kind === 'positive';
     const markup = pinnedChip
-      ? h`<a class="chip warn" href="#${pinnedChip.go}" data-go="${pinnedChip.go}"><span class="dot busy"></span>${pinnedChip.text}</a>`
+      ? h`<a class="chip ${done ? 'positive' : 'warn'}" href="#${pinnedChip.go}" data-go="${pinnedChip.go}">${raw(done ? icons.check() : '<span class="dot busy"></span>')}${pinnedChip.text}</a>`
       : '';
     for (const slot of [sidebarEl, tabbarEl]) {
       const el = slot.querySelector('[data-role="pinned"]');
@@ -501,10 +519,13 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     }
   }
 
-  /** Pins (or, with `null`, clears) the nav chip. `{text, go}` — `go` is a route name, as
-   *  `data-go` takes it. Cleared automatically when the wallet session ends. */
+  /** Pins (or, with `null`, clears) the nav chip. `{text, go, kind}` — `go` is a route name, as
+   *  `data-go` takes it, and `kind` is `'warn'` (the default: something is under way) or
+   *  `'positive'` (it finished). Cleared automatically when the wallet session ends. */
   function setPinnedChip(chip) {
-    pinnedChip = chip && chip.text ? { text: String(chip.text), go: String(chip.go || 'home') } : null;
+    pinnedChip = chip && chip.text
+      ? { text: String(chip.text), go: String(chip.go || 'home'), kind: chip.kind === 'positive' ? 'positive' : 'warn' }
+      : null;
     paintPinnedChip();
   }
 

@@ -24,7 +24,7 @@ registerScreen('lock', {
           </label>
           <button class="btn btn-primary block" type="submit">Unlock</button>
         </form>
-        <button class="btn-ghost sm" type="button" data-action="wipe">Forgot? Wipe and restore</button>
+        <button class="btn btn-ghost sm" type="button" data-action="wipe">Forgot? Wipe and restore</button>
       </div>`;
   },
   after(ctx, root) {

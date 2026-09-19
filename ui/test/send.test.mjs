@@ -24,6 +24,15 @@ const TO = `rand1${'p'.repeat(40)}`;
 const OWN = `rand1${'q'.repeat(40)}`; // unlockedBackend()'s own address
 const turns = async (n = 3) => { for (let i = 0; i < n; i += 1) await new Promise((r) => setTimeout(r, 0)); };
 
+/**
+ * `assert.equal(node, null)` is a landmine here: when it *fails*, node's assert builds a diff by
+ * inspecting both values, and inspecting a linkedom node graph exhausts the heap — the whole file
+ * dies with SIGKILL, no message, pointing at the wrong test. Never let assert inspect a DOM node.
+ */
+function assertGone(el, what) {
+  assert.ok(el === null || el === undefined, `${what} should not be on the page`);
+}
+
 /** A screen that hands its render's `ctx` back to the test, for the "never in ctx.state" checks. */
 const spied = [];
 registerScreen('spy', {
@@ -81,7 +90,7 @@ function controlledSend(overrides = {}) {
 test('a shell that cannot prove shows the reason and no prove button', async (t) => {
   const b = unlockedBackend({ send: { canProve: async () => ({ ok: false, reason: 'Proving needs about 5.5 GB; browsers allow 4 GB.' }) } });
   const { root } = await review(t, b);
-  assert.equal(root.querySelector('[data-action="prove"]'), null);
+  assertGone(root.querySelector('[data-action="prove"]'), 'root.querySelector([data-action="prove"])');
   assert.match(root.textContent, /5\.5 GB/);
   assert.match(root.textContent, /desktop app/i);
 });
@@ -146,8 +155,8 @@ test('the asset picker lists RPL assets, disabled, with the shared explanation',
 test('#send/1 explains instead of ever rendering the form', async (t) => {
   const { app, root } = await mountApp(t, unlockedBackend(), { hash: '#send/1' });
   await app.idle();
-  assert.equal(root.querySelector('form'), null, 'no send form for an RPL asset');
-  assert.equal(root.querySelector('textarea[name=to]'), null);
+  assertGone(root.querySelector('form'), 'no send form for an RPL asset');
+  assertGone(root.querySelector('textarea[name=to]'), 'root.querySelector(textarea[name=to])');
   assert.ok(root.textContent.includes(RPL_SEND_DISABLED_TEXT));
   assert.ok(root.querySelector('[data-go="send/0"]'), 'a way back to sending RAND');
 });
@@ -156,7 +165,7 @@ test('#send skips the picker when there is only one asset to list', async (t) =>
   const b = unlockedBackend({ assets: { list: async () => [{ index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0' }] } });
   const { app, root } = await mountApp(t, b, { hash: '#send' });
   await app.idle();
-  assert.equal(root.querySelector('[data-asset="0"]'), null, 'no picker to step through');
+  assertGone(root.querySelector('[data-asset="0"]'), 'no picker to step through');
   assert.ok(root.querySelector('textarea[name=to]'), 'straight to the recipient');
 });
 
@@ -188,7 +197,7 @@ test('a self-send asks once and then goes through', async (t) => {
   const dialog = root.querySelector('[role="dialog"]');
   assert.ok(dialog, 'a self-send is confirmed, not refused');
   assert.match(dialog.textContent, /Send to yourself\? This consolidates your notes\./);
-  assert.equal(root.querySelector('[data-action="prove"]'), null, 'and it has not reached review yet');
+  assertGone(root.querySelector('[data-action="prove"]'), 'and it has not reached review yet');
 
   dialog.querySelector('[data-role="confirm"]').click();
   await app.idle();
@@ -215,7 +224,7 @@ for (const { name, value, expect } of AMOUNT_CASES) {
     await app.idle();
     assert.match(root.querySelector('.field-error').textContent, expect);
     assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0);
-    assert.equal(root.querySelector('[data-action="prove"]'), null);
+    assertGone(root.querySelector('[data-action="prove"]'), 'root.querySelector([data-action="prove"])');
   });
 }
 
@@ -231,7 +240,7 @@ test('the whole balance is refused once the fee is known', async (t) => {
   await app.idle();
   assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 1);
   assert.match(root.querySelector('.field-error').textContent, /fee/i);
-  assert.equal(root.querySelector('[data-action="prove"]'), null);
+  assertGone(root.querySelector('[data-action="prove"]'), 'root.querySelector([data-action="prove"])');
 });
 
 test('Max fills the balance minus the fee', async (t) => {
@@ -241,9 +250,10 @@ test('Max fills the balance minus the fee', async (t) => {
   root.querySelector('textarea[name=to]').value = TO;
   root.querySelector('[data-role="max"]').click();
   await app.idle();
-  // balance 3.5 RAND − fee 0.00001 RAND
+  // balance 3.5 RAND − fee 0.00001 RAND. Which backend call told us the fee is the subject of the
+  // two `Max …` tests in the fix-round section below; here it only has to be right.
   assert.equal(root.querySelector('input[name=amount]').value, '3.49999');
-  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 1);
+  assert.equal(b.calls.filter((c) => c[0] === 'send.maxSendable' || c[0] === 'send.estimate').length, 1);
 });
 
 test('a "needs more than two notes" estimate is surfaced verbatim', async (t) => {
@@ -256,7 +266,7 @@ test('a "needs more than two notes" estimate is surfaced verbatim', async (t) =>
   submit(root);
   await app.idle();
   assert.ok(root.textContent.includes(message), 'the backend’s own words, unedited');
-  assert.equal(root.querySelector('[data-action="prove"]'), null);
+  assertGone(root.querySelector('[data-action="prove"]'), 'root.querySelector([data-action="prove"])');
 });
 
 // -------------------------------------------------------------- amendment 5: the review -------
@@ -308,7 +318,7 @@ test('proving shows a labelled progressbar, the phase and an elapsed timer', asy
   assert.ok(root.querySelector('[data-role="cancel"]'));
   ctl.emit('submitting');
   await turns();
-  assert.equal(root.querySelector('[data-role="cancel"]'), null);
+  assertGone(root.querySelector('[data-role="cancel"]'), 'root.querySelector([data-role="cancel"])');
   assert.ok(app);
 });
 
@@ -364,7 +374,7 @@ test('a second send cannot be started while one is in flight', async (t) => {
   await turns();
   // Whatever the user asks for, #send shows the proof that is already running.
   assert.ok(root.querySelector('.ring[role="progressbar"]'));
-  assert.equal(root.querySelector('form'), null);
+  assertGone(root.querySelector('form'), 'root.querySelector(form)');
   assert.equal(ctl.calls, 1);
 });
 
@@ -462,7 +472,7 @@ test('#sent reached cold (a reload) shows the hash and a link, and no key', asyn
   const hash = `0x${'ab'.repeat(32)}`;
   const { app, root } = await mountApp(t, unlockedBackend(), { hash: `#sent/${hash}` });
   await app.idle();
-  assert.equal(root.querySelector('[data-role="hold"]'), null, 'no key to reveal');
+  assertGone(root.querySelector('[data-role="hold"]'), 'no key to reveal');
   assert.ok(root.textContent.includes(hash.slice(0, 10)));
   assert.ok(root.querySelector(`[data-go="tx/${hash}"]`), 'a link to the transaction instead');
 });
@@ -482,4 +492,291 @@ test('every step has one page title, an announced step indicator and a big enoug
   await app.idle();
   assert.match(root.querySelector('[data-role="step-indicator"]').textContent, /Step 2 of 3/);
   assert.ok(document.activeElement && document.activeElement.tagName === 'H2', 'focus moved to the step heading');
+});
+
+// =============================================================== fix round 1 ====================
+
+// ---- 1. a failure's meaning depends on the phase it happened in --------------------------------
+
+const BEFORE_SUBMIT = ['selecting', 'witness', 'proving'];
+const AFTER_SUBMIT = ['submitting', 'confirming'];
+
+for (const phase of BEFORE_SUBMIT) {
+  test(`a failure during '${phase}' says the transfer was not sent, and offers a retry`, async (t) => {
+    const { b, ctl } = controlledSend();
+    const { root, app } = await review(t, b);
+    root.querySelector('[data-action="prove"]').click();
+    await turns();
+    ctl.emit(phase);
+    await turns();
+    ctl.fail(new Error('the prover gave up'));
+    await turns();
+
+    assert.match(root.textContent, /was not sent/i);
+    assert.ok(root.querySelector('[data-role="retry"]'), 'nothing was broadcast, so a retry is safe');
+    assertGone(root.querySelector('[data-role="check-activity"]'), 'root.querySelector([data-role="check-activity"])');
+    assert.ok(app);
+  });
+}
+
+for (const phase of AFTER_SUBMIT) {
+  test(`a failure during '${phase}' says the outcome is unknown and never invites a resend`, async (t) => {
+    const { b, ctl } = controlledSend();
+    const { root, app } = await review(t, b);
+    root.querySelector('[data-action="prove"]').click();
+    await turns();
+    ctl.emit(phase);
+    await turns();
+    ctl.fail(new Error('the socket dropped'));
+    await turns();
+
+    assert.match(root.textContent, /We couldn.t confirm this transfer/i);
+    assert.match(root.textContent, /may already have been sent/i);
+    assert.match(root.textContent, /sending twice would pay twice/i);
+    assert.ok(root.querySelector('[data-role="check-activity"]'), 'the way out is Activity');
+    assertGone(root.querySelector('[data-action="prove"]'), 'no way to prove again');
+    assertGone(root.querySelector('[data-role="retry"]'), 'and no way back to review');
+    assertGone(root.querySelector('[data-role="edit"]'), 'root.querySelector([data-role="edit"])');
+    assert.ok(app);
+  });
+}
+
+test('a rejection the backend calls definite is a plain failure, whatever the phase', async (t) => {
+  const { b, ctl } = controlledSend();
+  const { root } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  ctl.emit('submitting');
+  await turns();
+  const err = new Error('the node refused it: fee below the floor');
+  err.definite = true; // the node answered, so we know it did not land
+  ctl.fail(err);
+  await turns();
+
+  assert.match(root.textContent, /was not sent/i);
+  assert.match(root.textContent, /fee below the floor/);
+  assert.ok(root.querySelector('[data-role="retry"]'));
+  assertGone(root.querySelector('[data-role="check-activity"]'), 'root.querySelector([data-role="check-activity"])');
+});
+
+test('the unknown screen links to the explorer only for a well-formed hash', async (t) => {
+  const good = `0x${'ab'.repeat(32)}`;
+  for (const [hash, expected] of [[good, true], ['javascript:alert(1)', false], ['nope', false], [undefined, false]]) {
+    const { b, ctl } = controlledSend();
+    const { root } = await review(t, b);
+    root.querySelector('[data-action="prove"]').click();
+    await turns();
+    ctl.emit('submitting');
+    await turns();
+    const err = new Error('timed out waiting for the node');
+    if (hash !== undefined) err.hash = hash;
+    ctl.fail(err);
+    await turns();
+    const link = root.querySelector('[data-role="explorer-unknown"]');
+    assert.equal(!!link, expected, `hash ${String(hash)}`);
+    if (!expected && hash) assert.ok(!root.innerHTML.includes(hash), 'and the bad hash is not printed');
+  }
+});
+
+test('Check Activity syncs, then lands on #activity', async (t) => {
+  const { b, ctl } = controlledSend();
+  const { root, app } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  ctl.emit('confirming');
+  await turns();
+  ctl.fail(new Error('timed out'));
+  await turns();
+
+  const scansBefore = b.calls.filter((c) => c[0] === 'sync.scan').length;
+  root.querySelector('[data-role="check-activity"]').click();
+  await turns(6);
+  assert.ok(b.calls.filter((c) => c[0] === 'sync.scan').length > scansBefore, 'it re-scans first');
+  assert.equal(location.hash, '#activity');
+  assert.ok(app);
+});
+
+test('after an unknown outcome, review warns and gates Prove until a sync has finished', async (t) => {
+  // A scan that never settles, so the gate cannot lift on its own.
+  const { b, ctl } = controlledSend({ sync: { scan: () => new Promise(() => {}) } });
+  const { root, app } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  ctl.emit('submitting');
+  await turns();
+  ctl.fail(new Error('timed out'));
+  await turns();
+  root.querySelector('[data-role="check-activity"]').click();
+  await turns();
+
+  await app.go('#send');
+  await turns();
+  assert.ok(root.querySelector('[data-role="unknown-notice"]'), 'the warning stands on the form');
+  submit(root);
+  await turns(6);
+
+  const notice = root.querySelector('[data-role="unknown-notice"]');
+  assert.ok(notice, 'and above the review');
+  assert.match(notice.textContent, /outcome is unknown/i);
+  const prove = root.querySelector('[data-action="prove"]');
+  assert.ok(prove);
+  assert.equal(prove.disabled, true, 'proving is gated');
+  const gate = root.querySelector('input[name="checked-activity"]');
+  assert.ok(gate);
+  assert.match(gate.closest('label').textContent, /I checked — it did not go through/);
+
+  gate.checked = true;
+  gate.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.equal(root.querySelector('[data-action="prove"]').disabled, false);
+});
+
+test('a completed sync lifts the unknown-outcome gate', async (t) => {
+  const { b, ctl } = controlledSend();
+  const { root, app } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  ctl.emit('submitting');
+  await turns();
+  ctl.fail(new Error('timed out'));
+  await turns();
+  root.querySelector('[data-role="check-activity"]').click();
+  await turns(6); // the fake's scan resolves
+
+  await app.go('#send');
+  await turns();
+  submit(root);
+  await turns(6);
+  assert.ok(root.querySelector('[data-role="unknown-notice"]'), 'the notice stands for the session');
+  assertGone(root.querySelector('input[name="checked-activity"]'), 'but the gate is gone');
+  assert.equal(root.querySelector('[data-action="prove"]').disabled, false);
+});
+
+// ---- 4. a send that finishes while the user is elsewhere ---------------------------------------
+
+test('a send that completes off-screen leaves no key reachable from ctx.state, and says so', async (t) => {
+  const txKey = `tk-${'9a'.repeat(16)}`;
+  const hash = `0x${'ab'.repeat(32)}`;
+  const { b, ctl } = controlledSend();
+  const { root, app } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  await app.go('#home');
+  await turns();
+
+  ctl.settle({ hash, txKey });
+  await turns();
+
+  const chip = root.querySelector('[data-role="pinned"] .chip');
+  assert.ok(chip, 'the user is told, without being yanked off the screen they were on');
+  assert.match(chip.textContent, /Sent/);
+  assert.equal(chip.getAttribute('data-go'), `sent/${hash}`);
+
+  spied.length = 0;
+  await app.go('#spy');
+  await app.idle();
+  const state = spied[0].state;
+  assert.equal(reaches(state, txKey), false, 'not in ctx.state');
+  assert.ok(state.send, 'the finished send is still recorded');
+  const settled = await state.send.promise;
+  assert.deepEqual(settled, { hash }, 'and its promise fulfils to the hash alone');
+  assert.equal(reaches(settled, txKey), false);
+});
+
+test('a malformed hash from the backend goes to activity, not to #sent/<junk>', async (t) => {
+  const b = unlockedBackend({
+    send: { canProve: async () => ({ ok: true }), send: async () => ({ hash: 'javascript:alert(1)', txKey: 'tk-x' }) },
+  });
+  const { root, app } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await app.idle();
+  assert.equal(location.hash, '#activity');
+  assert.ok(!location.hash.includes('javascript'));
+  assert.ok(app && root);
+});
+
+// ---- 6. Max ------------------------------------------------------------------------------------
+
+test('Max uses send.maxSendable when the backend offers one', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await mountApp(t, b, { hash: '#send/0' });
+  await app.idle();
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('[data-role="max"]').click();
+  await app.idle();
+  assert.equal(root.querySelector('input[name=amount]').value, '3.49999');
+  assert.equal(b.calls.filter((c) => c[0] === 'send.maxSendable').length, 1);
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0, 'no whole-balance estimate');
+});
+
+test('Max falls back to a one-unit estimate where the backend has no maxSendable', async (t) => {
+  const b = unlockedBackend();
+  delete b.send.maxSendable;
+  const { app, root } = await mountApp(t, b, { hash: '#send/0' });
+  await app.idle();
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('[data-role="max"]').click();
+  await app.idle();
+  assert.equal(root.querySelector('input[name=amount]').value, '3.49999');
+  const estimates = b.calls.filter((c) => c[0] === 'send.estimate');
+  assert.equal(estimates.length, 1);
+  assert.equal(estimates[0][1].amount, '1', 'a one-unit probe, not the whole balance');
+});
+
+test('Max explains itself when the balance does not cover the fee', async (t) => {
+  const b = unlockedBackend({
+    assets: { list: async () => [{ index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '5000', pending: '0' }] },
+    // 5000 units of RAND against a 10000-unit fee: there is nothing sendable.
+    send: { maxSendable: async () => ({ amount: '0', fee: '10000' }) },
+  });
+  const { app, root } = await mountApp(t, b, { hash: '#send/0' });
+  await app.idle();
+  const amount = root.querySelector('input[name=amount]');
+  amount.value = '0.000001';
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('[data-role="max"]').click();
+  await app.idle();
+  assert.match(root.querySelector('.field-error').textContent, /doesn.t cover the network fee/i);
+  assert.equal(amount.value, '0.000001', 'the field was left alone');
+});
+
+// ---- 7. never fabricate an asset ---------------------------------------------------------------
+
+test('a wallet with no RAND gets an empty state, not a fabricated zero balance', async (t) => {
+  const b = unlockedBackend({
+    assets: {
+      list: async () => [
+        { index: 1, id: 'wrapped-eth', name: 'Wrapped Ether', symbol: 'wETH', decimals: 9, balance: '120000000', pending: '0' },
+        { index: 2, id: 'wbtc', name: 'Wrapped Bitcoin', symbol: 'wBTC', decimals: 9, balance: '1', pending: '0' },
+      ],
+    },
+  });
+  const { app, root } = await mountApp(t, b, { hash: '#send/0' });
+  await app.idle();
+  assertGone(root.querySelector('form'), 'no form against an invented asset');
+  assert.ok(root.querySelector('[data-role="no-rand"]'));
+  assert.match(root.textContent, /No RAND to send yet/i);
+  assert.ok(root.querySelector('[data-go="receive"]'));
+  assert.ok(root.querySelector('[data-go="faucet"]'));
+});
+
+test('a wallet holding only an RPL asset gets the explanation, not a form', async (t) => {
+  const b = unlockedBackend({
+    assets: { list: async () => [{ index: 1, id: 'wrapped-eth', name: 'Wrapped Ether', symbol: 'wETH', decimals: 9, balance: '120000000', pending: '0' }] },
+  });
+  const { app, root } = await mountApp(t, b, { hash: '#send' });
+  await app.idle();
+  assertGone(root.querySelector('form'), 'root.querySelector(form)');
+  assert.ok(root.textContent.includes(RPL_SEND_DISABLED_TEXT));
+});
+
+// ---- 8. the proof cost is the estimate's, not a constant ---------------------------------------
+
+test('the proof cost comes from the estimate', async (t) => {
+  const b = unlockedBackend({
+    send: { canProve: async () => ({ ok: true }), estimate: async () => ({ fee: '10000', inputs: 2, change: '0', proofs: 2 }) },
+  });
+  const { root } = await review(t, b);
+  assert.match(root.textContent, /2 proofs/);
+  assert.match(root.textContent, /about 4 minutes/i);
+  assert.doesNotMatch(root.textContent, /1 proof\b/);
 });

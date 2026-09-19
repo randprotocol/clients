@@ -19,6 +19,7 @@ import { kindOf } from '../lib/rows.js';
 // The explorer rules live in lib/ since task 1.5 (the `#sent` screen needs them too); re-exported
 // here because that is where they were, and where the tests import them from.
 import { explorerLink } from '../lib/explorer.js';
+import { wireSecretReveal } from '../lib/reveal.js';
 
 export { explorerLink };
 
@@ -79,11 +80,11 @@ registerScreen('tx', {
           <span class="k">Transaction key</span>
           <span class="v cluster">
             <span class="mono truncate" data-role="txkey">${shortHex(txKey)}</span>
-            <button class="btn-icon" type="button" data-role="reveal-key" aria-label="Reveal the full transaction key">${raw(icons.eye())}</button>
+            <button class="btn-icon" type="button" data-role="reveal-key" data-keep-label="true" aria-label="Reveal the full transaction key">${raw(icons.eye())}</button>
             <button class="btn-icon" type="button" data-role="copy-key" aria-label="Copy the transaction key">${raw(icons.copy())}</button>
           </span>
         </div>` : '');
-    const noteLink = raw(k.kind === 'in' && item.index !== undefined ? h`<button class="btn-ghost sm" type="button" data-go="note/${item.index}">View the received note</button>` : '');
+    const noteLink = raw(k.kind === 'in' && item.index !== undefined ? h`<button class="btn btn-ghost sm" type="button" data-go="note/${item.index}">View the received note</button>` : '');
     const explorer = explorerLink(settings.explorerUrl, item.hash);
     const explorerBtn = raw(explorer ? h`<button class="btn block" type="button" data-role="explorer">${explorer.label}</button>` : '');
 
@@ -101,21 +102,18 @@ registerScreen('tx', {
         ${explorerBtn}
       </div>`;
 
-    let revealed = false;
-    const offReveal = on(root, '[data-role="reveal-key"]', 'click', (evt, btn) => {
-      evt.preventDefault();
-      const span = root.querySelector('[data-role="txkey"]');
-      if (!span || !txKey) return;
-      revealed = !revealed;
-      span.textContent = revealed ? txKey : shortHex(txKey);
-      btn.setAttribute('aria-label', revealed ? 'Hide the transaction key' : 'Reveal the full transaction key');
-    });
-    const offCopyKey = on(root, '[data-role="copy-key"]', 'click', async (evt) => {
-      evt.preventDefault();
-      if (!txKey) return;
-      await ctx.backend.platform.copy(txKey);
-      if (!ctx.isCurrent()) return;
-      ctx.toast('Transaction key copied', { kind: 'positive' });
+    // The reveal, the masking and the copy are lib/reveal.js — the same implementation the send
+    // receipt and the settings key panels use, so the "only ever in one text node" rule is written
+    // once. This screen's mask is the shortened key rather than dots, and its reveal control is
+    // the icon button it has always been (a plain click, not a hold: the most accessible of the
+    // three, and it keeps its own aria-label rather than taking the helper's text).
+    const reveal = wireSecretReveal(root, {
+      getSecret: () => txKey,
+      masked: shortHex(txKey),
+      selectors: { mask: '[data-role="txkey"]', hold: null, timed: '[data-role="reveal-key"]', copy: '[data-role="copy-key"]' },
+      copy: (secret) => ctx.backend.platform.copy(secret),
+      onCopied: () => { if (ctx.isCurrent()) ctx.toast('Transaction key copied', { kind: 'positive' }); },
+      labels: { reveal: 'Reveal the full transaction key', hide: 'Hide the transaction key' },
     });
     const offExplorer = on(root, '[data-role="explorer"]', 'click', (evt) => {
       evt.preventDefault();
@@ -123,10 +121,9 @@ registerScreen('tx', {
     });
 
     return () => {
-      const span = root.querySelector('[data-role="txkey"]');
-      if (span) span.textContent = '';
+      reveal.destroy();
       txKey = null;
-      offReveal(); offCopyKey(); offExplorer();
+      offExplorer();
     };
   },
 });

@@ -26,5 +26,7 @@ export const icons = {
   check: () => svg('<path d="m5 12.5 4.5 4.5L19 7"/>', { strokeWidth: 2.4 }),
   chevron: () => svg('<path d="m9 5 7 7-7 7"/>'),
   warning: () => svg('<path d="M12 4 2.8 20h18.4z"/><path d="M12 10v4"/><path d="M12 17.2h.01"/>'),
+  // The neutral counterpart of `warning`: something is being said, not something is wrong.
+  info: () => svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/>'),
   shield: () => svg('<path d="M12 3.3 5 6v5.4c0 4.6 3 7.8 7 9.3 4-1.5 7-4.7 7-9.3V6z"/><path d="m9 12 2.2 2.2L15.5 9.5"/>'),
 };

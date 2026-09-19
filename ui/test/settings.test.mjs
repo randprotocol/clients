@@ -11,6 +11,15 @@ import { mountApp } from './helpers.mjs';
 
 const PASSWORD = 'unlocked-password-1'; // unlockedBackend()'s own
 
+/**
+ * `assert.equal(node, null)` is a landmine here: when it *fails*, node's assert builds a diff by
+ * inspecting both values, and inspecting a linkedom node graph exhausts the heap — the whole file
+ * dies with SIGKILL, no message, pointing at the wrong test. Never let assert inspect a DOM node.
+ */
+function assertGone(el, what) {
+  assert.ok(el === null || el === undefined, `${what} should not be on the page`);
+}
+
 async function settings(t, b = unlockedBackend()) {
   const { app, root } = await mountApp(t, b, { hash: '#settings' });
   await app.idle();
@@ -90,7 +99,7 @@ test('Test connection reports the height and the chain id', async (t) => {
   const status = root.querySelector('[data-role="network-status"]');
   assert.match(status.textContent, /1,?402,?918/);
   assert.match(status.textContent, /13/);
-  assert.equal(root.querySelector('[data-role="network-status"] .banner.warn, [data-role="network-status"].warn'), null);
+  assertGone(root.querySelector('[data-role="network-status"] .banner.warn, [data-role="network-status"].warn'), 'root.querySelector([data-role="network-status"] .banner.warn');
 });
 
 test('Test connection warns when the node is on another chain', async (t) => {
@@ -117,7 +126,7 @@ test('a node’s own words reach the page as text, never as markup', async (t) =
   await app.idle();
   const status = root.querySelector('[data-role="network-status"]');
   assert.match(status.textContent, /unreachable/);
-  assert.equal(status.querySelector('img'), null);
+  assertGone(status.querySelector('img'), 'status.querySelector(img)');
   assert.ok(root.innerHTML.includes('&lt;img'), 'escaped, not parsed');
 });
 
@@ -163,13 +172,13 @@ test('the viewing key is behind a password re-entry that never unlocks the walle
   // A wrong password says so and shows nothing.
   await reauth(app, root, '[data-role="show-viewing-key"]', 'not the password');
   assert.ok(root.querySelector('[role="dialog"] .field.invalid'), 'the sheet reports the bad password');
-  assert.equal(root.querySelector('[data-role="viewing-key-slot"] [data-role="hold"]'), null);
+  assertGone(root.querySelector('[data-role="viewing-key-slot"] [data-role="hold"]'), 'root.querySelector([data-role="viewing-key-slot"] [data-role');
 
   root.querySelector('[role="dialog"] input[name=password]').value = PASSWORD;
   root.querySelector('[role="dialog"] form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   await app.idle();
 
-  assert.equal(root.querySelector('[role="dialog"]'), null, 'the sheet closed');
+  assertGone(root.querySelector('[role="dialog"]'), 'the sheet closed');
   assert.ok(root.querySelector('[data-role="viewing-key-slot"] [data-role="hold"]'));
   assert.equal(b.calls.filter((c) => c[0] === 'wallet.unlock').length, 0, 're-auth is not an unlock');
   assert.ok(b.calls.filter((c) => c[0] === 'wallet.verifyPassword').length >= 1);
@@ -262,4 +271,115 @@ test('about leaves the version out when the backend has none', async (t) => {
   const about = root.querySelector('[data-role="about"]');
   assert.match(about.textContent, /fake/);
   assert.doesNotMatch(about.textContent, /1\.5/);
+});
+
+// =============================================================== fix round 1 ====================
+
+test('Copy spend key is gated on the same checkbox as the reveal', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await settings(t, b);
+  await reauth(app, root, '[data-role="export-spend-key"]');
+  const slot = root.querySelector('[data-role="spend-key-slot"]');
+  const copy = slot.querySelector('[data-role="copy"]');
+  assert.equal(copy.disabled, true, 'copying is a disclosure too');
+
+  copy.click();
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'platform.copy').length, 0);
+
+  const understand = slot.querySelector('input[name=understand]');
+  understand.checked = true;
+  understand.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.equal(copy.disabled, false);
+  copy.click();
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'platform.copy').length, 1);
+});
+
+test('the re-auth sheet cannot be submitted twice while a check is in flight', async (t) => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let checks = 0;
+  const b = unlockedBackend({
+    wallet: { verifyPassword: async (pw) => { checks += 1; await gate; return pw === PASSWORD; } },
+  });
+  const { app, root } = await settings(t, b);
+  root.querySelector('[data-role="show-viewing-key"]').click();
+  await app.idle();
+  const dialog = root.querySelector('[role="dialog"]');
+  const form = dialog.querySelector('form');
+  dialog.querySelector('input[name=password]').value = PASSWORD;
+
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(dialog.querySelector('[data-role="reauth-submit"]').disabled, true, 'the button is busy');
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(checks, 1, 'a parallel submit is ignored, not queued');
+
+  release();
+  await app.idle();
+  assert.ok(root.querySelector('[data-role="viewing-key-slot"] [data-role="hold"]'));
+});
+
+test('a block height past 2^53 is grouped without losing a digit', async (t) => {
+  const huge = '9007199254740993123'; // Number() would round this
+  const b = unlockedBackend({
+    rpc: { call: async (method) => (method === 'rand_chainId' ? 13 : { height: huge, peers: 1, syncing: false }) },
+  });
+  const { app, root } = await settings(t, b);
+  root.querySelector('[data-role="test-connection"]').click();
+  await app.idle();
+  const status = root.querySelector('[data-role="network-status"]').textContent;
+  assert.match(status, /9,007,199,254,740,993,123/);
+});
+
+test('Connecting… is not painted as a success', async (t) => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const b = unlockedBackend({ rpc: { call: async (m) => { await gate; return m === 'rand_chainId' ? 13 : { height: 5 }; } } });
+  const { app, root } = await settings(t, b);
+  root.querySelector('[data-role="test-connection"]').click();
+  await new Promise((r) => setTimeout(r, 0));
+  const status = root.querySelector('[data-role="network-status"]');
+  assert.match(status.textContent, /Connecting/i);
+  assertGone(status.querySelector('.banner.positive'), 'nothing is known yet');
+  assert.ok(status.querySelector('.banner'));
+  release();
+  await app.idle();
+  assert.ok(status.querySelector('.banner.positive'), 'and the answer is');
+});
+
+test('hiding the key panel forgets the secret and asks for the password again', async (t) => {
+  const b = unlockedBackend();
+  const key = await b.wallet.viewingKey();
+  const { app, root } = await settings(t, b);
+  await reauth(app, root, '[data-role="show-viewing-key"]');
+  const slot = root.querySelector('[data-role="viewing-key-slot"]');
+  slot.querySelector('[data-role="timed"]').click();
+  assert.ok(root.textContent.includes(key), 'the non-hold reveal shows it');
+
+  slot.querySelector('[data-role="done"]').click();
+  await app.idle();
+  assert.ok(!root.textContent.includes(key), 'the panel is gone');
+  assert.ok(root.querySelector('[data-role="show-viewing-key"]'), 'and it is behind the password again');
+
+  const verifiesBefore = b.calls.filter((c) => c[0] === 'wallet.verifyPassword').length;
+  await reauth(app, root, '[data-role="show-viewing-key"]');
+  assert.equal(b.calls.filter((c) => c[0] === 'wallet.verifyPassword').length, verifiesBefore + 1);
+});
+
+test('a revealed secret is hidden again when the window loses focus', async (t) => {
+  const b = unlockedBackend();
+  const key = await b.wallet.viewingKey();
+  const { app, root } = await settings(t, b);
+  await reauth(app, root, '[data-role="show-viewing-key"]');
+  const slot = root.querySelector('[data-role="viewing-key-slot"]');
+  slot.querySelector('[data-role="timed"]').click();
+  assert.ok(root.textContent.includes(key));
+
+  window.dispatchEvent(new Event('blur'));
+  await app.idle();
+  assert.ok(!root.textContent.includes(key), 'it does not stay on a screen nobody is looking at');
 });

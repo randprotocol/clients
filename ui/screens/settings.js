@@ -16,6 +16,7 @@ import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { markInvalid, markValid } from '../lib/forms.js';
+import { wireSecretReveal } from '../lib/reveal.js';
 
 const THEMES = [
   { value: 'system', label: 'System' },
@@ -29,8 +30,12 @@ const AUTO_LOCK = [
   { value: 60, label: '1 hour' },
   { value: 0, label: 'Never' },
 ];
-const HOLD_MS = 650;
 const WIPE_WORD = 'WIPE';
+// What each key slot shows when no key is open: the button that asks for the password again.
+const VIEWING_KEY_BUTTON = '<button class="btn block" type="button" data-role="show-viewing-key">'
+  + `${icons.eye()}Show viewing key</button>`;
+const SPEND_KEY_BUTTON = '<button class="btn block" type="button" data-role="export-spend-key">'
+  + `${icons.shield()}Export spend key</button>`;
 const SPEND_KEY_WARNING = 'Anyone with this key can spend everything this wallet holds, now and in '
   + 'the future. It is not a backup to keep in a note-taking app or to paste into a chat — an '
   + 'explorer or a watcher only ever needs the viewing key.';
@@ -50,6 +55,18 @@ export function checkRpcUrl(text) {
   if (parsed.protocol === 'http:' && local) return { url: value };
   if (parsed.protocol === 'http:') return { error: 'Use https — plain http is only allowed for a node on this machine.' };
   return { error: 'Use an https:// address.' };
+}
+
+/**
+ * Thousands separators for a decimal string, done on the string. A block height is not bounded by
+ * `Number.MAX_SAFE_INTEGER`, and `Number('9007199254740993123').toLocaleString('en-US')` answers
+ * `9,007,199,254,740,993,000` — a wallet does not silently round the chain's own numbers. Anything
+ * that is not a run of digits (the node said something else) is passed straight through.
+ */
+export function groupDigits(text) {
+  const s = String(text ?? '');
+  if (!/^\d+$/.test(s)) return s;
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 function sectionMarkup(title, body) {
@@ -99,16 +116,12 @@ function securityMarkup(settings) {
     <div class="card stack">
       <div class="card-head"><h3>Viewing key</h3></div>
       <p class="caption">A viewing key shows everything this wallet has ever received or sent, past and future. It cannot spend. It is all or nothing — to disclose one payment, use that payment's transaction key instead.</p>
-      <div data-role="viewing-key-slot">
-        <button class="btn block" type="button" data-role="show-viewing-key">${raw(icons.eye())}Show viewing key</button>
-      </div>
+      <div data-role="viewing-key-slot">${raw(VIEWING_KEY_BUTTON)}</div>
     </div>
     <div class="card stack">
       <div class="card-head"><h3>Spend key</h3></div>
       <p class="caption">The spend key <em>is</em> the wallet. Export it to move to another device, or to send from the desktop app, which can prove a transfer natively.</p>
-      <div data-role="spend-key-slot">
-        <button class="btn block" type="button" data-role="export-spend-key">${raw(icons.shield())}Export spend key</button>
-      </div>
+      <div data-role="spend-key-slot">${raw(SPEND_KEY_BUTTON)}</div>
     </div>
     <div class="card stack">
       <div class="card-head"><h3>Wipe this wallet</h3></div>
@@ -151,7 +164,7 @@ registerScreen('settings', {
     return h`
       <h1 class="sr-only">Settings</h1>
       <div class="topbar"><span class="topbar-title">Settings</span></div>
-      <div data-role="body"><div class="skeleton block"></div></div>`;
+      <div class="stack" data-role="body"><div class="skeleton block"></div></div>`;
   },
   async after(ctx, root) {
     const mySession = ctx.session.id;
@@ -183,10 +196,11 @@ registerScreen('settings', {
     const wipeInput = body.querySelector('input[name=wipe]');
     const wipeBtn = body.querySelector('[data-role="wipe"]');
 
-    // Secrets live here and nowhere else, and are nulled on cleanup.
+    // Secrets live here and nowhere else. They are dropped when the panel showing them is closed,
+    // when the window stops being looked at, a minute after a copy, and on cleanup — after which
+    // seeing one again costs the password again.
     let viewingKey = null;
     let spendKey = null;
-    const holdTimers = new Map();
 
     function setRpcError(message) {
       if (message) {
@@ -200,10 +214,14 @@ registerScreen('settings', {
       }
     }
 
-    /** Every string in here is node-controlled, so it is interpolated, never `raw()`ed. */
+    /** Every string in here is node-controlled, so it is interpolated, never `raw()`ed.
+     *  `kind` is one of 'info' (nothing is known yet), 'positive', 'warn', 'negative'. */
     function showStatus(kind, title, detail) {
-      const cls = kind === 'warn' ? 'banner warn' : kind === 'negative' ? 'banner negative' : 'banner positive';
-      const icon = kind === 'positive' ? icons.check() : kind === 'warn' ? icons.warning() : icons.warning();
+      const cls = kind === 'warn' ? 'banner warn'
+        : kind === 'negative' ? 'banner negative'
+        : kind === 'positive' ? 'banner positive'
+        : 'banner';
+      const icon = kind === 'positive' ? icons.check() : kind === 'info' ? icons.info() : icons.warning();
       statusEl.innerHTML = h`
         <div class="${cls}">
           <span class="ic">${raw(icon)}</span>
@@ -249,7 +267,9 @@ registerScreen('settings', {
       setRpcError(null);
       btn.disabled = true;
       btn.setAttribute('aria-busy', 'true');
-      showStatus('positive', 'Connecting…', 'Asking the node for its height and chain id.');
+      // Neutral: nothing is known yet, and a green banner that says "Connecting" reads as a
+      // result. The real answer replaces it.
+      showStatus('info', 'Connecting…', 'Asking the node for its height and chain id.');
       let status;
       let chainId;
       try {
@@ -268,7 +288,9 @@ registerScreen('settings', {
       btn.disabled = false;
       btn.removeAttribute('aria-busy');
       const height = status && status.height !== undefined && status.height !== null ? String(status.height) : 'unknown';
-      const heightText = /^\d+$/.test(height) ? Number(height).toLocaleString('en-US') : height;
+      // Grouped as a string, never through Number(): a chain's height is not bounded by 2^53, and
+      // `Number('9007199254740993123').toLocaleString()` quietly invents digits.
+      const heightText = groupDigits(height);
       const theirs = String(chainId ?? '');
       const ours = String(settings.chainId ?? '');
       if (ours && theirs && theirs !== ours) {
@@ -312,8 +334,12 @@ registerScreen('settings', {
 
     // ---- re-authentication ----
     /**
-     * Asks for the password in a sheet and resolves once `wallet.verifyPassword` says yes. Never
-     * `wallet.unlock`: that would end the wallet session (and with it everything else on screen).
+     * Asks for the password in a sheet and calls `onOk()` once `wallet.verifyPassword` says yes.
+     * Never `wallet.unlock`: that would end the wallet session (and with it everything else on
+     * screen). The check costs what unlocking costs by contract, so the submit is disabled while
+     * one is in flight and a second submit is dropped rather than queued — parallel attempts would
+     * be a way to spend the backend's throttling budget faster. No client-side lockout: counting
+     * attempts is the backend's job, and a UI that thinks it is doing it is only lying.
      */
     function askPassword(purpose, onOk) {
       const dialog = ctx.sheet(h`
@@ -328,17 +354,26 @@ registerScreen('settings', {
           </label>
           <div class="sheet-foot">
             <button class="btn" type="button" data-role="cancel">Cancel</button>
-            <button class="btn btn-primary" type="submit">Continue</button>
+            <button class="btn btn-primary" type="submit" data-role="reauth-submit">Continue</button>
           </div>
         </form>`);
       const input = dialog.querySelector('input[name=password]');
       const wrap = input.closest('.field');
+      const submitBtn = dialog.querySelector('[data-role="reauth-submit"]');
+      let checking = false;
       on(dialog, '[data-role="cancel"]', 'click', () => ctx.closeSheet());
       on(dialog, 'form', 'submit', async (evt) => {
         evt.preventDefault();
+        if (checking) return;
+        checking = true;
+        submitBtn.disabled = true;
+        submitBtn.setAttribute('aria-busy', 'true');
         let ok = false;
         try { ok = await ctx.backend.wallet.verifyPassword(input.value); } catch { ok = false; }
+        checking = false;
         if (!live()) return;
+        submitBtn.disabled = false;
+        submitBtn.removeAttribute('aria-busy');
         if (!ok) {
           markInvalid(wrap, input, 'reauth-error');
           dialog.querySelector('#reauth-error').classList.add('field-error');
@@ -353,35 +388,20 @@ registerScreen('settings', {
       });
     }
 
-    // ---- hold to reveal, shared by the two key panels ----
-    function wireHold(slot, getKey) {
-      const mask = slot.querySelector('[data-role="mask"]');
-      const holdBtn = slot.querySelector('[data-role="hold"]');
-      if (!mask || !holdBtn) return;
-      const reveal = () => {
-        const key = getKey();
-        if (!key) return;
-        mask.textContent = key; // the only place a key is ever written
-        mask.classList.remove('masked');
-        holdBtn.classList.remove('holding');
-      };
-      const start = (evt) => {
-        evt.preventDefault();
-        if (holdBtn.disabled || !getKey()) return;
-        holdBtn.classList.add('holding');
-        clearTimeout(holdTimers.get(slot));
-        holdTimers.set(slot, setTimeout(reveal, HOLD_MS));
-      };
-      const cancel = () => {
-        holdBtn.classList.remove('holding');
-        clearTimeout(holdTimers.get(slot));
-      };
-      holdBtn.addEventListener('pointerdown', start);
-      holdBtn.addEventListener('pointerup', cancel);
-      holdBtn.addEventListener('pointerleave', cancel);
-      holdBtn.addEventListener('pointercancel', cancel);
-      holdBtn.addEventListener('keydown', (evt) => { if (evt.key === 'Enter' || evt.key === ' ') start(evt); });
-      holdBtn.addEventListener('keyup', cancel);
+    // ---- the two key panels ----
+    // Both go through lib/reveal.js: one implementation of the gesture, the masking, the copy and
+    // the auto-hide, and `dropOnHide` on top — in settings a key that stops being looked at is
+    // forgotten outright, and getting it back costs the password again.
+    let openPanel = null; // { slot, reveal } — at most one key is ever unlocked at a time
+
+    function closePanel({ collapse = true } = {}) {
+      const panel = openPanel;
+      openPanel = null;
+      viewingKey = null;
+      spendKey = null;
+      if (!panel) return;
+      panel.reveal.destroy();
+      if (collapse && panel.slot.isConnected !== false) panel.slot.innerHTML = panel.collapsed;
     }
 
     function keyPanelMarkup({ label, extra = '', disabled = false }) {
@@ -393,9 +413,27 @@ registerScreen('settings', {
             <button class="btn block hold-btn" type="button" data-role="hold"${raw(disabled ? ' disabled' : '')}>
               <span class="fill"></span>${raw(icons.eye())}Hold to reveal
             </button>
-            <button class="btn block" type="button" data-role="copy">${raw(icons.copy())}Copy ${label}</button>
+            <button class="btn block" type="button" data-role="timed"${raw(disabled ? ' disabled' : '')}></button>
+            <button class="btn block" type="button" data-role="copy"${raw(disabled ? ' disabled' : '')}>${raw(icons.copy())}Copy ${label}</button>
+            <button class="btn btn-ghost block" type="button" data-role="done">Done — hide this key</button>
           </div>
         </div>`;
+    }
+
+    /** Paints a revealed-key panel into `slot` and wires it; `collapsed` is the markup to put back
+     *  when it is closed (the button that asks for the password again). */
+    function openKeyPanel(slot, { label, extra, disabled, getSecret, collapsed }) {
+      closePanel();
+      slot.innerHTML = keyPanelMarkup({ label, extra, disabled });
+      const reveal = wireSecretReveal(slot, {
+        getSecret,
+        copy: (secret) => ctx.backend.platform.copy(secret),
+        onCopied: () => { if (live()) ctx.toast('Copied', { kind: 'positive' }); },
+        dropOnHide: true,
+        onDrop: () => { viewingKey = null; spendKey = null; },
+        labels: { reveal: `Show ${label} for 10 seconds`, hide: `Hide ${label}` },
+      });
+      openPanel = { slot, reveal, collapsed };
     }
 
     const offViewingKey = on(body, '[data-role="show-viewing-key"]', 'click', (evt) => {
@@ -409,10 +447,14 @@ registerScreen('settings', {
           return;
         }
         if (!live()) { key = null; return; } // never written anywhere at all
+        // After openKeyPanel, never before: opening a panel closes any other one, and closing a
+        // panel forgets both keys.
+        openKeyPanel(body.querySelector('[data-role="viewing-key-slot"]'), {
+          label: 'viewing key',
+          getSecret: () => viewingKey,
+          collapsed: VIEWING_KEY_BUTTON,
+        });
         viewingKey = key;
-        const slot = body.querySelector('[data-role="viewing-key-slot"]');
-        slot.innerHTML = keyPanelMarkup({ label: 'viewing key' });
-        wireHold(slot, () => viewingKey);
       });
     });
 
@@ -427,10 +469,11 @@ registerScreen('settings', {
           return;
         }
         if (!live()) { key = null; return; }
-        spendKey = key;
-        const slot = body.querySelector('[data-role="spend-key-slot"]');
-        slot.innerHTML = keyPanelMarkup({
+        openKeyPanel(body.querySelector('[data-role="spend-key-slot"]'), {
           label: 'spend key',
+          getSecret: () => spendKey,
+          collapsed: SPEND_KEY_BUTTON,
+          // Nothing is revealed *or copied* until the sentence has been read and agreed to.
           disabled: true,
           extra: h`
             <div class="banner negative">
@@ -442,26 +485,24 @@ registerScreen('settings', {
               <span>I understand anyone with this key can spend my funds</span>
             </label>`,
         });
-        wireHold(slot, () => spendKey);
+        spendKey = key;
       });
     });
 
+    // The consent box gates *every* way the key can leave the screen — revealing it and copying
+    // it are the same disclosure, and only one of them used to be behind the sentence.
     const offUnderstand = on(body, 'input[name=understand]', 'change', (evt, box) => {
       const slot = body.querySelector('[data-role="spend-key-slot"]');
-      const holdBtn = slot && slot.querySelector('[data-role="hold"]');
-      if (holdBtn) holdBtn.disabled = !box.checked;
+      if (!slot) return;
+      for (const sel of ['[data-role="hold"]', '[data-role="timed"]', '[data-role="copy"]']) {
+        const btn = slot.querySelector(sel);
+        if (btn) btn.disabled = !box.checked;
+      }
     });
 
-    const offCopyKey = on(body, '[data-role="copy"]', 'click', async (evt, btn) => {
+    const offDone = on(body, '[data-role="done"]', 'click', (evt) => {
       evt.preventDefault();
-      // Which key this button belongs to is decided by where it sits, and the value itself comes
-      // from the closure — never from the DOM, which has never held it.
-      const slot = btn.closest('[data-role="viewing-key-slot"], [data-role="spend-key-slot"]');
-      const secret = slot && slot.getAttribute('data-role') === 'viewing-key-slot' ? viewingKey : spendKey;
-      if (!secret) return;
-      await ctx.backend.platform.copy(secret);
-      if (!live()) return;
-      ctx.toast('Copied', { kind: 'positive' });
+      closePanel();
     });
 
     // ---- wipe ----
@@ -485,13 +526,10 @@ registerScreen('settings', {
     });
 
     return () => {
-      for (const timer of holdTimers.values()) clearTimeout(timer);
-      holdTimers.clear();
+      closePanel({ collapse: false });
       for (const mask of body.querySelectorAll('[data-role="mask"]')) mask.textContent = '';
-      viewingKey = null;
-      spendKey = null;
       offSaveNetwork(); offTest(); offTheme(); offAutoLock();
-      offViewingKey(); offSpendKey(); offUnderstand(); offCopyKey();
+      offViewingKey(); offSpendKey(); offUnderstand(); offDone();
       offWipeInput(); offWipe(); offExternal();
     };
   },

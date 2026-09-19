@@ -772,3 +772,43 @@ test('a real scan failure while home is still on screen does show the banner', a
   assert.ok(banner);
   assert.match(banner.textContent, /Cannot reach the fullnode/);
 });
+
+// ------------------------------------------------------- the button variants need their base ----
+// `.btn-primary` and `.btn-ghost` in components.css only re-colour: the layout (display, height,
+// padding, the 44 px tap target) all comes from `.btn`, so on their own they render as bare,
+// left-aligned text. `.btn-round` and `.btn-icon` declare their own box and are standalone. This
+// guard encodes exactly that, and reads it back out of the stylesheet so the two cannot drift.
+test('no markup uses a button variant that needs .btn without it', async () => {
+  const { readFile, readdir } = await import('node:fs/promises');
+  const css = await readFile(new URL('../components.css', import.meta.url), 'utf8');
+
+  // A variant is standalone iff its own base rule gives it a box (`display`).
+  const NEEDS_BASE = [];
+  for (const variant of ['btn-primary', 'btn-ghost', 'btn-round', 'btn-icon']) {
+    const rule = new RegExp(`(^|\\n)\\.${variant}\\s*\\{([^}]*)\\}`).exec(css);
+    assert.ok(rule, `${variant} has a base rule in components.css`);
+    if (!/(^|;|\s)display\s*:/.test(rule[2])) NEEDS_BASE.push(variant);
+  }
+  assert.deepEqual(NEEDS_BASE.sort(), ['btn-ghost', 'btn-primary'], 'the CSS still says what this guard assumes');
+
+  async function* walk(dir, prefix = '') {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) yield* walk(new URL(`${entry.name}/`, dir), `${prefix}${entry.name}/`);
+      else if (/\.(js|html)$/.test(entry.name)) yield [`${prefix}${entry.name}`, new URL(entry.name, dir)];
+    }
+  }
+  const offenders = [];
+  for (const dir of ['../screens/', '../']) {
+    for await (const [name, url] of walk(new URL(dir, import.meta.url))) {
+      if (dir === '../' && !/^(app\.js|gallery\.html|dev\.html)$/.test(name)) continue;
+      const src = await readFile(url, 'utf8');
+      for (const [, value] of src.matchAll(/class="([^"$]*)"/g)) {
+        const tokens = value.split(/\s+/).filter(Boolean);
+        for (const variant of NEEDS_BASE) {
+          if (tokens.includes(variant) && !tokens.includes('btn')) offenders.push(`${name}: class="${value}"`);
+        }
+      }
+    }
+  }
+  assert.deepEqual(offenders, [], 'a variant that only re-colours needs .btn for its box');
+});

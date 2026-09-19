@@ -1,22 +1,21 @@
 // `#sent/<hash>` — the receipt for a submitted transfer.
 //
-// The per-transaction key reaches this screen through the session-keyed handoff in ./state.js and
-// lives in this closure alone: it is written into one text node while it is revealed, blanked on
-// cleanup, and never put in an attribute, in `ctx.state`, in the URL or in storage. Reached cold
-// (a reload, or a second visit) there is simply no key, and the screen says what it can.
+// The per-transaction key reaches this screen through the session-keyed handoff in ./state.js
+// (which the send itself filled at the moment the backend answered, whatever screen was mounted)
+// and lives in this closure alone. The reveal, the masking and the copy are the shared helper in
+// lib/reveal.js, so the one rule — the secret is only ever in one text node, never an attribute,
+// never `ctx.state`, never the URL — is implemented once. Reached cold (a reload, or a second
+// visit) there is simply no key, and the screen says what it can.
 import { h, raw, on } from '../../lib/dom.js';
 import { icons } from '../../lib/icons.js';
 import { registerScreen } from '../../app.js';
 import { formatUnits, shortAddress, shortHex } from '../../lib/format.js';
 import { explorerLink } from '../../lib/explorer.js';
-import { HOLD_MS, takeResult } from './state.js';
+import { wireSecretReveal } from '../../lib/reveal.js';
+import { takeResult, clearFinishedSend } from './state.js';
 
 function sentSkeletonMarkup() {
-  return h`
-    <div class="narrow">
-      <div class="topbar"><span class="topbar-title">Sent</span></div>
-      <div class="skeleton block"></div>
-    </div>`;
+  return h`<div class="narrow"><div class="skeleton block"></div></div>`;
 }
 
 registerScreen('sent', {
@@ -30,6 +29,11 @@ registerScreen('sent', {
     // reload (or a second visit) simply finds nothing, which is the correct answer.
     const result = takeResult(ctx.session, hash);
     let txKey = (result && result.txKey) || null;
+
+    // The receipt has been reached, so the finished send is done with — and so is the chip that
+    // led here.
+    clearFinishedSend(ctx, hash);
+    ctx.setPinnedChip(null);
 
     let assets = [];
     let settings = {};
@@ -45,7 +49,7 @@ registerScreen('sent', {
       ? raw(h`<span class="amount">${formatUnits(result.amount, 9, asset.decimals)}<span class="unit">${asset.symbol}</span></span>`)
       : '';
     const toRow = result
-      ? raw(h`<div class="kv wrap"><span class="k">To</span><span class="v mono">${shortAddress(result.to)}</span></div>`)
+      ? raw(h`<div class="kv"><span class="k">To</span><span class="v mono truncate">${shortAddress(result.to)}</span></div>`)
       : '';
     const keyBlock = txKey
       ? raw(h`
@@ -54,6 +58,7 @@ registerScreen('sent', {
           <div class="hold-reveal">
             <span class="key-mask masked" data-role="txkey">•••• •••• •••• •••• •••• ••••</span>
             <button class="btn block hold-btn" type="button" data-role="hold"><span class="fill"></span>${raw(icons.eye())}Hold to reveal</button>
+            <button class="btn block" type="button" data-role="timed"></button>
             <button class="btn block" type="button" data-role="copy-key">${raw(icons.copy())}Copy transaction key</button>
           </div>
         </div>`)
@@ -65,7 +70,6 @@ registerScreen('sent', {
     root.innerHTML = h`
       <h1 class="sr-only">Sent</h1>
       <div class="narrow">
-        <div class="topbar"><span class="topbar-title">Sent</span></div>
         <div class="stage">
           <span class="avatar lg in">${raw(icons.check())}</span>
           <h2 class="title" data-role="step-title" tabindex="-1">Transfer submitted</h2>
@@ -73,7 +77,7 @@ registerScreen('sent', {
         </div>
         <div class="card">
           ${toRow}
-          <div class="kv wrap"><span class="k">Transaction</span><span class="v mono">${shortHex(hash, 10)}</span></div>
+          <div class="kv"><span class="k">Transaction</span><span class="v mono truncate">${shortHex(hash, 10)}</span></div>
         </div>
         ${keyBlock}
         ${explorerBtn}
@@ -83,55 +87,26 @@ registerScreen('sent', {
     const title = root.querySelector('[data-role="step-title"]');
     if (title && typeof title.focus === 'function') title.focus();
 
-    // ---- hold to reveal: the key is written into one text node and nowhere else ----
-    const mask = root.querySelector('[data-role="txkey"]');
-    const holdBtn = root.querySelector('[data-role="hold"]');
-    let holdTimer = null;
-
-    function reveal() {
-      if (!txKey || !mask) return;
-      mask.textContent = txKey;
-      mask.classList.remove('masked');
-      if (holdBtn) holdBtn.classList.remove('holding');
-    }
-    function startHold(evt) {
-      evt.preventDefault();
-      if (!txKey) return;
-      holdBtn.classList.add('holding');
-      clearTimeout(holdTimer);
-      holdTimer = setTimeout(reveal, HOLD_MS);
-    }
-    function cancelHold() {
-      if (holdBtn) holdBtn.classList.remove('holding');
-      clearTimeout(holdTimer);
-    }
-    if (holdBtn) {
-      holdBtn.addEventListener('pointerdown', startHold);
-      holdBtn.addEventListener('pointerup', cancelHold);
-      holdBtn.addEventListener('pointerleave', cancelHold);
-      holdBtn.addEventListener('pointercancel', cancelHold);
-      holdBtn.addEventListener('keydown', (evt) => { if (evt.key === 'Enter' || evt.key === ' ') startHold(evt); });
-      holdBtn.addEventListener('keyup', cancelHold);
-    }
-
-    const offCopy = on(root, '[data-role="copy-key"]', 'click', async (evt) => {
-      evt.preventDefault();
-      if (!txKey) return;
-      await ctx.backend.platform.copy(txKey);
-      if (!live()) return;
-      ctx.toast('Transaction key copied', { kind: 'positive' });
+    // The key never leaves this closure: the helper reads it through `getSecret` at the moment it
+    // paints, and blanks the node again on teardown. Deliberately NOT `dropOnHide` — someone
+    // switching windows to paste a transaction key somewhere must not come back to nothing.
+    const reveal = wireSecretReveal(root, {
+      getSecret: () => txKey,
+      selectors: { mask: '[data-role="txkey"]', hold: '[data-role="hold"]', timed: '[data-role="timed"]', copy: '[data-role="copy-key"]' },
+      copy: (secret) => ctx.backend.platform.copy(secret),
+      onCopied: () => { if (live()) ctx.toast('Transaction key copied', { kind: 'positive' }); },
+      labels: { reveal: 'Show for 10 seconds', hide: 'Hide the transaction key' },
     });
+
     const offExplorer = on(root, '[data-role="explorer"]', 'click', (evt) => {
       evt.preventDefault();
       if (explorer) ctx.backend.platform.openExternal(explorer.url);
     });
 
     return () => {
-      clearTimeout(holdTimer);
-      if (mask) mask.textContent = '';
+      reveal.destroy();
       txKey = null;
-      offCopy(); offExplorer();
+      offExplorer();
     };
   },
 });
-

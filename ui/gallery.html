@@ -355,9 +355,13 @@
         <div class="hold-reveal">
           <span class="key-mask masked">•••• •••• •••• •••• •••• ••••</span>
           <button class="btn block hold-btn" type="button"><span class="fill"></span><svg class="g-i"><use href="#i-eye"/></svg>Hold to reveal</button>
+          <button class="btn block" type="button">Show for 10 seconds</button>
+          <button class="btn block" type="button"><svg class="g-i"><use href="#i-copy"/></svg>Copy viewing key</button>
+          <button class="btn btn-ghost block" type="button">Done — hide this key</button>
         </div>
       </div>
     </div>
+    <p class="g-note">Press-and-hold is a good default and a bad only-option: it is unavailable to anyone who cannot hold a pointer down steadily, so every secret also has a plain button that shows it for ten seconds. Both are wired by <code>ui/lib/reveal.js</code>, which is also what guarantees the secret is written into the one text node and nowhere else — never an attribute — and hides it again when the window loses focus.</p>
   </section>
 
   <!-- ============================ chips & banners ============================ -->

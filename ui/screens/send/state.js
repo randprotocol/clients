@@ -4,6 +4,7 @@
 // Split out of screens/send.js (which was past 800 lines) so the screen itself is the wiring and
 // this is the behaviour; importable under plain Node, since none of it touches `document`.
 import { formatUnits, parseUnits, elapsed } from '../../lib/format.js';
+import { TX_HASH_RE } from '../../lib/explorer.js';
 
 export const PHASE_LABELS = {
   selecting: 'Selecting notes',
@@ -15,10 +16,41 @@ export const PHASE_LABELS = {
 // Cancel is offered up to, but not including, the moment the transaction leaves this device: once
 // the node has it, "cancel" would be a lie.
 export const CANCELLABLE = ['selecting', 'witness', 'proving'];
-export const HOLD_MS = 650;
+// …and for the same reason, a failure from `'submitting'` onwards does not mean "not sent". The
+// transaction may be in a mempool, in a block, or nowhere; this wallet cannot tell, and the one
+// thing it must not do is invite the user to send it again.
+export const AFTER_BROADCAST = ['submitting', 'confirming'];
 export const ADDRESS_DEBOUNCE_MS = 150;
 export const SELF_SEND_QUESTION = 'Send to yourself? This consolidates your notes.';
-export const PROVE_COST = '1 proof · about 2 minutes on this computer';
+export const UNKNOWN_NOTICE = 'Your last transfer’s outcome is unknown — check Activity first.';
+export const UNKNOWN_CONFIRM = 'I checked — it did not go through';
+
+/** "1 proof · about 2 minutes on this computer" — from the estimate, not from a constant. Roughly
+ *  two minutes of native proving per proof; a withdrawal needs two, a transfer one. */
+export function proveCost(proofs) {
+  const n = Number.isFinite(Number(proofs)) && Number(proofs) >= 1 ? Math.floor(Number(proofs)) : 1;
+  return `${n} ${n === 1 ? 'proof' : 'proofs'} · about ${n * 2} minutes on this computer`;
+}
+
+/**
+ * What a rejection means, which depends entirely on how far the transfer had got.
+ *
+ *  - `'cancelled'` — the user asked, or the wallet session ended. Nothing happened.
+ *  - `'not-sent'`  — it failed before anything was broadcast, or the backend says it *knows* the
+ *                    transfer did not happen (`err.definite`). Safe to try again.
+ *  - `'unknown'`   — it failed at or after `'submitting'`. It may be on chain. Not safe to retry.
+ */
+export function outcomeOf(store) {
+  if (!store || !store.error) return 'ok';
+  if (store.cancelling || isAbortError(store.error)) return 'cancelled';
+  if (store.error.definite === true) return 'not-sent';
+  return AFTER_BROADCAST.includes(store.phase) ? 'unknown' : 'not-sent';
+}
+
+/** A hash from a rejection is node-controlled text: only 32 bytes of hex ever gets further. */
+export function safeHash(hash) {
+  return TX_HASH_RE.test(String(hash || '')) ? String(hash) : null;
+}
 
 /**
  * What to tell the user when a proof failed. The wasm core aborts with a bare `unreachable` (or
@@ -68,10 +100,35 @@ export function takeResult(session, hash) {
 export function draftFor(ctx, assetIndex) {
   let draft = ctx.state.sendDraft;
   if (!draft || draft.assetIndex !== assetIndex) {
-    draft = { assetIndex, to: '', amount: '', selfConfirmed: false, estimate: null };
+    // `knownFee` is the fee last learned from the backend by any route (an estimate, or
+    // `maxSendable`), so the local amount check can subtract it before asking anything again.
+    draft = { assetIndex, to: '', amount: '', selfConfirmed: false, estimate: null, knownFee: null };
     ctx.state.sendDraft = draft;
   }
   return draft;
+}
+
+// ------------------------------------------------------------- the unknown-outcome record ------
+/**
+ * A transfer whose fate this wallet could not establish leaves a mark on the session. It is what
+ * puts a standing warning above the form and the review, and what makes proving again take an
+ * explicit "I checked" until the user has actually re-scanned. Nothing secret is in it.
+ */
+export function markUnknownOutcome(ctx, { hash = null } = {}) {
+  ctx.state.sendUnknown = { hash: safeHash(hash), atMs: Date.now(), syncedSince: false };
+  return ctx.state.sendUnknown;
+}
+
+export function unknownOutcome(ctx) {
+  return ctx.state.sendUnknown || null;
+}
+
+/** Called when a scan started *after* the failure has finished: the user has now had a chance to
+ *  see whether the transfer is there. The warning stays for the session; the extra confirm does
+ *  not. */
+export function noteSyncFinished(ctx) {
+  const record = ctx.state.sendUnknown;
+  if (record) record.syncedSince = true;
 }
 
 // ------------------------------------------------------------------- the in-flight send -------
@@ -79,6 +136,12 @@ export function draftFor(ctx, assetIndex) {
 export function currentSend(ctx) {
   const store = ctx.state.send;
   return store && store.sessionId === ctx.session.id ? store : null;
+}
+
+/** Forgets a finished send once its receipt has been shown, so a later `#send` is a fresh start. */
+export function clearFinishedSend(ctx, hash) {
+  const store = currentSend(ctx);
+  if (store && store.done && (!hash || store.hash === hash)) ctx.state.send = null;
 }
 
 /**
@@ -146,14 +209,55 @@ export function startSend(ctx, req, asset) {
   const finish = () => {
     store.done = true;
     stopTicker();
-    if (ctx.session.id === session.id) ctx.setPinnedChip(null);
   };
-  const p = Promise.resolve(ctx.backend.send.send(req, onPhase, controller ? { signal: controller.signal } : undefined));
+
+  // The settle handler runs whatever screen happens to be mounted — including none of this flow's
+  // — so everything that must happen exactly once happens here, not in a screen's listener.
+  const p = Promise.resolve(ctx.backend.send.send(req, onPhase, controller ? { signal: controller.signal } : undefined))
+    .then(
+      (result) => {
+        const hash = safeHash(result && result.hash);
+        store.hash = hash;
+        // The transaction key is moved out of the promise chain *here*, at the instant it arrives,
+        // into the session-keyed handoff. `ctx.state.send.promise` therefore fulfils to the hash
+        // alone: nothing reachable from `ctx.state` — not a field, not a resolved value — ever
+        // carries the key, whether or not a screen was mounted to catch it.
+        if (hash) {
+          stashResult(session, {
+            hash,
+            txKey: (result && result.txKey) || null,
+            amount: req.amount,
+            to: req.to,
+            assetIndex: req.asset,
+          });
+        }
+        finish();
+        if (ctx.session.id === session.id) {
+          // Not a navigation: the user may be in the middle of something else. A chip that says
+          // the transfer landed, and leads to the receipt, is how they find out.
+          if (hash) ctx.setPinnedChip({ text: 'Sent — view', go: `sent/${hash}`, kind: 'positive' });
+          else ctx.setPinnedChip(null);
+        }
+        fan();
+        return { hash };
+      },
+      (err) => {
+        store.error = err;
+        finish();
+        if (ctx.session.id === session.id) {
+          ctx.setPinnedChip(null);
+          // Recorded here rather than in a screen, so a transfer that failed while the user was
+          // elsewhere still leaves the warning behind it.
+          if (outcomeOf(store) === 'unknown') markUnknownOutcome(ctx, { hash: err && err.hash });
+        }
+        fan();
+        throw err;
+      },
+    );
   store.promise = p;
-  p.then(
-    () => { finish(); fan(); },
-    (err) => { store.error = err; finish(); fan(); },
-  );
+  // The failure is delivered through `store.error` and the listeners; this only marks the promise
+  // handled so a screen that never attaches cannot produce an unhandled rejection.
+  p.catch(() => {});
   return store;
 }
 
