@@ -350,9 +350,21 @@ body.wide .hero .amount { font-size: var(--fs-balance); }
    base.css's `list-style: none` otherwise strips a <ul>'s list semantics in Safari/VoiceOver);
    the <li> is a pure wrapper, so it carries the hairline and nothing else. */
 .list { display: flex; flex-direction: column; }
-.list > li { display: flex; min-width: 0; }
+/* A column, not a row: a list item is usually just its `.row`, but it may also carry a line that
+   belongs to that row — the sentence explaining why a registry asset cannot be sent — and that
+   line goes *under* the row, not squeezed in beside it. */
+.list > li { display: flex; flex-direction: column; min-width: 0; }
 .list > li > .row { width: 100%; }
+.list > li > .caption { padding: 0 var(--s-3) var(--s-3); }
 .list > li + li { border-top: 1px solid var(--border-soft); }
+
+/* A row that is listed but cannot be chosen — a registry asset in the send flow's asset picker.
+   `aria-disabled`, never `disabled`, so it keeps its place in the tab order and the sentence
+   explaining why (tied on with aria-describedby) can actually be announced; same reasoning as
+   `.btn-round[aria-disabled]` above. It carries no destination, so a click does nothing. */
+.row[aria-disabled="true"] { opacity: .45; cursor: default; }
+.row[aria-disabled="true"]:hover { background: transparent; }
+.row[aria-disabled="true"]:active { transform: none; }
 
 /* Placeholder rows while the wallet scans. */
 .row .row-main > .skeleton + .skeleton { margin-top: var(--s-2); }
@@ -406,6 +418,15 @@ body.wide .hero .amount { font-size: var(--fs-balance); }
   border-top: 1px solid var(--border-soft);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+/* A strip above the four destinations for something the shell has pinned there — today the send
+   flow's "Proving… 02:41" chip, which is how a proof the user navigated away from stays visible
+   and one tap from being watched again. Empty by default, and it takes up no room when it is. */
+.tabbar .tabbar-notice {
+  display: flex;
+  justify-content: center;
+  padding: var(--s-2) var(--s-3) 0;
+}
+.tabbar .tabbar-notice:empty { display: none; }
 .tabbar .tabbar-inner {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -638,6 +659,18 @@ body.compact .sidebar { display: none; }
 .input:disabled { opacity: .5; }
 .field .hint { font-size: var(--fs-caption); color: var(--text-soft); }
 .field .error { display: none; font-size: 13px; font-weight: 500; color: var(--negative); }
+/* A field whose label line also carries an action — Amount … [Max], Recipient … [Paste]. Such a
+   field is a <div class="field"> with its own <label class="label" for="…">, not the usual
+   wrapping <label>: a <button> inside a <label> is both invalid and a second thing the label's
+   own click would activate. */
+.field .field-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  margin-bottom: calc(var(--s-2) * -1); /* .field's own gap already spaces the control below */
+}
 
 /* Error state: one class on the wrapper drives the border, the ring and the message. */
 .field.invalid input,
@@ -656,6 +689,26 @@ body.compact .sidebar { display: none; }
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   min-height: 56px;
+}
+
+/* ============================================================================= check ========= */
+/* A consent checkbox with its sentence — "I understand anyone with this key can spend my funds".
+   The whole label is the target (a 16 px box is not one), so it carries the 44 px height itself. */
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.check input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* ============================================================================== chip ========= */
@@ -707,6 +760,42 @@ a.chip:active { transform: scale(.98); }
   border-color: var(--border-soft);
   color: var(--text-soft);
   flex: none;
+}
+
+/* ========================================================================= segmented ========= */
+/* Two to four mutually exclusive choices that fit on one line — the theme switch in settings.
+   Markup is a real radio group (`role="radiogroup"` + `role="radio"`/`aria-checked`), not a row of
+   toggle buttons, so a screen reader announces "1 of 3" rather than three unrelated pressables. */
+.segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--s-1);
+  padding: var(--s-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+}
+.segmented .seg {
+  position: relative;
+  min-height: 36px;
+  padding: 0 var(--s-3);
+  border-radius: calc(var(--r-md) - var(--s-1));
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  transition: background var(--mid) var(--ease), color var(--mid) var(--ease), box-shadow var(--mid) var(--ease);
+}
+/* 36 px reads right next to a field, but is not a legal touch target: the same invisible band as
+   `.btn.sm` and `.chip`, derived from --tap so the two cannot drift apart. */
+.segmented .seg::after { content: ""; position: absolute; inset: calc((36px - var(--tap)) / 2) 0; }
+.segmented .seg:hover { color: var(--text-strong); }
+.segmented .seg[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-1);
 }
 
 /* ========================================================================== skeleton ========= */
@@ -1051,6 +1140,36 @@ body.wide .toast-area { bottom: var(--s-6); }
 .hold-btn.holding .fill { animation: hold-fill 650ms linear forwards; }
 @keyframes hold-fill { to { transform: scaleX(1); } }
 .hold-btn svg { width: 20px; height: 20px; flex: none; }
+
+/* ============================================================================ narrow ========= */
+/* A screen that is one decision rather than a page of content — the steps of the send flow, a
+   receipt — stays modal width even in a desktop window, centred in the content column, instead of
+   stretching a two-field form across 720 px. In a compact window it is simply the column. */
+.narrow { display: flex; flex-direction: column; gap: var(--s-4); width: 100%; }
+body.wide .narrow { max-width: 440px; margin: 0 auto; }
+/* The screen's own top bar sits inside the column, so its back button lines up with the card
+   underneath it rather than being stranded at the left edge of a 720 px page. */
+.narrow > .topbar { margin: 0 calc(var(--s-1) * -1); }
+/* A slot with nothing in it yet (the step indicator on a step that is not numbered) must not
+   still claim a gap. */
+.narrow > *:empty { display: none; }
+
+/* ============================================================================= stage ========= */
+/* One thing presented as the subject of the screen, centred, with its caption under it: the
+   proving ring and its elapsed time, the success mark on a receipt. */
+.stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-4) 0;
+  text-align: center;
+}
+.stage > .amount { font-size: 20px; color: var(--text-soft); }
+/* The elapsed time sits inside the ring (it is what the ring is counting); the phase is the
+   caption under it, where it has the whole column's width and cannot collide with the stroke. */
+.stage .ring .ring-label .amount { font-size: 20px; color: var(--text-strong); }
+.stage > .subtitle { font-weight: 600; color: var(--text-strong); }
 
 /* ============================================================================= empty ========= */
 .empty {

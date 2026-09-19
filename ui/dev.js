@@ -13,7 +13,17 @@
 //   ?activity=rich             — more activity/notes spanning several days, for day-grouping and filters
 //   ?faucet=fail                — faucet.request() rejects with a cooldown-style message
 //   ?address=long              — a realistic ~1.6 kB shielded address, for the Receive screen
+//   ?canProve=0|1              — send.canProve(): 1 = this shell proves natively (desktop),
+//                                0 = it cannot (the wasm shells), with the real reason string
+//   ?prove=ok|fail|slow        — send.send(): resolves at once / fails with a wasm OOM /
+//                                walks a phase every 1.5 s and never finishes (for the ring)
+//   ?assets=one                — assets.list() returns only RAND, so #send skips the picker
+//   ?chain=wrong               — the node answers rand_chainId with a different chain
+//   ?rpc=down                  — rpc.call() rejects, for the Test-connection failure state
 //   #hash                      — an initial route, same as any real navigation
+//
+// The unlocked fixture's password is `unlocked-password-1` — the settings screen's re-auth sheet
+// (viewing key, spend-key export) wants it.
 import { mount } from './app.js';
 import { fakeBackend, unlockedBackend } from './test/fake-backend.mjs';
 
@@ -25,6 +35,14 @@ const scan = params.get('scan');
 const activity = params.get('activity');
 const faucet = params.get('faucet');
 const address = params.get('address');
+const canProve = params.get('canProve');
+const prove = params.get('prove');
+const assetsMode = params.get('assets');
+const chain = params.get('chain');
+const rpcMode = params.get('rpc');
+
+const WASM_CANNOT_PROVE = 'A transfer proof needs about 5.6 GB of memory and a browser gives '
+  + 'WebAssembly at most 4 GB, so this wallet cannot finish one here.';
 
 /** A shielded address at its real length (~1.6 kB), so the Receive screen can be judged honestly. */
 function longAddress() {
@@ -100,6 +118,46 @@ async function init() {
   }
   if (faucet === 'fail') {
     backend.faucet.request = async () => { throw new Error('This address already claimed RAND today. Try again in 11h 24m.'); };
+  }
+
+  // ---- the send flow ----
+  if (canProve !== null) {
+    backend.send.canProve = canProve === '1'
+      ? async () => ({ ok: true })
+      : async () => ({ ok: false, reason: WASM_CANNOT_PROVE });
+  }
+  if (assetsMode === 'one') {
+    const [rand] = await backend.assets.list();
+    backend.assets.list = async () => [rand];
+  }
+  if (prove === 'ok') {
+    backend.send.send = async (_req, onPhase) => {
+      for (const phase of ['selecting', 'witness', 'proving', 'submitting', 'confirming']) onPhase(phase);
+      return { hash: `0x${'ab'.repeat(32)}`, txKey: `tk1${'x8f4k2m0p7z3v6n9c1b4a7s2d5f8g1h4j7'.repeat(2)}` };
+    };
+  } else if (prove === 'fail') {
+    backend.send.send = async (_req, onPhase) => {
+      onPhase('selecting');
+      onPhase('witness');
+      onPhase('proving');
+      await new Promise((r) => setTimeout(r, 400));
+      throw new Error('RuntimeError: unreachable');
+    };
+  } else if (prove === 'slow') {
+    // Walks a phase every 1.5 s and never finishes: the state a screenshot of the ring needs.
+    backend.send.send = (_req, onPhase) => new Promise(() => {
+      const phases = ['selecting', 'witness', 'proving'];
+      let i = 0;
+      onPhase(phases[0]);
+      setInterval(() => { i = Math.min(i + 1, phases.length - 1); onPhase(phases[i]); }, 1500);
+    });
+  }
+
+  // ---- the node, for settings ----
+  if (chain === 'wrong') {
+    backend.rpc.call = async (method) => (method === 'rand_chainId' ? 42 : { height: 1402918, peers: 6, syncing: false });
+  } else if (rpcMode === 'down') {
+    backend.rpc.call = async () => { throw new Error('Cannot reach the node at 127.0.0.1:8899 — timed out after 8s.'); };
   }
 
   window.__app = await mount(document.body, backend, { mode });

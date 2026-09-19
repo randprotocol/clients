@@ -281,8 +281,40 @@
           <span class="label">Recovery phrase</span>
           <textarea rows="3" spellcheck="false">abandon ability able about above absent absorb abstract absurd abuse access accident</textarea>
         </label>
+        <div class="field">
+          <div class="field-top">
+            <label class="label" for="g-amount">Amount</label>
+            <button class="btn sm" type="button">Max</button>
+          </div>
+          <input id="g-amount" type="text" inputmode="decimal" value="3.49999">
+          <span class="hint">Available 3.5 RAND · fee 0.00001 RAND</span>
+        </div>
       </div>
     </div>
+    <p class="g-note">A field whose label line also carries an action (<code>.field-top</code>) is a <code>&lt;div class="field"&gt;</code> with its own <code>&lt;label for&gt;</code>, not the usual wrapping <code>&lt;label&gt;</code>: a button inside a label is invalid, and the label's own click would fire it too.</p>
+  </section>
+
+  <!-- ============================ segmented control ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Segmented control</h2>
+    <div class="card">
+      <div class="stack">
+        <div class="segmented" role="radiogroup" aria-label="Theme">
+          <button class="seg" type="button" role="radio" aria-checked="true">System</button>
+          <button class="seg" type="button" role="radio" aria-checked="false">Dark</button>
+          <button class="seg" type="button" role="radio" aria-checked="false">Light</button>
+        </div>
+        <div class="segmented" role="radiogroup" aria-label="Range">
+          <button class="seg" type="button" role="radio" aria-checked="false">Day</button>
+          <button class="seg" type="button" role="radio" aria-checked="true">Week</button>
+        </div>
+        <label class="check">
+          <input type="checkbox">
+          <span>I understand anyone with this key can spend my funds</span>
+        </label>
+      </div>
+    </div>
+    <p class="g-note">Two to four mutually exclusive choices on one line. It is a real radio group — <code>role="radiogroup"</code> around <code>role="radio"</code>/<code>aria-checked</code> — so it is announced as "2 of 3" instead of as three unrelated buttons. The segments read 36 px but claim 44 px with the same invisible band as <code>.btn.sm</code>.</p>
   </section>
 
   <!-- ============================ onboarding hero ============================ -->
@@ -365,6 +397,49 @@
         <span><span class="banner-title">Backed up</span>Your recovery phrase was confirmed on this device.</span>
       </div>
     </div>
+  </section>
+
+  <!-- ============================ narrow column & stage ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Modal-width column (.narrow) and subject stage (.stage)</h2>
+    <div class="narrow">
+      <div class="stage">
+        <span class="avatar lg in"><svg><use href="#i-check"/></svg></span>
+        <h3 class="title">Transfer submitted</h3>
+        <span class="amount">120.00 RAND</span>
+      </div>
+      <div class="card">
+        <div class="kv"><span class="k">To</span><span class="v mono">rand1p4r…9v3d</span></div>
+        <div class="kv"><span class="k">Transaction</span><span class="v mono">0xab12cd34…7f2a</span></div>
+      </div>
+      <button class="btn btn-primary block" type="button">Done</button>
+    </div>
+    <p class="g-note">A screen that is one decision, not a page of content — the send flow's steps, a receipt — stays 440 px wide and centred under <code>body.wide</code> instead of stretching a two-field form across the 720 px column. <code>.stage</code> is the one thing the screen is about (a proving ring, a success mark) with its caption under it.</p>
+  </section>
+
+  <!-- ============================ disabled row ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">A row that is listed but not offered</h2>
+    <div class="card flush">
+      <ul class="list" role="list">
+        <li>
+          <button class="row" type="button">
+            <span class="avatar accent">R</span>
+            <span class="row-main"><span class="row-title"><span class="truncate">Rand</span></span><span class="row-sub">RAND</span></span>
+            <span class="row-end"><span class="amount">1,284.5392</span></span>
+          </button>
+        </li>
+        <li>
+          <button class="row" type="button" aria-disabled="true" aria-describedby="g-rpl-hint">
+            <span class="avatar rpl" data-hue="204">W</span>
+            <span class="row-main"><span class="row-title"><span class="truncate">Wrapped Ether</span><span class="chip xs">RPL</span></span><span class="row-sub">wETH</span></span>
+            <span class="row-end"><span class="amount">0.5000</span></span>
+          </button>
+          <p class="caption" id="g-rpl-hint">RPL transfers are not available on this network.</p>
+        </li>
+      </ul>
+    </div>
+    <p class="g-note">The send flow's asset picker. Hiding the assets a user can see everywhere else in the wallet would read as a bug, so they are listed, dimmed, and carry the reason — <code>aria-disabled</code> rather than <code>disabled</code>, so the row keeps its place in the tab order and its <code>aria-describedby</code> sentence can be announced.</p>
   </section>
 
   <!-- ============================ proving ring ============================ -->
@@ -516,6 +591,9 @@
     <h2 class="g-h">Tab bar (compact) and sidebar (wide)</h2>
     <div class="g-stage short">
       <nav class="tabbar">
+        <div class="tabbar-notice">
+          <a class="chip warn" href="#send"><span class="dot busy"></span>Proving… 02:41</a>
+        </div>
         <div class="tabbar-inner">
           <a class="tab on" href="#home"><svg><use href="#i-home"/></svg>Home</a>
           <a class="tab" href="#activity"><svg><use href="#i-clock"/></svg>Activity</a>
@@ -532,12 +610,14 @@
           <a class="nav-item" href="#activity"><svg class="g-i"><use href="#i-clock"/></svg>Activity</a>
           <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
           <a class="nav-item" href="#settings"><svg class="g-i"><use href="#i-settings"/></svg>Settings</a>
-          <div class="sidebar-foot">
+          <div class="sidebar-foot stack tight">
+            <a class="chip warn" href="#send"><span class="dot busy"></span>Proving… 02:41</a>
             <button class="chip" type="button"><svg class="g-i"><use href="#i-plus"/></svg>Add account</button>
           </div>
         </div>
       </aside>
     </div>
+    <p class="g-note"><code>.tabbar-notice</code> is the strip above the four destinations for something the shell has pinned there — the send flow's proving chip, so a proof the user navigated away from stays visible and one tap from being watched again. It collapses to nothing when empty. The sidebar puts the same chip in its foot.</p>
   </section>
 
   <!-- ============================ skeletons ============================ -->

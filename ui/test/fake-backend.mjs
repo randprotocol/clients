@@ -61,6 +61,7 @@ function createBackend(initial = {}, overrides = {}) {
     assets: defaultAssets(),
     activity: [],
     notes: [],
+    clipboard: '',
     scannedHeight: 1000,
     head: 1000,
     lastSyncMs: Date.now(),
@@ -88,6 +89,9 @@ function createBackend(initial = {}, overrides = {}) {
       if (password !== state.wallet.password) throw new Error('wrong password');
       state.unlocked = true;
     },
+    // Re-authentication only: it answers the question and changes nothing, so the wallet session
+    // the caller is in survives it (see ui/backend.js).
+    verifyPassword: (password) => !!state.wallet && password === state.wallet.password,
     lock: () => {
       state.unlocked = false;
     },
@@ -146,7 +150,12 @@ function createBackend(initial = {}, overrides = {}) {
   const sendDefs = {
     canProve: () => ({ ok: false, reason: 'test' }),
     estimate: (_req) => ({ fee: '10000', inputs: 1, change: '0', proofs: 1 }),
-    send: (_req, onPhase) => {
+    // `options.signal` is the session-linked AbortSignal (see ui/backend.js). This fake answers
+    // immediately, so the only abort it can observe is one that happened before the call; it
+    // rejects with an AbortError then, the way a real prover would mid-proof.
+    send: async (_req, onPhase, options) => {
+      const signal = options && options.signal;
+      if (signal && signal.aborted) throw abortError();
       if (typeof onPhase === 'function') {
         for (const phase of ['selecting', 'witness', 'proving', 'submitting', 'confirming']) onPhase(phase);
       }
@@ -159,7 +168,13 @@ function createBackend(initial = {}, overrides = {}) {
   };
 
   const rpcDefs = {
-    call: (method, params) => ({ method, params: params ?? null }),
+    // The two methods the settings screen's "Test connection" uses; anything else echoes, as
+    // before, so a test can assert on a call without this fake pretending to be a whole node.
+    call: (method, params) => {
+      if (method === 'rand_status') return { height: state.head, peers: 8, syncing: false };
+      if (method === 'rand_chainId') return state.settings.chainId;
+      return { method, params: params ?? null };
+    },
   };
 
   const settingsDefs = {
@@ -172,8 +187,14 @@ function createBackend(initial = {}, overrides = {}) {
 
   const platformDefs = {
     name: 'fake',
+    // Optional in the contract (see ui/backend.js); present here so the About section's "with a
+    // version" branch is exercised. A test deletes it to cover the other branch.
+    version: '1.5.0-dev',
     openExternal: (_url) => {},
-    copy: (_text) => {},
+    copy: (text) => { state.clipboard = String(text ?? ''); },
+    // Also optional in the contract. A clipboard that remembers what `copy` put in it is exactly
+    // as much of one as the screens need.
+    paste: () => state.clipboard || '',
   };
 
   const backend = {

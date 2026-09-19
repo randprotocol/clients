@@ -16,10 +16,11 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits, shortAddress, shortHex } from '../lib/format.js';
 import { kindOf } from '../lib/rows.js';
+// The explorer rules live in lib/ since task 1.5 (the `#sent` screen needs them too); re-exported
+// here because that is where they were, and where the tests import them from.
+import { explorerLink } from '../lib/explorer.js';
 
-// 32 bytes of hex, with the `0x` prefix this chain's hashes are written with throughout (see
-// `send.send()`'s return shape in ui/backend.js) optional.
-const TX_HASH_RE = /^(0x)?[0-9a-f]{64}$/i;
+export { explorerLink };
 
 function skeletonMarkup(title, backGo) {
   return h`
@@ -31,27 +32,6 @@ function notFoundMarkup(title, backGo, message) {
   return h`
     <div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="${backGo}" aria-label="Back">${raw(icons.chevron())}</button><span class="topbar-title">${title}</span><span class="spacer"></span></div>
     <div class="card"><div class="empty"><span class="empty-title">${message}</span></div></div>`;
-}
-
-/**
- * `{url, label}` for the explorer button, or `null` when there is nothing safe (or nothing
- * configured) to link to. `explorerUrl` comes from the user's own settings; `hash` comes from the
- * node, so it is validated before it is allowed anywhere near a URL.
- */
-export function explorerLink(explorerUrl, hash) {
-  if (!explorerUrl || !TX_HASH_RE.test(String(hash || ''))) return null;
-  let base;
-  try {
-    base = new URL(String(explorerUrl).endsWith('/') ? String(explorerUrl) : `${explorerUrl}/`);
-  } catch { return null; }
-  // https only. Plain http is allowed for a developer's own explorer on this machine and nowhere
-  // else: a transaction hash sent in clear to a remote host is a privacy leak, and a plaintext
-  // response is something a network can rewrite.
-  const local = base.hostname === 'localhost' || base.hostname === '127.0.0.1' || base.hostname === '[::1]';
-  if (base.protocol !== 'https:' && !(base.protocol === 'http:' && local)) return null;
-  const url = new URL(`tx/${hash}`, base);
-  const onRandscan = base.hostname === 'randscan.org' || base.hostname.endsWith('.randscan.org');
-  return { url: url.href, label: onRandscan ? 'Open in randscan' : 'Open in explorer' };
 }
 
 // ------------------------------------------------------------------------------------ tx ------

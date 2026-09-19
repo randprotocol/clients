@@ -579,12 +579,22 @@ test('the fake backend reports the live chain id', async () => {
 // ------------------------------------------------------------------------------------- guard ---
 test('no screen in this task hard-codes a chain number or a fallback explorer URL', async () => {
   const { readFile, readdir } = await import('node:fs/promises');
-  const dir = new URL('../screens/', import.meta.url);
-  for (const file of await readdir(dir)) {
-    const src = await readFile(new URL(file, dir), 'utf8');
-    assert.doesNotMatch(src, /rand\.example/, `${file} ships a test-fixture URL`);
-    assert.doesNotMatch(src, /chain\s*(id)?\s*[:=]\s*['"]?\d/i, `${file} hard-codes a chain number`);
+  // Recursive since task 1.5: the send flow is a directory of modules, and every one of them is
+  // as much "a screen" as a top-level file is.
+  async function* walk(dir, prefix = '') {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) yield* walk(new URL(`${entry.name}/`, dir), `${prefix}${entry.name}/`);
+      else if (entry.name.endsWith('.js')) yield [`${prefix}${entry.name}`, new URL(entry.name, dir)];
+    }
   }
+  let checked = 0;
+  for await (const [name, url] of walk(new URL('../screens/', import.meta.url))) {
+    const src = await readFile(url, 'utf8');
+    checked += 1;
+    assert.doesNotMatch(src, /rand\.example/, `${name} ships a test-fixture URL`);
+    assert.doesNotMatch(src, /chain\s*(id)?\s*[:=]\s*['"]?\d/i, `${name} hard-codes a chain number`);
+  }
+  assert.ok(checked >= 10, 'every screen module was actually read');
   assert.ok(fakeBackend);
 });
 

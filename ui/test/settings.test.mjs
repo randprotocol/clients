@@ -1,0 +1,265 @@
+// The settings screen (#settings) — task 1.5.
+//
+// Everything the node or the platform supplies (a status field, a chain id, an error message) is
+// text, never markup: the escaping checks below are as much a part of this screen's contract as
+// the behaviour is.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import './dom-env.mjs';
+import { unlockedBackend } from './fake-backend.mjs';
+import { mountApp } from './helpers.mjs';
+
+const PASSWORD = 'unlocked-password-1'; // unlockedBackend()'s own
+
+async function settings(t, b = unlockedBackend()) {
+  const { app, root } = await mountApp(t, b, { hash: '#settings' });
+  await app.idle();
+  return { app, root, b };
+}
+
+function submitNetwork(root) {
+  root.querySelector('[data-role="network-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
+/** Answers the re-auth sheet a secret is behind, and returns the sheet element. */
+async function reauth(app, root, trigger, password = PASSWORD) {
+  root.querySelector(trigger).click();
+  await app.idle();
+  const dialog = root.querySelector('[role="dialog"]');
+  dialog.querySelector('input[name=password]').value = password;
+  dialog.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+  return dialog;
+}
+
+// ---------------------------------------------------------------------------- network ---------
+
+test('the RPC URL must be https, or plain http only on this machine', async (t) => {
+  const { app, root, b } = await settings(t);
+  const input = root.querySelector('input[name=rpcUrl]');
+  const field = input.closest('.field');
+
+  input.value = 'http://node.example:8899';
+  submitNetwork(root);
+  await app.idle();
+  assert.ok(field.classList.contains('invalid'));
+  assert.match(field.querySelector('.field-error').textContent, /https/i);
+  assert.equal(b.calls.filter((c) => c[0] === 'settings.set').length, 0);
+
+  input.value = 'http://127.0.0.1:8899';
+  submitNetwork(root);
+  await app.idle();
+  assert.equal(field.classList.contains('invalid'), false, 'a local node may be plain http');
+  assert.equal(b.calls.filter((c) => c[0] === 'settings.set').length, 1);
+
+  input.value = 'https://rpc.example';
+  submitNetwork(root);
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'settings.set').length, 2);
+  assert.equal((await b.settings.get()).rpcUrl, 'https://rpc.example');
+});
+
+test('a refused host permission abandons the save', async (t) => {
+  const b = unlockedBackend({ platform: { ensureHostPermission: async () => false } });
+  const { app, root } = await settings(t, b);
+  root.querySelector('input[name=rpcUrl]').value = 'https://rpc.example';
+  submitNetwork(root);
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'platform.ensureHostPermission').length, 1);
+  assert.equal(b.calls.filter((c) => c[0] === 'settings.set').length, 0, 'nothing was saved');
+  assert.match(root.querySelector('[data-role="network-status"]').textContent, /permission/i);
+  assert.notEqual((await b.settings.get()).rpcUrl, 'https://rpc.example');
+});
+
+test('Test connection reports the height and the chain id', async (t) => {
+  const b = unlockedBackend({
+    rpc: {
+      call: async (method) => {
+        if (method === 'rand_status') return { height: 1402918, peers: 8, syncing: false };
+        if (method === 'rand_chainId') return 13;
+        throw new Error(`unexpected ${method}`);
+      },
+    },
+  });
+  const { app, root } = await settings(t, b);
+  root.querySelector('[data-role="test-connection"]').click();
+  await app.idle();
+  const methods = b.calls.filter((c) => c[0] === 'rpc.call').map((c) => c[1]);
+  assert.ok(methods.includes('rand_status'));
+  assert.ok(methods.includes('rand_chainId'));
+  const status = root.querySelector('[data-role="network-status"]');
+  assert.match(status.textContent, /1,?402,?918/);
+  assert.match(status.textContent, /13/);
+  assert.equal(root.querySelector('[data-role="network-status"] .banner.warn, [data-role="network-status"].warn'), null);
+});
+
+test('Test connection warns when the node is on another chain', async (t) => {
+  const b = unlockedBackend({
+    rpc: {
+      call: async (method) => (method === 'rand_chainId' ? 99 : { height: 7, peers: 1, syncing: true }),
+    },
+  });
+  const { app, root } = await settings(t, b);
+  root.querySelector('[data-role="test-connection"]').click();
+  await app.idle();
+  const status = root.querySelector('[data-role="network-status"]');
+  assert.match(status.textContent, /99/);
+  assert.match(status.textContent, /13/, 'and says which chain the wallet expects');
+  assert.ok(status.querySelector('.banner.warn') || status.classList.contains('warn'), 'and warns about it');
+});
+
+test('a node’s own words reach the page as text, never as markup', async (t) => {
+  const b = unlockedBackend({
+    rpc: { call: async () => { throw new Error('<img src=x onerror="alert(1)"> unreachable'); } },
+  });
+  const { app, root } = await settings(t, b);
+  root.querySelector('[data-role="test-connection"]').click();
+  await app.idle();
+  const status = root.querySelector('[data-role="network-status"]');
+  assert.match(status.textContent, /unreachable/);
+  assert.equal(status.querySelector('img'), null);
+  assert.ok(root.innerHTML.includes('&lt;img'), 'escaped, not parsed');
+});
+
+// -------------------------------------------------------------------------- appearance --------
+
+test('the theme applies instantly and is persisted', async (t) => {
+  const { app, root, b } = await settings(t);
+  const control = root.querySelector('[data-role="theme"]');
+  assert.equal(control.getAttribute('role'), 'radiogroup');
+  const dark = control.querySelector('[data-value="dark"]');
+  assert.equal(control.querySelector('[data-value="system"]').getAttribute('aria-checked'), 'true');
+
+  dark.click();
+  await app.idle();
+  assert.equal(document.documentElement.dataset.theme, 'dark');
+  assert.equal(dark.getAttribute('aria-checked'), 'true');
+  assert.equal(control.querySelector('[data-value="system"]').getAttribute('aria-checked'), 'false');
+  assert.equal((await b.settings.get()).theme, 'dark');
+});
+
+test('auto-lock offers a handful of minutes and Never', async (t) => {
+  const { app, root, b } = await settings(t);
+  const select = root.querySelector('select[name=autoLockMin]');
+  assert.deepEqual([...select.querySelectorAll('option')].map((o) => o.value), ['1', '5', '15', '60', '0']);
+  assert.match(select.querySelector('option[value="0"]').textContent, /never/i);
+  assert.equal(select.value, '15', 'the saved setting is selected');
+
+  // linkedom's `select.value` is getter-only, so the choice is made the way a user's click makes
+  // it — by selecting the option — rather than by assigning to `.value`.
+  select.querySelector('option[value="60"]').selected = true;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await app.idle();
+  assert.equal((await b.settings.get()).autoLockMin, 60);
+});
+
+// ---------------------------------------------------------------------------- security --------
+
+test('the viewing key is behind a password re-entry that never unlocks the wallet', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await settings(t, b);
+  const sessionBefore = app.session.id;
+
+  // A wrong password says so and shows nothing.
+  await reauth(app, root, '[data-role="show-viewing-key"]', 'not the password');
+  assert.ok(root.querySelector('[role="dialog"] .field.invalid'), 'the sheet reports the bad password');
+  assert.equal(root.querySelector('[data-role="viewing-key-slot"] [data-role="hold"]'), null);
+
+  root.querySelector('[role="dialog"] input[name=password]').value = PASSWORD;
+  root.querySelector('[role="dialog"] form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+
+  assert.equal(root.querySelector('[role="dialog"]'), null, 'the sheet closed');
+  assert.ok(root.querySelector('[data-role="viewing-key-slot"] [data-role="hold"]'));
+  assert.equal(b.calls.filter((c) => c[0] === 'wallet.unlock').length, 0, 're-auth is not an unlock');
+  assert.ok(b.calls.filter((c) => c[0] === 'wallet.verifyPassword').length >= 1);
+  assert.equal(app.session.id, sessionBefore, 'and the session survived it');
+});
+
+test('the viewing key itself is only ever in one text node', async (t) => {
+  const b = unlockedBackend();
+  const key = await b.wallet.viewingKey();
+  const { app, root } = await settings(t, b);
+  await reauth(app, root, '[data-role="show-viewing-key"]');
+  const slot = root.querySelector('[data-role="viewing-key-slot"]');
+  assert.ok(!root.textContent.includes(key), 'masked until revealed');
+
+  slot.querySelector('[data-role="hold"]').dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+  await new Promise((r) => setTimeout(r, 750));
+  assert.ok(root.textContent.includes(key), 'revealed');
+  const attributes = [...root.querySelectorAll('*')].flatMap((el) => [...el.attributes].map((a) => a.value)).join(' ');
+  assert.ok(!attributes.includes(key), 'never in an attribute');
+  assert.ok(!location.hash.includes(key));
+
+  slot.querySelector('[data-role="copy"]').click();
+  await app.idle();
+  assert.deepEqual(b.calls.filter((c) => c[0] === 'platform.copy').at(-1), ['platform.copy', key]);
+});
+
+test('exporting the spend key needs the password, the warning and the checkbox', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await settings(t, b);
+  await reauth(app, root, '[data-role="export-spend-key"]');
+  const slot = root.querySelector('[data-role="spend-key-slot"]');
+  assert.ok(slot);
+  assert.match(slot.textContent, /anyone with this key can spend/i);
+
+  const hold = slot.querySelector('[data-role="hold"]');
+  const understand = slot.querySelector('input[name=understand]');
+  assert.ok(understand);
+  assert.equal(hold.disabled, true, 'nothing is revealed until the box is ticked');
+
+  understand.checked = true;
+  understand.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.equal(hold.disabled, false);
+  assert.equal(b.calls.filter((c) => c[0] === 'wallet.exportSpendKey').length, 1);
+});
+
+test('wiping needs the word WIPE typed, and then wipes', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await settings(t, b);
+  const input = root.querySelector('input[name=wipe]');
+  const button = root.querySelector('[data-role="wipe"]');
+  assert.equal(button.disabled, true);
+
+  input.value = 'wipe';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  assert.equal(button.disabled, true, 'the exact word, not a near miss');
+
+  input.value = 'WIPE';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  assert.equal(button.disabled, false);
+
+  button.click();
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'wallet.wipe').length, 1);
+  assert.equal(await b.wallet.exists(), false);
+  assert.equal(location.hash, '#welcome');
+});
+
+// ------------------------------------------------------------------------------- about --------
+
+test('about names the app, the platform and the version, and opens links externally', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await settings(t, b);
+  const about = root.querySelector('[data-role="about"]');
+  assert.match(about.textContent, /Rand Wallet/);
+  assert.match(about.textContent, /fake/, 'platform.name');
+  assert.match(about.textContent, /1\.5/, 'platform.version when the backend offers one');
+
+  const link = about.querySelector('[data-role="external"]');
+  link.click();
+  await app.idle();
+  const opened = b.calls.filter((c) => c[0] === 'platform.openExternal');
+  assert.equal(opened.length, 1);
+  assert.match(opened[0][1], /^https:/);
+});
+
+test('about leaves the version out when the backend has none', async (t) => {
+  const b = unlockedBackend();
+  delete b.platform.version;
+  const { root } = await settings(t, b);
+  const about = root.querySelector('[data-role="about"]');
+  assert.match(about.textContent, /fake/);
+  assert.doesNotMatch(about.textContent, /1\.5/);
+});

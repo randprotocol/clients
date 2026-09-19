@@ -306,6 +306,11 @@ body.compact .app {
 body.compact.nav-on .app {
   padding-bottom: calc(72px + var(--s-6));
 }
+/* …and for the extra strip when the shell has pinned something above the tab bar (the send
+   flow's "Proving…" chip), so the last control on a screen is never hidden under it. */
+body.compact.nav-on:has(.tabbar-notice:not(:empty)) .app {
+  padding-bottom: calc(72px + var(--s-6) + 44px);
+}
 /* An extension popup is a hard 360x600 window. It still has to scroll vertically: an activity
    list, or the note under a full address on Receive, runs past 600 px and would otherwise be
    simply unreachable (`overflow: hidden` here used to clip it). Horizontal overflow stays

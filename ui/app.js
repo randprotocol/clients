@@ -224,6 +224,8 @@ function ensureBuiltinScreensLoaded() {
       import('./screens/detail.js'),
       import('./screens/receive.js'),
       import('./screens/faucet.js'),
+      import('./screens/send.js'),
+      import('./screens/settings.js'),
     ]);
   }
   return screensLoaded;
@@ -282,6 +284,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   function endSession() {
     try { abortSession(); } catch { /* an already-aborted controller */ }
     closeSheet(); // a dialog belongs to the session that opened it
+    setPinnedChip(null); // and so does anything pinned in the nav by it
     const carried = {};
     for (const key of SESSION_SAFE_STATE_KEYS) {
       if (Object.prototype.hasOwnProperty.call(ctx.state, key)) carried[key] = ctx.state[key];
@@ -414,6 +417,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     toast,
     sheet,
     closeSheet,
+    setPinnedChip,
     state: {},
     mode,
     canProve: backendApi.send.canProve,
@@ -462,7 +466,9 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   }
 
   function renderTabbar(activeName) {
-    tabbarEl.innerHTML = h`<div class="tabbar-inner">${raw(TABS.map((t) => navLink(t, activeName, 'tab')).join(''))}</div>`;
+    tabbarEl.innerHTML = h`
+      <div class="tabbar-notice" data-role="pinned"></div>
+      <div class="tabbar-inner">${raw(TABS.map((t) => navLink(t, activeName, 'tab')).join(''))}</div>`;
   }
 
   function renderSidebar(activeName) {
@@ -471,10 +477,35 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
         <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
         ${raw(TABS.map((t) => navLink(t, activeName, 'nav-item')).join(''))}
         <div class="sidebar-foot stack tight">
+          <span data-role="pinned"></span>
           <span class="chip"><span class="dot"></span>${networkLabel(settings.chainId)}</span>
           <button class="btn sm block" type="button" data-action="lock">${raw(icons.lock())}Lock</button>
         </div>
       </div>`;
+  }
+
+  // ---- pinned chip ----
+  // One small, persistent chip in the nav, for work that outlives the screen that started it: the
+  // send flow uses it for "Proving… 02:41", so a proof the user walked away from is still visible
+  // and one tap from being watched again. It belongs to the wallet session (a lock clears it), it
+  // is re-painted after every nav re-render, and its text is escaped like anything else.
+  let pinnedChip = null;
+
+  function paintPinnedChip() {
+    const markup = pinnedChip
+      ? h`<a class="chip warn" href="#${pinnedChip.go}" data-go="${pinnedChip.go}"><span class="dot busy"></span>${pinnedChip.text}</a>`
+      : '';
+    for (const slot of [sidebarEl, tabbarEl]) {
+      const el = slot.querySelector('[data-role="pinned"]');
+      if (el) el.innerHTML = markup;
+    }
+  }
+
+  /** Pins (or, with `null`, clears) the nav chip. `{text, go}` — `go` is a route name, as
+   *  `data-go` takes it. Cleared automatically when the wallet session ends. */
+  function setPinnedChip(chip) {
+    pinnedChip = chip && chip.text ? { text: String(chip.text), go: String(chip.go || 'home') } : null;
+    paintPinnedChip();
   }
 
   const fallbackScreen = {
@@ -565,6 +596,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       if (!container.contains(tabbarEl)) container.append(tabbarEl);
       renderSidebar(activeTab);
       renderTabbar(activeTab);
+      paintPinnedChip(); // the nav was just rebuilt, so the chip has to be put back
     } else {
       if (container.contains(sidebarEl)) sidebarEl.remove();
       if (container.contains(tabbarEl)) tabbarEl.remove();
