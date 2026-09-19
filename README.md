@@ -110,3 +110,11 @@ linux/ macosx/ windows/   per-OS packaging notes pointing at desktop/
 ## Status
 
 Experimental testnet software, like the chain itself: not audited, not for real value.
+
+## Licence
+
+This repository is **GPL-3.0-only**; the full text is in [`LICENSE`](LICENSE). Every client links
+the fullnode's crates, which are GPL-3.0-only, so the wallets that link them are too.
+Third-party components keep their own licences: the Inter and JetBrains Mono fonts in `ui/fonts/`
+are under the SIL Open Font License 1.1, and the vendored node and circuits crates under
+`core/vendor/` stay under their own terms.

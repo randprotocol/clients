@@ -1,6 +1,7 @@
 {
   "name": "rand-wallet-ui",
   "private": true,
+  "license": "GPL-3.0-only",
   "type": "module",
   "devDependencies": {
     "linkedom": "^0.18"

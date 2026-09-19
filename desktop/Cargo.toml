@@ -2,7 +2,7 @@
 name = "rand-wallet-desktop"
 version = "0.1.0"
 edition = "2021"
-license = "Apache-2.0"
+license = "GPL-3.0-only"
 authors = ["RandProtocol Contributors"]
 description = "Rand Wallet for Windows, Linux and macOS: a native shielded RAND wallet on the shared Rust core"
 default-run = "rand-wallet"
