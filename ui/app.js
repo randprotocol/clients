@@ -1,0 +1,410 @@
+// App shell shared by every wallet screen: router, theme, the locked/unlocked gate, and
+// navigation (tab bar when compact, sidebar when wide). Screens register themselves with
+// `registerScreen` and only ever talk to the `ctx` object `mount()` hands them — never to
+// `document`/`window`/the concrete backend shell directly (besides through `ctx.backend`).
+import { h, raw, on } from './lib/dom.js';
+import { assertBackend, BACKEND_SHAPE } from './backend.js';
+import { icons } from './lib/icons.js';
+import { shortAddress } from './lib/format.js';
+
+// Screens registered so far, `#name` → { render(ctx, arg), after?(ctx, root), tab? }. Registering
+// is a module-level, import-time side effect (each screens/*.js file calls `registerScreen` when
+// imported) — the registry itself is shared across every `mount()` call in a process, but all
+// per-mount state (routing, sheets, toasts, in-flight tracking) lives inside `mount()`'s closure.
+const screens = new Map();
+
+/** Registers a screen. `render` may be sync or return a Promise<string> (an `h`-built string). */
+export function registerScreen(name, def) {
+  if (!def || typeof def.render !== 'function') throw new Error(`registerScreen(${name}): render is required`);
+  screens.set(name, def);
+}
+
+const TABS = [
+  { name: 'home', label: 'Home', icon: 'home' },
+  { name: 'activity', label: 'Activity', icon: 'activity' },
+  { name: 'explore', label: 'Explore', icon: 'compass' },
+  { name: 'settings', label: 'Settings', icon: 'settings' },
+];
+const WIDE_AT = 900; // keep in sync with tokens.css --wide-at
+
+function parseHash(hash) {
+  const s = String(hash || '').replace(/^#/, '');
+  if (!s) return { name: '', arg: undefined };
+  const i = s.indexOf('/');
+  return i === -1 ? { name: s, arg: undefined } : { name: s.slice(0, i), arg: s.slice(i + 1) };
+}
+
+function route(name, arg) {
+  return arg === undefined ? { name } : { name, arg };
+}
+
+const PRE_WALLET_SCREENS = ['create', 'import', 'backup'];
+
+/**
+ * Pure routing decision, exported for tests. `hash` is the raw `location.hash` (leading `#`
+ * optional). No wallet on the device → `welcome` unless the hash already names one of the
+ * onboarding-flow screens; a wallet that is not unlocked → `lock` no matter what was asked for;
+ * otherwise the requested screen, or `home` when the hash is empty.
+ */
+export function resolveRoute({ exists, unlocked }, hash) {
+  const { name, arg } = parseHash(hash);
+  if (!exists) {
+    return PRE_WALLET_SCREENS.includes(name) ? route(name, arg) : route('welcome');
+  }
+  if (!unlocked) return route('lock');
+  if (!name) return route('home');
+  return route(name, arg);
+}
+
+/** Wraps every BACKEND_SHAPE method so every call is visible to `onCall` (for `app.idle()`). */
+function trackedBackend(backend, onCall) {
+  const wrapped = {};
+  for (const group of Object.keys(BACKEND_SHAPE)) {
+    const orig = backend[group];
+    const g = {};
+    for (const key of Object.keys(orig)) {
+      const val = orig[key];
+      g[key] = typeof val === 'function'
+        ? (...args) => { const p = Promise.resolve(val.apply(orig, args)); onCall(p); return p; }
+        : val;
+    }
+    wrapped[group] = g;
+  }
+  return wrapped;
+}
+
+function focusableIn(root) {
+  return Array.from(root.querySelectorAll(
+    'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  ));
+}
+
+let sheetIdSeq = 0;
+
+// The built-in screens (onboarding + lock) register themselves as a side effect of being
+// imported. They are loaded dynamically, the first time `mount()` runs, rather than with a
+// static `import` at module scope: app.js ↔ screens/*.js is a genuine cycle (registerScreen is
+// defined here, screens/*.js call it), and a static import of a cycle partner runs that partner's
+// whole module body — including its top-level `registerScreen(...)` calls — before this module's
+// own top-level code (the `screens` map) has executed, which throws. A dynamic import inside the
+// already-async `mount()` sidesteps that: by the time `mount()` runs, this module has fully
+// finished evaluating.
+let screensLoaded = null;
+function ensureBuiltinScreensLoaded() {
+  if (!screensLoaded) {
+    screensLoaded = Promise.all([import('./screens/onboarding.js'), import('./screens/lock.js')]);
+  }
+  return screensLoaded;
+}
+
+/**
+ * `mount(container, backend, { mode = 'app' } = {})` — throws (via `assertBackend`) if `backend`
+ * does not satisfy BACKEND_SHAPE. Renders into `container`; sets `document.documentElement`'s
+ * theme and `document.body`'s compact/wide/popup classes (these are page-level, not
+ * container-scoped, so the real shells should mount into `document.body`). Returns
+ * `{ go(hash), idle(), destroy() }`.
+ */
+export async function mount(container, backend, { mode = 'app' } = {}) {
+  assertBackend(backend);
+  await ensureBuiltinScreensLoaded();
+
+  const inflight = new Set();
+  function trackTask(p) {
+    inflight.add(p);
+    p.finally(() => inflight.delete(p)).catch(() => {});
+  }
+  const backendApi = trackedBackend(backend, trackTask);
+
+  let renderSeq = 0;
+  let renderPromise = null;
+  let currentCleanup = null;
+  let lastRouteKey = null;
+
+  const mainEl = document.createElement('main');
+  mainEl.className = 'app';
+  const sidebarEl = document.createElement('nav');
+  sidebarEl.className = 'sidebar';
+  const tabbarEl = document.createElement('nav');
+  tabbarEl.className = 'tabbar';
+  const toastArea = document.createElement('div');
+  toastArea.className = 'toast-area';
+  toastArea.setAttribute('aria-live', 'polite');
+  toastArea.setAttribute('role', 'status');
+  container.append(mainEl, toastArea);
+
+  // ---- theme ----
+  const settings = await backendApi.settings.get();
+  document.documentElement.dataset.theme = settings.theme || 'system';
+
+  // ---- compact / wide ----
+  // The 3-column wide grid (sidebar | app | detail) only makes sense once there is a sidebar to
+  // put in it, i.e. once the wallet is unlocked — welcome/create/import/lock stay a single
+  // centred column even on a wide viewport, the same as they would on the popup or a phone.
+  let mql = null;
+  let mqlListener = null;
+  let viewportWide = false;
+  let lastUnlocked = false;
+  function applyBodyLayout() {
+    const wide = mode !== 'popup' && viewportWide && lastUnlocked;
+    document.body.classList.toggle('wide', wide);
+    document.body.classList.toggle('compact', !wide);
+  }
+  if (mode === 'popup') {
+    document.body.classList.add('compact', 'popup');
+  } else {
+    document.body.classList.remove('popup');
+    if (typeof matchMedia === 'function') {
+      mql = matchMedia(`(min-width: ${WIDE_AT}px)`);
+      viewportWide = mql.matches;
+      mqlListener = (e) => { viewportWide = e.matches; applyBodyLayout(); };
+      if (typeof mql.addEventListener === 'function') mql.addEventListener('change', mqlListener);
+      else if (typeof mql.addListener === 'function') mql.addListener(mqlListener);
+    }
+    applyBodyLayout();
+  }
+
+  // ---- sheet / modal ----
+  let sheetEl = null;
+  let scrimEl = null;
+  let sheetReturnFocus = null;
+  let sheetKeydownHandler = null;
+
+  function closeSheet() {
+    if (!sheetEl) return;
+    sheetEl.remove();
+    if (scrimEl) scrimEl.remove();
+    if (sheetKeydownHandler) document.removeEventListener('keydown', sheetKeydownHandler);
+    sheetEl = null; scrimEl = null; sheetKeydownHandler = null;
+    const toFocus = sheetReturnFocus;
+    sheetReturnFocus = null;
+    if (toFocus && typeof toFocus.focus === 'function') toFocus.focus();
+  }
+
+  /** Opens a sheet (a centred modal under body.wide) with `html` as its contents; closing any
+   *  sheet already open first. Returns the sheet element so the caller can wire up its own
+   *  buttons (`on(dialog, '[data-role="confirm"]', 'click', …)`). Escape and a scrim click close
+   *  it; Tab is trapped inside; focus moves to the first focusable element on open and is
+   *  restored to whatever was focused before on close. */
+  function sheet(html) {
+    closeSheet();
+    sheetReturnFocus = document.activeElement;
+    scrimEl = document.createElement('div');
+    scrimEl.className = 'scrim';
+    sheetEl = document.createElement('div');
+    sheetEl.className = 'sheet';
+    sheetEl.setAttribute('role', 'dialog');
+    sheetEl.setAttribute('aria-modal', 'true');
+    sheetEl.innerHTML = html;
+    const titleEl = sheetEl.querySelector('.sheet-title, .modal-title');
+    if (titleEl) {
+      if (!titleEl.id) titleEl.id = `sheet-title-${++sheetIdSeq}`;
+      sheetEl.setAttribute('aria-labelledby', titleEl.id);
+    }
+    scrimEl.addEventListener('click', closeSheet);
+    sheetKeydownHandler = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); closeSheet(); return; }
+      if (e.key === 'Tab') {
+        const items = focusableIn(sheetEl);
+        if (items.length === 0) return;
+        const first = items[0], last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', sheetKeydownHandler);
+    container.append(scrimEl, sheetEl);
+    const focusables = focusableIn(sheetEl);
+    if (focusables.length) focusables[0].focus();
+    else { sheetEl.setAttribute('tabindex', '-1'); sheetEl.focus(); }
+    return sheetEl;
+  }
+
+  // ---- toasts ----
+  function toast(message, { kind } = {}) {
+    const el = document.createElement('div');
+    el.className = kind ? `toast ${kind}` : 'toast';
+    const icName = kind === 'positive' ? 'check' : kind === 'negative' ? 'warning' : null;
+    el.innerHTML = h`${icName ? raw(`<span class="ic">${icons[icName]()}</span>`) : ''}<span>${message}</span>`;
+    toastArea.append(el);
+    setTimeout(() => el.remove(), 2600);
+  }
+
+  // ---- ctx handed to every screen ----
+  const ctx = {
+    backend: backendApi,
+    go,
+    toast,
+    sheet,
+    closeSheet,
+    state: {},
+    mode,
+    canProve: backendApi.send.canProve,
+  };
+
+  function navLink(tab, activeName, variant) {
+    const active = tab.name === activeName;
+    const cls = variant === 'tab' ? (active ? 'tab on' : 'tab') : (active ? 'nav-item on' : 'nav-item');
+    const current = active ? raw(' aria-current="page"') : '';
+    return h`<a class="${cls}" href="#${tab.name}" data-go="${tab.name}"${current}>${raw(icons[tab.icon]())}${tab.label}</a>`;
+  }
+
+  function renderTabbar(activeName) {
+    tabbarEl.innerHTML = h`<div class="tabbar-inner">${raw(TABS.map((t) => navLink(t, activeName, 'tab')).join(''))}</div>`;
+  }
+
+  function renderSidebar(activeName) {
+    sidebarEl.innerHTML = h`
+      <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
+      ${raw(TABS.map((t) => navLink(t, activeName, 'nav-item')).join(''))}
+      <div class="sidebar-foot stack tight">
+        <span class="chip"><span class="dot"></span>${settings.chainId || 'rand'}</span>
+        <button class="btn sm block" type="button" data-action="lock">${raw(icons.lock())}Lock</button>
+      </div>`;
+  }
+
+  const fallbackScreen = {
+    async render() {
+      const info = await ctx.backend.wallet.info().catch(() => null);
+      return h`
+        <div class="topbar"><div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div></div>
+        <div class="card stack">
+          <span class="title">More is on the way</span>
+          <span class="subtitle">This screen ships in a later task. Your wallet is unlocked and ready.</span>
+          ${info ? raw(h`<div class="kv"><span class="k">Address</span><span class="v mono">${shortAddress(info.address)}</span></div>`) : ''}
+        </div>`;
+    },
+  };
+
+  async function doRender() {
+    const mySeq = ++renderSeq;
+    let exists = false, unlocked = false;
+    try {
+      exists = await backendApi.wallet.exists();
+      unlocked = exists && await backendApi.wallet.isUnlocked();
+    } catch (err) {
+      console.error('rand-wallet: failed to read wallet state', err);
+    }
+    if (mySeq !== renderSeq) return;
+
+    const r = resolveRoute({ exists, unlocked }, location.hash || '');
+    if (mySeq !== renderSeq) return;
+
+    // A real browser fires `hashchange` asynchronously (a task, not a microtask), so go()'s own
+    // explicit render and the native event it triggers both land here — the second one after the
+    // first has already finished. Rebuilding the DOM a second time for the exact same destination
+    // would blow away whatever the user has since typed into the screen that render #1 produced,
+    // so a repeat of the destination we already have on screen is a no-op.
+    const routeKey = `${unlocked ? '1' : '0'}:${r.name}:${r.arg ?? ''}`;
+    if (routeKey === lastRouteKey) return;
+    lastRouteKey = routeKey;
+
+    if (currentCleanup) {
+      const cleanup = currentCleanup;
+      currentCleanup = null;
+      try { cleanup(); } catch (err) { console.error('rand-wallet: screen cleanup failed', err); }
+    }
+
+    const screen = screens.get(r.name) || fallbackScreen;
+    const activeTab = screen.tab || r.name;
+
+    // A screen can opt out of nav even while unlocked (`nav: false`) — used by `backup`, a
+    // security gate the user should not be able to tab away from mid-flow. The wide 3-column
+    // grid follows nav visibility too: without a sidebar to put in its first column, it would
+    // just leave a blank gutter (see applyBodyLayout).
+    const showNav = unlocked && screen.nav !== false;
+    lastUnlocked = showNav;
+    applyBodyLayout();
+    document.body.classList.toggle('nav-on', showNav);
+    if (showNav) {
+      if (!container.contains(sidebarEl)) container.insertBefore(sidebarEl, mainEl);
+      if (!container.contains(tabbarEl)) container.append(tabbarEl);
+      renderSidebar(activeTab);
+      renderTabbar(activeTab);
+    } else {
+      if (container.contains(sidebarEl)) sidebarEl.remove();
+      if (container.contains(tabbarEl)) tabbarEl.remove();
+    }
+
+    let markup = '';
+    try {
+      markup = (await screen.render(ctx, r.arg)) || '';
+    } catch (err) {
+      console.error('rand-wallet: screen render failed', err);
+      markup = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Something went wrong</span>This screen could not be shown.</span></div>`;
+    }
+    if (mySeq !== renderSeq) return;
+    mainEl.innerHTML = markup;
+
+    if (typeof screen.after === 'function') {
+      try {
+        const cleanup = await screen.after(ctx, mainEl);
+        if (mySeq !== renderSeq) { if (typeof cleanup === 'function') { try { cleanup(); } catch { /* stale */ } } return; }
+        if (typeof cleanup === 'function') currentCleanup = cleanup;
+      } catch (err) {
+        console.error('rand-wallet: screen after() failed', err);
+      }
+    }
+  }
+
+  function scheduleRender() {
+    const p = doRender();
+    renderPromise = p;
+    p.finally(() => { if (renderPromise === p) renderPromise = null; }).catch(() => {});
+    return p;
+  }
+
+  function go(hash) {
+    const next = hash ? (String(hash).startsWith('#') ? String(hash) : `#${hash}`) : '';
+    if (location.hash !== next) location.hash = next;
+    return scheduleRender();
+  }
+
+  async function idle() {
+    // Await the current render and any backend call in flight (including ones kicked off by a
+    // screen's own event handlers, e.g. a form submit), looping in case settling one spawns
+    // another — never a timeout, per the app.idle() contract.
+    for (;;) {
+      const pending = [...inflight];
+      if (renderPromise) pending.push(renderPromise);
+      if (pending.length === 0) return;
+      await Promise.allSettled(pending);
+    }
+  }
+
+  const offHashchange = (() => {
+    const handler = () => scheduleRender();
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  })();
+
+  const offGoClicks = on(container, '[data-go]', 'click', (evt, matched) => {
+    evt.preventDefault();
+    go(matched.getAttribute('data-go'));
+  });
+
+  const offLockClicks = on(container, '[data-action="lock"]', 'click', async (evt) => {
+    evt.preventDefault();
+    await ctx.backend.wallet.lock();
+    go('#lock');
+  });
+
+  await scheduleRender();
+
+  return {
+    go,
+    idle,
+    destroy() {
+      offHashchange();
+      offGoClicks();
+      offLockClicks();
+      if (mql && mqlListener) {
+        if (typeof mql.removeEventListener === 'function') mql.removeEventListener('change', mqlListener);
+        else if (typeof mql.removeListener === 'function') mql.removeListener(mqlListener);
+      }
+      closeSheet();
+      if (currentCleanup) { try { currentCleanup(); } catch { /* ignore */ } currentCleanup = null; }
+      container.textContent = '';
+      document.body.classList.remove('compact', 'wide', 'popup', 'nav-on');
+    },
+  };
+}

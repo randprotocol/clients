@@ -203,6 +203,7 @@
         <button class="btn danger" type="button">Remove</button>
         <button class="btn sm" type="button">Max</button>
         <button class="btn btn-icon" type="button" aria-label="Back"><svg class="g-i"><use href="#i-back"/></svg></button>
+        <button class="btn btn-icon icon-flip" type="button" aria-label="Back (mirrored chevron)"><svg class="g-i"><use href="#i-chevron"/></svg></button>
       </div>
       <div class="cluster">
         <button class="btn btn-primary" type="button" disabled>Disabled primary</button>
@@ -237,6 +238,49 @@
           <span class="label">Recovery phrase</span>
           <textarea rows="3" spellcheck="false">abandon ability able about above absent absorb abstract absurd abuse access accident</textarea>
         </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ onboarding hero ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Onboarding hero</h2>
+    <div class="card">
+      <div class="onboard">
+        <span class="mark-lg"><svg class="g-i"><use href="#i-eye"/></svg></span>
+        <div class="stack tight">
+          <span class="title">Rand Wallet</span>
+          <p class="subtitle pitch">A shielded wallet for the Rand network. Every send is proved on this device.</p>
+        </div>
+        <div class="onboard-actions">
+          <button class="btn btn-primary block" type="button">Create a new wallet</button>
+          <button class="btn block" type="button">I already have a wallet</button>
+        </div>
+        <p class="caption onboard-foot"><svg class="g-i"><use href="#i-info"/></svg>Your keys never leave this device.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ strength meter & hold-to-reveal ============================ -->
+  <section class="g-section">
+    <h2 class="g-h">Password strength &amp; hold-to-reveal</h2>
+    <div class="card">
+      <div class="stack loose">
+        <label class="field">
+          <span class="label">Password</span>
+          <input type="password" value="correct horse battery" autocomplete="new-password">
+          <span class="strength" data-level="3">
+            <span class="strength-track">
+              <span class="strength-bar"></span><span class="strength-bar"></span>
+              <span class="strength-bar"></span><span class="strength-bar"></span>
+            </span>
+            <span class="strength-label">Strong</span>
+          </span>
+        </label>
+        <div class="hold-reveal">
+          <span class="key-mask masked">•••• •••• •••• •••• •••• ••••</span>
+          <button class="btn block hold-btn" type="button"><span class="fill"></span><svg class="g-i"><use href="#i-eye"/></svg>Hold to reveal</button>
+        </div>
       </div>
     </div>
   </section>

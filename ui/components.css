@@ -34,6 +34,14 @@
 }
 .btn:hover { background: var(--surface-2); border-color: var(--border); }
 .btn:active { transform: scale(.98); }
+/* A bare `h(icons.x())`/`raw(icons.x())` icon has no width/height attribute, only a viewBox, so
+   an unconstrained container (anything wider or taller than the icon's own 24 px box — a block
+   button, a footer line) blows it up to fill the available space. Every button-family element
+   gets a fixed icon size by default; a specific component (.avatar, .toast .ic, …) overrides it
+   where it needs a different one. */
+.btn svg,
+.btn-ghost svg,
+.btn-icon svg { width: 18px; height: 18px; flex: none; }
 .btn:disabled,
 .btn[aria-disabled="true"] {
   opacity: .45;
@@ -94,6 +102,10 @@
   color: var(--text-soft);
 }
 .btn-icon:hover { background: var(--press); color: var(--text-strong); border-color: transparent; }
+
+/* Mirrors an icon horizontally — the "chevron" icon (▸) becomes a back arrow (◂) on a topbar's
+   leading button, instead of shipping a second glyph for the same shape. */
+.icon-flip svg { transform: scaleX(-1); }
 
 /* The home-screen actions: a 56 px circle with its caption beneath.
    <button class="btn-round"><span class="ic">…</span><span class="cap">Send</span></button> */
@@ -496,21 +508,29 @@ body.compact .sidebar { display: none; }
   to { transform: translate(-50%, -50%); opacity: 1; }
 }
 
-body.wide .sheet {
-  top: 50%;
-  left: 50%;
-  right: auto;
-  bottom: auto;
-  transform: translate(-50%, -50%);
-  width: min(440px, calc(100vw - 2 * var(--s-5)));
-  max-width: none;
-  margin: 0;
-  padding: var(--s-5);
-  border-bottom: 1px solid var(--border);
-  border-radius: var(--r-xl);
-  animation-name: modal-in;
+/* A centred dialog once there is room for one — independent of body.wide/compact, which by now
+   tracks whether the sidebar is showing (see base.css), not raw viewport width: welcome/create/
+   import/lock/backup stay a single compact column even in a wide window, but a sheet opened from
+   any of them (e.g. lock's wipe confirmation) should still look like a desktop dialog, not a
+   phone bottom sheet, whenever the viewport actually has the width for one. Keep the breakpoint
+   in sync with --wide-at in tokens.css (custom properties cannot be used in a media query). */
+@media (min-width: 900px) {
+  .sheet {
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    transform: translate(-50%, -50%);
+    width: min(440px, calc(100vw - 2 * var(--s-5)));
+    max-width: none;
+    margin: 0;
+    padding: var(--s-5);
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--r-xl);
+    animation-name: modal-in;
+  }
+  .sheet .grab { display: none; }
 }
-body.wide .sheet .grab { display: none; }
 
 .sheet-title,
 .modal-title {
@@ -782,6 +802,107 @@ body.wide .toast-area { bottom: var(--s-6); }
   box-shadow: var(--shadow-1);
 }
 .qr img, .qr canvas, .qr svg { width: 100%; max-width: 220px; height: auto; image-rendering: pixelated; }
+
+/* =========================================================================== onboard ========= */
+/* Welcome / create / import / lock: a single centred column, no tab bar or sidebar (there is no
+   wallet yet, or it is locked). Used inside `.app` in place of the usual top-aligned flow. */
+.onboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--s-6);
+  min-height: calc(100vh - var(--s-8) * 2);
+  padding: var(--s-8) 0;
+}
+.onboard .mark-lg {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-xl);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-2);
+}
+.onboard .mark-lg svg { width: 30px; height: 30px; }
+.onboard .pitch { max-width: 300px; }
+.onboard-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.onboard-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  color: var(--text-soft);
+}
+.onboard-foot svg { width: 14px; height: 14px; flex: none; }
+
+/* ========================================================================== strength ========= */
+/* Password strength meter under a password field. Four segments; `data-level` (0–4, set from
+   script via el.dataset.level = String(n)) drives both the segment colours and the caption. */
+.strength { display: flex; flex-direction: column; gap: var(--s-1); }
+.strength .strength-track { display: flex; gap: 4px; }
+.strength .strength-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--border-soft);
+  transition: background var(--mid) var(--ease);
+}
+.strength .strength-label { font-size: var(--fs-caption); font-weight: 600; color: var(--text-soft); }
+.strength[data-level="1"] .strength-bar:nth-child(-n+1) { background: var(--negative); }
+.strength[data-level="2"] .strength-bar:nth-child(-n+2) { background: var(--warning); }
+.strength[data-level="3"] .strength-bar:nth-child(-n+3) { background: var(--warning); }
+.strength[data-level="4"] .strength-bar:nth-child(-n+4) { background: var(--positive); }
+.strength[data-level="1"] .strength-label { color: var(--negative); }
+.strength[data-level="2"] .strength-label,
+.strength[data-level="3"] .strength-label { color: var(--warning); }
+.strength[data-level="4"] .strength-label { color: var(--positive); }
+
+/* ========================================================================= hold-reveal ========= */
+/* A secret shown only while the user presses and holds — used for the recovery/spend key on the
+   backup screen. The mask never carries the real value in an attribute; script writes it into the
+   text node only once the hold completes, and clears it again on teardown. */
+.hold-reveal { display: flex; flex-direction: column; gap: var(--s-3); }
+.hold-reveal .key-mask {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-strong);
+  word-break: break-all;
+  text-align: center;
+}
+.hold-reveal .key-mask.masked { color: var(--text-mute); letter-spacing: .35em; user-select: none; }
+.hold-btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.hold-btn .fill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.hold-btn.holding .fill { animation: hold-fill 650ms linear forwards; }
+@keyframes hold-fill { to { transform: scaleX(1); } }
+.hold-btn svg { width: 20px; height: 20px; flex: none; }
 
 /* ============================================================================= empty ========= */
 .empty {

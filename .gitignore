@@ -16,6 +16,7 @@ android/app/src/main/jniLibs/
 extension/shared/core/*.wasm
 extension/shared/core/*.js
 web/node_modules/
+ui/node_modules/
 # OS / editors
 .DS_Store
 *.swp
