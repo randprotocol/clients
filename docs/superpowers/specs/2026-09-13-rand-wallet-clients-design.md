@@ -1,5 +1,7 @@
 # Rand Wallet: lightweight clients — design
 
+Renamed shrugg → rand on 2026-09-19; see the 2026-09-19 spec §10.
+
 Date: 2026-09-13. Status: approved for implementation under the assumptions in §2; the user runs
 this session unattended, so the assumptions are stated rather than asked.
 

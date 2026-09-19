@@ -675,7 +675,7 @@ fn settings(app: &mut App, ui: &mut Ui) {
 
     label(ui, &p, "Backup");
     card(ui, &p, |ui| {
-        ui.label(RichText::new(format!("The spend key is the wallet; it is stored in {}. Anyone who sees it can spend your RAND. The key file is what the rand command-line wallet reads.", crate::secrets::location())).size(13.0).color(p.text_soft));
+        ui.label(RichText::new(format!("The spend key is the wallet; it is stored in {}. Anyone who sees it can spend your RAND. The key file is what the shrugg command-line wallet reads.", crate::secrets::location())).size(13.0).color(p.text_soft));
     });
     if let Some(info) = app.info.clone() {
         if secondary(ui, &p, "Export key file (wallet.key.json)") {

@@ -42,7 +42,7 @@ struct SettingsView: View {
                     Button("Show spend key") { Task { await reveal(title: "Spend key", value: wallet.exportSpendKey()) } }
                         .foregroundColor(Theme.negative)
                 } header: { Text("Backup") } footer: {
-                    Text("The spend key is the wallet. Anyone who sees it can spend your RAND. The key file is what the rand command-line wallet reads.")
+                    Text("The spend key is the wallet. Anyone who sees it can spend your RAND. The key file is what the shrugg command-line wallet reads.")
                 }
 
                 Section("Security") {

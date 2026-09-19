@@ -1,7 +1,7 @@
 # Rand Wallet — lightweight clients
 
 Wallets for the Rand Protocol RAND chain (the fully shielded pool served by
-[`rand-node`](https://github.com/randprotocol/fullnode)), one per platform, sharing one Rust core:
+[`shrugg-node`](https://github.com/randprotocol/fullnode)), one per platform, sharing one Rust core:
 
 | client | language | directory | ships as |
 |---|---|---|---|

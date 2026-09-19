@@ -197,7 +197,7 @@ pub fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<(), String>
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
-/// RAND amounts: mirrors `randprotocol_core::format_amount` / `parse_amount`.
+/// RAND amounts: mirrors `shrugg_core::format_amount` / `parse_amount`.
 pub mod amount {
     pub const UNITS: u64 = 1_000_000_000;
 

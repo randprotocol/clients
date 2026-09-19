@@ -53,7 +53,7 @@
     <string name="send_fee">Network fee</string>
     <string name="send_available">Available: %1$s RAND</string>
     <string name="send_review">Review</string>
-    <string name="send_bad_address">That is not a rand1 address.</string>
+    <string name="send_bad_address">That is not a shrugg1 address.</string>
     <string name="send_bad_amount">Enter an amount in RAND, up to 9 decimals.</string>
     <string name="review_title">Review</string>
     <string name="review_amount">Amount</string>

@@ -16,14 +16,14 @@ final class CoreSmokeTests: XCTestCase {
         let w = try RandCore.keygen()
         XCTAssertEqual(w.spendKey.count, 64)
         XCTAssertEqual(w.viewingKey.count, 64)
-        XCTAssertTrue(w.address.hasPrefix("rand1"))
-        XCTAssertEqual(w.address.count, 1666)
+        XCTAssertTrue(w.address.hasPrefix("shrugg1"))
+        XCTAssertEqual(w.address.count, 1668)
         XCTAssertEqual(try RandCore.walletInfo(spendKey: w.spendKey), w)
         XCTAssertEqual(try RandCore.importKey(w.keyFile), w)
         let a = try RandCore.parseAddress(w.address)
         XCTAssertTrue(a.valid)
         XCTAssertEqual(a.pk, w.pk)
-        XCTAssertFalse(try RandCore.parseAddress("rand1nope").valid)
+        XCTAssertFalse(try RandCore.parseAddress("shrugg1nope").valid)
     }
 
     func testErrorsSurfaceAsThrownMessages() {
