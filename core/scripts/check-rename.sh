@@ -12,23 +12,22 @@
 # is skipped, for the rare line that legitimately mentions the old name on purpose (doc prose
 # contrasting it with the new one, or a test asserting the old name/key is now absent) rather than
 # leaving it behind by mistake. The HARDFAIL set below always wins over the marker.
+#
+# Portability: the allow-list stripping runs through one `perl` invocation over the whole grep
+# stream, not a `sed`/`grep` pipeline inside a per-line bash loop. Word-boundary matching for the
+# bare `shrugg` CLI name needs backslash-b-style lookaround, and BSD sed/grep (macOS) and GNU
+# sed/grep (Linux CI) disagree on how to spell that: the old draft of this script used a
+# BSD-only bracket-expression word-boundary extension that GNU's sed/grep reject outright, and
+# GNU's own word-boundary escapes aren't recognised by BSD's. Perl's regex engine is the same
+# everywhere it ships, which is every mainstream macOS and Linux install, so it is used instead
+# of trying to keep two sed dialects in sync (see the `(?<!...)`/`(?!...)` lookaround below).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-# Wire names the node owns: never renamed. Matched case-sensitively (lowercase only) so an
-# uppercase/mixed-case leftover like SHRUGG or ShruggCore is never mistaken for one of these.
-ALLOW='shrugg_[a-zA-Z]+'                 # shrugg_getCommitments, shrugg_core, shrugg_client, ...
-ALLOW="$ALLOW"'|shrugg1'                 # the shrugg1... address prefix, incl. examples/test vectors
-ALLOW="$ALLOW"'|shrugg-(core|zkvm|client|node)'  # vendored crate names / fullnode binaries
-ALLOW="$ALLOW"'|UNITS_PER_SHRUGG'        # the vendor crate's own constant name
-ALLOW="$ALLOW"'|"shrugg"'                # the bare wire literal, e.g. RPC_NAMESPACE == "shrugg"
-ALLOW="$ALLOW"'|[[:<:]]shrugg[[:>:]]'    # the standalone `shrugg` CLI/binary name in prose
-
-# CONTROLLER RULING: matching shrugg_[a-zA-Z]+ against a whole line (as the brief's sketch did)
-# would let a stale "shrugg_wallet" (or "ShruggCore") slip through a line that also contains other
-# text, which is exactly the bug this guard exists to catch. So every candidate line is checked
-# against this hard-fail set FIRST and unconditionally, before any ALLOW stripping.
-HARDFAIL='shrugg_wallet|ShruggCore'
+command -v perl >/dev/null 2>&1 || {
+  echo "check-rename.sh needs perl (for portable BSD/GNU-identical word-boundary matching); none found on PATH" >&2
+  exit 2
+}
 
 RAW=$(grep -rIniE 'shrugg' . \
   --exclude-dir=.git --exclude-dir=vendor --exclude-dir=target --exclude-dir=dist \
@@ -38,23 +37,39 @@ RAW=$(grep -rIniE 'shrugg' . \
   --exclude=check-rename.sh --exclude=Cargo.lock --exclude='2026-09-1[39]-*.md' \
   2>/dev/null | grep -v '^\./extension/shared/core/' || true)
 
+# For each line: HARDFAIL (case-insensitive) always wins, even over the rename-guard marker.
+# Otherwise the marker skips the line. Otherwise strip every allowed (wire-name) token
+# case-sensitively; if "shrugg" in any case still remains, the line is a real offender (e.g. an
+# un-renamed "SHRUGG" ticker, or a bare `shrugg` immediately glued to other identifier characters
+# that isn't one of the recognised wire-name shapes).
 offenders=()
 while IFS= read -r line; do
-  [ -z "$line" ] && continue
-  if echo "$line" | grep -qiE "$HARDFAIL"; then
-    offenders+=("$line")
-    continue
-  fi
-  if echo "$line" | grep -qF 'rename-guard: allow'; then
-    continue
-  fi
-  # Strip every allowed (wire-name) token, case-sensitively; if "shrugg" in any case still
-  # appears afterwards, this line is a real offender (e.g. an un-renamed "SHRUGG" ticker).
-  stripped=$(echo "$line" | sed -E "s/($ALLOW)//g")
-  if echo "$stripped" | grep -qiE 'shrugg'; then
-    offenders+=("$line")
-  fi
-done <<< "$RAW"
+  offenders+=("$line")
+done < <(printf '%s\n' "$RAW" | perl -ne '
+  BEGIN {
+    $HARDFAIL = qr{shrugg_wallet|ShruggCore}i;
+    $MARKER   = qr{rename-guard: allow};
+    $ALLOW = qr{
+        shrugg_[a-zA-Z]+                          # shrugg_getCommitments, shrugg_core, shrugg_client, etc
+      | shrugg1                                    # the shrugg1 address prefix, incl. examples, test vectors
+      | shrugg-(?:core|zkvm|client|node)            # vendored crate names and fullnode binaries
+      | UNITS_PER_SHRUGG                            # the vendor crate own constant name
+      | "shrugg"                                    # the bare wire literal, e.g. RPC_NAMESPACE == "shrugg"
+      | (?<![A-Za-z0-9_-])shrugg(?![A-Za-z0-9_-])   # standalone shrugg CLI name in prose: a whole word,
+                                                     # not glued to a letter, digit, underscore or hyphen
+                                                     # on either side (so shrugg wallet, backtick shrugg
+                                                     # backtick, shrugg send pass; shrugg-node and
+                                                     # shrugg_wallet do not, those are handled above and
+                                                     # by HARDFAIL respectively)
+    }x;
+  }
+  chomp;
+  next if $_ eq "";
+  if (/$HARDFAIL/) { print "$_\n"; next; }
+  next if /$MARKER/;
+  (my $stripped = $_) =~ s/$ALLOW//g;
+  print "$_\n" if $stripped =~ /shrugg/i;
+')
 
 if [ "${#offenders[@]}" -gt 0 ]; then
   printf '%s\n' "${offenders[@]}"
