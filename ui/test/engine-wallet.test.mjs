@@ -42,7 +42,10 @@ function stubClient(table = {}) {
   const calls = [];
   const d = {
     head: () => ({ height: 20, hash: HEX64('ab') }),
-    treeInfo: () => ({ next_index: 0, root: HEX64('00'), nullifiers: 0 }),
+    // `next_index` must be consistent with what `commitments` serves: the engine cross-checks a
+    // page against the leaf count, so a stub that serves leaf 0 while claiming 0 leaves is a
+    // hostile node, not a fixture.
+    treeInfo: () => ({ next_index: 64, root: HEX64('00'), nullifiers: 0 }),
     commitments: () => [],
     nullifiers: () => [],
     anchor: () => ({ height: 20, root: HEX64('ab') }),
@@ -441,4 +444,226 @@ test('a block action is size-bounded and re-parsed before it reaches the core', 
     () => makeWallet({ core, store: memoryStore(), rpc: () => big, settings: async () => ({}) }).scan(SPEND_KEY, {}),
     (err) => err.name === 'NodeReplyError',
   );
+});
+
+// =============================================================== fix round 3 ====================
+// The probes the round-2 re-review ran against the real engine, as tests.
+
+const nf = (height) => ({ height, nullifier: `${(height % 100).toString().padStart(2, '0')}`.repeat(32) });
+
+test('PROBE: a full nullifier page all claiming tip-1 cannot carry the cursor over the heights between', async () => {
+  // One full page from 0 whose 500 rows all claim height 3999 against tip 4000, then an empty
+  // page → `scanned_height = 4001` in two replies, and heights 1…3998 were never read. Any
+  // nullifier there is missed for ever: a spent note stays spendable.
+  const store = memoryStore();
+  let served = 0;
+  const client = stubClient({
+    head: () => ({ height: 4000, hash: HEX64('ab') }),
+    nullifiers: (from) => {
+      served += 1;
+      if (from === 0) return Array.from({ length: 500 }, () => nf(3999));
+      return [];
+    },
+  });
+  const asked = [];
+  const spy = stubClient({
+    head: () => ({ height: 4000, hash: HEX64('ab') }),
+    nullifiers: (from) => {
+      asked.push(from);
+      served += 1;
+      if (from === 0) return Array.from({ length: 500 }, () => nf(3999));
+      return [];
+    },
+  });
+  void client;
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => spy, settings: async () => ({}), annotate: false });
+  await wallet.scan(SPEND_KEY, {});
+
+  // The page claimed to answer "everything from 0" with 500 rows that are all at 3999. It is a
+  // legitimate prefix only if nothing exists in 0…3998 — which it did not demonstrate, so the
+  // cursor takes one span, not 4000 heights.
+  assert.equal(asked[1], 500, `the second request was from ${asked[1]}: the page carried the cursor over 1…3998`);
+  assert.ok(served >= 8, `the whole range was covered in ${served} replies, so most of it was never asked about`);
+  // It does end up caught up — over many replies, each of which asked about its own span.
+  assert.equal(store.current.scanned_height, 4001);
+});
+
+test('a full page moves the cursor to its last height, and no further than one span', async () => {
+  const store = memoryStore();
+  const asked = [];
+  const client = stubClient({
+    head: () => ({ height: 10_000, hash: HEX64('ab') }),
+    nullifiers: (from) => {
+      asked.push(from);
+      // A dense chain: a full page whose last row is 100 heights up.
+      if (from < 300) return Array.from({ length: 500 }, (_, i) => nf(from + Math.floor(i / 5)));
+      return [];
+    },
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await wallet.scan(SPEND_KEY, {});
+  // Each full page stopped AT its last height (that height may have been truncated mid-way), so
+  // the next request re-reads it rather than stepping over it.
+  assert.deepEqual(asked.slice(0, 3), [0, 99, 198]);
+});
+
+test('a nullifier page that does not answer the request is refused, and nothing is persisted', async () => {
+  const cases = {
+    'a row below the height asked for': (from) => (from === 0 ? [] : [nf(0)]),
+    'a row above the tip this node reported': () => [nf(9_000)],
+    'rows out of order': () => [nf(9), nf(4)],
+  };
+  for (const [what, rows] of Object.entries(cases)) {
+    const store = memoryStore();
+    // A tip well past one span, so the loop really does make a second request.
+    const client = stubClient({ head: () => ({ height: 3_000, hash: HEX64('ab') }), nullifiers: rows });
+    const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+    const before = JSON.stringify(store.current);
+    await assert.rejects(() => wallet.scan(SPEND_KEY, {}), (err) => {
+      assert.equal(err.name, 'NodeReplyError', `${what}: got ${err.name}`);
+      return true;
+    });
+    assert.equal(JSON.stringify(store.current), before, `${what}: the store was written`);
+  }
+});
+
+test('PROBE: a commitment page that starts somewhere else is refused', async () => {
+  // A node serving leaf 900 for a request from 0 used to move `scanned_index` to 901, leaving
+  // 0–899 never trial-decrypted — received notes silently missing.
+  const store = memoryStore();
+  const client = stubClient({
+    commitments: (from) => (from === 0 ? [{ index: 900, cm: HEX64('0b'), height: 4, envelope: envelope() }] : []),
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await assert.rejects(() => wallet.scan(SPEND_KEY, {}), (err) => err.name === 'NodeReplyError');
+  assert.equal(store.current.scanned_index, 0, 'the cursor moved over leaves that were never read');
+});
+
+test('a commitment page may not claim leaves the tree says do not exist', async () => {
+  const store = memoryStore();
+  const client = stubClient({
+    treeInfo: () => ({ next_index: 1, root: HEX64('00'), nullifiers: 0 }),
+    commitments: (from) => (from === 0
+      ? [{ index: 0, cm: HEX64('0b'), height: 4, envelope: envelope() }, { index: 1, cm: HEX64('0c'), height: 4, envelope: envelope() }]
+      : []),
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await assert.rejects(() => wallet.scan(SPEND_KEY, {}), /past the 1 leaves/);
+  assert.equal(store.current.scanned_index, 0);
+});
+
+test('a bridge state that could not be read does not advance the attest cursor', async () => {
+  const store = memoryStore();
+  const client = stubClient({
+    head: () => ({ height: 900, hash: HEX64('ab') }),
+    bridgeState: () => { throw new Error('the node is having a moment'); },
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.equal(st.bridgeUnknown, true, 'the caller was not told the bridge could not be asked');
+  assert.equal(store.current.scanned_attest_height, 0,
+    'the cursor advanced over blocks that were never examined, so a deposit there is lost for ever');
+
+  // A node that answers "the bridge is off" IS an answer: reading nothing covers the range.
+  const honest = stubClient({ head: () => ({ height: 900, hash: HEX64('ab') }) });
+  const ok = await makeWallet({ core: stubCore(), store, rpc: () => honest, settings: async () => ({}), annotate: false }).scan(SPEND_KEY, {});
+  assert.equal(ok.bridgeUnknown, undefined);
+  assert.equal(store.current.scanned_attest_height, 512);
+});
+
+test('a node that will not say which chain it is, to a wallet that knows, is a wrong chain', async () => {
+  const store = memoryStore();
+  await makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({ chainId: 13 }) }).scan(SPEND_KEY, {});
+  assert.equal(store.current.genesis, GENESIS_A);
+
+  const mute = stubClient({
+    chainId: () => { throw new Error('no such method'); },
+    genesis: () => { throw new Error('no such method'); },
+  });
+  const answer = await makeWallet({ core: stubCore(), store, rpc: () => mute, settings: async () => ({}) }).scan(SPEND_KEY, {});
+  assert.ok(answer.wrongChain, '"I cannot prove which chain I am" read as "carry on"');
+  assert.equal(answer.wrongChain.got.unknown, true);
+});
+
+test('a first scan against a node with no identity says so instead of pretending', async () => {
+  const store = memoryStore();
+  const mute = stubClient({
+    chainId: () => { throw new Error('no such method'); },
+    genesis: () => { throw new Error('no such method'); },
+  });
+  const st = await makeWallet({ core: stubCore(), store, rpc: () => mute, settings: async () => ({}) }).scan(SPEND_KEY, {});
+  assert.equal(st.wrongChain, undefined, 'a store with no identity may still proceed');
+  assert.equal(st.identityUnknown, true, 'but the caller must know there is nothing to check against');
+  assert.equal(store.current.chain_id, null);
+  assert.equal(store.current.identityUnknown, undefined, 'a transient marker was persisted');
+});
+
+test('PROBE: a rescan racing a scan really resets, and the losing scan is discarded', async () => {
+  // The probe: `rescan()` ran outside the scan lock and its plain write lost the compare-and-set,
+  // after which the stale-merge path re-maxed the cursors and re-merged the other tab's notes —
+  // the reset silently no-opped while Settings said "Rescanned".
+  const backing = memoryStore();
+  let rev = 0;
+  const shared = {
+    async getNoteStore() { return { ...(await backing.getNoteStore()), rev }; },
+    async setNoteStore(s) { await backing.setNoteStore(s); },
+    async compareAndSet(value, expectedRev) {
+      if (expectedRev !== rev) { const e = new Error('stale'); e.name = 'StaleStoreError'; throw e; }
+      rev += 1;
+      await backing.setNoteStore(value);
+      return rev;
+    },
+  };
+  const note = {
+    index: 0, note: '00'.repeat(112), cm: HEX64('0b'), nf: HEX64('0c'),
+    amount: '5', asset: 0, time: 4, from: '00'.repeat(32), height: 4, spent: false, pending: null,
+  };
+  const core = stubCore({
+    scan_page: ({ rows }) => ({ received: rows.length ? [note] : [], sent: [], next_index: rows.length ? 1 : 0, rows: rows.length }),
+  });
+  const page = (from) => (from === 0 ? [{ index: 0, cm: HEX64('0b'), height: 4, envelope: envelope() }] : []);
+  const deps = { core, store: shared, rpc: () => stubClient({ commitments: page }), settings: async () => ({ chainId: 13 }), annotate: false };
+
+  // Tab one scans and records a note, so there is something for the reset to remove.
+  await makeWallet(deps).scan(SPEND_KEY, {});
+  assert.equal(backing.current.notes.length, 1);
+  const epochBefore = backing.current.reset_epoch;
+
+  // Tab two loads the store, tab one rescans for a chain change, tab two then tries to save.
+  const tabTwo = makeWallet(deps);
+  const loadedBefore = await tabTwo.loadStore();
+  await makeWallet(deps).rescan(SPEND_KEY, { forChain: true });
+  assert.ok(backing.current.reset_epoch > epochBefore, 'the reset did not bump the epoch');
+
+  await assert.rejects(
+    () => tabTwo.persist({ ...loadedBefore, scanned_index: 50 }),
+    (err) => { assert.equal(err.name, 'StoreResetError'); assert.equal(err.retryable, true); return true; },
+    'a scan that predates the reset wrote its page back over it',
+  );
+});
+
+test('a rescan reports success only when the reset is really on disk', async () => {
+  const always = {
+    async getNoteStore() { return emptyNoteStore(); },
+    async setNoteStore() {},
+    async compareAndSet() { const e = new Error('stale'); e.name = 'StaleStoreError'; throw e; },
+  };
+  const wallet = makeWallet({ core: stubCore(), store: always, rpc: () => stubClient(), settings: async () => ({}) });
+  await assert.rejects(() => wallet.rescan(SPEND_KEY, {}), (err) => {
+    assert.match(err.message, /another tab kept changing this wallet/);
+    assert.equal(err.retryable, true);
+    return true;
+  });
+});
+
+test('a rescan tells whoever is listening that the store was reset', async () => {
+  const resets = [];
+  const store = memoryStore();
+  const wallet = makeWallet({
+    core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({}),
+    onReset: (epoch) => resets.push(epoch),
+  });
+  await wallet.scan(SPEND_KEY, {});
+  await wallet.rescan(SPEND_KEY, {});
+  assert.deepEqual(resets, [1], 'other tabs were never told to drop their view');
 });

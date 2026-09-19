@@ -49,26 +49,60 @@ test('tree info: next_index is an integer', () => {
   rejects(() => checkTreeInfo({ next_index: null }), /next_index/);
 });
 
+const from0 = { from: 0, limit: 500 };
+
 test('commitments: every row is checked, and a page cannot exceed what was asked for', () => {
   const good = [{ index: 0, cm: HEX64, height: 3, envelope }];
-  assert.equal(checkCommitments(good, 500).length, 1);
-  rejects(() => checkCommitments(good, 0), /more than the 0 asked for/);
-  rejects(() => checkCommitments({}, 500), /not an array/);
-  rejects(() => checkCommitments([{ index: '0', cm: HEX64, height: 3, envelope }], 500), /row 0 index/);
-  rejects(() => checkCommitments([{ index: 0, cm: 'nope', height: 3, envelope }], 500), /row 0 cm is not 64 hex/);
-  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: null, envelope }], 500), /row 0 height/);
-  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: 3 }], 500), /row 0 envelope/);
-  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: 3, envelope: { ...envelope, body: 'zz' } }], 500), /envelope\.body/);
-  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: 3, envelope: { ...envelope, body: 'a'.repeat(70000) } }], 500), /envelope\.body/);
+  assert.equal(checkCommitments(good, from0).length, 1);
+  rejects(() => checkCommitments(good, { from: 0, limit: 0 }), /more than the 0 asked for/);
+  rejects(() => checkCommitments({}, from0), /not an array/);
+  // A non-integer index is now caught by the "does this page answer the request" check, which
+  // runs first and says something more useful than "row 0 index".
+  rejects(() => checkCommitments([{ index: '0', cm: HEX64, height: 3, envelope }], from0), /starts at leaf/);
+  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: 3, envelope }, { index: '1', cm: HEX64, height: 3, envelope }], from0), /row 1 index/);
+  rejects(() => checkCommitments([{ index: 0, cm: 'nope', height: 3, envelope }], from0), /row 0 cm is not 64 hex/);
+  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: null, envelope }], from0), /row 0 height/);
+  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: 3 }], from0), /row 0 envelope/);
+  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: 3, envelope: { ...envelope, body: 'zz' } }], from0), /envelope\.body/);
+  rejects(() => checkCommitments([{ index: 0, cm: HEX64, height: 3, envelope: { ...envelope, body: 'a'.repeat(70000) } }], from0), /envelope\.body/);
 });
 
+test('commitments: a page must answer the request it was made for', () => {
+  const leaf = (index) => ({ index, cm: HEX64, height: 3, envelope });
+  // The probe that found this: a node serving leaf 900 for a request from 0 moved the cursor to
+  // 901 and left leaves 0–899 never trial-decrypted — received notes silently gone.
+  rejects(() => checkCommitments([leaf(900)], from0), /starts at leaf 900, not the 0/);
+  rejects(() => checkCommitments([leaf(0), leaf(2)], from0), /not 1 — the page has a gap/);
+  assert.equal(checkCommitments([leaf(0), leaf(1), leaf(2)], from0).length, 3);
+  assert.equal(checkCommitments([], from0).length, 0, 'an empty page is a legitimate answer');
+  assert.equal(checkCommitments([leaf(7), leaf(8)], { from: 7, limit: 500 }).length, 2);
+
+  // …and never a leaf the tree says it has not grown.
+  rejects(() => checkCommitments([leaf(0), leaf(1)], { from: 0, limit: 500, leafCount: 1 }), /past the 1 leaves/);
+  assert.equal(checkCommitments([leaf(0), leaf(1)], { from: 0, limit: 500, leafCount: 2 }).length, 2);
+  assert.throws(() => checkCommitments([], { limit: 500 }), /without the index it was asked from/);
+});
+
+const nfFrom = (from, tip) => ({ from, limit: 500, tip });
+
 test('nullifiers: the row that used to poison the cursor', () => {
-  assert.equal(checkNullifiers([{ height: 7, nullifier: HEX64 }], 500).length, 1);
+  assert.equal(checkNullifiers([{ height: 7, nullifier: HEX64 }], nfFrom(0, 100)).length, 1);
   // Exactly the shape that made `Math.max(...rows.map(r => r.height))` NaN.
-  rejects(() => checkNullifiers([{ height: 7, nullifier: HEX64 }, { height: 'nine', nullifier: HEX64 }], 500), /row 1 height/);
-  rejects(() => checkNullifiers([{ height: null, nullifier: HEX64 }], 500), /row 0 height/);
-  rejects(() => checkNullifiers([{ height: 7 }], 500), /row 0 nullifier/);
-  rejects(() => checkNullifiers('rows', 500), /not an array/);
+  rejects(() => checkNullifiers([{ height: 7, nullifier: HEX64 }, { height: 'nine', nullifier: HEX64 }], nfFrom(0, 100)), /row 1 height/);
+  rejects(() => checkNullifiers([{ height: null, nullifier: HEX64 }], nfFrom(0, 100)), /row 0 height/);
+  rejects(() => checkNullifiers([{ height: 7 }], nfFrom(0, 100)), /row 0 nullifier/);
+  rejects(() => checkNullifiers('rows', nfFrom(0, 100)), /not an array/);
+});
+
+test('nullifiers: a page must be the prefix the RPC promises', () => {
+  const row = (height) => ({ height, nullifier: HEX64 });
+  // `nullifiers_from` collects height >= from, sorts, truncates — so a reply is sorted, starts no
+  // lower than `from`, and never reaches past the chain's tip.
+  assert.equal(checkNullifiers([row(3), row(3), row(9)], nfFrom(3, 100)).length, 3);
+  rejects(() => checkNullifiers([row(2)], nfFrom(3, 100)), /below the 3 it was asked from/);
+  rejects(() => checkNullifiers([row(9), row(4)], nfFrom(3, 100)), /the page is not sorted/);
+  rejects(() => checkNullifiers([row(400)], nfFrom(3, 100)), /above the tip 100/);
+  assert.throws(() => checkNullifiers([], { limit: 500 }), /without the height it was asked from/);
 });
 
 test('anchor and witness', () => {
@@ -144,12 +178,12 @@ test('an envelope is bounded by what the chain actually produces', () => {
   // let one 500-row page claim ~128 MB, which a wallet would buffer before checking any of it.
   const real = { kem_ct: 'ab'.repeat(1088), to_receiver: 'cd'.repeat(60), to_sender: 'ef'.repeat(60), body: '01'.repeat(140) };
   const row = (env) => [{ index: 0, cm: HEX64, height: 1, envelope: env }];
-  assert.equal(checkCommitments(row(real), 500).length, 1, 'a real envelope must still pass');
+  assert.equal(checkCommitments(row(real), from0).length, 1, 'a real envelope must still pass');
 
   assert.ok(ENVELOPE_LIMITS.kem_ct < 5000);
   assert.ok(ENVELOPE_LIMITS.total <= 2 * 2 * 2048);
-  rejects(() => checkCommitments(row({ ...real, kem_ct: 'a'.repeat(ENVELOPE_LIMITS.kem_ct + 2) }), 500), /envelope\.kem_ct/);
-  rejects(() => checkCommitments(row({ ...real, body: 'a'.repeat(ENVELOPE_LIMITS.body + 2) }), 500), /envelope\.body/);
+  rejects(() => checkCommitments(row({ ...real, kem_ct: 'a'.repeat(ENVELOPE_LIMITS.kem_ct + 2) }), from0), /envelope\.kem_ct/);
+  rejects(() => checkCommitments(row({ ...real, body: 'a'.repeat(ENVELOPE_LIMITS.body + 2) }), from0), /envelope\.body/);
 
   // …and a page of individually-legal rows that adds up to too much is refused as a page.
   const fat = Array.from({ length: 500 }, (_, i) => ({
@@ -158,7 +192,7 @@ test('an envelope is bounded by what the chain actually produces', () => {
   }));
   const perRow = ENVELOPE_LIMITS.kem_ct + ENVELOPE_LIMITS.to_receiver + ENVELOPE_LIMITS.to_sender + ENVELOPE_LIMITS.body;
   if (perRow > ENVELOPE_LIMITS.total) {
-    rejects(() => checkCommitments(fat, 500), /envelope is \d+ characters/);
+    rejects(() => checkCommitments(fat, from0), /envelope is \d+ characters/);
   } else {
     assert.ok(perRow * 500 < 8_000_000, 'the whole-page bound should still be reachable in principle');
   }

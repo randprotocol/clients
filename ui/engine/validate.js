@@ -134,9 +134,19 @@ export function checkTreeInfo(reply) {
 }
 
 /** `rand_getCommitments` → the page of leaves, exactly as `scan_page` takes them. */
-export function checkCommitments(reply, limit) {
+export function checkCommitments(reply, { from, limit, leafCount } = {}) {
   const m = 'rand_getCommitments';
+  if (!Number.isSafeInteger(from) || from < 0) throw new NodeReplyError(`${m}: called without the index it was asked from`);
   const rows = arrayReply(m, reply, limit);
+  // A page must be an answer to the REQUEST, not just well-formed rows. `notes_from(from, limit)`
+  // iterates the leaf column family forward from `from`, and leaf indexes are dense, so an honest
+  // non-empty reply starts exactly at `from` and is contiguous. Without this check a node could
+  // answer a request from 0 with leaf 900, the cursor would move to 901, and leaves 0–899 would
+  // never be trial-decrypted — received notes silently missing, with nothing to show for it.
+  if (rows.length > 0) {
+    const first = rows[0] && rows[0].index;
+    if (first !== from) fail(m, `the page starts at leaf ${excerpt(first)}, not the ${from} it was asked for`);
+  }
   let pageChars = 0;
   rows.forEach((row, i) => {
     if (!row || typeof row !== 'object') fail(m, `row ${i} is not an object`, row);
@@ -153,18 +163,39 @@ export function checkCommitments(reply, limit) {
     if (envChars > ENVELOPE_LIMITS.total) fail(m, `row ${i} envelope is ${envChars} characters, over the chain's own limit`);
     pageChars += envChars;
     if (pageChars > MAX_PAGE_CHARS) fail(m, `the page is over ${MAX_PAGE_CHARS} characters of envelope`);
+    if (i > 0 && row.index !== rows[i - 1].index + 1) {
+      fail(m, `row ${i} is leaf ${row.index}, not ${rows[i - 1].index + 1} — the page has a gap`);
+    }
+    // The tree cannot serve a leaf it has not grown. `leafCount` is `rand_getTreeInfo.next_index`
+    // read in the same scan; where the node did not serve it, this check is simply skipped.
+    if (Number.isSafeInteger(leafCount) && row.index >= leafCount) {
+      fail(m, `row ${i} is leaf ${row.index}, past the ${leafCount} leaves the tree reports`);
+    }
   });
   return rows;
 }
 
 /** `rand_getNullifiers` → `[{height, nullifier}]`. The row this file exists for. */
-export function checkNullifiers(reply, limit) {
+export function checkNullifiers(reply, { from, limit, tip } = {}) {
   const m = 'rand_getNullifiers';
+  if (!Number.isSafeInteger(from) || from < 0) throw new NodeReplyError(`${m}: called without the height it was asked from`);
   const rows = arrayReply(m, reply, limit);
+  // `nullifiers_from(from, limit)` collects every row with `height >= from`, sorts, and truncates
+  // to `limit` — so an honest reply is a PREFIX of the ordered set: non-decreasing in height, none
+  // below `from`, none above the chain's tip. Checking that is what makes the page's coverage
+  // knowable (see the cursor rule in wallet.js); without it a node can hand back one page of rows
+  // all claiming `tip - 1` and skip everything in between.
   rows.forEach((row, i) => {
     if (!row || typeof row !== 'object') fail(m, `row ${i} is not an object`, row);
     intField(m, `row ${i} height`, row.height);
     hexField(m, `row ${i} nullifier`, row.nullifier, 64);
+    if (row.height < from) fail(m, `row ${i} is at height ${row.height}, below the ${from} it was asked from`);
+    if (Number.isSafeInteger(tip) && row.height > tip) {
+      fail(m, `row ${i} is at height ${row.height}, above the tip ${tip} this node reported`);
+    }
+    if (i > 0 && row.height < rows[i - 1].height) {
+      fail(m, `row ${i} is at height ${row.height}, below row ${i - 1}'s ${rows[i - 1].height} — the page is not sorted`);
+    }
   });
   return rows;
 }

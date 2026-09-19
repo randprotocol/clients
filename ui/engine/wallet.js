@@ -64,15 +64,54 @@ export const BUNDLE_INPUTS = 2;
 const NUMERIC_FIELDS = ['scanned_index', 'scanned_height', 'scanned_attest_height', 'head'];
 const WORK_CURSORS = ['scanned_index', 'scanned_height', 'scanned_attest_height'];
 /** Keys held on the in-memory store that must never be written to storage. */
-const TRANSIENT = ['recovered', 'rev', 'behind', 'wrongChain'];
+const TRANSIENT = ['recovered', 'rev', 'behind', 'wrongChain', 'bridgeUnknown', 'identityUnknown'];
 
 /**
- * How far one *empty* reply may advance a height cursor.
+ * ---------------------------------------------------------------------------------------------
+ * THE CURSOR RULE — how far one nullifier reply may move `scanned_height`, and why.
+ * ---------------------------------------------------------------------------------------------
  *
- * An empty nullifier page means "nothing from here on, as far as I know" — and "as far as I know"
- * is the node's tip, which is exactly the number that must not be trusted. So the cursor moves by
- * at most one page span per reply: a wild tip can then poison one span, which the next honest
- * scan re-reads, instead of jumping the cursor to 2^53 and locking the honest node out for ever.
+ * The principle: **a work cursor may only move over data this wallet requested, received and
+ * validated as being the data it asked for.** "The node said so" never moves a cursor.
+ *
+ * What the RPC actually is (`randprotocol-node`'s `storage.rs::nullifiers_from`, via
+ * `rand_getNullifiers(from_height, limit)`, `limit` capped at 1000):
+ *
+ *     collect every (height, nullifier) with height >= from_height; sort(); truncate(limit)
+ *
+ * so an honest reply is a **prefix of the ordered set** — sorted by height, nothing below
+ * `from_height`, and one height's rows *can* be split across pages by the truncation.
+ * `checkNullifiers` rejects anything that is not such a prefix (out of order, below `from`, above
+ * the tip the node reported this scan).
+ *
+ * Coverage of one validated reply requested at `f`, with the tip `T` this node reported:
+ *
+ *   FULL page (`rows.length === limit`), last row height `L`:
+ *       every row with height in [f, L) sorts before the truncation point, so the page contains
+ *       ALL of them. Height `L` itself may be cut in half. → fully covered: [f, L-1].
+ *       Cursor → `L` (so `L` is read again next time), clamped: `min(L, f + HEIGHT_SPAN)`.
+ *       Clamping DOWN is always sound: the rows above the clamp were still processed (marking a
+ *       nullifier spent is idempotent), and the next request simply re-reads them.
+ *       `L === f` means one height holds more than `limit` nullifiers — see "Known limitations".
+ *
+ *   SHORT or EMPTY page (`rows.length < limit`):
+ *       the node asserts there is nothing else at or after `f` — at all, up to its own tip. That
+ *       assertion is the only evidence, and `T` is a number this wallet must not trust, so the
+ *       cursor takes it one span at a time. Cursor → `min(f + HEIGHT_SPAN, T + 1)`.
+ *
+ * Invariant (induction over replies): each reply's coverage begins exactly at the previous
+ * cursor, so after any sequence the union of coverage is contiguous from where the store started,
+ * and every height below `scanned_height` was covered by a reply that was consistent with its own
+ * request. No reply moves the cursor past `T + 1`, and one scan moves it by at most
+ * `MAX_HEIGHTS_PER_SCAN` however large `T` is.
+ *
+ * WHAT A HOSTILE NODE CAN STILL DO, and this is not fixable here: answer "no nullifiers" for a
+ * range that has some. A short page is a claim of absence, and this protocol has no proof of
+ * absence — a light client cannot tell a quiet chain from a lying node. The consequence is a
+ * spent note still shown as spendable; a transfer built on it is refused by the chain as a
+ * double-spend rather than losing anything. Rescanning against a node you trust re-reads every
+ * height and repairs the view. The same is true of withheld *leaves*: a node that omits notes
+ * makes them invisible, not lost. See web/wallet/README.md.
  */
 const HEIGHT_SPAN = PAGE;
 /**
@@ -84,6 +123,8 @@ const HEIGHT_SPAN = PAGE;
  * does end up ahead of an honest node.
  */
 const MAX_HEIGHT_PAGES_PER_SCAN = 512;
+/** …and the total a single scan may advance `scanned_height`, whatever the replies look like. */
+export const MAX_HEIGHTS_PER_SCAN = HEIGHT_SPAN * MAX_HEIGHT_PAGES_PER_SCAN;
 /** How many block headers `rebuildableDeposits` may examine in one scan (it is one call each). */
 const MAX_ATTEST_HEIGHTS_PER_SCAN = 512;
 
@@ -99,6 +140,9 @@ export function emptyNoteStore() {
     // other silently invents history. `null` until the first scan learns them.
     chain_id: null,
     genesis: null,
+    // Bumped by every `rescan()`. A scan that loaded the store before a reset must not write its
+    // page back over it — that is how a reset silently no-opped while the UI said "Rescanned".
+    reset_epoch: 0,
     // note commitment -> the hash of the transaction that created it, learned from the same block
     // headers. `rand_getCommitments` serves leaves, not transactions, so without this a received
     // note has no hash and no transaction page to open.
@@ -183,7 +227,7 @@ export function coreApi(core) {
   };
 }
 
-export function makeWallet({ core, store, rpc, settings, annotate = true }) {
+export function makeWallet({ core, store, rpc, settings, annotate = true, onReset }) {
   if (!core || typeof core.call !== 'function') throw new Error('makeWallet needs a core with call()');
   if (!store || typeof store.getNoteStore !== 'function') throw new Error('makeWallet needs a note store');
   const c = coreApi(core);
@@ -215,6 +259,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
       for (const key of NUMERIC_FIELDS) s[key] = 0;
       s.recovered = true;
     }
+    if (!isCursor(s.reset_epoch)) s.reset_epoch = 0;
     if (typeof s.genesis !== 'string' || s.genesis === '') s.genesis = null;
     if (!isCursor(s.chain_id) && typeof s.chain_id !== 'string') s.chain_id = null;
     return s;
@@ -230,7 +275,19 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
    * is conditional on the revision this store was loaded at, so two tabs cannot silently overwrite
    * each other. On a lost race the other tab's store is merged in and the write retried once.
    */
-  async function persist(st, previous) {
+  async function persist(st, previous, { reset = false } = {}) {
+    // A reset that happened underneath this scan wins. Without this the losing writer's merge path
+    // re-maxes the cursors and re-merges the notes, and the rescan the user asked for evaporates.
+    if (!reset) {
+      const current = (await store.getNoteStore()) || {};
+      const epoch = isCursor(current.reset_epoch) ? current.reset_epoch : 0;
+      if (epoch > (isCursor(st.reset_epoch) ? st.reset_epoch : 0)) {
+        const err = new Error('this wallet was rescanned while the scan was running; the scan was discarded');
+        err.name = 'StoreResetError';
+        err.retryable = true;
+        throw err;
+      }
+    }
     for (const key of NUMERIC_FIELDS) {
       if (!isCursor(st[key])) throw new Error(`refusing to save the note store: ${key} is not a block cursor (${String(st[key])})`);
     }
@@ -254,16 +311,27 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
       return st;
     } catch (err) {
       if (!isStaleStoreError(err)) throw err;
+      // A RESET is never merged. Merging a reset into the winner's store is exactly how a rescan
+      // silently no-ops: the cursors get re-maxed and the notes re-added. `rescan` catches this,
+      // re-reads and applies the reset to the new store instead.
+      if (reset) throw err;
       // Another tab wrote while this scan was running. Take its store, re-apply this scan's own
       // findings onto it (every merge here is by index, so doing it twice is a no-op) and try
       // once more. A second loss means the tabs are fighting; that is the user's to retry.
       const fresh = await loadStore();
+      if (!reset && (fresh.reset_epoch || 0) > (st.reset_epoch || 0)) {
+        const stop = new Error('this wallet was rescanned while the scan was running; the scan was discarded');
+        stop.name = 'StoreResetError';
+        stop.retryable = true;
+        throw stop;
+      }
       mergeNotes(fresh, st.notes);
       mergeSent(fresh, st.sent);
       for (const sub of st.submissions) if (!fresh.submissions.some((x) => x.hash === sub.hash)) fresh.submissions.push(sub);
       Object.assign(fresh.block_times, st.block_times);
       Object.assign(fresh.note_tx, st.note_tx);
       for (const key of WORK_CURSORS) fresh[key] = Math.max(isCursor(fresh[key]) ? fresh[key] : 0, st[key]);
+      fresh.reset_epoch = Math.max(fresh.reset_epoch || 0, st.reset_epoch || 0);
       fresh.head = isCursor(st.head) ? st.head : (isCursor(fresh.head) ? fresh.head : 0);
       fresh.chain_id = st.chain_id ?? fresh.chain_id ?? null;
       fresh.genesis = st.genesis ?? fresh.genesis ?? null;
@@ -293,8 +361,20 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
     const out = new Map();
     const start = st.scanned_attest_height;
     if (start > head) return { deposits: out, through: start - 1 };
+    // Three outcomes, not two. "The bridge is off" is an answer — there are no attestations to
+    // find, so reading nothing really does cover the range. "I could not tell you" is not: the
+    // old code swallowed the error into `enabled = false` and then advanced the cursor 512 heights
+    // per scan over blocks it never looked at, so a node that was merely down for that one call
+    // could hide a bridge deposit for ever.
     let enabled = false;
-    try { enabled = checkBridgeState(await client.bridgeState({ signal })).enabled; } catch { /* a node without the method */ }
+    let known = false;
+    try {
+      enabled = checkBridgeState(await client.bridgeState({ signal })).enabled;
+      known = true;
+    } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
+    }
+    if (!known) return { deposits: out, through: start - 1, unknown: true };
     // A chain with no bridge has no attestations, so the range is read by reading nothing — but
     // the cursor still moves only as far as one scan's worth, for the same reason every other
     // cursor does: `head` is the node's claim, and a claim near 2^53 must not become a cursor.
@@ -404,22 +484,43 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
    * on. The vault, the settings and the keys are untouched — this is a cache reset, not a wipe.
    */
   async function rescan(spendKey, { forChain = false, onProgress, signal } = {}, settingsOverride) {
-    const st = await loadStore();
-    for (const key of WORK_CURSORS) st[key] = 0;
-    st.head = 0;
-    st.chain_id = null;
-    st.genesis = null;
-    if (forChain) {
-      st.notes = [];
-      st.sent = [];
-      st.submissions = [];
-      st.block_times = {};
-      st.note_tx = {};
+    // Written as a RESET, never merged: on a lost compare-and-set race the reset is re-applied to
+    // whatever the winner wrote, not folded into it. Merging a reset is how it silently no-ops.
+    let written = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      throwIfAborted(signal);
+      const st = await loadStore();
+      for (const key of WORK_CURSORS) st[key] = 0;
+      st.head = 0;
+      st.chain_id = null;
+      st.genesis = null;
+      if (forChain) {
+        st.notes = [];
+        st.sent = [];
+        st.submissions = [];
+        st.block_times = {};
+        st.note_tx = {};
+      }
+      st.last_sync_ms = 0;
+      // Every scan that loaded the store before this point must now abandon its page.
+      st.reset_epoch = (st.reset_epoch || 0) + 1;
+      try {
+        // `previous` omitted and `reset` set: resetting the cursors IS the point, so neither the
+        // monotonicity check nor the epoch check applies to this write.
+        await persist(st, undefined, { reset: true });
+        written = st;
+        break;
+      } catch (err) {
+        if (!isStaleStoreError(err)) throw err;
+        // Someone else wrote first; read their store and reset that one instead.
+      }
     }
-    st.last_sync_ms = 0;
-    // `previous` is deliberately omitted: resetting the cursors IS the point, so the monotonicity
-    // check that protects every other write must not apply to this one.
-    await persist(st);
+    if (!written) {
+      const err = new Error('another tab kept changing this wallet; try the rescan again');
+      err.retryable = true;
+      throw err;
+    }
+    onReset?.(written.reset_epoch);
     return scan(spendKey, { onProgress, signal }, settingsOverride);
   }
 
@@ -443,6 +544,16 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
     // persists nothing, and hands the caller something the UI can act on.
     const identity = await chainIdentity(client, s, signal);
     const known = st.chain_id !== null || st.genesis !== null;
+    const anonymous = identity.chainId === null && identity.genesis === null;
+    // A node that will say neither which chain it is nor what its genesis was, to a wallet that
+    // already knows both, is a downgrade: "I cannot prove I am the right chain" must not read as
+    // "carry on". Only a store with no identity yet may proceed on nothing.
+    if (known && anonymous) {
+      return withMarker(st, 'wrongChain', {
+        expected: { chainId: st.chain_id, genesis: st.genesis },
+        got: { chainId: null, genesis: null, unknown: true },
+      });
+    }
     if (known && !sameChain(st, identity)) {
       return withMarker(st, 'wrongChain', {
         expected: { chainId: st.chain_id, genesis: st.genesis },
@@ -457,11 +568,19 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
       return withMarker(st, 'behind', { tip: head0, wallet: st.scanned_height - 1 });
     }
 
+    // A first scan records whatever the node supplies — and says so when that is nothing, so the
+    // UI can tell the user this wallet has no chain identity to check against later.
     if (!known) { st.chain_id = identity.chainId; st.genesis = identity.genesis; }
+    const identityUnknown = st.chain_id === null && st.genesis === null;
 
-    const { deposits, through: attestThrough } = await rebuildableDeposits(client, spendKey, st, head0, signal, onProgress);
+    const { deposits, through: attestThrough, unknown: bridgeUnknown } = await rebuildableDeposits(client, spendKey, st, head0, signal, onProgress);
+    // The tree's leaf count, when the node serves it: a page may never claim a leaf beyond it.
     let total = 0;
-    try { total = checkTreeInfo(await client.treeInfo({ signal })).next_index; } catch { /* a node without it */ }
+    let leafCount;
+    try {
+      total = checkTreeInfo(await client.treeInfo({ signal })).next_index;
+      leafCount = total;
+    } catch { /* a node without it: the continuity checks still apply, this one is skipped */ }
 
     const placePage = async (rows) => {
       const res = await c.scanPage(spendKey, rows);
@@ -477,9 +596,12 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
 
     for (;;) {
       throwIfAborted(signal);
-      const rows = checkCommitments(await client.commitments(st.scanned_index, PAGE, { signal }), PAGE);
-      if (rows.length === 0) break;
       const cursorBefore = st.scanned_index;
+      const rows = checkCommitments(
+        await client.commitments(cursorBefore, PAGE, { signal }),
+        { from: cursorBefore, limit: PAGE, leafCount },
+      );
+      if (rows.length === 0) break;
       const next = await placePage(rows);
       st.scanned_index = Math.max(st.scanned_index, next);
       if (st.scanned_index <= cursorBefore) throw new Error(`rand_getCommitments returned ${rows.length} rows from ${cursorBefore} without advancing`);
@@ -490,9 +612,12 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
     let from = 0;
     while (deposits.size > 0) {
       throwIfAborted(signal);
-      const rows = checkCommitments(await client.commitments(from, PAGE, { signal }), PAGE);
-      if (rows.length === 0) throw new Error(`${deposits.size} rebuilt deposit(s) match no leaf of the tree`);
       const cursorBefore = from;
+      const rows = checkCommitments(
+        await client.commitments(cursorBefore, PAGE, { signal }),
+        { from: cursorBefore, limit: PAGE, leafCount },
+      );
+      if (rows.length === 0) throw new Error(`${deposits.size} rebuilt deposit(s) match no leaf of the tree`);
       await placePage(rows);
       from = Math.max(from, rows[rows.length - 1].index + 1);
       if (from <= cursorBefore) throw new Error('rand_getCommitments did not advance');
@@ -504,34 +629,45 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
 
     // Head read *before* paging nullifiers, so every block up to it is covered by the pages.
     const headBefore = checkHead(await client.head({ signal })).height;
+    const startedAt = st.scanned_height;
     let cursor = st.scanned_height;
     for (let page = 0; ; page += 1) {
       throwIfAborted(signal);
       if (cursor > headBefore) break; // caught up with what this node claims to have
       if (page >= MAX_HEIGHT_PAGES_PER_SCAN) break; // enough for one scan; the next one continues
-      const rows = checkNullifiers(await client.nullifiers(cursor, PAGE, { signal }), PAGE);
-      if (rows.length === 0) {
-        // "Nothing from here on" — true only as far as this node has read, and its tip is exactly
-        // the number that must not be trusted. So the cursor takes one page span of that claim at
-        // a time: a wild tip costs one more span of re-reading next scan instead of jumping the
-        // cursor past the real chain and refusing every honest node afterwards.
-        const next = Math.min(cursor + HEIGHT_SPAN, headBefore + 1);
-        if (next <= cursor) { cursor = headBefore + 1; break; }
-        cursor = next;
+      if (cursor - startedAt >= MAX_HEIGHTS_PER_SCAN) break; // …and enough ground, however it moved
+      const from = cursor;
+      // Validated against the request: a prefix of the ordered set, sorted, nothing below `from`,
+      // nothing above the tip this node reported. See THE CURSOR RULE above.
+      const rows = checkNullifiers(
+        await client.nullifiers(from, PAGE, { signal }),
+        { from, limit: PAGE, tip: headBefore },
+      );
+      const set = new Set(rows.map((r) => r.nullifier));
+      for (const n of st.notes) if (set.has(n.nf)) n.spent = true;
+
+      if (rows.length < PAGE) {
+        // A claim of absence from `from` onwards. Evidence for the rows (there are none); the
+        // reach of the claim is the node's tip, taken one span at a time.
+        const next = Math.min(from + HEIGHT_SPAN, headBefore + 1);
+        cursor = Math.max(cursor + 1, next); // always progress, so the loop cannot spin
+        if (cursor > headBefore) { cursor = headBefore + 1; break; }
         onProgress?.({ phase: 'spends', scanned: cursor, total: headBefore });
         continue;
       }
-      const maxHeight = Math.max(...rows.map((r) => r.height)); // every height validated above
-      const set = new Set(rows.map((r) => r.nullifier));
-      for (const n of st.notes) if (set.has(n.nf)) n.spent = true;
-      // A short page is the end of the nullifiers, but it is still only evidence up to the last
-      // row's height — the rest of the way to the tip is claim, taken one span at a time above.
-      if (rows.length < PAGE) { cursor = Math.max(cursor, maxHeight + 1); continue; }
-      if (maxHeight === cursor) throw new Error(`block ${cursor} published more than ${PAGE} nullifiers`);
-      cursor = maxHeight;
+
+      // A full page is a prefix: [from, last) is complete, `last` itself may be truncated, so the
+      // cursor stops AT `last` and reads it again. Clamped to one span — clamping down only costs
+      // a re-read, and it is what stops a page of rows all claiming `tip - 1` from carrying the
+      // cursor over every height in between.
+      const last = rows[rows.length - 1].height;
+      if (last === from) {
+        throw new Error(`block ${from} published more than ${PAGE} nullifiers; this wallet cannot page inside one block`);
+      }
+      cursor = Math.min(last, from + HEIGHT_SPAN);
       onProgress?.({ phase: 'spends', scanned: cursor, total: headBefore });
     }
-    // Only as far as the pages actually read. Never `headBefore + 1` on the node's say-so.
+    // Only as far as the pages actually covered. Never `headBefore + 1` on the node's say-so.
     st.scanned_height = Math.max(st.scanned_height, Math.min(cursor, headBefore + 1));
     const readThrough = st.scanned_height - 1;
     for (const n of st.notes) {
@@ -549,6 +685,9 @@ export function makeWallet({ core, store, rpc, settings, annotate = true }) {
     st.last_sync_ms = Date.now();
     throwIfAborted(signal);
     await persist(st, before);
+    // Transient, never persisted: things the caller should know about THIS scan.
+    if (bridgeUnknown) st.bridgeUnknown = true;
+    if (identityUnknown) st.identityUnknown = true;
     return st;
   }
 

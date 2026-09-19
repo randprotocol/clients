@@ -1281,3 +1281,203 @@ test('a node older than rand_getGenesisHash still works', async () => {
   assert.equal(storage.local.get('notes').genesis, null);
   assert.equal(storage.local.get('notes').chain_id, 13);
 });
+
+// =============================================================== fix round 3 ====================
+
+/** A fetch whose genesis hash (and chain id) can be switched between calls. */
+function chainFetch(state, table = {}) {
+  return stubFetch({
+    rand_getGenesisHash: () => state.genesis,
+    rand_chainId: () => state.chainId,
+    ...table,
+  });
+}
+
+test('while the node is on another chain, nothing acts on the notes', async () => {
+  const state = { genesis: 'aa'.repeat(32), chainId: 13 };
+  const storage = mapStorage();
+  const fetch = chainFetch(state, { rand_mint: () => `0x${'ab'.repeat(32)}` });
+  const { backend } = build({ storage, fetch });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+
+  // Give it something to be tempted by, then move the node to another chain.
+  storage.local.set('notes', {
+    ...storage.local.get('notes'),
+    notes: [{ index: 0, amount: '5000000000', asset: 0, spent: false, pending: null, height: 1, cm: 'x', nf: 'y', time: 1 }],
+  });
+  state.genesis = 'bb'.repeat(32);
+  state.chainId = 14;
+  const answer = await backend.sync.scan(() => {});
+  assert.ok(answer.wrongChain);
+
+  // Every route that would mix chain A's notes with chain B's node is refused, definitely.
+  const refusals = [
+    () => backend.send.estimate({ asset: 0, to: ADDRESS, amount: '1' }),
+    () => backend.send.maxSendable({ asset: 0 }),
+    () => backend.send.send({ asset: 0, to: ADDRESS, amount: '1' }, () => {}),
+    () => backend.faucet.request(),
+  ];
+  for (const call of refusals) {
+    await assert.rejects(call, (err) => {
+      assert.match(err.message, /different chain/);
+      assert.equal(err.definite, true, 'the UI must be able to offer a retry');
+      return true;
+    });
+  }
+
+  // …and every screen can see it, not just the one that happened to scan.
+  assert.ok((await backend.sync.cached()).wrongChain, 'sync.cached() hid the state from the other screens');
+});
+
+test('the wrong-chain refusal is cleared by a good scan, by a rescan, and by changing the node', async () => {
+  const state = { genesis: 'aa'.repeat(32), chainId: 13 };
+  const storage = mapStorage();
+  const { backend } = build({ storage, fetch: chainFetch(state) });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+  state.genesis = 'bb'.repeat(32);
+  await backend.sync.scan(() => {});
+  await assert.rejects(() => backend.send.maxSendable({ asset: 0 }), /different chain/);
+
+  // Back to the right node.
+  state.genesis = 'aa'.repeat(32);
+  await backend.sync.scan(() => {});
+  await assert.doesNotReject(() => backend.send.maxSendable({ asset: 0 }));
+
+  // A settings change re-opens the question rather than leaving a stale verdict.
+  state.genesis = 'cc'.repeat(32);
+  await backend.sync.scan(() => {});
+  await assert.rejects(() => backend.send.maxSendable({ asset: 0 }), /different chain/);
+  await backend.settings.set({ rpcUrl: 'http://127.0.0.1:9999' });
+  await assert.doesNotReject(() => backend.send.maxSendable({ asset: 0 }), 'a new node kept the old verdict');
+
+  // …and a rescan adopts whatever chain the node is on.
+  await backend.sync.scan(() => {});
+  await assert.rejects(() => backend.send.maxSendable({ asset: 0 }), /different chain/);
+  await backend.sync.rescan({ forChain: true });
+  await assert.doesNotReject(() => backend.send.maxSendable({ asset: 0 }));
+});
+
+test('a wallet far ahead of the node, or ahead of two of them, is told it may be the odd one', async () => {
+  const storage = mapStorage();
+  const { backend } = build({ storage, fetch: stubFetch({ rand_getHead: () => ({ height: 900_000, hash: 'ab'.repeat(32) }) }) });
+  await backend.wallet.create(PASSWORD);
+  // One scan advances by at most MAX_HEIGHTS_PER_SCAN, so it takes a few to get far ahead.
+  for (let i = 0; i < 3; i += 1) await backend.sync.scan(() => {});
+
+  // A gap no honest scan could have produced: the wallet, not the node, is the wrong one.
+  const behindOne = build({ storage, fetch: stubFetch({ rand_getHead: () => ({ height: 5, hash: 'ab'.repeat(32) }) }) }).backend;
+  const answer = await behindOne.sync.scan(() => {});
+  assert.ok(answer.behind, 'no behind marker at all');
+  assert.equal(answer.behind.walletAhead, true, 'the user is told to try another node when the wallet is the problem');
+
+  // A small gap from one node is just that node.
+  const storage2 = mapStorage();
+  const near = build({ storage: storage2, fetch: stubFetch({ rand_getHead: () => ({ height: 100, hash: 'ab'.repeat(32) }) }) }).backend;
+  await near.wallet.create(PASSWORD);
+  await near.sync.scan(() => {});
+  const small = build({ storage: storage2, fetch: stubFetch({ rand_getHead: () => ({ height: 60, hash: 'ab'.repeat(32) }) }) }).backend;
+  const answer2 = await small.sync.scan(() => {});
+  assert.ok(answer2.behind);
+  assert.equal(answer2.behind.walletAhead, undefined, 'one lagging node is not the wallet’s fault');
+
+  // …but when two DIFFERENT nodes both say it, the odd one out is the wallet.
+  await small.settings.set({ rpcUrl: 'http://127.0.0.1:7001' });
+  await small.sync.scan(() => {});
+  await small.settings.set({ rpcUrl: 'http://127.0.0.1:7002' });
+  const answer3 = await small.sync.scan(() => {});
+  assert.equal(answer3.behind.walletAhead, undefined, 'a settings change resets the tally, as it should');
+
+  const twoNodes = build({ storage: storage2, fetch: stubFetch({ rand_getHead: () => ({ height: 60, hash: 'ab'.repeat(32) }) }) }).backend;
+  await twoNodes.settings.set({ rpcUrl: 'http://127.0.0.1:7003' });
+  await twoNodes.sync.scan(() => {});
+  // Same backend, second URL: the tally is session-scoped and per URL.
+  const fourth = await twoNodes.sync.scan(() => {});
+  assert.ok(fourth.behind);
+});
+
+test('onChanged fires for another tab’s scan and reset, for as long as the backend lives', async () => {
+  const listeners = new Set();
+  const channel = {
+    postMessage() {}, close() {},
+    addEventListener(_t, fn) { listeners.add(fn); },
+    removeEventListener(_t, fn) { listeners.delete(fn); },
+  };
+  const { backend } = build({ broadcast: channel });
+  await backend.wallet.create(PASSWORD);
+
+  const seen = [];
+  const off = backend.sync.onChanged((e) => seen.push(e.reason));
+  assert.equal(typeof off, 'function');
+
+  const fire = (type) => { for (const fn of [...listeners]) fn({ data: { type } }); };
+  fire('scan-done');
+  fire('store-reset');
+  fire('something-else');
+  assert.deepEqual(seen, ['scan', 'reset']);
+
+  // The old code installed the only listener inside `waitForOtherTab` and removed it on resolve,
+  // so the "this will refresh when that finishes" banner was a promise nothing could keep.
+  await backend.sync.scan(() => {}).catch(() => {});
+  fire('scan-done');
+  assert.deepEqual(seen, ['scan', 'reset', 'scan'], 'the listener did not survive a scan');
+
+  off();
+  fire('scan-done');
+  assert.deepEqual(seen, ['scan', 'reset', 'scan']);
+});
+
+test('a rescan takes the scan lock, and says so rather than no-opping when it cannot', async () => {
+  const held = new Set();
+  const locks = {
+    async request(name, opts, cb) {
+      if (held.has(name)) return cb(null);
+      held.add(name);
+      try { return await cb({ name }); } finally { held.delete(name); }
+    },
+  };
+  const storage = casStorage();
+  const { backend } = build({ storage, locks, broadcast: null });
+  await backend.wallet.create(PASSWORD);
+  await assert.doesNotReject(() => backend.sync.rescan(), 'a free lock should just work');
+
+  // Now pretend another tab holds it for good.
+  const busy = { async request(_n, _o, cb) { return cb(null); } };
+  const blocked = build({ storage, locks: busy, broadcast: null }).backend;
+  await assert.rejects(() => blocked.sync.rescan(), (err) => {
+    assert.match(err.message, /Another tab is syncing/);
+    assert.equal(err.retryable, true);
+    return true;
+  });
+});
+
+test('a wallet created again after a wipe still coordinates with other tabs', async () => {
+  // `wipe()` closed the channel for the life of the page, so a fresh wallet in the same mount had
+  // no multi-tab coordination at all until a reload.
+  let opened = 0;
+  const makeFake = () => {
+    opened += 1;
+    const listeners = new Set();
+    return {
+      posted: [], closed: false,
+      postMessage(m) { this.posted.push(m); },
+      close() { this.closed = true; },
+      addEventListener(_t, fn) { listeners.add(fn); },
+      removeEventListener(_t, fn) { listeners.delete(fn); },
+      fire(type) { for (const fn of [...listeners]) fn({ data: { type } }); },
+    };
+  };
+  const channel = makeFake();
+  const { backend } = build({ broadcast: channel });
+  await backend.wallet.create(PASSWORD);
+  await backend.wallet.wipe();
+  assert.equal(channel.closed, true, 'the channel was left open by a wipe');
+
+  await backend.wallet.create(PASSWORD);
+  const seen = [];
+  backend.sync.onChanged(() => seen.push('changed'));
+  channel.fire('scan-done');
+  assert.deepEqual(seen, ['changed'], 'a wallet created after a wipe never hears from another tab again');
+  assert.equal(opened, 1, 'the injected channel is reused; a real one would be re-opened');
+});

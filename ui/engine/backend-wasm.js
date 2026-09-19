@@ -40,7 +40,7 @@
 // the faucet — is real.
 import { encryptSecret, decryptSecret, checkVault, isVaultRecordError } from './crypto.js';
 import { makeRpc, isAllowedRpcMethod } from './rpc.js';
-import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, BUNDLE_INPUTS } from './wallet.js';
+import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, BUNDLE_INPUTS, MAX_HEIGHTS_PER_SCAN } from './wallet.js';
 import { checkFee, checkAssets, checkSubmitted } from './validate.js';
 
 // Storage keys. `unlocked` is the only session one.
@@ -185,11 +185,50 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   // either explicitly is how the tests drive both paths without a browser; passing `null` turns
   // that half off.
   const locksApi = locks !== undefined ? locks : (typeof navigator !== 'undefined' && navigator.locks) || null;
-  let channel = broadcast !== undefined ? broadcast : defaultChannel();
+  // The channel is lazy and re-openable: `wipe()` closes it, and a wallet created again in the
+  // same page used to be left with no multi-tab coordination at all until a reload.
+  const makeChannel = () => (broadcast !== undefined ? broadcast : defaultChannel());
+  let channel = makeChannel();
+  let channelListener = null;
+  const changedListeners = new Set();
+
+  /**
+   * ONE long-lived listener per backend, rather than one per wait.
+   *
+   * `waitForOtherTab` used to install the only `message` listener and remove it again when it
+   * resolved — so the "another tab is syncing, this will refresh when it finishes" banner was a
+   * lie: nothing was listening by the time the other tab finished. Now every `scan-done` and
+   * `store-reset` from another tab reaches `sync.onChanged` subscribers, whatever else is going on.
+   */
+  function listenOnChannel() {
+    if (!channel || channelListener || typeof channel.addEventListener !== 'function') return;
+    channelListener = (event) => {
+      const data = event && event.data;
+      if (!data || (data.type !== 'scan-done' && data.type !== 'store-reset')) return;
+      for (const fn of [...changedListeners]) {
+        try { fn({ reason: data.type === 'store-reset' ? 'reset' : 'scan' }); } catch { /* a listener's problem */ }
+      }
+    };
+    channel.addEventListener('message', channelListener);
+  }
+  listenOnChannel();
+
+  function ensureChannel() {
+    if (!channel) { channel = makeChannel(); listenOnChannel(); }
+    return channel;
+  }
+
+  function announce(type) {
+    try { channel?.postMessage({ type }); } catch { /* a closed channel */ }
+  }
 
   /** Closes the BroadcastChannel, if there is one and it can be closed. Idempotent. */
   function closeChannel() {
     const open = channel;
+    if (open && channelListener && typeof open.removeEventListener === 'function') {
+      try { open.removeEventListener('message', channelListener); } catch { /* going away anyway */ }
+    }
+    channelListener = null;
     channel = null;
     if (!open || typeof open.close !== 'function') return;
     try { open.close(); } catch { /* already closed */ }
@@ -223,10 +262,32 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   }
 
   async function setSettings(patch) {
-    const next = { ...(await getSettings()), ...(patch || {}) };
+    const previous = await getSettings();
+    const next = { ...previous, ...(patch || {}) };
     await storage.set(K.settings, next);
+    // A new node is a new question: whatever the last one was, it is re-evaluated on the next scan.
+    if (next.rpcUrl !== previous.rpcUrl) { wrongChain = null; behindUrls.clear(); }
     if (patch && Object.prototype.hasOwnProperty.call(patch, 'autoLockMin')) await rearmAutoLock();
     return next;
+  }
+
+  // --------------------------------------------------------------- what the last scan learned ---
+  // Session-scoped, never persisted. While the node this wallet is pointed at is on a different
+  // chain, *nothing may act on the notes* — they describe another chain, and a fee fetched from
+  // this node mixed with those notes is a transfer built out of two unrelated ledgers. This shell
+  // cannot send, but the desktop backend reuses this engine and can.
+  let wrongChain = null;
+  /** RPC URLs that have reported this wallet as ahead of them, for the "you may be the odd one" hint. */
+  const behindUrls = new Set();
+
+  const WRONG_CHAIN_REFUSAL = 'This node is on a different chain — switch node or rescan.';
+
+  function refuseOnWrongChain() {
+    if (!wrongChain) return;
+    const err = new Error(WRONG_CHAIN_REFUSAL);
+    err.definite = true;      // nothing was attempted, so the UI may offer a retry
+    err.wrongChain = wrongChain;
+    throw err;
   }
 
   // ------------------------------------------------------------------------------- the node ----
@@ -249,7 +310,10 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   if (typeof storage.compareAndSet === 'function') {
     noteStore.compareAndSet = (value, expectedRev) => storage.compareAndSet(K.notes, expectedRev, value);
   }
-  const engine = makeWallet({ core, store: noteStore, rpc: rpcClient, settings: getSettings });
+  const engine = makeWallet({
+    core, store: noteStore, rpc: rpcClient, settings: getSettings,
+    onReset: () => announce('store-reset'),
+  });
 
   async function loadNotes() { return engine.loadStore(); }
 
@@ -440,6 +504,11 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   /** Records a freshly created/imported/unlocked wallet. The vault is written first. */
   async function startSession(info) {
     await storage.session.set(K.unlocked, { spend_key: info.spend_key, viewing_key: info.viewing_key });
+    // A wallet wiped and created again in the same page had no multi-tab coordination at all
+    // until a reload, because `wipe()` closed the channel for good.
+    ensureChannel();
+    wrongChain = null;
+    behindUrls.clear();
     await rearmAutoLock();
   }
 
@@ -621,7 +690,22 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   const sync = {
     async cached() {
       const st = await loadNotes();
-      return shape(st);
+      const out = shape(st);
+      // The marker belongs to the wallet's state, not to whoever happened to call `scan`. Every
+      // screen reads `cached()`, so every screen can show the blocking banner.
+      if (wrongChain) out.wrongChain = wrongChain;
+      return out;
+    },
+
+    /**
+     * OPTIONAL in the contract: `onChanged(cb)` → unsubscribe. Fires when ANOTHER tab of this
+     * wallet finished a scan or reset the store, so a screen can refresh from `cached()` without
+     * starting a scan of its own. Synchronous registration, like `wallet.onLocked`.
+     */
+    onChanged(cb) {
+      if (typeof cb !== 'function') return () => {};
+      changedListeners.add(cb);
+      return () => changedListeners.delete(cb);
     },
 
     async scan(onProgress, options = {}) {
@@ -629,8 +713,20 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       const signal = options && options.signal;
       const runScan = async () => {
         const st = await engine.scan(key, { signal, onProgress: (p) => report(p, onProgress) });
-        try { channel?.postMessage({ type: 'scan-done' }); } catch { /* a closed channel */ }
-        return shape(st);
+        const out = shape(st);
+        // Remembered for the rest of this session: every method that would act on the notes
+        // refuses while it is set (see refuseOnWrongChain), and `sync.cached()` carries it so
+        // every screen can say so, not only the one that happened to scan.
+        wrongChain = out.wrongChain || null;
+        if (out.behind) {
+          const client = await rpcClient();
+          behindUrls.add(client.url);
+          out.behind = withBehindHints(out.behind);
+        } else {
+          behindUrls.clear();
+        }
+        if (!out.wrongChain && !out.behind) announce('scan-done');
+        return out;
       };
 
       if (!locksApi || typeof locksApi.request !== 'function') return runScan();
@@ -660,17 +756,62 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      */
     async rescan(options = {}) {
       const { spend_key: key } = await requireUnlocked();
-      const st = await engine.rescan(key, {
-        forChain: options.forChain === true,
-        signal: options.signal,
-        onProgress: (p) => report(p, options.onProgress),
+      const run = async () => {
+        const st = await engine.rescan(key, {
+          forChain: options.forChain === true,
+          signal: options.signal,
+          onProgress: (p) => report(p, options.onProgress),
+        });
+        const out = shape(st);
+        wrongChain = out.wrongChain || null;
+        behindUrls.clear();
+        announce('scan-done');
+        return out;
+      };
+
+      // Under the SAME lock a scan takes. A reset racing a scan used to lose the conditional
+      // write, fall into the merge path, and quietly come back with the other tab's cursors —
+      // the reset evaporated while Settings said "Rescanned".
+      if (!locksApi || typeof locksApi.request !== 'function') return run();
+      let result = null;
+      let taken = false;
+      await locksApi.request(SCAN_LOCK, { ifAvailable: true }, async (lock) => {
+        if (!lock) return;
+        taken = true;
+        result = await run();
       });
-      return shape(st);
+      if (taken) return result;
+      // Another tab is mid-scan. Wait briefly for it, then try once more rather than resetting
+      // underneath it.
+      await waitForOtherTab(options.signal);
+      throwIfAborted(options.signal);
+      let second = null;
+      await locksApi.request(SCAN_LOCK, { ifAvailable: true }, async (lock) => {
+        if (!lock) return;
+        second = await run();
+      });
+      if (second) return second;
+      const err = new Error('Another tab is syncing — try again in a moment.');
+      err.retryable = true;
+      throw err;
     },
   };
 
   function throwIfAborted(signal) {
     if (signal && signal.aborted) throw abortError();
+  }
+
+  /**
+   * `behind` says the node's tip is below what this wallet has read — but which side is wrong?
+   * Usually the node. If the gap is bigger than one scan could ever have produced honestly, or if
+   * *different* nodes keep saying the same thing, the wallet is the odd one out (a node once
+   * misreported its tip, or the user moved between networks) and the cure is a rescan, not
+   * another node.
+   */
+  function withBehindHints(behind) {
+    const gap = Math.max(0, (Number(behind.wallet) || 0) - (Number(behind.tip) || 0));
+    const ahead = gap > MAX_HEIGHTS_PER_SCAN || behindUrls.size >= 2;
+    return ahead ? { ...behind, walletAhead: true } : behind;
   }
 
   /** The contract's progress shape is `{scanned, head}`; the engine reports a phase too. */
@@ -694,6 +835,10 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     if (st.wrongChain) out.wrongChain = st.wrongChain;
     // This node's tip is below what this wallet has already read. Also nothing read or merged.
     if (st.behind) out.behind = st.behind;
+    // The bridge could not be asked, so the attest cursor stood still this scan.
+    if (st.bridgeUnknown) out.bridgeUnknown = true;
+    // This wallet has no chain identity recorded, because no node has supplied one.
+    if (st.identityUnknown) out.identityUnknown = true;
     return out;
   }
 
@@ -785,6 +930,7 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      * which is written for the user (it is what tells them to consolidate).
      */
     async estimate(req = {}) {
+      refuseOnWrongChain();
       const asset = Number(req.asset) || 0;
       if (asset !== 0) throw new Error(RPL_SEND_DISABLED_TEXT);
       const fee = await bundleFee();
@@ -807,6 +953,7 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      * `select_inputs` rather than taking on trust.
      */
     async maxSendable({ asset = 0 } = {}) {
+      refuseOnWrongChain();
       const fee = await bundleFee();
       const index = Number(asset) || 0;
       if (index !== 0) return { amount: '0', fee: fee.toString() };
@@ -835,6 +982,8 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       // and the desktop backend's minutes-long proof reuses this exact wrapper.
       const release = holdUnlock();
       try {
+        // Before anything else: these notes are not this node's chain's notes.
+        refuseOnWrongChain();
         const { reason } = await send.canProve();
         const err = new Error(reason);
         err.definite = true;
@@ -854,6 +1003,7 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      */
     async request() {
       await requireUnlocked();
+      refuseOnWrongChain();
       const w = await storage.get(K.wallet);
       if (!w || !w.address) throw new Error('no wallet on this device');
       const client = await rpcClient();
@@ -892,8 +1042,14 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   function dispose() {
     clearAutoLock();
     lockedListeners.clear();
+    changedListeners.clear();
     closeChannel();
   }
 
   return { wallet, sync, assets, send, faucet, rpc, settings, platform, dispose };
+}
+
+/** The message a wallet gives when its node is on a different chain from its notes. */
+export function wrongChainRefusal() {
+  return 'This node is on a different chain — switch node or rescan.';
 }

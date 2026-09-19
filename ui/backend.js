@@ -31,8 +31,17 @@
  *    not a reason to move any cursor — the reply is the cached data and scanning resumes by itself
  *    once the node catches up. Home says so quietly.
  *  - `otherTab?` — OPTIONAL, `true`. Another tab of the same wallet is scanning and this one chose
- *    to wait rather than race it; the wait ran out, so this is the cached data. Purely
- *    informational: the scanning tab's result arrives on its own.
+ *    to wait rather than race it; the wait ran out, so this is the cached data. The scanning tab's
+ *    result arrives through `sync.onChanged?` — a backend that sets this should offer that too,
+ *    or the banner promises a refresh nothing will deliver.
+ *  - `bridgeUnknown?` — OPTIONAL, `true`. The bridge's state could not be read this scan, so the
+ *    bridge-deposit cursor deliberately did not move (advancing it would skip blocks that were
+ *    never examined). Nothing is wrong with the data; the next scan tries again.
+ *  - `identityUnknown?` — OPTIONAL, `true`. This wallet has no chain identity recorded, because no
+ *    node has supplied one — so `wrongChain` cannot be detected for it. Informational.
+ *  - `behind.walletAhead?` — OPTIONAL, on the `behind` object. The *wallet*, not the node, is the
+ *    odd one out: the gap is larger than any honest scan could produce, or several different nodes
+ *    have said the same thing. The UI's copy changes from "try another node" to "rescan".
  * `options` is OPTIONAL and today carries one OPTIONAL field:
  *  - `signal?` — an `AbortSignal` that aborts when the wallet session the scan was started under
  *    ends (a lock, a wipe, an unlock, a new wallet, or the UI being torn down). A backend that
@@ -132,6 +141,21 @@
  * two methods, and treats every field of either answer as untrusted text:
  *  - `rand_status`   → `{height, …}` — `height` the node's current block height.
  *  - `rand_chainId`  → the chain's own id (a number or a string).
+ *
+ * `sync.onChanged?(cb)` → an unsubscribe function. OPTIONAL, and **synchronous** — like
+ * `wallet.onLocked`, it registers rather than does, so the shell forwards it unwrapped. Fires when
+ * *another tab* of the same wallet finished a scan or reset the store, with `{reason: 'scan' |
+ * 'reset'}`. A screen uses it to refresh from `sync.cached()` — never to start a scan of its own.
+ * It is what makes the `otherTab` banner's "this will refresh when that finishes" true.
+ *
+ * ---- acting on a wallet whose node is on another chain ----
+ *
+ * While the last scan reported `wrongChain`, `send.estimate`, `send.maxSendable`, `send.send` and
+ * `faucet.request` **reject** with `definite: true` and a message written for the user ('This node
+ * is on a different chain — switch node or rescan.'). Mixing one chain's notes with another
+ * chain's fee, anchor or faucet is not a transfer anyone can make sense of. The refusal is cleared
+ * by a scan that does not report `wrongChain`, by `sync.rescan`, and by changing the RPC URL (then
+ * re-evaluated on the next scan).
  *
  * `sync.rescan?(options?)` → the same shape as `sync.scan`. OPTIONAL. Forgets how far the wallet
  * has read and reads it again — **without touching the keys**: the vault, the address and the
