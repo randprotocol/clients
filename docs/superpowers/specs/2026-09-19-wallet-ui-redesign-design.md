@@ -200,3 +200,18 @@ not written here.
 
 Open, for the owner: upstream is now `GPL-3.0-only`; this repository declares Apache-2.0 and
 links those crates into every binary it ships.
+
+## 12. Amendment: what "RPL transfer" can mean on this chain
+
+Established from the node's source at 142e1f7 (plan Task 4.1): a transaction's bundle with
+`asset != 0` is rejected (`TxError::UnsupportedAsset`), the reference CLI's `send` has no asset
+option, and the only action that carries an asset bundle is `BridgeBurn`. So §6's two-bundle
+"RPL transfer" does not exist. The wallet therefore:
+
+- shows RPL balances and activity per asset, labelled from a local known-token table keyed by the
+  registry's `(chain, token)` or else `RPL#<index>` (the registry has no symbol or decimals);
+- renders Send disabled for an RPL asset with "RPL transfers are not available on this network.";
+- offers **Withdraw** (owner's decision, 2026-09-19): a `BridgeBurn` back to the asset's origin
+  chain — a RAND fee bundle (≥ 0.01 RAND) plus an asset bundle that burns exactly the amount, two
+  proofs, desktop only, behind a warning that the destination and amount become public (plan
+  Task 4.4). It never uses a dust burn to route value to a third party.

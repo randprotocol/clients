@@ -590,6 +590,60 @@ fn asset_bundle_has_zero_fee() {
 - [ ] **Step 2–4:** FAIL → implement → `node --test ui/test && (cd desktop/src-tauri && cargo test)` PASS.
 - [ ] **Step 5:** Commit `multi-asset balances in the wasm and desktop backends`.
 
+### Task 4.4: RPL bridge withdrawal (`BridgeBurn`) — desktop only
+
+Added 2026-09-19 on the owner's instruction, after Task 4.1 established that the ledger admits no
+shielded→shielded transfer of an asset ≥ 1 (`ledger/mod.rs` rejects a transaction bundle with
+`asset != 0`): the one thing an RPL note can do is be burned back to its origin chain.
+
+**What the chain requires** (mirror `randprotocol-client`'s `wallet::submit_burn`, never improvise):
+one `Transaction { bundle: <RAND fee bundle: asset 0, fee ≥ BRIDGE_BURN_FEE = 10_000_000 units, burn 0>,
+action: Action::BridgeBurn { asset_bundle: <asset bundle: asset = index, fee 0, burn == amount, both
+outputs back to the sender>, asset, amount, relayer_fee ≤ amount, to_chain: u16, to: [u8; 32] } }`.
+Two proofs, generated one after the other (≈ 2 × 98 s, 5.6 GB peak each, never concurrently).
+
+**Files:** `core/crates/wallet-core/src/lib.rs` (+ `examples/`), `desktop/src-tauri/src/{commands,engine}.rs`,
+`ui/backend.js`, `ui/test/fake-backend.mjs`, `ui/engine/backend-wasm.js`, `ui/screens/{asset,withdraw}.js`,
+`ui/test/withdraw.test.mjs`.
+
+**Interfaces — Produces:**
+- `wallet-core` dispatch `plan_burn {notes, asset, amount, fee?}` → `{inputs, fee_inputs, change, fee_change, fee, proofs: 2}`
+  (errors: no RAND for the fee → message containing "RAND" and "fee"; `asset == 0` → "RAND is not a bridged asset";
+  amount above the two largest notes → the existing consolidate-first message) and `prove_burn {spend_key, asset,
+  amount, relayer_fee, to_chain, to, inputs, fee_inputs, witnesses…}` → `{tx, hash, tx_bytes, proofs: 2}`. `version`
+  reply gains `"bridge_burn": true` and `"bridge_burn_fee"`.
+- Backend group `bridge: ['state', 'canWithdraw', 'estimate', 'withdraw']`: `state()` → `rand_getBridgeState`
+  summary `{enabled, chains: [...]}`; `canWithdraw()` → `{ok, reason?}` (false on the wasm shells with the 5.5 GB
+  sentence; false when the bridge is disabled); `estimate({asset, amount, relayerFee, toChain, to})` →
+  `{fee, relayerFee, receive, proofs: 2}`; `withdraw(req, onPhase)` → `{hash}` with phases
+  `'selecting'|'witness'|'proving'|'proving-asset'|'submitting'|'confirming'`.
+- UI: asset detail for `index ≥ 1` gains a **Withdraw** action beside the disabled Send (`#withdraw/<index>`).
+  Steps: destination chain (from `bridge.state()`, preselected to the asset's origin `chain`) → destination
+  address (validated per chain family: 20-byte hex for EVM chains, left-padded to 32 bytes; anything else must be
+  64 hex characters) → amount (Max; relayer fee shown as "deducted on the destination chain") → review with an
+  explicit warning "This leaves the shielded pool. The destination address and amount become public on the other
+  chain." and a typed confirmation of the last 4 characters of the destination → proving (two rings) → done,
+  linking to the burn in randscan. No Withdraw button where `canWithdraw().ok` is false; the reason is shown instead.
+
+- [ ] **Step 1: Failing core tests** — `plan_burn_picks_fee_notes_separately`, `plan_burn_without_rand_for_fee_says_so`,
+  `plan_burn_refuses_asset_zero`, and `burn_bundles_have_the_ledger_shape` (asset bundle: `fee == 0`,
+  `burn == amount`, `asset == index`; fee bundle: `asset == 0`, `burn == 0`, `fee ≥ BRIDGE_BURN_FEE`), built on a
+  `build_burn_unproven` split so the shape is testable without a 3-minute proof; plus `fixture_burn_request(profile)`.
+- [ ] **Step 2:** `cd core && cargo test -p wallet-core burn` — FAIL.
+- [ ] **Step 3:** Implement by mirroring upstream `submit_burn` line for line (input selection `Plan::select`
+  semantics, output addressing, action fields); take `BRIDGE_BURN_FEE` from `randprotocol_core::gas`.
+- [ ] **Step 4:** `cargo test -p wallet-core` PASS; `cargo run --release --example prove_fixture -- burn` proves both
+  bundles and upstream's own stateless validation accepts the transaction (name the function used in the report).
+- [ ] **Step 5:** Failing UI tests (`ui/test/withdraw.test.mjs`, fake backend): no Withdraw button when
+  `canWithdraw` is false, reason shown; EVM address validation and padding; relayer fee > amount refused before
+  `estimate`; the typed confirmation gates the button; phases include `'proving-asset'`; lands on `#withdrawn/<hash>`.
+  Implement the screen, the fake, the wasm backend (`canWithdraw` false) and the Tauri commands
+  (`bridge_state`, `bridge_can_withdraw`, `bridge_estimate`, `bridge_withdraw`) with Rust tests against the stub RPC.
+- [ ] **Step 6:** All suites PASS; screenshots of the four steps in both themes; commit
+  `bridge: withdraw an RPL asset to its origin chain (BridgeBurn), desktop only`.
+
+Runs after Task 4.3 and Task 3.1 (it needs the desktop backend).
+
 ---
 
 ## Phase 5 — Full RPC set and Explore
