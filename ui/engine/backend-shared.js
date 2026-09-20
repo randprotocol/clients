@@ -1183,11 +1183,19 @@ export function makeSharedBackend({
   /**
    * The whole RPL token registry, paged off `rand_getTokens` and validated page by page.
    *
-   * The node's cap is `MAX_TOKEN_PAGE`; a page shorter than the limit is the last. The page count
-   * is bounded as well, because "keep asking until a short page" is a loop whose length a remote
-   * server decides, and a node that always answers a full page of the same rows would otherwise
-   * spin here for ever. Progress is required too: a page that does not move the cursor forward
-   * ends the walk rather than repeating it.
+   * **The cursor is the last row's index + 1, and nothing else.** `next_index` is the index the
+   * next *registration* will hand out — the END of the registry — and the node sends that same
+   * figure on every page (`tokens::next_index()`'s own doc comment, and the node's test asserting
+   * `next_index: 3` for a registry whose highest index is 2). `docs/rpc.md` states the paging rule
+   * as "a page shorter than `limit` is the last", so the end of the walk is the short page and
+   * nothing else decides it. Taking `next_index` as a cursor made the second request jump past
+   * every row still unread: a 1 500-token registry came back with its first 1 000 and no error,
+   * and each dropped token then rendered through the `unlisted` fallback — nine decimals instead
+   * of its own eight, so every balance of it printed ten times too large, with no backings and a
+   * Withdraw flow that dead-ends.
+   *
+   * Two bounds, because the length of this loop is otherwise a remote server's choice: at most
+   * `MAX_TOKEN_PAGES` requests, and every page must move the cursor forward or the walk ends.
    */
   const MAX_TOKEN_PAGES = 16;
   async function fetchTokenRegistry(client) {
@@ -1201,9 +1209,9 @@ export function makeSharedBackend({
         seen.add(t.index);
         tokens.push(t);
       }
+      // The node's own rule for where the registry ends. `next_index` is deliberately not read.
       if (reply.tokens.length < MAX_TOKEN_PAGE) break;
-      const last = reply.tokens[reply.tokens.length - 1].index;
-      const next = Math.max(last + 1, reply.next_index || 0);
+      const next = reply.tokens[reply.tokens.length - 1].index + 1;
       if (next <= from) break; // a page that did not advance is not a page to follow
       from = next;
     }
@@ -1228,6 +1236,24 @@ export function makeSharedBackend({
      * old shape kept whichever row was read last.
      *
      * The registry is cached, so a reload — or an offline start — opens on the names it had.
+     *
+     * **The registry is read through the chain gate**, like every other node read in this file
+     * that shapes a transaction. It was not, and on chain 13 that was harmless, because a token's
+     * `decimals` was the local constant `FALLBACK.decimals` and the reply carried nothing else a
+     * transaction depended on. On chain 14 the node supplies `decimals`, and it is the number
+     * `parseUnits(text, asset.decimals)` scales **every amount the user types** by, in the send
+     * flow and the withdraw flow alike. A node that inflated it by one would have a user send, or
+     * burn, ten times what they meant — and the burn pre-flight would not catch it, because
+     * `burn_is_possible` checks the release unit against the **backing's source** decimals off the
+     * verified bridge state and never looks at the token's Rand-side decimals.
+     *
+     * The gate sits inside the existing try/catch, so a node that cannot be verified — a wrong
+     * chain, an unreachable one — degrades to exactly what being offline already did: the names
+     * this wallet already had. Nothing from an unverified node is used, and nothing from one is
+     * written to the cache. RAND's own row needs no node at all and is built either way.
+     *
+     * It costs no extra round trip in practice: `requireVerifiedChain()` caches its verdict per
+     * URL for the session, so the two identity calls happen once however many screens call this.
      */
     async list() {
       const k = await constants();
@@ -1236,11 +1262,11 @@ export function makeSharedBackend({
 
       let registry = (await storage.get(K.tokens)) || [];
       try {
-        const client = await rpcClient();
+        const { client } = await requireVerifiedChain();
         const fresh = await fetchTokenRegistry(client);
         registry = fresh;
         await storage.set(K.tokens, fresh);
-      } catch { /* offline, or a chain with no tokens: whatever was cached still answers */ }
+      } catch { /* unverifiable, offline, or a chain with no tokens: the cache still answers */ }
 
       const balances = new Map();
       for (const n of st.notes || []) {

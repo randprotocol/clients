@@ -19,9 +19,33 @@ const CORE_WASM = new URL('../../../extension/shared/core/rand_wallet_bg.wasm', 
 const PASSWORD = 'a-real-password-for-a-real-vault';
 
 const haveCore = existsSync(CORE_JS) && existsSync(CORE_WASM);
-const skip = haveCore
-  ? false
-  : 'the wasm core is not built — run core/scripts/build-wasm.sh (a few minutes) to run this file';
+const BUILD_IT = 'the wasm core is not built — run `core/scripts/build-wasm.sh` (a few minutes), '
+  + 'then re-run this file';
+const skip = haveCore ? false : BUILD_IT;
+
+/**
+ * **This file is the only place two things are checked at all**, so its absence must not be quiet.
+ *
+ * `burn_is_possible`'s refusal table lives in `wallet-core` rather than in JavaScript (task 6.2 —
+ * one implementation of a rule whose whole job is to agree with the ledger), and it is asserted
+ * against the REAL core only here; so is the chain the shipped artefact was built for. The wasm is
+ * git-ignored build output, so on a fresh clone — or a CI runner that skipped the build — both
+ * would vanish into `skipped` and the suite would still read green.
+ *
+ * A fresh clone must not FAIL, so the default is a skip with a reason that names the command. What
+ * this adds is a test that always runs: it says out loud, in the ordinary test output, that the
+ * real-core coverage was not exercised — and with `RAND_REQUIRE_CORE=1` (set it wherever this is
+ * run for real) the absence is an outright failure instead.
+ */
+test('the real-core coverage is either exercised or said out loud', (t) => {
+  if (haveCore) return;
+  const message = `SKIPPED: the real wasm core is absent, so the chain-14 artefact check and the `
+    + `burn_is_possible refusal table did NOT run. ${BUILD_IT}.`;
+  if (process.env.RAND_REQUIRE_CORE === '1') {
+    assert.fail(`${message} (RAND_REQUIRE_CORE=1)`);
+  }
+  t.diagnostic(message);
+});
 
 /** The same `{call(method, params)}` shape the browser shells hand the backend, synchronous here. */
 async function realCore() {

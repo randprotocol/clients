@@ -343,24 +343,57 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.equal('backings' in list[1], false, 'a guessed backing would send a burn nowhere');
   });
 
-  scoped('assets.list pages the token registry and stops when a page is short', async () => {
+  /**
+   * The paging cursor is the last row's index + 1, and **not** `next_index`.
+   *
+   * `rand_getTokens`' `next_index` is the index the next *registration* will hand out — the end of
+   * the registry — and the node sends it on every page (`tokens::next_index()`'s doc comment says
+   * so, and docs/rpc.md states the rule as "a page shorter than `limit` is the last"). Reading it
+   * as a cursor makes the second request jump past everything still unread, so a registry larger
+   * than one page loses its tail in silence. A dropped token then falls into the `unlisted`
+   * branch, where its balance is printed at nine decimals instead of its own eight — off by ten —
+   * and it has no backings, so Withdraw dead-ends on it.
+   *
+   * 1 500 rows and 1 000 to a page, which is where the old cursor and the right one differ. The
+   * previous fixture had exactly one full page, where `max(last + 1, next_index)` and `last + 1`
+   * happen to agree.
+   */
+  scoped('assets.list pages the whole registry, past the first page, to the end', async () => {
     const asked = [];
-    const many = Array.from({ length: 1000 }, (_, i) => ({ ...zusd(), index: i + 1, symbol: `T${i + 1}` }));
+    const many = Array.from({ length: 1500 }, (_, i) => ({ ...zusd(), index: i + 1, symbol: `T${i + 1}` }));
     const fetch = stubFetch({
       rand_getTokens: (params) => {
         asked.push(params);
         const from = Number((params && params[0]) || 0);
         const page = many.filter((t) => t.index >= from).slice(0, 1000);
+        // The registry's END, on every page — exactly as the node sends it.
+        return { enabled: true, registration_fee: '0', next_index: 1501, tokens: page };
+      },
+    });
+    const { backend } = build({ fetch });
+    await backend.wallet.create(PASSWORD);
+    const list = await backend.assets.list();
+    assert.equal(list.length, 1501, 'RAND plus every listed token');
+    assert.equal(list[list.length - 1].symbol, 'T1500', 'the tail of the registry was dropped');
+    assert.deepEqual(asked, [[0, 1000], [1001, 1000]], 'the cursor is the last row read, not the registry’s end');
+  });
+
+  scoped('assets.list stops on a short page, and on one that does not advance', async () => {
+    const asked = [];
+    const page = Array.from({ length: 1000 }, (_, i) => ({ ...zusd(), index: i + 1, symbol: `T${i + 1}` }));
+    // A node that answers the same full page whatever it is asked. Without a progress requirement
+    // this is a loop whose length a remote server chooses.
+    const fetch = stubFetch({
+      rand_getTokens: (params) => {
+        asked.push(params);
         return { enabled: true, registration_fee: '0', next_index: 1001, tokens: page };
       },
     });
     const { backend } = build({ fetch });
     await backend.wallet.create(PASSWORD);
     const list = await backend.assets.list();
-    assert.equal(list.length, 1001, 'RAND plus every listed token');
-    assert.deepEqual(asked[0], [0, 1000], 'the node’s own MAX_TOKEN_PAGE, from the start');
-    assert.equal(asked.length, 2, 'a full page is followed up; the short one after it ends the walk');
-    assert.deepEqual(asked[1], [1001, 1000]);
+    assert.ok(asked.length <= 16, `the walk made ${asked.length} requests`);
+    assert.equal(list.length, 1001, 'a repeated page was counted twice');
   });
 
   scoped('bridge.state and bridge.canWithdraw both refuse a chain with no bridge', async () => {
@@ -428,6 +461,89 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     const list = await offline.backend.assets.list();
     assert.equal(list[1].symbol, 'zUSD', 'an offline start lost the token registry');
     assert.equal(list[1].decimals, 8);
+  });
+
+  /**
+   * **The registry read goes through the chain gate, like every other node read that shapes a
+   * transaction.** It did not, and on chain 13 that was harmless: a token's `decimals` was a local
+   * constant. On chain 14 the node supplies it, and it is what `parseUnits(text, asset.decimals)`
+   * scales every amount the user types by — in Send and in Withdraw alike. A node that inflated it
+   * by one would make a user send ten times what they meant, and `burn_is_possible` would not
+   * notice: it checks the release unit against the **backing's source** decimals off the verified
+   * bridge state, and never the token's Rand-side decimals.
+   */
+  scoped('a token registry from a node the gate refuses is neither believed nor cached', async () => {
+    const storage = mapStorage();
+    const honest = build({ storage, fetch: stubFetch({ rand_getTokens: () => tokenRegistry() }) });
+    await honest.backend.wallet.create(PASSWORD);
+    await honest.backend.sync.scan(() => {}); // adopts this chain's id and genesis
+    assert.equal((await honest.backend.assets.list())[1].decimals, 8);
+
+    // A different chain, whose registry would put zUSD at two decimals.
+    const wrong = build({
+      storage,
+      fetch: chainFetch({ genesis: 'cc'.repeat(32), chainId: 99 }, {
+        rand_getTokens: () => tokenRegistry([{ ...zusd(), decimals: 2 }]),
+      }),
+    });
+    const list = await wrong.backend.assets.list();
+    assert.equal(list[0].symbol, 'RAND', 'RAND is this wallet’s own token and needs no node at all');
+    assert.equal(list[1].decimals, 8, 'an unverified node’s decimals scaled what the user types');
+    assert.equal(storage.local.get('tokens')[0].decimals, 8, '…and were written to the cache');
+    assert.equal(
+      wrong.fetch.requests.some((r) => r.body.method === 'rand_getTokens'), false,
+      'the registry was read from a node the gate refused',
+    );
+  });
+
+  scoped('assets.list answers from the cache when no node can be reached at all', async () => {
+    const storage = mapStorage();
+    const online = build({ storage, fetch: stubFetch({ rand_getTokens: () => tokenRegistry() }) });
+    await online.backend.wallet.create(PASSWORD);
+    await online.backend.assets.list();
+
+    const offline = build({ storage, fetch: async () => { throw new TypeError('fetch failed'); } });
+    const list = await offline.backend.assets.list();
+    assert.equal(list[0].symbol, 'RAND');
+    assert.equal(list[1].symbol, 'zUSD', 'an unreachable node lost the names the wallet already had');
+  });
+
+  scoped('the registry is asked for only AFTER the node has named its chain', async () => {
+    const fetch = stubFetch({ rand_getTokens: () => tokenRegistry() });
+    const { backend } = build({ fetch });
+    await backend.wallet.create(PASSWORD);
+    await backend.assets.list();
+    const order = fetch.requests.map((r) => r.body.method);
+    const tokensAt = order.indexOf('rand_getTokens');
+    assert.ok(tokensAt >= 0, 'the registry was never read');
+    for (const identity of ['rand_chainId', 'rand_getGenesisHash']) {
+      const at = order.indexOf(identity);
+      assert.ok(at >= 0 && at < tokensAt, `${identity} was not asked before the registry`);
+    }
+    // …and those three are ALL it puts on the wire. In particular it does not read
+    // `rand_getAssets`, whose rows carry no symbol and no decimals: the bridge's own registry is
+    // read once per burn, off the verified client, inside `screenBurn`.
+    assert.deepEqual(
+      new Set(order), new Set(['rand_chainId', 'rand_getGenesisHash', 'rand_getTokens']),
+      'assets.list() made a node read nobody has accounted for',
+    );
+  });
+
+  scoped('the gate does not put an identity round trip on every assets.list()', async () => {
+    // Every screen calls `assets.list()`. The verdict is cached per URL for the session, so the
+    // gate costs two RPC calls once and nothing after that; a gate that re-verified per call would
+    // be a real cost on a screen that lists assets on every render.
+    const fetch = stubFetch({ rand_getTokens: () => tokenRegistry() });
+    const { backend } = build({ fetch });
+    await backend.wallet.create(PASSWORD);
+    const count = (m) => fetch.requests.filter((r) => r.body.method === m).length;
+    await backend.assets.list();
+    const identities = count('rand_getGenesisHash');
+    assert.equal(identities, 1, 'the first call verified the node');
+    await backend.assets.list();
+    await backend.assets.list();
+    assert.equal(count('rand_getGenesisHash'), identities, 'the node was re-verified on every call');
+    assert.equal(count('rand_getTokens'), 3, 'the registry itself is still read fresh each time');
   });
 
   scoped('assets.list includes an asset the note store holds even without a registry', async () => {
