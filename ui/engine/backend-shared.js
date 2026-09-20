@@ -37,12 +37,32 @@
 //                    for the whole operation and must never resolve a fresh one: that is the entire
 //                    point of the invariant this file enforces (see `requireVerifiedChain` below).
 //                    `ctx` is:
-//                      { req, onPhase, options, client, url, identity, reason }
+//                      { req, onPhase, options, client, url, identity, reason,
+//                        engine, requireUnlocked, bundleFee }
 //                    `req`, `onPhase`, `options` are `send.send`'s own three arguments, passed
 //                    through unchanged; `client`, `url`, `identity` are exactly
 //                    `requireVerifiedChain()`'s return value; `reason` is whatever `canProve()`
 //                    returned alongside `ok: true` (normally `undefined` — a shell that can prove
 //                    usually has no reason to report).
+//
+//                    The last three are what a shell that can ACTUALLY send needs, and they are
+//                    handed over rather than rebuilt because there must be exactly one of each:
+//                      engine             this backend's own `makeWallet` (wallet.js) — the same
+//                                         instance every scan and rescan runs through, over the
+//                                         same note store. Its `send()` is already the whole
+//                                         transfer (select, witness, prove, submit, confirm,
+//                                         re-scan); an `executeSend` calls it and does not
+//                                         reimplement it. A second `makeWallet` over the same
+//                                         storage would be a second writer of the note store.
+//                      requireUnlocked()  -> `{spend_key, viewing_key}`, or throws "the wallet is
+//                                         locked". The plaintext spend key lives in
+//                                         `storage.session` and nowhere else, and this is the one
+//                                         way to read it; a proof needs it, so an `executeSend`
+//                                         that proves must ask for it here rather than hold one.
+//                      bundleFee(client)  -> BigInt, the fee `send.estimate` would quote: the
+//                                         node's own minimum bundle fee, from the client that was
+//                                         verified, falling back to the core's constant. Pass
+//                                         `ctx.client`, never a fresh one.
 //
 // Returns the full `Backend` contract (ui/backend.js): `{ wallet, sync, assets, send, faucet, rpc,
 // settings, platform, dispose }`. Every member is implemented here except `send.canProve` (which
@@ -1124,7 +1144,13 @@ export function makeSharedBackend({ core, storage, platform, fetch: fetchImpl, l
           throw err;
         }
         const { client, url, identity } = await requireVerifiedChain();
-        return await executeSend({ req, onPhase, options, client, url, identity, reason });
+        return await executeSend({
+          req, onPhase, options, client, url, identity, reason,
+          // Not a fresh engine, not a fresh session read and not a second fee helper: the ones
+          // this backend already uses, so a send cannot diverge from what the rest of the file
+          // sees. See the header on `executeSend` for why each is here.
+          engine, requireUnlocked, bundleFee,
+        });
       } finally {
         release();
       }
