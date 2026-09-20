@@ -124,11 +124,45 @@ test('fee: a decimal units string, never a float', () => {
   rejects(() => checkFee(null), /the fee/);
 });
 
-test('assets: rows with an index, and an asset_id when present', () => {
+test('assets: rows with an index, and a chain, token and asset_id when present', () => {
   assert.equal(checkAssets([]).length, 0);
-  assert.equal(checkAssets([{ index: 1, chain: 2, token: 'aa', asset_id: HEX64 }]).length, 1);
+  assert.equal(checkAssets([{ index: 1, chain: 2, token: HEX64, asset_id: HEX64 }]).length, 1);
   rejects(() => checkAssets([{ index: 'one' }]), /row 0 index/);
   rejects(() => checkAssets([{ index: 1, asset_id: 'nope' }]), /row 0 asset_id/);
+  // A row may legitimately carry neither, and an older node's reply is not refused for it.
+  assert.equal(checkAssets([{ index: 1 }]).length, 1);
+});
+
+/**
+ * `chain` is a **bridge chain id** — the same concept `checkBridgeState` derives its `chains` from
+ * — and it is a `u16` on the chain's side (`AssetInfo.chain`, `Action::BridgeBurn.to_chain`). It
+ * used to be the one field here with no bound at all, which mattered once `assets.list()` began
+ * threading it through: `ui/screens/withdraw.js` offers a known origin chain as the ONLY
+ * destination, so an unbounded `chain` off a node reply reached `prove_burn`'s `to_chain` without
+ * ever passing the bounded `chains` list. `token` is the token's address on that chain, 32 bytes,
+ * and got the same treatment `asset_id` already had.
+ */
+test('assets: a chain id is a u16 and a token is 32 bytes, both from the node', () => {
+  rejects(() => checkAssets([{ index: 1, chain: 100000 }]), /row 0 chain/);
+  rejects(() => checkAssets([{ index: 1, chain: 0x10000 }]), /row 0 chain/); // one past a u16
+  rejects(() => checkAssets([{ index: 1, chain: -1 }]), /row 0 chain/);
+  rejects(() => checkAssets([{ index: 1, chain: '2' }]), /row 0 chain/); // a chain id is a number
+  rejects(() => checkAssets([{ index: 1, chain: 2.5 }]), /row 0 chain/);
+  assert.equal(checkAssets([{ index: 1, chain: 0xffff }])[0].chain, 0xffff, 'the top of the range is fine');
+  assert.equal(checkAssets([{ index: 1, chain: 0 }])[0].chain, 0);
+
+  rejects(() => checkAssets([{ index: 1, token: 'aa' }]), /row 0 token/); // too short
+  rejects(() => checkAssets([{ index: 1, token: `${HEX64}aa` }]), /row 0 token/); // too long
+  rejects(() => checkAssets([{ index: 1, token: 'zz'.repeat(32) }]), /row 0 token/); // not hex
+  rejects(() => checkAssets([{ index: 1, token: 2 }]), /row 0 token/);
+
+  // And the same bound applies through `rand_getBridgeState`, which routes its registry through
+  // this very function — the bounded `chains` list is not the only thing a burn's destination can
+  // come from.
+  rejects(
+    () => checkBridgeState({ enabled: true, assets: [{ index: 1, chain: 100000 }] }),
+    /row 0 chain/,
+  );
 });
 
 test('block header: best-effort, never an error, never a bad timestamp', () => {

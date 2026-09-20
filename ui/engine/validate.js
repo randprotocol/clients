@@ -230,6 +230,16 @@ export function checkAssets(reply, { max = 4096 } = {}) {
   rows.forEach((row, i) => {
     if (!row || typeof row !== 'object') fail(m, `row ${i} is not an object`, row);
     intField(m, `row ${i} index`, row.index);
+    // `chain` is a **bridge chain id**, the same thing `checkBridgeState` bounds its derived
+    // `chains` to, and a `u16` on the chain's side (`AssetInfo.chain`, and
+    // `Action::BridgeBurn.to_chain`). Bounded here rather than at either caller because both of
+    // them — `rand_getAssets` and `rand_getBridgeState`'s registry — come through this function,
+    // and because `assets.list()` now carries this field into the withdraw flow, where a known
+    // origin chain is offered as the ONLY destination: an unbounded value would reach
+    // `prove_burn`'s `to_chain` without ever meeting the bounded `chains` list.
+    if (row.chain !== undefined && row.chain !== null) intField(m, `row ${i} chain`, row.chain, { max: 0xffff });
+    // The token's address on that chain: `AssetInfo.token` is `[u8; 32]`, hex-encoded by the node.
+    if (row.token !== undefined && row.token !== null) hexField(m, `row ${i} token`, row.token, 64);
     if (row.asset_id !== undefined && row.asset_id !== null) hexField(m, `row ${i} asset_id`, row.asset_id, 64);
   });
   return rows;
@@ -349,7 +359,11 @@ export function checkBridgeState(reply) {
   if (emitters && typeof emitters === 'object' && !Array.isArray(emitters)) {
     for (const key of Object.keys(emitters).slice(0, 4096)) {
       const id = Number(key);
-      // A bridge chain id is a u16 on the chain's side (`Action::BridgeBurn.to_chain`).
+      // A bridge chain id is a u16 on the chain's side (`Action::BridgeBurn.to_chain`) — the same
+      // bound `checkAssets` puts on a registry row's `chain`. The dispositions differ on purpose:
+      // here a bad key is DROPPED, because these are the keys of a map and one nonsense key should
+      // not cost a caller the chains that are fine; there a bad `chain` REJECTS the whole reply,
+      // which is what every other field of a registry row already does.
       if (Number.isSafeInteger(id) && id >= 0 && id <= 0xffff) chains.push(id);
     }
     chains.sort((a, b) => a - b);
