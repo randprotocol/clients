@@ -367,12 +367,29 @@ pub struct Selection {
     pub change: String,
 }
 
+/// Sum note amounts with an overflow check: two adversarial-looking `u64` amounts must never wrap
+/// silently into a smaller, plausible-looking total. Every running total this crate builds from
+/// note amounts goes through this (or an inline `checked_add` for a total that must bail out of a
+/// loop early rather than finish the fold).
+fn checked_sum<I: IntoIterator<Item = u64>>(units: I) -> Result<u64> {
+    units.into_iter().try_fold(0u64, |acc, u| acc.checked_add(u)).ok_or_else(|| "amounts overflow".to_string())
+}
+
+/// Spendable notes of `asset`, largest first; ties keep their original relative order (the sort is
+/// stable). The one place "which notes could this bundle spend" is decided, so `select_inputs`
+/// (any asset), `plan_transfer` and `max_sendable` (always asset 0 — both refuse a non-zero asset
+/// before ever reaching here) cannot drift apart on the rule.
+fn spendable_of(notes: &[OwnedNote], asset: u32) -> Vec<&OwnedNote> {
+    let mut v: Vec<&OwnedNote> = notes.iter().filter(|n| n.is_spendable() && n.asset == asset).collect();
+    v.sort_by_key(|n| std::cmp::Reverse(n.units()));
+    v
+}
+
 /// Largest-first, at most two notes of one asset (a bundle spends exactly two inputs). Mirrors
 /// `randprotocol_client::wallet::select_inputs`, including its two errors.
 pub fn select_inputs(notes: &[OwnedNote], asset: u32, need: u64) -> Result<Selection> {
-    let mut sorted: Vec<&OwnedNote> = notes.iter().filter(|n| n.is_spendable() && n.asset == asset).collect();
-    sorted.sort_by(|a, b| b.units().cmp(&a.units()));
-    let have: u64 = sorted.iter().map(|n| n.units()).sum();
+    let sorted = spendable_of(notes, asset);
+    let have = checked_sum(sorted.iter().map(|n| n.units()))?;
     if have < need {
         return bad(format!(
             "insufficient balance: have {} RAND, need {} RAND",
@@ -386,7 +403,7 @@ pub fn select_inputs(notes: &[OwnedNote], asset: u32, need: u64) -> Result<Selec
         if sum >= need {
             break;
         }
-        sum += n.units();
+        sum = sum.checked_add(n.units()).ok_or_else(|| "amounts overflow".to_string())?;
         chosen.push((*n).clone());
     }
     if sum < need {
@@ -395,7 +412,10 @@ pub fn select_inputs(notes: &[OwnedNote], asset: u32, need: u64) -> Result<Selec
             format_amount(sum)
         ));
     }
-    Ok(Selection { chosen, need: need.to_string(), change: (sum - need).to_string() })
+    // Guarded already by `sum >= need` above (so this never actually fails) — checked anyway,
+    // defence in depth for money arithmetic.
+    let change = sum.checked_sub(need).ok_or_else(|| "amounts overflow".to_string())?;
+    Ok(Selection { chosen, need: need.to_string(), change: change.to_string() })
 }
 
 /// What a client needs to build one transfer: which notes to spend and what the bundle's numbers
@@ -453,11 +473,9 @@ pub fn max_sendable(notes: &[OwnedNote], asset: u32, fee: u64) -> Result<MaxSend
     if asset != 0 {
         return bad(RPL_TRANSFER_UNAVAILABLE);
     }
-    let mut sorted: Vec<&OwnedNote> = notes.iter().filter(|n| n.is_spendable() && n.asset == 0).collect();
-    sorted.sort_by_key(|n| std::cmp::Reverse(n.units()));
-    sorted.truncate(BUNDLE_INPUTS);
-    let sum: u64 = sorted.iter().map(|n| n.units()).sum();
-    Ok(MaxSendable { amount: sum.saturating_sub(fee).to_string(), fee: fee.to_string(), inputs: sorted.len() })
+    let candidates: Vec<&OwnedNote> = spendable_of(notes, 0).into_iter().take(BUNDLE_INPUTS).collect();
+    let sum = checked_sum(candidates.iter().map(|n| n.units()))?;
+    Ok(MaxSendable { amount: sum.saturating_sub(fee).to_string(), fee: fee.to_string(), inputs: candidates.len() })
 }
 
 // ------------------------------------------------------------------ proving a transfer
@@ -720,11 +738,36 @@ fn str_param<'a>(p: &'a Value, name: &str) -> Result<&'a str> {
     p.get(name).and_then(Value::as_str).ok_or_else(|| format!("missing string parameter {name:?}"))
 }
 
+/// Amounts (and every other numeric wire field this crate reads through this helper) are decimal
+/// strings of ASCII digits, `^[0-9]{1,20}$` — never a JSON number. A JavaScript caller has already
+/// lost precision past 2^53 before a bare number reaches us; requiring a string instead moves the
+/// precision boundary out to `u64::MAX` (20 digits), where `parse` catches the rest. No sign, no
+/// leading/trailing whitespace, no fractional part — a string is either exactly digits or refused.
 fn u64_param(p: &Value, name: &str) -> Result<u64> {
     match p.get(name) {
-        Some(Value::Number(n)) => n.as_u64().ok_or_else(|| format!("{name} must be a non-negative integer")),
-        Some(Value::String(s)) => s.parse().map_err(|_| format!("{name} must be a decimal integer")),
-        _ => bad(format!("missing parameter {name:?}")),
+        Some(Value::String(s)) => {
+            if s.is_empty() || s.len() > 20 || !s.bytes().all(|b| b.is_ascii_digit()) {
+                return bad(format!("{name} must be a decimal string of ASCII digits"));
+            }
+            s.parse::<u64>().map_err(|_| format!("{name} is out of range"))
+        }
+        Some(_) => bad("amounts must be decimal strings"),
+        None => bad(format!("missing parameter {name:?}")),
+    }
+}
+
+/// `asset` is the one numeric parameter that is a JSON number, not a decimal string (it is a small
+/// index, never money) — but it must still be validated, not truncated: `as u32` on an oversized
+/// `u64` silently wraps (2^32 becomes 0, i.e. RAND), which would have let a client's typo or a
+/// hostile page redirect an RPL call onto the native asset. Absent means the default, asset 0;
+/// anything present that is not a whole number fitting `u32` is refused outright.
+fn asset_param(p: &Value) -> Result<u32> {
+    match p.get("asset") {
+        None => Ok(0),
+        Some(Value::Number(n)) => {
+            n.as_u64().and_then(|v| u32::try_from(v).ok()).ok_or_else(|| "asset must be a non-negative integer".to_string())
+        }
+        Some(_) => bad("asset must be a non-negative integer"),
     }
 }
 
@@ -779,13 +822,12 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
         "select_inputs" => {
             let notes: Vec<OwnedNote> =
                 serde_json::from_value(params.get("notes").cloned().unwrap_or(Value::Array(vec![]))).map_err(|e| format!("notes: {e}"))?;
-            let asset = params.get("asset").and_then(Value::as_u64).unwrap_or(0) as u32;
-            Ok(ser(&select_inputs(&notes, asset, u64_param(params, "need")?)?))
+            Ok(ser(&select_inputs(&notes, asset_param(params)?, u64_param(params, "need")?)?))
         }
         "plan_transfer" => {
             let notes: Vec<OwnedNote> =
                 serde_json::from_value(params.get("notes").cloned().unwrap_or(Value::Array(vec![]))).map_err(|e| format!("notes: {e}"))?;
-            let asset = params.get("asset").and_then(Value::as_u64).unwrap_or(0) as u32;
+            let asset = asset_param(params)?;
             let amount = u64_param(params, "amount")?;
             let fee = u64_param(params, "fee")?;
             Ok(ser(&plan_transfer(&notes, asset, amount, fee)?))
@@ -793,7 +835,7 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
         "max_sendable" => {
             let notes: Vec<OwnedNote> =
                 serde_json::from_value(params.get("notes").cloned().unwrap_or(Value::Array(vec![]))).map_err(|e| format!("notes: {e}"))?;
-            let asset = params.get("asset").and_then(Value::as_u64).unwrap_or(0) as u32;
+            let asset = asset_param(params)?;
             let fee = u64_param(params, "fee")?;
             Ok(ser(&max_sendable(&notes, asset, fee)?))
         }
@@ -1138,8 +1180,149 @@ mod tests {
             let params = json!({ "notes": notes, "amount": bad_amount, "fee": gas::BUNDLE_BASE.to_string() });
             let v: Value = serde_json::from_str(&call("plan_transfer", &params.to_string())).unwrap();
             assert_eq!(v["ok"], false, "amount {bad_amount:?} should have been refused");
-            assert!(v["error"].as_str().unwrap().contains("decimal integer"), "{v}");
+            assert!(v["error"].as_str().unwrap().contains("digits"), "{v}");
         }
+    }
+
+    // ---------------------------------------------------------- checked arithmetic (review fix)
+
+    #[test]
+    fn select_inputs_note_sum_overflow_is_an_error_not_a_panic() {
+        let notes = vec![owned(0, 0, u64::MAX), owned(1, 0, u64::MAX)];
+        let err = select_inputs(&notes, 0, 10).unwrap_err();
+        assert!(err.contains("overflow"), "{err}");
+    }
+
+    #[test]
+    fn plan_transfer_note_sum_overflow_is_an_error_not_a_panic() {
+        let notes = vec![owned(0, 0, u64::MAX), owned(1, 0, u64::MAX)];
+        let err = plan_transfer(&notes, 0, 10, gas::BUNDLE_BASE).unwrap_err();
+        assert!(err.contains("overflow"), "{err}");
+    }
+
+    #[test]
+    fn max_sendable_note_sum_overflow_is_an_error_not_a_panic() {
+        let notes = vec![owned(0, 0, u64::MAX), owned(1, 0, u64::MAX)];
+        let err = max_sendable(&notes, 0, gas::BUNDLE_BASE).unwrap_err();
+        assert!(err.contains("overflow"), "{err}");
+    }
+
+    #[test]
+    fn checked_sum_helper_overflows_cleanly() {
+        assert_eq!(checked_sum([1u64, 2, 3]).unwrap(), 6);
+        assert_eq!(checked_sum(std::iter::empty()).unwrap(), 0);
+        assert!(checked_sum([u64::MAX, 1]).is_err());
+    }
+
+    // -------------------------------------------------- shared spendable-native helper (review fix)
+
+    #[test]
+    fn spendable_of_filters_and_sorts_largest_first_stably() {
+        let mut notes = vec![owned(0, 0, 1_000_000_000), owned(1, 1, 9_000_000_000), owned(2, 0, 5_000_000_000), owned(3, 0, 5_000_000_000), owned(4, 0, 0)];
+        notes[0].spent = true;
+        let out: Vec<u64> = spendable_of(&notes, 0).into_iter().map(|n| n.index).collect();
+        // note 0 (spent), note 1 (wrong asset) and note 4 (zero amount) are all excluded; the
+        // 5-RAND tie (2 and 3) keeps its original relative order.
+        assert_eq!(out, vec![2, 3]);
+    }
+
+    // ------------------------------------------------------ consistency property (review fix)
+
+    /// `max_sendable`'s answer and `plan_transfer`'s own selection must never disagree: the largest
+    /// amount `max_sendable` reports must be exactly the amount `plan_transfer` can still build a
+    /// bundle for (one unit more always fails), and both pick the same notes to spend. A dozen
+    /// hand-written wallets: single notes at, above and below the fee, equal-amount and tied notes,
+    /// five notes, spent/pending notes mixed in, an empty wallet, a balance landing exactly on the
+    /// fee, and a real zero-amount note (never spendable).
+    #[test]
+    fn max_sendable_and_plan_transfer_agree_on_amount_and_notes() {
+        let fee = gas::BUNDLE_BASE;
+        let cases: Vec<Vec<OwnedNote>> = vec![
+            vec![owned(0, 0, 5_000_000_000)],
+            vec![owned(0, 0, fee)],
+            vec![owned(0, 0, fee / 2)],
+            vec![owned(0, 0, 2_000_000_000), owned(1, 0, 2_000_000_000)],
+            vec![owned(0, 0, 5_000_000_000), owned(1, 0, 3_000_000_000)],
+            (0..5).map(|i| owned(i, 0, (i + 1) * 1_000_000_000)).collect(),
+            vec![
+                owned(0, 0, 5_000_000_000),
+                owned(1, 0, 5_000_000_000),
+                owned(2, 0, 1_000_000_000),
+                owned(3, 0, 1_000_000_000),
+                owned(4, 0, 1_000_000_000),
+            ],
+            {
+                let mut v = vec![
+                    owned(0, 0, 10_000_000_000),
+                    owned(1, 0, 9_000_000_000),
+                    owned(2, 0, 3_000_000_000),
+                    owned(3, 0, 2_000_000_000),
+                ];
+                v[0].spent = true;
+                v[1].pending = Some(3);
+                v
+            },
+            vec![],
+            vec![owned(0, 0, fee / 2), owned(1, 0, fee / 2)],
+            vec![owned(0, 0, 4_000_000_000), owned(1, 0, 4_000_000_000), owned(2, 0, 1_000_000_000)],
+            vec![owned(0, 0, 0), owned(1, 0, 5_000_000_000), owned(2, 0, 3_000_000_000)],
+        ];
+        assert_eq!(cases.len(), 12, "a dozen hand-written wallets, as asked");
+
+        for (i, notes) in cases.iter().enumerate() {
+            let max = max_sendable(notes, 0, fee).unwrap();
+            let m: u64 = max.amount.parse().unwrap();
+            let expected_indices: Vec<u64> = spendable_of(notes, 0).into_iter().take(BUNDLE_INPUTS).map(|n| n.index).collect();
+
+            if m > 0 {
+                let plan = plan_transfer(notes, 0, m, fee).unwrap_or_else(|e| panic!("case {i}: plan_transfer(m={m}) should succeed: {e}"));
+                // `m` is defined as the candidates' sum minus fee, so spending exactly `m` always
+                // leaves zero change — that is what "the max you can send" means.
+                assert_eq!(plan.change, "0", "case {i}");
+                assert_eq!(
+                    plan.inputs.iter().map(|n| n.index).collect::<Vec<_>>(),
+                    expected_indices,
+                    "case {i}: plan_transfer and max_sendable disagree on which notes to spend"
+                );
+                assert!(plan_transfer(notes, 0, m + 1, fee).is_err(), "case {i}: one more unit than max_sendable should fail");
+            } else {
+                assert!(plan_transfer(notes, 0, 1, fee).is_err(), "case {i}: max_sendable says 0, so even amount 1 should fail");
+            }
+        }
+    }
+
+    // --------------------------------------------------- strict asset/amount parsing (review fix)
+
+    #[test]
+    fn asset_param_defaults_absent_to_zero_and_rejects_everything_malformed() {
+        assert_eq!(asset_param(&json!({})).unwrap(), 0);
+        assert_eq!(asset_param(&json!({"asset": 0})).unwrap(), 0);
+        assert_eq!(asset_param(&json!({"asset": 1})).unwrap(), 1);
+        assert_eq!(asset_param(&json!({"asset": 4294967295u32})).unwrap(), 4294967295);
+        // The truncating-cast bug this replaces: 2^32 must be rejected, never silently read as 0.
+        assert!(asset_param(&json!({"asset": 4294967296u64})).is_err());
+        assert!(asset_param(&json!({"asset": -1})).is_err());
+        assert!(asset_param(&json!({"asset": 1.5})).is_err());
+        assert!(asset_param(&json!({"asset": "1"})).is_err());
+        assert!(asset_param(&json!({"asset": null})).is_err());
+        assert!(asset_param(&json!({"asset": true})).is_err());
+    }
+
+    #[test]
+    fn u64_param_requires_a_strict_ascii_digit_string() {
+        let get = |v: Value| u64_param(&json!({ "amount": v }), "amount");
+        assert_eq!(get(json!("5")).unwrap(), 5);
+        assert_eq!(get(json!("00000000000000000001")).unwrap(), 1, "leading zeros are still digits");
+        assert_eq!(get(json!(u64::MAX.to_string())).unwrap(), u64::MAX);
+        assert!(get(json!("+5")).is_err(), "no sign");
+        assert!(get(json!(" 5")).is_err(), "no leading whitespace");
+        assert!(get(json!("5 ")).is_err(), "no trailing whitespace");
+        assert!(get(json!("")).is_err(), "empty is not a number");
+        assert!(get(json!("18446744073709551616")).is_err(), "u64::MAX + 1 is out of range");
+        let err = get(json!(5)).unwrap_err();
+        assert!(err.contains("decimal strings"), "{err}");
+        assert!(get(json!(5.0)).is_err(), "a JSON number is refused even when integral");
+        assert!(get(json!(null)).is_err());
     }
 
     #[test]
