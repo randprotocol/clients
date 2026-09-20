@@ -579,15 +579,136 @@ really send/mint):
 
 ### Task 2.1: Extension backend and mounts
 
-**Files:** Create `extension/shared/backend-extension.js`; rewrite `popup.js`, `app.js`, `popup.html`, `app.html`; delete `extension/shared/lib/{views,format,qr,wallet,crypto,rpc}.js` and `styles.css`; modify `chrome/pack.sh`, `firefox/pack.sh` (add `rsync -a --exclude test --exclude node_modules --exclude scripts --exclude gallery.html --exclude package*.json ui/ dist/<browser>/ui/`); extend `extension/test/smoke.mjs`.
+**Rewritten 2026-09-20** against the Backend contract and `makeWasmBackend` as they actually stand
+after Tasks 1.1–1.8 (the original one-paragraph version predates all of it and would have bounced
+back NEEDS_CONTEXT). Facts established by reading the current code (not assumed):
 
-**Interfaces:** Consumes `makeWasmBackend`. `backend-extension.js` exports `extensionBackend()` = `makeWasmBackend({ core, storage: extStorage(), platform: { name: 'extension', openExternal: url => ext.tabs.create({url}), copy } })` with `extStorage()` mapping to `ext.storage.local` / `ext.storage.session` and re-arming the `autolock` alarm in `session.set('unlocked', …)`. Popup: `mount(root, backend, {mode:'popup'})`; in popup mode the Send action calls `ext.tabs.create({url: ext.runtime.getURL('app.html#send')})` — implement as `platform.openFlowInTab?(hash)` which `ui/screens/home.js` uses when defined. Settings → RPC URL still requests the optional host permission: `platform.ensureHostPermission?(url)`.
+- Task 1.2 left `extension/shared/lib/{crypto,rpc,format,qr}.js` as one-line re-export shims into
+  `../../../ui/{engine,lib}/...` — each file's own header comment says it is "deleted with that UI
+  in task 2.1" — but `popup.js`/`app.js` still mount the pre-redesign `extension/shared/lib/views.js`,
+  which imports the ORIGINAL `wallet.js` and `store.js` (not shims — real, self-consistent
+  pre-redesign code that was simply never migrated). None of the six screens tasks (1.3–1.5, 1.7)
+  ever touched the extension. This task is the actual migration, not a formality.
+- `chrome/pack.sh`/`firefox/pack.sh` only `rsync` `extension/shared/` into `dist/<browser>/`, so
+  the four shims' `../../../ui/...` imports resolve in the repo layout and 404 once packed — the
+  packed extension has been broken since Task 1.2. `extension/test/smoke.mjs` never caught it
+  because it only smoke-tests the raw wasm core, never the packed tree.
+- `platform.openFlowInTab?` (the reason the original brief planned a tab-escape for Send) is DEAD
+  CODE from the UI's side: no screen calls it, because `send.canProve()` is unconditionally
+  `{ok:false, …}` in every wasm backend (`ui/engine/backend-wasm.js` — proving needs ~5.6 GB,
+  wasm32 caps at 4 GiB), so Send's proving/witness/submitting steps — the ones that would outlive
+  a closed 360×600 popup — are never reached. **Do not implement `openFlowInTab` in this task.**
+  Send renders normally in the popup and ends at the "cannot prove here" explanation.
+- `makeWasmBackend`'s auto-lock (`ui/engine/backend-wasm.js`, `rearmAutoLock`/`autoLockNow`) is a
+  plain `setTimeout` (unref'd for Node), re-armed only by `wallet.noteActivity()` and by a fresh
+  `unlock`/`create`/`import`. That is correct for a shell whose JS process outlives the wallet
+  session (the web wallet, the future Tauri app) but **wrong for a browser-extension popup**: the
+  popup's JS context is destroyed the instant it loses focus, so a `setTimeout` armed while it was
+  open never fires — auto-lock would silently never happen. A background service worker doesn't
+  fix this either: Chrome evicts an idle MV3 service worker after ~30 s with no pending work, well
+  before any real `autoLockMin`. The only mechanism in this codebase that survives both is
+  `chrome.alarms` (already in both manifests' `permissions`), which is exactly what the
+  *pre-redesign* `extension/shared/background.js` already uses — this task keeps that mechanism,
+  wires it to the new backend instead of the old `store.js`, and does not touch
+  `makeWasmBackend` (which stays fully storage/platform-agnostic; confirmed by grep: it contains
+  zero `chrome.*`/`browser.*`/`window.*`/`document.*` calls today, and this task must not add any).
+- `storage.compareAndSet?` is optional everywhere it's read (two call sites, both feature-detected,
+  both fall back to a plain `set`) — `chrome.storage` has no compare-and-swap primitive, so the
+  extension's storage adapter simply omits it. This only loses the two-tab race guard the web
+  wallet gets from IndexedDB transactions; the popup and an app tab can still both be open, so note
+  it as a known, accepted gap (same failure mode Task 1.6 already made non-destructive: at worst a
+  concurrent write is retried as a scan, never silently corrupted).
 
-- [ ] **Step 1:** Add to `smoke.mjs` a pack check: after the key checks, `execSync('chrome/pack.sh')`, then assert `dist/chrome/ui/app.js`, `dist/chrome/ui/tokens.css`, `dist/chrome/core/rand_wallet_bg.wasm` exist, `dist/chrome/ui/test` does not, and no file under `dist/chrome` matches `/\beval\(|new Function\(/`.
-- [ ] **Step 2:** `node extension/test/smoke.mjs` — FAIL (no `dist/chrome/ui`).
-- [ ] **Step 3:** Implement the files above; HTML links `ui/tokens.css`, `ui/base.css`, `ui/components.css`; popup body fixed 360×600.
-- [ ] **Step 4:** Smoke PASS; `node --test ui/test` PASS. Load `dist/chrome` unpacked in Chrome: popup renders at 360×600 with the tab bar, Send opens a tab, lock/unlock works, alarm locks after the configured minutes. Repeat the popup check in Firefox via `about:debugging`.
-- [ ] **Step 5:** Commit `extension: run on the shared ui`.
+**Files:**
+- Create: `extension/shared/backend-extension.js` (composes `makeWasmBackend`; owns the
+  `chrome.alarms` wiring described below), `extension/shared/lib/idle-lock.js` (the alarm glue,
+  factored out so it can be unit-tested with a fake `ext` — see Interfaces).
+- Rewrite: `popup.js`, `app.js`, `popup.html`, `app.html`, `background.js` (rewired to the new
+  backend's storage key, not `store.js`'s).
+- Delete: `extension/shared/lib/{views,wallet,store,crypto,rpc,format,qr}.js`, `styles.css`. Keep
+  `extension/shared/lib/core.js` (a generic Worker↔promise wrapper, not tied to the old UI — reused
+  as-is, its shape already matches `makeWasmBackend`'s `core.call(method, params)` requirement) and
+  `extension/shared/{worker.js,lib/browser.js}` unchanged.
+- Modify: `chrome/pack.sh`, `firefox/pack.sh` (copy real `ui/` files, not a shim that reaches
+  outside `dist/`), `extension/test/smoke.mjs` (a real packed-tree check — see Step 1).
+
+**Interfaces — Produces:**
+
+```js
+// extension/shared/backend-extension.js
+export function extensionBackend() { … }   // → a Backend; called once from popup.js and app.js
+```
+Composition, mirroring `web/wallet/main.js`'s pattern (`makeCore`/`makePlatform`/`boot`) but over
+`chrome.storage` instead of IndexedDB:
+- `storage`: `get/set/remove/clear` over `ext.storage.local`; `session.get/set/remove` over
+  `ext.storage.session` (this is the same MV3 session-storage area the pre-redesign code already
+  used — it is a browser-level store, not page memory, so it survives a killed-and-restarted
+  service worker within one browsing session, which matters below). No `compareAndSet`.
+- `platform`: `{name: IS_FIREFOX ? 'firefox' : 'chrome', openExternal: url => ext.tabs.create({url}),
+  copy: text => navigator.clipboard.writeText(text), paste: navigator.clipboard?.readText ?
+  () => navigator.clipboard.readText() : undefined, ensureHostPermission: url => ext.permissions
+  .request({origins: [new URL(url).origin + '/*']})}`. No `openFlowInTab`, no `version` (nothing
+  to show yet).
+- `core`: reuse `extension/shared/lib/core.js`'s existing Worker-wrapping `call(method, params)`
+  against `extension/shared/worker.js` (unchanged) — do not reimplement it.
+
+**Auto-lock — `extension/shared/lib/idle-lock.js`:**
+```js
+export function wireIdleLock(backend, ext) { … }   // called once inside extensionBackend()
+```
+It does two things to the object `makeWasmBackend` returned, without modifying
+`ui/engine/backend-wasm.js`:
+1. Wraps `wallet.noteActivity`, `wallet.unlock`, `wallet.create`, `wallet.import` (call through to
+   the original, then on success/no-throw) to also re-arm a `chrome.alarms.create('autolock',
+   {delayInMinutes: settings.autoLockMin})` alarm (read `autoLockMin` via `backend.settings.get()`;
+   `0` or absent means never — clear any existing alarm instead of creating one). Wraps
+   `wallet.lock` and `wallet.wipe` to also `ext.alarms.clear('autolock')`.
+2. Implements `wallet.onLocked(cb)` (overwriting whatever `makeWasmBackend` provided, since that
+   one is driven by the internal timer this design bypasses) by subscribing to
+   `ext.storage.onChanged`: when the session area's unlocked-session key transitions from present
+   to `undefined` **and this page did not just call `wallet.lock()`/`wallet.wipe()` itself**, call
+   `cb({reason: 'idle'})`. Read the exact storage key `backend-wasm.js` uses for the unlocked
+   session from its own exports/constants rather than hard-coding a string that could drift —
+   if it isn't already exported, export it (a one-line addition to `ui/engine/backend-wasm.js`,
+   the only touch this task makes there, and only if truly necessary).
+
+**`background.js` (rewritten, not deleted):** on `ext.alarms.onAlarm` named `'autolock'`, remove
+the unlocked-session key from `ext.storage.session` directly (the same key `idle-lock.js` watches
+for) — this is the actual lock action; it works whether or not any popup/tab is currently open,
+and if one is open, `idle-lock.js`'s `storage.onChanged` listener there notices and routes to
+`#lock` via the shell's normal `wallet.onLocked` path. Keep the existing `onInstalled` (open
+`app.html#welcome` on fresh install) and drop the old direct `store.js`-based `unlocked` removal
+it used to do inline, since that key name and mechanism no longer exist.
+
+**Manifest:** `alarms` is already declared in both `chrome/manifest.json` and
+`firefox/manifest.json` — no permission change needed, only how it's used changes (backend-driven
+key, not `store.js`'s).
+
+- [ ] **Step 1: Failing test.** Extend `extension/test/smoke.mjs`: after the existing raw-core
+  checks, `execSync('chrome/pack.sh')`, then assert `dist/chrome/ui/app.js`,
+  `dist/chrome/ui/tokens.css`, `dist/chrome/ui/backend.js`, `dist/chrome/ui/engine/backend-wasm.js`,
+  `dist/chrome/core/rand_wallet_bg.wasm` all exist as real files (not symlinks into the repo);
+  `dist/chrome/ui/test` does not exist; nothing under `dist/chrome` matches
+  `/\beval\(|new Function\(/`; `dist/chrome/lib/{crypto,rpc,format,qr,wallet,views,store}.js` do
+  not exist. Also a unit test for `idle-lock.js` against a fake `ext` (`{alarms:{create,clear},
+  storage:{onChanged:{addListener,removeListener}, session:{get,set,remove}}}`): `noteActivity()`
+  creates an alarm with the configured minutes; `autoLockMin: 0` clears rather than creates;
+  `lock()`/`wipe()` clear the alarm; a storage change removing the unlocked key fires `onLocked`'s
+  callback; a storage change caused by this page's own `lock()` call does NOT re-fire it (no
+  double-handling).
+- [ ] **Step 2:** `node extension/test/smoke.mjs` and `node --test ui/test/idle-lock.test.mjs` (or
+  wherever you put it) — FAIL.
+- [ ] **Step 3:** Implement everything above. HTML links `ui/tokens.css`, `ui/base.css`,
+  `ui/components.css`; popup body fixed 360×600; `pack.sh` gains
+  `rsync -a --exclude test --exclude node_modules --exclude scripts --exclude gallery.\* --exclude dev.\* --exclude package*.json ui/ dist/<browser>/ui/`
+  (both browsers) alongside the existing wasm-core copy.
+- [ ] **Step 4:** Smoke PASS; the idle-lock unit test PASS; `node --test ui/test web/wallet/test`
+  still PASS (nothing there should change). Load `dist/chrome` unpacked in Chrome
+  (`chrome://extensions`, Developer mode): popup renders at 360×600 with the tab bar; create a
+  wallet; Send shows the "cannot prove here" explanation with no Prove button; lock/unlock works;
+  set auto-lock to 1 minute in Settings, close the popup, wait over a minute, reopen — locked.
+  Repeat the popup + lock/unlock check in Firefox via `about:debugging` → "Load Temporary Add-on…".
+- [ ] **Step 5:** Commit `extension: run on the shared ui, with alarms-based auto-lock`.
 
 ---
 
