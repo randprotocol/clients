@@ -74,7 +74,15 @@ pub const EXPLORER_URL: &str = "https://randscan.org";
 /// doubled its slots but the prover's peak is dominated by one low-degree extension either way —
 /// and a burn is now **one** proof rather than two, so the worst case a client must budget for
 /// went *down*. The published requirement (an 8 GiB device gate) is unchanged.
-pub const PROVER_PEAK_MEMORY_BYTES: u64 = 5_656_723_456;
+///
+/// The constant is the largest measured run **rounded up to 5.7 GB**, not the sample itself. Peak
+/// RSS varies run to run, with the allocator and with the OS version, so a constant equal to one
+/// sample would leave a `>=` comparison with no margin at all and would read as a threshold that
+/// had been tuned to pass. 5 700 000 000 is ~0.8% above the largest of the three runs, the same
+/// shape of headroom the chain-8 figure had. It is **descriptive, not the gate**: the operative
+/// device check is `MIN_PROVE_GIB` (8 GiB) in `ui/engine/backend-native.js`, and wasm32 cannot
+/// prove at all until this number drops below a 4 GiB address space.
+pub const PROVER_PEAK_MEMORY_BYTES: u64 = 5_700_000_000;
 
 /// A bundle spends at most this many input notes **per group** — slots 0–1 carry the private
 /// asset, slots 2–3 carry RAND — so coin selection picks at most two notes of each. Unchanged
@@ -516,7 +524,12 @@ fn select_groups(
 ) -> Result<(Vec<OwnedNote>, Vec<OwnedNote>)> {
     if asset == 0 {
         // RAND is burned through `burn_r` only; the ledger refuses a RAND `burn_a`
-        // (`NonCanonicalRandBurn`), so a plan that asked for one is this wallet's bug.
+        // (`NonCanonicalRandBurn`), so a plan that asked for one is this wallet's bug. Upstream's
+        // line, kept as defence in depth — but it is NOT the evidence that this crate cannot build
+        // such a bundle, and no test reaches it. That evidence is structural: `BundlePlan` has
+        // exactly two construction sites (`build_transfer_unproven`, which always passes
+        // `burn_a: 0`, and `build_burn_unproven`, which refuses `asset == 0` outright), so no
+        // caller can ask for a RAND `burn_a` at all.
         if burn_a != 0 {
             return bad("a RAND burn goes through burn_r, never burn_a");
         }
@@ -864,14 +877,38 @@ impl BundlePlan {
         })
     }
 
-    /// The slot the payment sits in: 2 for a RAND bundle, 0 for a token's. What a client hands out
-    /// as the disclosure key for "this payment" ([`ProveResult::payment_slot`]).
-    fn payment_slot(&self) -> usize {
-        if self.asset == 0 {
-            A_SLOTS
-        } else {
-            0
-        }
+    /// The slot the payment sits in — 2 for a RAND bundle, 0 for a token's — or `None` when the
+    /// bundle **pays nobody**, which is every burn (`to: None`). The `None` arm is what makes
+    /// [`payment_of`] structurally unable to hand a client a dummy slot's disclosure key: slot 0
+    /// of a burn is a `Payee::Nobody` output sealed to a throwaway key, and a method that
+    /// answered `0` there would name it as the payment.
+    ///
+    /// Keyed on `self.to`, never on `self.asset` alone: the asset decides *which* slot pays, the
+    /// destination decides *whether* one does.
+    fn payment_slot(&self) -> Option<usize> {
+        self.to.as_ref()?;
+        Some(if self.asset == 0 { A_SLOTS } else { 0 })
+    }
+}
+
+/// The payment's slot, its per-transaction disclosure key and its commitment — all three `None`
+/// for a bundle that pays nobody.
+///
+/// The one place a result's payment scalars are derived, so a `ProveResult` and a `BurnResult`
+/// cannot disagree about which slot the payment is in, and so no caller has to remember to apply
+/// an index to the right one of three four-wide arrays. That remembering is exactly the bug these
+/// scalars exist to remove: on chain 13 the payment was always index 0, and all three shipped
+/// clients read `tx_keys[0]`/`commitments[0]`; on chain 14 index 0 of a RAND transfer is a
+/// zero-value dummy sealed to a throwaway key, so the old read returns a receipt that opens
+/// nothing.
+fn payment_of(plan: &BundlePlan, prepared: &Prepared) -> (Option<usize>, Option<String>, Option<String>) {
+    match plan.payment_slot() {
+        None => (None, None, None),
+        Some(k) => (
+            Some(k),
+            Some(hex::encode(prepared.tx_keys[k].0)),
+            Some(word8_to_hex(&prepared.bundle.commitments[k])),
+        ),
     }
 }
 
@@ -1115,12 +1152,21 @@ pub struct ProveResult {
     /// One per slot, in slot order.
     pub nullifiers: [String; BUNDLE_SLOTS],
     pub commitments: [String; BUNDLE_SLOTS],
-    /// The per-slot disclosure keys, in slot order. Handing out `tx_keys[payment_slot]` discloses
-    /// exactly the payment (randscan.org opens it); the dummy slots' keys open envelopes sealed to
-    /// a throwaway key and are worth nothing to anybody.
+    /// The per-slot disclosure keys, in slot order — the honest picture of the bundle. The dummy
+    /// slots' keys open envelopes sealed to a throwaway key and are worth nothing to anybody.
+    /// **A client wanting "the key for this payment" reads [`ProveResult::payment_tx_key`]**, not
+    /// an index into this array.
     pub tx_keys: [String; BUNDLE_SLOTS],
-    /// Which slot the payment sits in: 2 for a RAND transfer, 0 for a token's.
-    pub payment_slot: usize,
+    /// Which slot the payment sits in: 2 for a RAND transfer, 0 for a token's. Never `null` on a
+    /// transfer (which always pays someone); `null` on a burn, which pays nobody.
+    pub payment_slot: Option<usize>,
+    /// **The disclosure key of the note that pays the recipient** — `tx_keys[payment_slot]`,
+    /// resolved here so no client has to. Handing it out discloses exactly the payment and
+    /// nothing else (randscan.org opens it). `null` when the bundle pays nobody.
+    pub payment_tx_key: Option<String>,
+    /// **The commitment of the note that pays the recipient** — `commitments[payment_slot]`,
+    /// resolved here likewise. The leaf a receipt points at. `null` when nobody is paid.
+    pub payment_commitment: Option<String>,
     /// Leaf indices of the notes this bundle spends — the asset group's, then the RAND group's —
     /// for the client to mark `pending`.
     pub spent_indices: Vec<u64>,
@@ -1237,7 +1283,7 @@ pub fn prove_transfer(req: &ProveRequest) -> Result<ProveResult> {
     let nullifiers = std::array::from_fn(|k| word8_to_hex(&bundle.nullifiers[k]));
     let commitments = std::array::from_fn(|k| word8_to_hex(&bundle.commitments[k]));
     let tx_keys = std::array::from_fn(|k| hex::encode(b.prepared.tx_keys[k].0));
-    let payment_slot = b.plan.payment_slot();
+    let (payment_slot, payment_tx_key, payment_commitment) = payment_of(&b.plan, &b.prepared);
     let (change, fee_change) =
         if b.asset == 0 { (b.prepared.change_r, 0) } else { (b.prepared.change_a, b.prepared.change_r) };
     let encoded = b.tx.encode();
@@ -1257,6 +1303,8 @@ pub fn prove_transfer(req: &ProveRequest) -> Result<ProveResult> {
         commitments,
         tx_keys,
         payment_slot,
+        payment_tx_key,
+        payment_commitment,
         spent_indices: b.spent_indices,
         proofs: b.proofs,
     })
@@ -1342,6 +1390,13 @@ pub struct BurnResult {
     pub nullifiers: [String; BUNDLE_SLOTS],
     pub commitments: [String; BUNDLE_SLOTS],
     pub tx_keys: [String; BUNDLE_SLOTS],
+    /// **Always `null`**, and so are the two below: a burn pays nobody inside the pool — its
+    /// destination is `to_chain`/`to` on the far side — so there is no payment note to disclose.
+    /// The three fields are present, and present as `null`, so a client can read the same shape
+    /// off a transfer and a burn rather than branching on which call it made.
+    pub payment_slot: Option<usize>,
+    pub payment_tx_key: Option<String>,
+    pub payment_commitment: Option<String>,
     /// Leaf indices of every note this transaction spends — the token group's, then the RAND
     /// group's — for the client to mark `pending`.
     pub spent_indices: Vec<u64>,
@@ -1476,7 +1531,9 @@ pub fn prove_burn(req: &BurnRequest) -> Result<BurnResult> {
     let nullifiers = std::array::from_fn(|k| word8_to_hex(&bundle.nullifiers[k]));
     let commitments = std::array::from_fn(|k| word8_to_hex(&bundle.commitments[k]));
     let tx_keys = std::array::from_fn(|k| hex::encode(b.prepared.tx_keys[k].0));
-    let _ = &b.plan;
+    // A burn's plan has `to: None`, so all three come back `None` — structurally, not by a literal
+    // written here that a later edit could get wrong.
+    let (payment_slot, payment_tx_key, payment_commitment) = payment_of(&b.plan, &b.prepared);
     let encoded = b.tx.encode();
     Ok(BurnResult {
         hash: b.tx.hash().to_hex(),
@@ -1497,6 +1554,9 @@ pub fn prove_burn(req: &BurnRequest) -> Result<BurnResult> {
         nullifiers,
         commitments,
         tx_keys,
+        payment_slot,
+        payment_tx_key,
+        payment_commitment,
         spent_indices: b.spent_indices,
         proofs: b.proofs,
     })
@@ -1596,7 +1656,10 @@ fn amount_field(v: &Value) -> Option<u64> {
 // ------------------------------------------------------------------ opening (for receipts)
 
 /// Open one envelope with a per-transaction key — what a recipient (or randscan.org) does with
-/// the `tx_keys[0]` a sender hands over. Returns the note or `None`.
+/// the key a sender hands over. That key is [`ProveResult::payment_tx_key`], and the commitment to
+/// pass alongside it is [`ProveResult::payment_commitment`]; **never `tx_keys[0]`**, which on a
+/// chain-14 RAND transfer is a zero-value dummy sealed to a throwaway key and opens nothing.
+/// Returns the note or `None`.
 pub fn open_with_tx_key(cm_hex: &str, envelope: &EnvelopeHex, tx_key_hex: &str) -> Result<Option<Value>> {
     let cm = word8_from_hex(cm_hex).ok_or("cm is not 64 hex characters")?;
     let key: [u8; 32] = hex::decode(tx_key_hex.trim())
@@ -1908,7 +1971,9 @@ fn asset_param(p: &Value) -> Result<u32> {
 ///   between a typo and a wasted proof
 /// - `prove_burn` `{…BurnRequest}` → BurnResult (slow — one bundle proof)
 /// - `prove_transfer` `{…ProveRequest}` → ProveResult (slow — one bundle proof)
-/// - `open_with_tx_key` `{cm, envelope, tx_key}` → note or null
+/// - `open_with_tx_key` `{cm, envelope, tx_key}` → note or null. `cm`/`tx_key` are
+///   `payment_commitment`/`payment_tx_key` from a `prove_transfer` reply — never index 0 of the
+///   four-wide arrays, which on a RAND transfer is a dummy slot
 /// - `format_amount` `{units}` → `"1.5"`; `parse_amount` `{text}` → units string
 /// - `fixture_prove_request` `{profile?, asset?}` → a valid `prove_transfer` request for smoke
 ///   tests: a RAND transfer at `asset: 0` (the default), a token transfer at `asset >= 1`
@@ -2949,7 +3014,7 @@ mod tests {
         assert_eq!(res.fee_change, "0", "a RAND transfer's change is `change`, not `fee_change`");
         assert_eq!(res.spent_indices, vec![1]);
         assert_eq!(res.proofs, 1);
-        assert_eq!(res.payment_slot, 2, "a RAND transfer pays from slots 2-3");
+        assert_eq!(res.payment_slot, Some(2), "a RAND transfer pays from slots 2-3");
         let tx = Transaction::decode(&hex::decode(&res.tx_hex).unwrap()).unwrap();
         assert_eq!(tx.hash().to_hex(), res.hash);
         let bundle = tx.bundle.as_ref().unwrap();
@@ -2986,10 +3051,18 @@ mod tests {
         // pinned guest, so a proof copied onto any other transaction no longer verifies.
         let binding = tx.binding();
         exec.verify_bundle(&randprotocol_zkvm::executor::ZkExecutor::hc_bundle(), &bundle.proof, &binding).unwrap();
-        assert!(
-            open_with_tx_key(&rows[0].cm, &rows[0].envelope, &res.tx_keys[res.payment_slot]).unwrap().is_some(),
-            "the payment slot's key opens the payment"
-        );
+        // Through the scalars, which is what a client reads: the key and the commitment that
+        // name the payment, on a really-proved transaction.
+        assert_eq!(res.payment_commitment.as_deref(), Some(rows[0].cm.as_str()));
+        let opened = open_with_tx_key(
+            res.payment_commitment.as_deref().unwrap(),
+            &rows[0].envelope,
+            res.payment_tx_key.as_deref().unwrap(),
+        )
+        .unwrap()
+        .expect("payment_tx_key opens payment_commitment's envelope");
+        assert_eq!(opened["amount"], "1000000000");
+        assert_eq!(res.payment_tx_key.as_deref(), Some(res.tx_keys[2].as_str()), "the scalar is the array at the slot");
     }
 
     /// Mirrors exactly the param shapes `ui/engine/wallet.js`'s `core` binding (its `call(...)`
@@ -3186,7 +3259,7 @@ mod tests {
                 "upstream Plan::outputs' asset-0 arm"
             );
             assert_eq!(openers(&w, &dest, b), vec!["nobody", "nobody", "pay", "mine"]);
-            assert_eq!(build.plan.payment_slot(), 2);
+            assert_eq!(build.plan.payment_slot(), Some(2));
             assert_eq!(build.spent_indices, vec![0, 1], "both RAND notes, in leaf order");
         }
 
@@ -3217,7 +3290,7 @@ mod tests {
                 "upstream Plan::outputs' token arm: the fee and its change are slots 2-3"
             );
             assert_eq!(openers(&w, &dest, b), vec!["pay", "mine", "mine", "nobody"]);
-            assert_eq!(build.plan.payment_slot(), 0);
+            assert_eq!(build.plan.payment_slot(), Some(0));
             assert_eq!(A_SLOTS, 2);
             assert_eq!(build.proofs, 1, "one hidden bundle, one proof");
         }
@@ -3369,6 +3442,107 @@ mod tests {
             let rand = vec![owned(0, 1, 5), owned(1, 0, u64::MAX), owned(2, 0, u64::MAX)];
             assert!(plan_transfer(&rand, 1, 1, gas::BUNDLE_BASE).unwrap_err().contains("overflow"));
             assert!(plan_burn(&notes, 1, 10, gas::BRIDGE_BURN_FEE).unwrap_err().contains("overflow"));
+        }
+
+        /// The payment scalars, on both layouts: they name the slot the recipient's note really
+        /// sits in, they agree with the four-wide arrays at that index, and the key **opens the
+        /// payment envelope** — which is the property a client actually needs and the one an index
+        /// applied to the wrong array silently breaks.
+        #[test]
+        fn the_payment_scalars_name_the_slot_that_pays_and_the_key_opens_it() {
+            for (asset, want_slot) in [(0u32, 2usize), (1, 0)] {
+                let req: ProveRequest =
+                    serde_json::from_value(fixture_prove_request("test", asset).unwrap()).unwrap();
+                let amount: u64 = req.amount.parse().unwrap();
+                let (_w, build) = build_transfer_unproven(&req).unwrap();
+                let bundle = build.tx.bundle.as_ref().unwrap();
+
+                assert_eq!(build.plan.payment_slot(), Some(want_slot), "asset {asset}");
+                let (slot, key, cm) = payment_of(&build.plan, &build.prepared);
+                assert_eq!(slot, Some(want_slot));
+                // The scalars are exactly the arrays at that index — the arrays stay the honest
+                // picture, the scalars save every client from applying the index itself.
+                assert_eq!(key.as_deref(), Some(hex::encode(build.prepared.tx_keys[want_slot].0).as_str()));
+                assert_eq!(cm.as_deref(), Some(word8_to_hex(&bundle.commitments[want_slot]).as_str()));
+
+                // And the key really opens the recipient's note, for the right amount and asset.
+                let env = EnvelopeHex {
+                    kem_ct: hex::encode(&bundle.envelopes[want_slot].kem_ct),
+                    to_receiver: hex::encode(&bundle.envelopes[want_slot].to_receiver),
+                    to_sender: hex::encode(&bundle.envelopes[want_slot].to_sender),
+                    body: hex::encode(&bundle.envelopes[want_slot].body),
+                };
+                let opened = open_with_tx_key(&cm.unwrap(), &env, &key.unwrap())
+                    .unwrap()
+                    .unwrap_or_else(|| panic!("asset {asset}: the payment key must open the payment"));
+                assert_eq!(opened["amount"], amount.to_string(), "asset {asset}");
+                assert_eq!(opened["asset"], asset, "asset {asset}");
+                let dest = ShieldedAddress::parse(&req.to).unwrap();
+                assert_eq!(opened["pk"], word8_to_hex(&dest.pk), "asset {asset}: it is the recipient's note");
+
+                // The old chain-13 read is now a dummy for a RAND transfer, which is the whole
+                // reason these scalars exist.
+                if asset == 0 {
+                    let dummy = EnvelopeHex {
+                        kem_ct: hex::encode(&bundle.envelopes[0].kem_ct),
+                        to_receiver: hex::encode(&bundle.envelopes[0].to_receiver),
+                        to_sender: hex::encode(&bundle.envelopes[0].to_sender),
+                        body: hex::encode(&bundle.envelopes[0].body),
+                    };
+                    let cm0 = word8_to_hex(&bundle.commitments[0]);
+                    let key0 = hex::encode(build.prepared.tx_keys[0].0);
+                    let note = open_with_tx_key(&cm0, &dummy, &key0).unwrap();
+                    assert_eq!(
+                        note.map(|n| n["amount"].clone()),
+                        Some(json!("0")),
+                        "slot 0 of a RAND transfer is a zero-value dummy, not the payment"
+                    );
+                }
+            }
+        }
+
+        /// A burn pays nobody inside the pool, so there is no payment note to disclose: the slot
+        /// is `None` structurally (from `to: None`, not from a literal), and all three result
+        /// fields serialise as JSON `null`.
+        #[test]
+        fn a_burn_has_no_payment_to_disclose() {
+            let req: BurnRequest = serde_json::from_value(fixture_burn_request("test").unwrap()).unwrap();
+            let (_w, b) = build_burn_unproven(&req).unwrap();
+            assert_eq!(b.plan.payment_slot(), None, "a burn pays nobody");
+            assert_eq!(payment_of(&b.plan, &b.prepared), (None, None, None));
+
+            // And on the wire. Built by hand rather than by proving, so this stays a millisecond
+            // test: the three fields are the only ones a burn's payment could reach.
+            let v = serde_json::to_value(BurnResult {
+                tx_hex: String::new(),
+                hash: String::new(),
+                time: 0,
+                asset: 1,
+                amount: "400".into(),
+                relayer_fee: "100".into(),
+                to_chain: 2,
+                token: String::new(),
+                to: String::new(),
+                change: "100".into(),
+                fee: "10000000".into(),
+                fee_change: "0".into(),
+                tier: 14,
+                proof_bytes: 0,
+                tx_bytes: 0,
+                nullifiers: std::array::from_fn(|_| String::new()),
+                commitments: std::array::from_fn(|_| String::new()),
+                tx_keys: std::array::from_fn(|_| String::new()),
+                payment_slot: None,
+                payment_tx_key: None,
+                payment_commitment: None,
+                spent_indices: vec![0, 1],
+                proofs: 1,
+            })
+            .unwrap();
+            for k in ["payment_slot", "payment_tx_key", "payment_commitment"] {
+                assert!(v[k].is_null(), "{k} must be JSON null on a burn, got {}", v[k]);
+                assert!(v.get(k).is_some(), "{k} must be PRESENT, so a client reads one shape");
+            }
         }
 
         /// The same note handed in twice would nullify one leaf in two slots — a bundle spending

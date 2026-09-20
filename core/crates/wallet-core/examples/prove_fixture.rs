@@ -89,9 +89,15 @@ fn prove_transfer_fixture(profile: &str, asset: u32) {
         r.tx_bytes
     );
     println!(
-        "  sent {} of asset {}, change {}, fee {} RAND, RAND change {}, payment in slot {}",
-        r.amount, r.asset, r.change, r.fee, r.fee_change, r.payment_slot
+        "  sent {} of asset {}, change {}, fee {} RAND, RAND change {}",
+        r.amount, r.asset, r.change, r.fee, r.fee_change
     );
+    // The receipt a client hands out: the payment's own slot, key and commitment, resolved by
+    // core so nobody indexes into the four-wide arrays themselves.
+    match (r.payment_slot, &r.payment_tx_key, &r.payment_commitment) {
+        (Some(k), Some(key), Some(cm)) => println!("  payment in slot {k}: key {key}, commitment {cm}"),
+        _ => println!("  this bundle pays nobody inside the pool"),
+    }
 
     // The point of the exercise: the chain's own admission, not a hand-rolled check.
     let leaves: Vec<&ProveInput> = req.inputs.iter().chain(&req.fee_inputs).collect();

@@ -42,6 +42,13 @@ backings), and `burn_is_possible` — upstream's own pre-flight, ported whole �
 `rand_getBridgeState` reply the client fetched for the five things only the chain knows. **Call it
 before `prove_burn`**, or a typo costs a proof.
 
+A bundle has four slots, so `prove_transfer`'s and `prove_burn`'s `nullifiers`, `commitments` and
+`tx_keys` are four-wide and in **slot** order. Two of those slots are always dummies sealed to a
+throwaway key that opens to nobody, the sender included — so a receipt must **never** be built
+from index 0, which is what every client did when a bundle had two slots. Core resolves it
+instead: `payment_slot`, `payment_tx_key` and `payment_commitment` name the note that pays the
+recipient, and are `null` on a burn, which pays nobody inside the pool.
+
 Every bundle proof is made over, and verified against, its transaction's `binding`: the wallet
 assembles the whole transaction with the proof empty, takes the binding, proves against it and
 fills the proof in. `version`'s reply carries `bundle_inputs` (2, per group), `bundle_slots` (4),
