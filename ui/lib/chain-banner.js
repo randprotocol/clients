@@ -11,11 +11,11 @@ import { h, raw } from './dom.js';
 import { icons } from './icons.js';
 
 /**
- * `chain 13 · aa1b2c3d…` — the identity a user can actually compare between two nodes.
+ * `chain 14 · aa1b2c3d…` — the identity a user can actually compare between two nodes.
  *
  * The chain id alone is not enough: two chains can carry the same id (the node's own docs say so,
- * which is why `rand_getGenesisHash` exists), and "different chain (chain 13) … read from chain
- * 13" is a banner that reads like a bug. The genesis hash is what tells them apart.
+ * which is why `rand_getGenesisHash` exists), and "different chain (chain 14) … read from chain
+ * 14" is a banner that reads like a bug. The genesis hash is what tells them apart.
  */
 export function chainLabel(identity) {
   if (!identity || (identity.chainId === null && identity.genesis === null)) {
@@ -25,7 +25,7 @@ export function chainLabel(identity) {
     ? 'chain unknown'
     : `chain ${identity.chainId}`;
   // A missing half is named as missing rather than silently dropped. Without this, a node that
-  // gave its id but not its genesis rendered as "different chain (chain 13) … read from chain 13",
+  // gave its id but not its genesis rendered as "different chain (chain 14) … read from chain 14",
   // which reads as a bug in the wallet rather than a problem with the node.
   const genesis = typeof identity.genesis === 'string' && identity.genesis
     ? `${identity.genesis.slice(0, 8)}…`

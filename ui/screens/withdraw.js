@@ -10,17 +10,18 @@
 //     shell, so both are feature-detected before a single control is drawn.
 //
 //   * **Every check that can be made locally is made before `bridge.estimate`, and every check the
-//     chain can make is made before the proof.** Two bundle proofs is about three and a half
-//     minutes of this computer; a recipient of the wrong shape, a relayer fee bigger than the
-//     amount, a disabled bridge or an unregistered asset would each spend all of it on a
-//     transaction the chain was always going to refuse. The first two are here, the last two are
-//     `bridge.withdraw`'s own gates (ui/engine/backend-shared.js, `burnIsPossible`).
+//     chain can make is made before the proof.** A bundle proof is about a minute and a half of
+//     this computer and ~5.7 GB; a recipient of the wrong shape, a relayer fee bigger than the
+//     amount, a disabled bridge, an unregistered index, a coin that does not back this token or
+//     one that is not holding enough would each spend all of it on a transaction the chain was
+//     always going to refuse. The first two are here; the rest are `bridge.withdraw`'s own gates
+//     (ui/engine/backend-shared.js, `screenBurn` → the core's `burn_is_possible`).
 //
 //   * **The last step is typed, not tapped.** The destination's last four characters have to be
 //     typed out before the button is live, because an address the user cannot undo is worth one
 //     deliberate act.
 //
-// Steps: chain → address → amount → review → proving → `#withdrawn/<hash>`. Like the send flow,
+// Steps: backing → address → amount → review → proving → `#withdrawn/<hash>`. Like the send flow,
 // the proof lives on `ctx.state` (session-scoped) with a pinned chip, so leaving the screen does
 // not cancel three and a half minutes of work.
 import { h, raw, on } from '../lib/dom.js';
@@ -44,17 +45,17 @@ export const EVM_CHAINS = Object.freeze([2, 3, 4]);
 export const PHASE_LABELS = Object.freeze({
   selecting: 'Selecting notes',
   witness: 'Building the witnesses',
-  // Two bundles, proved one after the other. The native backend reports `proving-asset` for the
-  // whole of `prove_burn` (it cannot see inside the call); a backend that can tell the two apart
-  // reports `proving` for the second. Both are labelled, so neither looks like a stall.
-  'proving-asset': 'Proving the asset bundle (1 of 2)',
-  proving: 'Proving the fee bundle (2 of 2)',
+  // ONE bundle since chain 14: the token is burned from slots 0–1 and the RAND fee is paid from
+  // slots 2–3 of the same proof. `'proving-asset'` named the first of two and is gone from the
+  // contract; a backend that reported it now would be reporting a phase nothing knows, and this
+  // screen keeps the last one it recognised rather than labelling it.
+  proving: 'Proving the bundle',
   submitting: 'Submitting to the node',
   confirming: 'Waiting for the block',
 });
 
 /** Cancel is offered up to, but not including, the moment the transaction leaves this device. */
-const CANCELLABLE = ['selecting', 'witness', 'proving-asset', 'proving'];
+const CANCELLABLE = ['selecting', 'witness', 'proving'];
 const AFTER_BROADCAST = ['submitting', 'confirming'];
 
 export const LEAVES_POOL_WARNING = 'This leaves the shielded pool. The destination address and '
@@ -241,36 +242,44 @@ function chainName(id) {
 }
 
 /**
- * The destination chain. Usually there is exactly one: a burn's destination **must** be the
- * asset's own origin chain (`check_burn`'s `WrongTokenChain`), and `assets.list()` now carries
- * that chain through from the registry. It is still a step, and still preselected rather than
- * assumed away, because it is the fact the user most needs to see before the address field.
+ * The destination: one of the asset's **backings**, not a bare chain.
+ *
+ * `Action::BridgeBurn` names a `(to_chain, token)` pair, and one RPL token can be backed by
+ * several coins on several chains — zUSD is seven. A pair that does not back this token is
+ * `NotABacking`, and a coin that is not holding enough of it is `InsufficientBacking`; both are
+ * refused by the ledger, after a proof, unless the user is asked which coin they want. So every
+ * backing `assets.list()` carries is offered, with what that coin is holding, and the first is
+ * preselected. Chain 13's "there is exactly one origin chain" is not true of a bridged token and
+ * never was — the old flow kept whichever registry row was read last.
  */
-function chainStepMarkup(asset, { chains, origin }) {
-  const offered = origin === null ? chains : [origin];
-  const note = origin === null
-    ? raw(h`<p class="caption">This wallet does not know which chain ${asset.symbol} came from, so every chain this bridge knows is offered. Sending to the wrong one is refused by the chain.</p>`)
-    : raw(h`<p class="caption">${asset.symbol} came from this chain, so it is the only place it can go back to.</p>`);
-  const warning = origin !== null && chains.length > 0 && !chains.includes(origin)
+function backingStepMarkup(asset, { chains, backings }) {
+  const note = backings.length === 0
+    ? raw(h`<p class="caption">This wallet does not know which coins back ${asset.symbol}, so there is nothing it can safely burn to.</p>`)
+    : raw(h`<p class="caption">${asset.symbol} is released as the coin you pick, on that coin's own chain.</p>`);
+  const unknown = backings.filter((b) => chains.length > 0 && !chains.includes(b.chain));
+  const warning = unknown.length > 0
     ? raw(h`
       <div class="banner warn">
         <span class="ic">${raw(icons.warning())}</span>
-        <span><span class="banner-title">This bridge does not list that chain</span>The withdrawal may be refused. Nothing is spent until it is proved.</span>
+        <span><span class="banner-title">This bridge does not list every chain below</span>A withdrawal to one it does not list may be refused. Nothing is spent until it is proved.</span>
       </div>`)
     : '';
-  const rows = offered.map((id) => h`
+  const rows = backings.map((b, i) => h`
     <li>
-      <button class="row" type="button" data-chain="${id}" aria-pressed="${String(id === origin)}">
+      <button class="row" type="button" data-chain="${b.chain}" data-token="${b.token}" data-backing="${i}" aria-pressed="${String(i === 0)}">
         <span class="avatar sm">${raw(icons.bridge())}</span>
-        <span class="row-main"><span class="row-title">${chainName(id)}</span></span>
+        <span class="row-main">
+          <span class="row-title">${chainName(b.chain)}</span>
+          <span class="row-sub mono truncate">${shortHex(b.token, 8)}</span>
+        </span>
         <span class="row-end">${raw(icons.chevron())}</span>
       </button>
     </li>`).join('');
-  const empty = offered.length === 0
-    ? raw(h`<div class="card"><div class="empty"><span class="empty-title">No destination chain</span><span>This node's bridge lists no chains to withdraw to.</span></div></div>`)
+  const empty = backings.length === 0
+    ? raw(h`<div class="card"><div class="empty"><span class="empty-title">No coin to release</span><span>This node lists no backing for ${asset.symbol}.</span></div></div>`)
     : raw(h`<div class="card flush"><ul class="list">${raw(rows)}</ul></div>`);
   return h`
-    <h2 class="title" data-role="step-title" tabindex="-1">Withdraw ${asset.symbol} to</h2>
+    <h2 class="title" data-role="step-title" tabindex="-1">Withdraw ${asset.symbol} as</h2>
     ${warning}
     ${empty}
     ${note}`;
@@ -351,7 +360,7 @@ function reviewStepMarkup({ asset, display, toChain, units, estimate }) {
       </div>
     </form>
     <button class="btn btn-primary block" type="button" data-action="prove" disabled>${raw(icons.bridge())}Withdraw</button>
-    <p class="caption">${Number(estimate.proofs) || 2} proofs · about ${(Number(estimate.proofs) || 2) * 2} minutes on this computer</p>
+    <p class="caption">${Number(estimate.proofs) || 1} ${Number(estimate.proofs) === 1 ? 'proof' : 'proofs'} · about ${Math.max(2, (Number(estimate.proofs) || 1) * 2)} minutes on this computer</p>
     <button class="btn btn-ghost block" type="button" data-role="edit">Edit</button>`;
 }
 
@@ -369,20 +378,18 @@ function ringMarkup(role, label, state) {
 }
 
 /**
- * Both bundles, always both shown. A burn is two proofs and takes twice as long as anything else
- * this wallet does; one ring that sits still for three and a half minutes is indistinguishable
- * from a wallet that has hung.
+ * One bundle, one ring. A chain-14 burn burns the token from slots 0–1 and pays the RAND fee from
+ * slots 2–3 of the SAME proof, so the second ring — and the "1 of 2" that went with it — would be
+ * counting to a number the chain no longer has.
  */
-function ringStates(phase) {
-  if (phase === 'proving-asset') return ['active', 'pending'];
-  if (phase === 'proving') return ['done', 'active'];
-  if (AFTER_BROADCAST.includes(phase)) return ['done', 'done'];
-  return ['pending', 'pending'];
+function ringState(phase) {
+  if (phase === 'proving') return 'active';
+  if (AFTER_BROADCAST.includes(phase)) return 'done';
+  return 'pending';
 }
 
 function provingStepMarkup(store) {
   const label = PHASE_LABELS[store.phase] || 'Working';
-  const [a, f] = ringStates(store.phase);
   const cancel = store.controller && CANCELLABLE.includes(store.phase)
     ? raw(h`<button class="btn block" type="button" data-role="cancel">Cancel</button>`)
     : '';
@@ -390,15 +397,14 @@ function provingStepMarkup(store) {
     <h2 class="title" data-role="step-title" tabindex="-1">Withdrawing</h2>
     <div class="stage">
       <div class="cluster rings">
-        ${raw(ringMarkup('ring-asset', 'Asset bundle', a))}
-        ${raw(ringMarkup('ring-fee', 'Fee bundle', f))}
+        ${raw(ringMarkup('ring-bundle', 'Bundle', ringState(store.phase)))}
       </div>
       <span class="amount mono" data-role="elapsed">${elapsed(Date.now() - store.startedMs)}</span>
       <span class="subtitle" data-role="phase">${label}</span>
     </div>
     <div class="banner">
       <span class="ic">${raw(icons.shield())}</span>
-      <span><span class="banner-title">Keep this window open</span>Two proofs run on this device, one after the other — about three and a half minutes. You can look at other screens; closing the wallet stops it.</span>
+      <span><span class="banner-title">Keep this window open</span>One proof runs on this device — about a minute and a half. You can look at other screens; closing the wallet stops it.</span>
     </div>
     <div data-role="prove-actions">${cancel}</div>`;
 }
@@ -479,13 +485,22 @@ registerScreen('withdraw', {
       return;
     }
 
-    const origin = Number.isInteger(Number(asset.chain)) ? Number(asset.chain) : null;
+    // Every coin that backs this token, straight from `assets.list()`. A burn names one of them
+    // (`to_chain` + `token`), so this is the choice the flow opens on.
+    const backings = (Array.isArray(asset.backings) ? asset.backings : [])
+      .filter((b) => b && Number.isInteger(Number(b.chain)) && typeof b.token === 'string' && b.token);
     const chains = Array.isArray(state.chains) ? state.chains : [];
+    const first = backings[0] || null;
 
     // ---- the draft ----
     let draft = ctx.state.withdrawDraft;
     if (!draft || draft.assetIndex !== index) {
-      draft = { assetIndex: index, toChain: origin, to: '', amount: '', relayerFee: '', estimate: null, display: '', padded: '' };
+      draft = {
+        assetIndex: index,
+        toChain: first ? Number(first.chain) : null,
+        token: first ? first.token : '',
+        to: '', amount: '', relayerFee: '', estimate: null, display: '', padded: '',
+      };
       ctx.state.withdrawDraft = draft;
     }
 
@@ -536,10 +551,10 @@ registerScreen('withdraw', {
       stopScreenTicker();
       if (next === 'review' && (!draft.estimate || reviewUnits <= 0n)) next = 'amount';
       if (next === 'amount' && !draft.padded) next = 'address';
-      if (next === 'address' && draft.toChain === null) next = 'chain';
+      if (next === 'address' && (draft.toChain === null || !draft.token)) next = 'chain';
       step = next;
       confirmed = false;
-      if (next === 'chain') stepEl.innerHTML = chainStepMarkup(asset, { chains, origin });
+      if (next === 'chain') stepEl.innerHTML = backingStepMarkup(asset, { chains, backings });
       else if (next === 'address') stepEl.innerHTML = addressStepMarkup(asset, draft.toChain, draft);
       else if (next === 'amount') stepEl.innerHTML = amountStepMarkup(asset, draft);
       else if (next === 'review') {
@@ -565,9 +580,9 @@ registerScreen('withdraw', {
       }, 1000);
     }
 
-    // The rings change state with the phase, so the block is repainted whole rather than patched:
-    // it is two small SVGs and a label, and a half-updated pair is exactly the confusion they
-    // exist to prevent.
+    // The ring changes state with the phase, so the block is repainted whole rather than patched:
+    // it is one small SVG and a label, and a half-updated pair of them is exactly the confusion
+    // they exist to prevent.
     const paintPhase = () => paintProving();
 
     function onStoreChange(store) {
@@ -604,12 +619,18 @@ registerScreen('withdraw', {
 
     const running = currentWithdrawal(ctx);
     if (running) attach(running);
-    else goStep(draft.estimate ? 'review' : (draft.padded ? 'amount' : (draft.toChain === null ? 'chain' : 'chain')), { focus: false });
+    else goStep(draft.estimate ? 'review' : (draft.padded ? 'amount' : 'chain'), { focus: false });
 
     // ---- handlers ----
     const offChain = on(root, '[data-chain]', 'click', (evt, btn) => {
       evt.preventDefault();
-      draft.toChain = Number(btn.dataset.chain);
+      const chosen = backings[Number(btn.dataset.backing)] || null;
+      if (!chosen) return;
+      // A changed coin invalidates whatever was estimated against the old one: the release unit
+      // and the amount that coin is holding are both its own.
+      if (draft.token !== chosen.token || draft.toChain !== Number(chosen.chain)) draft.estimate = null;
+      draft.toChain = Number(chosen.chain);
+      draft.token = chosen.token;
       goStep('address');
     });
 
@@ -689,6 +710,7 @@ registerScreen('withdraw', {
           amount: amount.units.toString(),
           relayerFee: relayer.units.toString(),
           toChain: draft.toChain,
+          token: draft.token,
           to: draft.padded,
         });
       } catch (err) {
@@ -723,12 +745,13 @@ registerScreen('withdraw', {
       // `disabled` attribute is a rendering, not a rule.
       if (currentWithdrawal(ctx)) return; // one withdrawal at a time
       if (!confirmed) return;
-      if (!draft.estimate || reviewUnits <= 0n || !draft.padded || draft.toChain === null) return;
+      if (!draft.estimate || reviewUnits <= 0n || !draft.padded || draft.toChain === null || !draft.token) return;
       const store = startWithdrawal(ctx, {
         asset: index,
         amount: reviewUnits.toString(),
         relayerFee: String(draft.estimate.relayerFee || '0'),
         toChain: draft.toChain,
+        token: draft.token,
         to: draft.padded,
         fee: String(draft.estimate.fee || ''),
       }, asset, draft.display);

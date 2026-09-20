@@ -30,13 +30,14 @@
 //
 // ---- what this shell cannot do ----
 //
-// A bundle proof peaks at ~5.6 GB (`wallet-core`'s own PROVER_PEAK_MEMORY_BYTES) and wasm32 stops
+// A bundle proof peaks at ~5.7 GB (`wallet-core`'s own PROVER_PEAK_MEMORY_BYTES) and wasm32 stops
 // at 4 GiB, so `send.canProve()` is `{ok: false}` and `send.send()` rejects before anything is
-// selected. Everything else — keys, addresses, scanning, the note store, assets, fee estimates,
-// the faucet — is real.
-import { makeSharedBackend, UNLOCKED_SESSION_KEY, RPL_SEND_DISABLED_TEXT, unlockDelayMs } from './backend-shared.js';
+// selected — for a transfer of RAND, for a transfer of an RPL token (which chain 14 admits, and
+// which is the same one bundle) and for a withdrawal alike. Everything else — keys, addresses,
+// scanning, the note store, assets, fee estimates, the faucet — is real.
+import { makeSharedBackend, UNLOCKED_SESSION_KEY, unlockDelayMs } from './backend-shared.js';
 
-export { UNLOCKED_SESSION_KEY, RPL_SEND_DISABLED_TEXT, unlockDelayMs };
+export { UNLOCKED_SESSION_KEY, unlockDelayMs };
 
 /** Shown to the user verbatim, so it is written for them (ui/backend.js on `send.canProve`). */
 export const CANNOT_PROVE_REASON = 'A transfer proof needs about 5.5 GB of memory and browsers '
@@ -62,10 +63,10 @@ async function executeSend({ reason }) {
 /**
  * Never reached either, and for one more reason than `executeSend`: `bridge.canWithdraw()` asks
  * `canProve()` first, so it is unconditionally `{ok: false}` here and no screen offers Withdraw
- * at all. A withdrawal is *two* bundle proofs (~5.7 GB, ~3.5 minutes natively), so a shell that
- * cannot produce one certainly cannot produce two. Present so the group's shape is real rather
- * than missing, and so `bridge.withdraw()` refuses the way it always has if `canProve()` ever
- * changes.
+ * at all. A withdrawal is one bundle proof (~5.7 GB, ~1.5 minutes natively) — the same one a
+ * transfer is — so a shell that cannot produce one cannot withdraw. Present so the group's shape
+ * is real rather than missing, and so `bridge.withdraw()` refuses the way it always has if
+ * `canProve()` ever changes.
  */
 async function executeWithdraw({ reason }) {
   const err = new Error(reason || CANNOT_PROVE_REASON);

@@ -6,7 +6,7 @@ import {
   NodeReplyError, checkHead, checkTreeInfo, checkCommitments, checkNullifiers, checkAnchor,
   checkWitness, checkFee, checkAssets, checkBlockHeader, checkSubmitted, checkBridgeState,
   intField, hexField, unitsField, checkGenesisHash, checkBlockActions, checkTransaction,
-  ENVELOPE_LIMITS,
+  checkTokens, ENVELOPE_LIMITS, MAX_TOKEN_PAGE,
 } from '../engine/validate.js';
 
 const HEX64 = 'ab'.repeat(32);
@@ -165,6 +165,81 @@ test('assets: a chain id is a u16 and a token is 32 bytes, both from the node', 
   );
 });
 
+/**
+ * Chain 14's `rand_getAssets` is **one row per backing**, not one per asset: zUSD is seven rows
+ * that all carry `index: 1`. Each row gained the backing coin's own `decimals` (the SOURCE chain's
+ * — 18 on chain 3, not the token's 8 on Rand), and the three decimal-string amounts the mint cap
+ * is counted in. All of them reach `wallet-core`'s `burn_is_possible`, which derives the release
+ * unit from `decimals` and compares the burn against `locked`, so none may be believed unchecked.
+ */
+test('assets: chain 14 sends one row per backing, with the coin’s decimals and locked amount', () => {
+  const row = {
+    index: 1, chain: 2, token: HEX64, asset_id: HEX64, decimals: 6,
+    locked: '900000000', mint_cap_per_day: '10000000000000', minted_today: '1000000000', mint_day: 20716,
+  };
+  const rows = checkAssets([row, { ...row, chain: 3, decimals: 18, token: 'cd'.repeat(32) }]);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].decimals, 6);
+  assert.equal(rows[1].decimals, 18, 'a backing’s decimals are the SOURCE coin’s, not the token’s 8');
+  assert.equal(rows[0].locked, '900000000');
+
+  rejects(() => checkAssets([{ ...row, decimals: 300 }]), /row 0 decimals/); // past a u8
+  rejects(() => checkAssets([{ ...row, decimals: '6' }]), /row 0 decimals/);
+  rejects(() => checkAssets([{ ...row, locked: 1.5 }]), /row 0 locked/);
+  rejects(() => checkAssets([{ ...row, locked: '-1' }]), /row 0 locked/);
+  rejects(() => checkAssets([{ ...row, minted_today: 'lots' }]), /row 0 minted_today/);
+  rejects(() => checkAssets([{ ...row, mint_cap_per_day: 1e30 }]), /row 0 mint_cap_per_day/);
+  rejects(() => checkAssets([{ ...row, mint_day: '20716' }]), /row 0 mint_day/);
+  // An older node that sends none of them is still a node.
+  assert.equal(checkAssets([{ index: 1, chain: 2, token: HEX64 }]).length, 1);
+});
+
+test('tokens: the RPL registry, paged, with every amount a decimal string', () => {
+  const bridged = {
+    index: 1, id: HEX64, id_text: `rpl1${'q'.repeat(58)}`, name: 'Shielded USD', symbol: 'zUSD',
+    decimals: 8, mint_nonce: 0, total_supply: '3600000000', registered_at: 256,
+    authority: {
+      kind: 'bridge',
+      backings: [
+        { chain: 2, token: HEX64, decimals: 6, locked: '900000000', mint_cap_per_day: '1', minted_today: '0', mint_day: 20716 },
+        { chain: 3, token: 'cd'.repeat(32), decimals: 18, locked: '0', mint_cap_per_day: '1', minted_today: '0', mint_day: 20716 },
+      ],
+    },
+  };
+  const reply = checkTokens({ enabled: true, registration_fee: '1000000000', next_index: 2, tokens: [bridged] });
+  assert.equal(reply.enabled, true);
+  assert.equal(reply.next_index, 2);
+  assert.equal(reply.registration_fee, '1000000000');
+  assert.equal(reply.tokens.length, 1);
+  assert.equal(reply.tokens[0].symbol, 'zUSD');
+  assert.equal(reply.tokens[0].decimals, 8);
+  assert.equal(reply.tokens[0].backings.length, 2, 'a bridged token’s backings are lifted out of `authority`');
+  assert.deepEqual(reply.tokens[0].backings[1], { chain: 3, token: 'cd'.repeat(32), locked: '0', decimals: 18 });
+
+  // A chain with no `tokens` section answers this, and it is not an error.
+  assert.deepEqual(checkTokens({ enabled: false, tokens: [] }), { enabled: false, next_index: 0, registration_fee: '0', tokens: [] });
+
+  // A native token has an authority with no backings at all.
+  const native = checkTokens({ enabled: true, tokens: [{ ...bridged, index: 2, authority: { kind: 'key', key: 'aa' } }] });
+  assert.deepEqual(native.tokens[0].backings, []);
+
+  // Index 0 is RAND and is never listed; a row claiming it is a node lying about the native token.
+  rejects(() => checkTokens({ enabled: true, tokens: [{ ...bridged, index: 0 }] }), /row 0 index/);
+  rejects(() => checkTokens({ enabled: true, tokens: [{ ...bridged, decimals: 10 }] }), /row 0 decimals/);
+  rejects(() => checkTokens({ enabled: true, tokens: [{ ...bridged, total_supply: 1.5 }] }), /row 0 total_supply/);
+  rejects(() => checkTokens({ enabled: true, tokens: [{ ...bridged, id: 'nope' }] }), /row 0 id/);
+  rejects(() => checkTokens({ enabled: true, tokens: [{ ...bridged, symbol: 42 }] }), /row 0 symbol/);
+  rejects(() => checkTokens({ enabled: true, tokens: [{ ...bridged, name: 'x'.repeat(500) }] }), /row 0 name/);
+  rejects(() => checkTokens({ enabled: true, tokens: [{ ...bridged, id_text: 'x'.repeat(500) }] }), /row 0 id_text/);
+  rejects(() => checkTokens(null), /not an object/);
+  rejects(() => checkTokens({ enabled: true, tokens: 'lots' }), /not an array/);
+  // A page longer than the node's own cap is not a page this wallet asked for.
+  rejects(
+    () => checkTokens({ enabled: true, tokens: new Array(MAX_TOKEN_PAGE + 1).fill(bridged) }),
+    /more than the 1000 asked for/,
+  );
+});
+
 test('block header: best-effort, never an error, never a bad timestamp', () => {
   assert.equal(checkBlockHeader(null), null);
   assert.equal(checkBlockHeader('not a block'), null);
@@ -193,8 +268,8 @@ test('submitted: a transaction hash, with or without 0x', () => {
 });
 
 test('bridge state: `enabled` only when exactly true, and the chains are derived', () => {
-  assert.deepEqual(checkBridgeState({ enabled: true, extra: 1 }), { enabled: true, chains: [], assets: [] });
-  assert.deepEqual(checkBridgeState({ enabled: 'yes' }), { enabled: false, chains: [], assets: [] });
+  assert.deepEqual(checkBridgeState({ enabled: true, extra: 1 }), { enabled: true, chains: [], assets: [], mintPaused: false });
+  assert.deepEqual(checkBridgeState({ enabled: 'yes' }), { enabled: false, chains: [], assets: [], mintPaused: false });
   rejects(() => checkBridgeState(null), /not an object/);
 
   // There is NO `chains` field on the wire: the node sends an `emitters` map keyed by chain id,
@@ -212,6 +287,18 @@ test('bridge state: `enabled` only when exactly true, and the chains are derived
   assert.deepEqual(checkBridgeState({ enabled: true, chains: [7, 8] }).chains, []);
   // And a malformed registry is still refused, by the registry call's own validator.
   rejects(() => checkBridgeState({ enabled: true, assets: [{ index: 'one' }] }), /rand_getAssets/);
+});
+
+/**
+ * Bridge hardening B1: while `mint_paused` is true the chain refuses every transfer attest, so a
+ * deposit made now will not arrive. Burns stay open, which is why it is reported rather than
+ * folded into `enabled` — a wallet can still withdraw, and should say why nothing is coming in.
+ */
+test('bridge state: mint_paused is carried, and only when the node says exactly true', () => {
+  assert.equal(checkBridgeState({ enabled: true }).mintPaused, false);
+  assert.equal(checkBridgeState({ enabled: true, mint_paused: true }).mintPaused, true);
+  assert.equal(checkBridgeState({ enabled: true, mint_paused: 'yes' }).mintPaused, false);
+  assert.equal(checkBridgeState({ enabled: true, mint_paused: 1 }).mintPaused, false);
 });
 
 test('the primitives are usable on their own', () => {

@@ -18,6 +18,21 @@ test('covers exactly the methods the vendored node dispatches', () => {
   assert.deepEqual(new Set(Object.keys(METHODS).map(wireName)), node);
 });
 
+test('the three RPL token methods carry the parameters docs/rpc.md declares', () => {
+  // Chain 14's token registry (`docs/rpc.md` §rand_getTokens/rand_getToken/rand_getTokenSupply).
+  // The `params` LENGTH is load-bearing, not decorative: `typed()` slices the caller's arguments
+  // to it and reads the trailing `{signal}` at exactly that position, so a wrong length turns a
+  // caller's options object into a bogus positional argument on the wire.
+  assert.deepEqual(METHODS.getTokens.params, ['fromIndex', 'limit']);
+  assert.deepEqual(METHODS.getToken.params, ['token']);
+  assert.deepEqual(METHODS.getTokenSupply.params, ['token']);
+  // `rand_getTokens` is where the Explore screen's Assets card gets a token registry; it takes
+  // arguments, so `groupMethods` leaves it out of the mount-time fetch (see explore.test.mjs).
+  assert.equal(METHODS.getTokens.explore, 'assets');
+  assert.equal(METHODS.getTokenSupply.explore, 'assets');
+  assert.equal(METHODS.getToken.explore, 'lookup');
+});
+
 test('every method name is one this wallet is allowed to put on the wire', () => {
   const RPC_METHOD_RE = /^(?:rand|bridge)_[A-Za-z][A-Za-z0-9]*$/;
   for (const name of Object.keys(METHODS)) {

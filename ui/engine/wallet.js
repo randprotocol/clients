@@ -30,6 +30,7 @@ import {
   checkBlockHeader, checkBridgeState, checkSubmitted, checkGenesisHash, checkBlockActions,
   checkTransaction, intField,
 } from './validate.js';
+import { isTransportFailure } from './rpc.js';
 
 const PAGE = 500;
 export const COMMIT_TIMEOUT_MS = 180_000;
@@ -37,13 +38,14 @@ export const COMMIT_TIMEOUT_MS = 180_000;
 const MAX_BLOCK_TIMES_PER_SCAN = 128;
 
 /**
- * How many notes one bundle can spend. It is the chain's rule, not this file's: the zkVM's bundle
- * shape is 2-in-2-out, and the core's `select_inputs` refuses a `need` that would take a third
- * note ("need more than two notes; …consolidate first"). It is a named constant here, and only
- * here, so that the one place JavaScript has to know it is greppable — and
+ * How many notes one bundle can spend **per group**. It is the chain's rule, not this file's:
+ * chain 14's hidden-asset bundle has four slots in two groups of two — slots 0–1 carry a private
+ * asset, slots 2–3 carry RAND — and the core's selection refuses a `need` that would take a third
+ * note of either ("need more than two notes; …consolidate first"). It is a named constant here,
+ * and only here, so that the one place JavaScript has to know it is greppable — and
  * `web/wallet/test/core.integration.test.mjs` cross-checks it against the real wasm core rather
- * than trusting this line. A core that ever reports `bundle_inputs` in its `version` constants
- * wins over it (see `backend-wasm.js`'s `maxSendable`).
+ * than trusting this line. A core that reports `bundle_inputs` in its `version` constants wins
+ * over it (the chain-14 core does).
  */
 export const BUNDLE_INPUTS = 2;
 
@@ -220,13 +222,30 @@ export function coreApi(core) {
     rebuiltDeposit: (spend_key, action) => call('rebuilt_deposit', { spend_key, action }),
     pendingCleared: (note, read_through) => call('pending_cleared', { note, read_through }),
     selectInputs: (notes, need, asset = 0) => call('select_inputs', { notes, need: String(need), asset }),
+    /**
+     * Chain 14's ONE planning call, for RAND and for a token alike. `asset: 0` (or omitted) picks
+     * RAND notes that cover amount + fee and leaves `fee_inputs` empty; `asset >= 1` picks notes
+     * of that token for `inputs` and RAND notes for `fee_inputs`, because a transfer of a token
+     * still pays its fee in RAND — out of slots 2–3 of the same bundle, in the same single proof.
+     */
+    planTransfer: (req) => call('plan_transfer', req),
+    /** The most one bundle can move, and — for a token — why the answer is zero when it is. */
+    maxSendable: (req) => call('max_sendable', req),
     proveTransfer: (req) => call('prove_transfer', req),
-    // A bridge burn's two halves. `plan_burn` selects BOTH bundles' notes (the asset to burn and
-    // the RAND to pay with) and costs nothing; `prove_burn` proves both, sequentially, and costs
-    // about 3.5 minutes. `fee` is optional on the plan (it defaults to the chain's
-    // `BRIDGE_BURN_FEE`) and **required** on the proof — see core/crates/wallet-core.
+    // A bridge burn. `plan_burn` selects both groups' notes (the token to burn and the RAND to pay
+    // with) and costs nothing; `prove_burn` proves the ONE bundle they share, which since chain 14
+    // is a single proof of about a minute and a half rather than two of about three and a half.
+    // `fee` is optional on the plan (it defaults to the chain's `BRIDGE_BURN_FEE`) and **required**
+    // on the proof — see core/crates/wallet-core.
     planBurn: (req) => call('plan_burn', req),
     proveBurn: (req) => call('prove_burn', req),
+    /**
+     * The four facts about the chain a burn needs before any proving, over a `rand_getBridgeState`
+     * reply the caller already fetched: the bridge is on, the index is registered, the named coin
+     * backs it, and that coin is holding enough — in whole release units. Pure; `wallet-core` does
+     * no I/O. Resolves `true` or rejects with the chain's own sentence.
+     */
+    burnIsPossible: (req) => call('burn_is_possible', req),
     openWithTxKey: (cm, envelope, tx_key) => call('open_with_tx_key', { cm, envelope, tx_key }),
     formatAmount: (units) => call('format_amount', { units: String(units) }),
     parseAmount: (text) => call('parse_amount', { text }),
@@ -236,11 +255,10 @@ export function coreApi(core) {
 /**
  * The chain id a proof commits to: the chain that was **verified**, not the one in settings.
  *
- * They can diverge silently — a store that knows chain 13 scans happily whatever
+ * They can diverge silently — a store that knows chain 14 scans happily whatever
  * `settings.chainId` says, because the configured id is only compared when an identity is first
  * adopted — and a proof bound to the wrong chain id is refused by the chain at best. Shared by
- * `send` and `burn` so the two cannot drift; a burn costs two proofs, so getting this wrong there
- * is twice as expensive.
+ * `send` and `burn` so the two cannot drift.
  */
 function provenChainIdOf(st, identity) {
   const proven = identity && identity.chainId !== null && identity.chainId !== undefined
@@ -481,8 +499,14 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
   async function chainIdentity(client, signal) {
     // "The node said no" and "there was no node" are different facts, and the caller needs both:
     // a node that answers `unknown method` has identified itself as anonymous, while one that
-    // cannot be reached has identified itself as nothing at all. `makeRpc` gives transport
-    // failures the code -1 and passes a node's own JSON-RPC error code through.
+    // cannot be reached has identified itself as nothing at all.
+    //
+    // The discriminator is `isTransportFailure` — `err.failure`, set by engine/rpc.js only where
+    // a request genuinely produced no JSON-RPC reply — and NOT `err.code === -1`. `-1` is the code
+    // rpc.js *puts on* such a failure, but it is also a perfectly legal application-defined
+    // JSON-RPC code (the reserved range is -32768..-32000), so a node answering
+    // `{"error":{"code":-1}}` used to be filed here as unreachable — and an unreachable node is
+    // what the chain gate reports as "could not verify this node's chain".
     let reachable = false;
     const attempt = async (run) => {
       try {
@@ -491,7 +515,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
         return value;
       } catch (err) {
         if (err && err.name === 'AbortError') throw err;
-        if (!err || err.code !== -1) reachable = true; // the node answered, even if with a refusal
+        if (!isTransportFailure(err)) reachable = true; // the node answered, even if with a refusal
         return null;
       }
     };
@@ -512,8 +536,8 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    *   ───────────   ───────────────────────    ──────────────────────────────────────────────────
    *   nothing       both id and genesis        adopt them — unless the id differs from the one
    *                                            this wallet was configured for, which is
-   *                                            `wrongChain` (a new wallet built for chain 13 must
-   *                                            not be pinned to an attacker's chain 14)
+   *                                            `wrongChain` (a new wallet built for chain 14 must
+   *                                            not be pinned to an attacker's chain 15)
    *   nothing       one, or neither            `identityUnknown` — do not scan. A wallet must not
    *                                            pin itself to a chain nobody named.
    *   an identity   not every field it knows   `wrongChain`, `got` marked `unknown`
@@ -548,7 +572,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     if (knows.chainId && String(st.chain_id) !== String(identity.chainId)) return wrong(got);
     if (knows.genesis && st.genesis !== identity.genesis) return wrong(got);
     // item 7: a store that knows only one half learns the other from a node whose known half
-    // matches — otherwise a chain-id-only store accepts chain 13 with ANY genesis for ever.
+    // matches — otherwise a chain-id-only store accepts chain 14 with ANY genesis for ever.
     if (knows.chainId !== knows.genesis && (has.chainId && has.genesis)) {
       return { kind: 'ok', adoptMissing: { chainId: identity.chainId, genesis: identity.genesis } };
     }
@@ -807,34 +831,56 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
   }
 
   /**
-   * Select, prove and submit a transfer. `onPhase` receives 'select' | 'witness' | 'prove' |
-   * 'submit' | 'wait'. Resolves with the submission record; the proof runs in the core worker.
+   * Plan, prove and submit a transfer — of RAND, or of an RPL token. `onPhase` receives 'select' |
+   * 'witness' | 'prove' | 'submit' | 'wait'. Resolves with the submission record; the proof runs
+   * in the core worker.
    *
-   * Not reachable from the wasm shells: a bundle proof peaks at ~5.6 GB and wasm32 stops at
+   * Chain 14 made this ONE shape for both. The bundle has four slots in two groups: slots 0–1 for
+   * a private asset `A`, slots 2–3 for RAND. `asset: 0` means every slot is RAND and the fee comes
+   * out of the same notes as the value — exactly the pre-chain-14 transfer. `asset >= 1` spends
+   * notes of that token from slots 0–1 and pays the RAND fee from slots 2–3, **in the same single
+   * proof**; a wallet holding the token and no RAND cannot send it, and `plan_transfer` refuses
+   * that here, before a witness is fetched.
+   *
+   * Both groups' witnesses come from ONE `anchorAndWitnesses` call, because `prove_transfer` takes
+   * a single `anchor_height`/`anchor_root` and the bundle is folded against one root.
+   *
+   * Not reachable from the wasm shells: a bundle proof peaks at ~5.7 GB and wasm32 stops at
    * 4 GiB, so `backend-wasm.js` refuses before it ever gets here (see `send.canProve`).
    */
-  async function send(spendKey, { to, amountUnits, feeUnits, wait = true, onPhase, signal, client: given, identity }, settingsOverride) {
+  async function send(spendKey, { to, asset = 0, amountUnits, feeUnits, wait = true, onPhase, signal, client: given, identity }, settingsOverride) {
     const s = settingsOverride || (await currentSettings());
     // The client the caller verified, for every step: the fee, the anchor, the witnesses, the
     // broadcast and every retry. A transfer assembled from two nodes is not a transfer.
     const client = given || (await rpcFor(s));
+    const index = Number(asset) || 0;
     onPhase?.('select');
     const st = await scan(spendKey, { signal, client }, s);
-    const need = toUnits(amountUnits) + toUnits(feeUnits);
-    const sel = await c.selectInputs(st.notes, need.toString(), 0);
+    // The core's own selection, for both groups at once. Everything it can refuse — not enough of
+    // the token, no spendable RAND for the fee, more than two notes either side — is refused here,
+    // before a single witness is fetched and long before a proof is started.
+    const plan = await c.planTransfer({
+      notes: st.notes, asset: index, amount: String(amountUnits), fee: String(feeUnits),
+    });
+    const inputs = plan.inputs || [];
+    const feeInputs = plan.fee_inputs || [];
     onPhase?.('witness');
-    const { anchor, paths } = await anchorAndWitnesses(client, sel.chosen, signal);
+    const { anchor, paths } = await anchorAndWitnesses(client, [...inputs, ...feeInputs], signal);
     onPhase?.('prove');
     const provenChainId = provenChainIdOf(st, identity);
     const res = await c.proveTransfer({
       spend_key: spendKey,
       chain_id: provenChainId,
       to,
+      asset: index,
       amount: String(amountUnits),
-      fee: String(feeUnits),
+      fee: String(plan.fee ?? feeUnits),
       anchor_height: anchor.height,
       anchor_root: anchor.root,
-      inputs: sel.chosen.map((note, i) => ({ note, path: paths[i] })),
+      inputs: inputs.map((note, i) => ({ note, path: paths[i] })),
+      // Empty for a RAND transfer, and the core refuses a non-empty one there: on chain 14 a RAND
+      // transfer's fee comes out of `inputs` itself.
+      fee_inputs: feeInputs.map((note, i) => ({ note, path: paths[inputs.length + i] })),
       profile: 'production',
     });
     // The last point at which nothing has left this device. Past it a failure means the outcome is
@@ -846,8 +892,16 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     for (const n of fresh.notes) if (res.spent_indices.includes(n.index)) n.pending = res.time;
     const toInfo = await c.parseAddress(to);
     const submission = {
-      hash, to, to_pk: toInfo.pk, amount: res.amount, change: res.change, fee: res.fee, time: res.time, tier: res.tier,
-      proof_bytes: res.proof_bytes, tx_key: res.tx_keys[0], commitment: res.commitments[0],
+      hash, to, to_pk: toInfo.pk, asset: Number(res.asset) || 0,
+      amount: res.amount, change: res.change, fee_change: res.fee_change,
+      fee: res.fee, time: res.time, tier: res.tier,
+      proof_bytes: res.proof_bytes,
+      // **The PAYMENT's key and leaf, never `tx_keys[0]`/`commitments[0]`.** Those arrays are four
+      // wide and in SLOT order since chain 14, and slot 0 is the payment only for a token: for a
+      // RAND transfer it is a zero-value dummy sealed to a throwaway wallet that `build_bundle`
+      // generated and dropped, so its key opens nothing, for anybody, including this sender. The
+      // core resolves the right slot and reports these two scalars precisely so no client has to.
+      tx_key: res.payment_tx_key, commitment: res.payment_commitment,
       spent_indices: res.spent_indices, status: 'pending', created_ms: Date.now(),
     };
     fresh.submissions.unshift(submission);
@@ -871,34 +925,32 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
   }
 
   /**
-   * Plan, prove and submit a **bridge burn**: `amount` of a registry (RPL) asset leaves the
-   * shielded pool for `to` on `to_chain`, paid for out of a second bundle of RAND notes.
-   * `onPhase` receives 'select' | 'witness' | 'prove-asset' | 'submit' | 'wait'.
+   * Plan, prove and submit a **bridge burn**: `amount` of an RPL token leaves the shielded pool
+   * for `to` on `to_chain`, redeeming the coin `token` there, paid for in RAND.
+   * `onPhase` receives 'select' | 'witness' | 'prove' | 'submit' | 'wait'.
    *
-   * This is `send()`'s shape with three differences, all of them the chain's:
+   * Since chain 14 this is `send()`'s shape almost exactly — **one bundle, one proof** — with two
+   * differences, both the chain's:
    *
-   *   1. **Two bundles, one anchor.** `plan_burn` selects the asset notes and the RAND fee notes
-   *      separately, and `prove_burn` takes ONE `anchor_height`/`anchor_root` for both — so the
-   *      witnesses for both lists are fetched in a single `anchorAndWitnesses` call, which is
-   *      also the only way to be sure the two halves agree about the tree.
-   *   2. **Two proofs, ~3.5 minutes, one opaque call.** `prove_burn` proves the asset bundle and
-   *      then the fee bundle, sequentially (proving them at once would need ~11 GB and OOM the
-   *      machines that only just clear the gate). The core reports nothing in between, so the
-   *      phase stays `'prove-asset'` — named for the bundle that is proved first — for the whole
-   *      of it, rather than this file inventing progress it cannot observe.
-   *   3. **Nothing is addressed to anybody inside the pool.** Every output of both bundles comes
-   *      back to this wallet; the recipient lives in the action's `to_chain`/`to`. So there is no
-   *      `to_pk`, no per-recipient transaction key to hand over, and the submission record is
-   *      what Activity shows.
+   *   1. **It names the coin it redeems.** One RPL token can be backed by several coins on several
+   *      chains (zUSD is seven), and `Action::BridgeBurn` carries `(to_chain, token)`. A pair that
+   *      does not back this asset, or a coin that is not holding enough, is refused by the ledger
+   *      — which is why `bridge.withdraw` (backend-shared.js) puts the whole question to the
+   *      core's `burn_is_possible` against a fetched `rand_getBridgeState` before any of this runs.
+   *      `wallet-core` does no I/O, and neither does this function's plan step, so unless it
+   *      happens there it does not happen at all.
+   *   2. **Nothing is addressed to anybody inside the pool.** Every output comes back to this
+   *      wallet; the recipient lives in the action's `to_chain`/`to`. So `payment_slot`,
+   *      `payment_tx_key` and `payment_commitment` come back as `null`, there is no `to_pk` and no
+   *      transaction key to hand over, and the submission record is what Activity shows.
    *
-   * The two facts only the chain knows — the bridge is enabled, and this asset is in the registry
-   * — are NOT checked here. `wallet-core` does no I/O and neither does this function's plan step;
-   * `bridge.withdraw` (backend-shared.js) checks them off `rand_getBridgeState` before any of this
-   * runs, because getting them wrong costs the user both proofs for a transaction the chain was
-   * always going to refuse.
+   * The token group and the RAND fee group are slots 0–1 and 2–3 of the SAME bundle, so their
+   * witnesses come from ONE `anchorAndWitnesses` call folded against one root — `prove_burn` takes
+   * a single anchor and the ledger checks the bundle against it. Chain 13's two bundles, its
+   * "asset bundle first, fee bundle second" ordering and its `'prove-asset'` phase are all gone.
    */
   async function burn(spendKey, {
-    asset, amountUnits, relayerFeeUnits = '0', toChain, to, feeUnits,
+    asset, amountUnits, relayerFeeUnits = '0', toChain, token, to, feeUnits,
     wait = true, onPhase, signal, client: given, identity,
   }, settingsOverride) {
     const s = settingsOverride || (await currentSettings());
@@ -916,10 +968,9 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     const assetInputs = plan.inputs || [];
     const feeInputs = plan.fee_inputs || [];
     onPhase?.('witness');
-    // One fetch for both lists, so both bundles are folded against the same root — `prove_burn`
-    // takes a single anchor and the ledger checks both bundles against it.
+    // One fetch for both groups, so the whole bundle is folded against the same root.
     const { anchor, paths } = await anchorAndWitnesses(client, [...assetInputs, ...feeInputs], signal);
-    onPhase?.('prove-asset');
+    onPhase?.('prove');
     const provenChainId = provenChainIdOf(st, identity);
     const res = await c.proveBurn({
       spend_key: spendKey,
@@ -928,6 +979,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       amount: String(amountUnits),
       relayer_fee: String(relayerFeeUnits ?? '0'),
       to_chain: Number(toChain),
+      token: String(token),
       to: String(to),
       fee: String(plan.fee),
       anchor_height: anchor.height,
@@ -941,14 +993,16 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     onPhase?.('submit');
     const hash = checkSubmitted('rand_sendTransaction', await client.sendTransaction(res.tx_hex));
     const fresh = await loadStore();
-    // Both bundles' inputs, asset notes first then RAND — `spent_indices`' documented order.
+    // Both groups' inputs, the token's notes first then RAND — `spent_indices`' documented order.
     for (const n of fresh.notes) if (res.spent_indices.includes(n.index)) n.pending = res.time;
     const submission = {
       hash, kind: 'burn', asset: res.asset, amount: res.amount, relayer_fee: res.relayer_fee,
-      // `to` comes back normalized (lower-cased, `0x` stripped); the bytes are unchanged.
-      to_chain: res.to_chain, to: res.to,
+      // `token` and `to` come back normalized (lower-cased, `0x` stripped); the bytes are unchanged.
+      to_chain: res.to_chain, token: res.token, to: res.to,
       change: res.change, fee: res.fee, fee_change: res.fee_change, time: res.time, tier: res.tier,
       proof_bytes: res.proof_bytes, spent_indices: res.spent_indices,
+      // No `tx_key` and no `commitment`: a burn pays nobody inside the pool, so the core's three
+      // `payment_*` fields are present and null, and there is nothing to disclose to anybody.
       status: 'pending', created_ms: Date.now(),
     };
     fresh.submissions.unshift(submission);

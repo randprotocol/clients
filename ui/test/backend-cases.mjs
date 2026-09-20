@@ -22,6 +22,7 @@ import {
   SPEND_KEY, VIEWING_KEY, PASSWORD, PK, ADDRESS, GENESIS, URL_A, URL_B, URL_C,
   mapStorage, casStorage, drain, stubCore, stubFetch, stubPlatform, chainFetch, nodeWithout,
   nodeFarm, node, unreachable, coreOn, withKdfSpy, assertKeyNeverLeaked, capturingMapWrites,
+  tokenRegistry, zusd, backing, assetRows, USDT_ETH, USDC_ETH, USDT_BSC, NO_SPENDABLE_RAND,
 } from './backend-fixtures.mjs';
 
 /**
@@ -285,10 +286,8 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     await assert.rejects(() => backend.sync.scan(() => {}), /locked/);
   });
 
-  scoped('assets.list puts RAND first and names registry assets RPL#n', async () => {
-    const fetch = stubFetch({
-      rand_getAssets: () => [{ index: 1, chain: 2, token: 'aa'.repeat(32), asset_id: 'dd'.repeat(32) }],
-    });
+  scoped('assets.list puts RAND first and names a token from the chain’s own registry', async () => {
+    const fetch = stubFetch({ rand_getTokens: () => tokenRegistry() });
     const { backend, storage } = build({ fetch });
     await backend.wallet.create(PASSWORD);
     const list = await backend.assets.list();
@@ -298,32 +297,39 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.equal(list[0].decimals, 9);
     assert.equal(list[0].id, 'rand');
     assert.equal(list[0].balance, '0');
+    // Chain 14: a token has a REAL name, symbol, id and decimal count. `RPL#<index>` at nine
+    // decimals was a stand-in for a registry that carried none of them, and is now a lie.
     assert.equal(list[1].index, 1);
-    assert.equal(list[1].symbol, 'RPL#1');
-    assert.equal(list[1].decimals, 9);
-    assert.equal(list[1].id, 'dd'.repeat(32));
-    assert.equal('name' in list[1], false, 'an RPL asset has no display name until a token table exists');
-    // Cached for an offline start.
-    assert.ok(storage.local.get('assets'));
+    assert.equal(list[1].symbol, 'zUSD');
+    assert.equal(list[1].name, 'Shielded USD');
+    assert.equal(list[1].decimals, 8, 'a bridged token is eight decimals on Rand, never RAND’s nine');
+    assert.equal(list[1].id, zusd().id);
+    assert.equal(list[1].idText, zusd().id_text);
+    assert.equal(list[1].unlisted, undefined, 'a token the node listed is not a fallback');
+    // Cached for an offline start, exactly as the registry was.
+    assert.ok(storage.local.get('tokens'));
   });
 
-  scoped('assets.list carries a registry asset’s origin chain and token through', async () => {
-    const fetch = stubFetch({
-      rand_getAssets: () => [{ index: 1, chain: 2, token: 'aa'.repeat(32), asset_id: 'dd'.repeat(32) }],
-    });
+  scoped('assets.list carries EVERY backing, not the last one to be read', async () => {
+    // zUSD is one token backed by several coins. `byIndex.set(index, row)` over `rand_getAssets`
+    // kept only the last, so the withdraw flow offered one destination out of seven — and burning
+    // to the wrong coin is `NotABacking`, learned after a proof.
+    const fetch = stubFetch({ rand_getTokens: () => tokenRegistry() });
     const { backend } = build({ fetch });
     await backend.wallet.create(PASSWORD);
     const list = await backend.assets.list();
-    // `chain` is the asset's ORIGIN chain, and a burn's destination must be exactly it
-    // (`BridgeState::check_burn`). It used to be dropped here, which left the withdraw flow
-    // asking the user to re-enter a fact the node had already answered.
-    assert.equal(list[1].chain, 2);
-    assert.equal(list[1].token, 'aa'.repeat(32));
-    // RAND is not a registry asset and has neither.
-    assert.equal('chain' in list[0], false);
+    assert.deepEqual(list[1].backings, [
+      { chain: 2, token: USDT_ETH, locked: '900000000', decimals: 6 },
+      { chain: 2, token: USDC_ETH, locked: '0', decimals: 6 },
+      { chain: 3, token: USDT_BSC, locked: '900000000', decimals: 18 },
+    ]);
+    // RAND is this chain's own token and is backed by nothing.
+    assert.equal('backings' in list[0], false);
+    // And nothing pretends there is one origin chain any more.
+    assert.equal('chain' in list[1], false, 'a single `chain` cannot name seven backings');
   });
 
-  scoped('assets.list invents no chain for an asset the registry does not list', async () => {
+  scoped('assets.list keeps a fallback name for a held index the node does not list, and says so', async () => {
     const { backend, storage } = build();
     await backend.wallet.create(PASSWORD);
     const notes = storage.local.get('notes');
@@ -331,14 +337,37 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     storage.local.set('notes', notes);
     const list = await backend.assets.list();
     assert.equal(list[1].index, 3);
-    assert.equal('chain' in list[1], false, 'a guessed origin chain would send a burn nowhere');
+    assert.equal(list[1].symbol, 'RPL#3');
+    assert.equal(list[1].balance, '7');
+    assert.equal(list[1].unlisted, true, 'a screen must be able to say this name is the wallet’s own guess');
+    assert.equal('backings' in list[1], false, 'a guessed backing would send a burn nowhere');
+  });
+
+  scoped('assets.list pages the token registry and stops when a page is short', async () => {
+    const asked = [];
+    const many = Array.from({ length: 1000 }, (_, i) => ({ ...zusd(), index: i + 1, symbol: `T${i + 1}` }));
+    const fetch = stubFetch({
+      rand_getTokens: (params) => {
+        asked.push(params);
+        const from = Number((params && params[0]) || 0);
+        const page = many.filter((t) => t.index >= from).slice(0, 1000);
+        return { enabled: true, registration_fee: '0', next_index: 1001, tokens: page };
+      },
+    });
+    const { backend } = build({ fetch });
+    await backend.wallet.create(PASSWORD);
+    const list = await backend.assets.list();
+    assert.equal(list.length, 1001, 'RAND plus every listed token');
+    assert.deepEqual(asked[0], [0, 1000], 'the node’s own MAX_TOKEN_PAGE, from the start');
+    assert.equal(asked.length, 2, 'a full page is followed up; the short one after it ends the walk');
+    assert.deepEqual(asked[1], [1001, 1000]);
   });
 
   scoped('bridge.state and bridge.canWithdraw both refuse a chain with no bridge', async () => {
     const { backend } = build();
     await backend.wallet.create(PASSWORD);
     // The default stub node answers `{enabled: false}` — a chain with no bridge at all.
-    assert.deepEqual(await backend.bridge.state(), { enabled: false, chains: [] });
+    assert.deepEqual(await backend.bridge.state(), { enabled: false, chains: [], mintPaused: false });
     const can = await backend.bridge.canWithdraw();
     assert.equal(can.ok, false);
     assert.ok(can.reason, 'and says why, in words meant for the user');
@@ -353,22 +382,52 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
         guardian_set_index: 0,
         guardians: [],
         burn_sequence: 3,
-        next_index: 2,
-        assets: [{ index: 1, chain: 2, token: 'cc'.repeat(32), asset_id: 'dd'.repeat(32) }],
+        // Chain 14 dropped `next_index` (a bridged token is listed under an index the
+        // registration already fixed) and added `mint_paused`.
+        mint_paused: false,
+        assets: assetRows(),
       }),
     });
     const { backend } = build({ fetch });
     await backend.wallet.create(PASSWORD);
-    assert.deepEqual(await backend.bridge.state(), { enabled: true, chains: [2, 4] });
+    assert.deepEqual(await backend.bridge.state(), { enabled: true, chains: [2, 4], mintPaused: false });
   });
 
-  scoped('assets.list still answers when the registry RPC fails', async () => {
-    const fetch = stubFetch({ rand_getAssets: () => { throw new Error('no bridge here'); } });
+  scoped('bridge.state reports a paused mint, which is not the same as no bridge', async () => {
+    // B1: while minting is paused, deposits do not arrive — but burns stay open, so a wallet can
+    // still withdraw and should be able to say why nothing is coming in.
+    const fetch = stubFetch({
+      rand_getBridgeState: () => ({
+        enabled: true, emitters: { 2: 'aa'.repeat(20) }, mint_paused: true, assets: assetRows(),
+      }),
+    });
+    const { backend } = build({ fetch });
+    await backend.wallet.create(PASSWORD);
+    const state = await backend.bridge.state();
+    assert.equal(state.enabled, true);
+    assert.equal(state.mintPaused, true);
+  });
+
+  scoped('assets.list still answers when the token registry RPC fails', async () => {
+    const fetch = stubFetch({ rand_getTokens: () => { throw new Error('no tokens here'); } });
     const { backend } = build({ fetch });
     await backend.wallet.create(PASSWORD);
     const list = await backend.assets.list();
     assert.equal(list.length, 1);
     assert.equal(list[0].symbol, 'RAND');
+  });
+
+  scoped('assets.list starts offline from the cached registry', async () => {
+    // The registry is cached so a reload opens on the symbols it had rather than on `RPL#1`.
+    const storage = mapStorage();
+    const online = build({ storage, fetch: stubFetch({ rand_getTokens: () => tokenRegistry() }) });
+    await online.backend.wallet.create(PASSWORD);
+    await online.backend.assets.list();
+
+    const offline = build({ storage, fetch: stubFetch({ rand_getTokens: () => { throw new Error('offline'); } }) });
+    const list = await offline.backend.assets.list();
+    assert.equal(list[1].symbol, 'zUSD', 'an offline start lost the token registry');
+    assert.equal(list[1].decimals, 8);
   });
 
   scoped('assets.list includes an asset the note store holds even without a registry', async () => {
@@ -395,21 +454,48 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.equal(est.inputs, 1);
     assert.equal(est.change, '3999000000');
     assert.equal(est.proofs, 1);
+    // Chain 14: a RAND transfer pays its fee out of `inputs`, so there is no second group.
+    assert.equal(est.feeInputs, 0);
+    assert.equal(est.feeChange, '0');
     assert.ok(fetch.requests.some((r) => r.body.method === 'rand_estimateFee'));
-    assert.ok(core.calls.some(([m]) => m === 'select_inputs'));
+    assert.ok(core.calls.some(([m]) => m === 'plan_transfer'), 'the estimate is the core’s own plan');
   });
 
-  scoped('estimate refuses an RPL asset in the words the UI shows', async () => {
-    const { backend } = build();
+  scoped('estimate plans a TOKEN transfer, with the RAND fee in its own group', async () => {
+    const { backend, storage, core } = build();
     await backend.wallet.create(PASSWORD);
-    await assert.rejects(
-      () => backend.send.estimate({ asset: 1, to: ADDRESS, amount: '1' }),
-      /RPL transfers are not available on this network\./,
-    );
+    const notes = storage.local.get('notes');
+    notes.notes = [
+      { index: 0, amount: '5000000000', asset: 0, spent: false, pending: null, height: 1, cm: 'x', nf: 'y', time: 1 },
+      { index: 1, amount: '500', asset: 1, spent: false, pending: null, height: 1, cm: 'z', nf: 'w', time: 1 },
+    ];
+    storage.local.set('notes', notes);
+
+    const est = await backend.send.estimate({ asset: 1, to: ADDRESS, amount: '100' });
+    assert.equal(est.inputs, 1, 'the token group');
+    assert.equal(est.feeInputs, 1, 'and the RAND group that pays the fee');
+    assert.equal(est.change, '400', 'change is in units of the token');
+    assert.equal(est.feeChange, '4999000000', 'and the RAND change is its own figure');
+    assert.equal(est.fee, '1000000');
+    assert.equal(est.proofs, 1, 'one bundle, one proof — for a token exactly as for RAND');
+    const [, planned] = core.calls.find(([m]) => m === 'plan_transfer');
+    assert.equal(planned.asset, 1, 'the asset never reached the core');
+  });
+
+  scoped('a token transfer with no spendable RAND is refused in the core’s own words', async () => {
+    const { backend, storage } = build();
+    await backend.wallet.create(PASSWORD);
+    const notes = storage.local.get('notes');
+    notes.notes = [{ index: 1, amount: '500', asset: 1, spent: false, pending: null, height: 1, cm: 'z', nf: 'w', time: 1 }];
+    storage.local.set('notes', notes);
+    await assert.rejects(() => backend.send.estimate({ asset: 1, to: ADDRESS, amount: '100' }), (err) => {
+      assert.equal(err.message, NO_SPENDABLE_RAND);
+      return true;
+    });
   });
 
   scoped('estimate surfaces the core-s own consolidate message', async () => {
-    const core = stubCore({ select_inputs: () => { throw new Error('need more than two notes; the largest two hold 3 RAND — consolidate first by sending to your own address'); } });
+    const core = stubCore({ plan_transfer: () => { throw new Error('need more than two notes; the largest two hold 3 RAND — consolidate first by sending to your own address'); } });
     const { backend } = build({ core });
     await backend.wallet.create(PASSWORD);
     await assert.rejects(
@@ -437,6 +523,28 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     const { backend } = build();
     await backend.wallet.create(PASSWORD);
     assert.deepEqual(await backend.send.maxSendable({ asset: 0 }), { amount: '0', fee: '1000000' });
+  });
+
+  scoped('maxSendable for a TOKEN does not subtract the RAND fee, and says when it cannot be paid', async () => {
+    const { backend, storage, core } = build();
+    await backend.wallet.create(PASSWORD);
+    const token = { index: 1, amount: '500', asset: 1, spent: false, pending: null, height: 1, cm: 'z', nf: 'w', time: 1 };
+    const notes = storage.local.get('notes');
+    notes.notes = [token, { index: 0, amount: '5000000000', asset: 0, spent: false, pending: null, height: 1, cm: 'x', nf: 'y', time: 1 }];
+    storage.local.set('notes', notes);
+    const max = await backend.send.maxSendable({ asset: 1 });
+    assert.equal(max.amount, '500', 'the fee is RAND, from the other group — it never comes off the token');
+    assert.equal(max.fee, '1000000');
+    assert.equal(max.reason, undefined);
+    const [, asked] = core.calls.find(([m]) => m === 'max_sendable');
+    assert.equal(asked.asset, 1);
+
+    // The same wallet without any RAND: zero, and the core's sentence saying why.
+    notes.notes = [token];
+    storage.local.set('notes', notes);
+    const blocked = await backend.send.maxSendable({ asset: 1 });
+    assert.equal(blocked.amount, '0');
+    assert.equal(blocked.reason, NO_SPENDABLE_RAND, 'a "you can send 0" with no reason is a dead end');
   });
 
   scoped('rpc.call only allows rand_ and bridge_ methods', async () => {
@@ -789,12 +897,12 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     );
 
     // The registry is best-effort, so a bad one falls back to the cache and RAND still answers.
-    const assetEnv = build({ fetch: stubFetch({ rand_getAssets: () => [{ index: 'one' }] }) });
+    const assetEnv = build({ fetch: stubFetch({ rand_getTokens: () => ({ enabled: true, tokens: [{ index: 'one' }] }) }) });
     await assetEnv.backend.wallet.create(PASSWORD);
     const list = await assetEnv.backend.assets.list();
     assert.equal(list.length, 1);
     assert.equal(list[0].symbol, 'RAND');
-    assert.equal(assetEnv.storage.local.get('assets'), undefined, 'a malformed registry was cached');
+    assert.equal(assetEnv.storage.local.get('tokens'), undefined, 'a malformed registry was cached');
   });
 
   scoped('a note store poisoned with NaN cursors self-heals, keeps its notes, and says so once', async () => {
@@ -929,7 +1037,13 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
 
   // ---- 8. the two-note rule belongs to the chain --------------------------------------------- //
 
-  scoped('maxSendable follows the core when it reports how many notes a bundle spends', async () => {
+  scoped('maxSendable is the CORE-s answer, not a selection rule written here', async () => {
+    // How many notes a bundle spends, and whether the fee comes off the amount, are the chain's
+    // rules. This file used to reimplement both — "the largest N spendable notes, less the fee" —
+    // which was true only of RAND and only while N was whatever `version.bundle_inputs` said. The
+    // core's `max_sendable` is held to agree with its own `plan_transfer` by a property test in
+    // the crate, so asking it is the only way the number shown and the number that can actually
+    // be sent cannot drift.
     const notes = [
       { index: 0, amount: '3000000000', asset: 0, spent: false, pending: null, height: 1, cm: 'a', nf: 'b', time: 1 },
       { index: 1, amount: '2000000000', asset: 0, spent: false, pending: null, height: 1, cm: 'c', nf: 'd', time: 1 },
@@ -940,15 +1054,15 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
       storage.local.set('notes', { ...storage.local.get('notes'), notes });
     };
 
-    // Default: the engine's BUNDLE_INPUTS of two — the largest two, less the fee.
     const plain = build();
     await seed(plain.backend, plain.storage);
     assert.equal((await plain.backend.send.maxSendable({ asset: 0 })).amount, '4999000000');
+    assert.ok(plain.core.calls.some(([m]) => m === 'max_sendable'), 'the answer was computed here');
 
-    // A core that says three takes precedence over anything this JavaScript believes.
-    const three = build({ core: stubCore({ version: () => ({ ...stubCore().callDefaults, default_chain_id: 13, token_symbol: 'RAND', token_decimals: 9, bundle_inputs: 3 }) }) });
-    await seed(three.backend, three.storage);
-    assert.equal((await three.backend.send.maxSendable({ asset: 0 })).amount, '5999000000');
+    // A core that selects differently is simply believed: nothing here second-guesses it.
+    const generous = build({ core: stubCore({ max_sendable: ({ fee }) => ({ amount: '5999000000', fee: String(fee), inputs: 3, fee_inputs: 0, reason: null }) }) });
+    await seed(generous.backend, generous.storage);
+    assert.equal((await generous.backend.send.maxSendable({ asset: 0 })).amount, '5999000000');
   });
 
   // =============================================================== fix round 2 ====================
@@ -1812,6 +1926,28 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     // Even a caller that passes one explicitly cannot persist it.
     await moved.settings.set({ rpcUrls: [URL_A, URL_B] });
     assert.deepEqual((await moved.settings.get()).rpcUrls, [URL_C]);
+    assert.equal(Object.prototype.hasOwnProperty.call(storage.local.get('settings'), 'rpcUrls'), false);
+  });
+
+  scoped('FAILOVER: a stale endpoint set already sitting in storage is ignored on READ', async () => {
+    // Task 5.0 finding N1: `setSettings` refuses to WRITE `rpcUrls`, and the case above pins that
+    // — but the other half is the read. A wallet built before that rule, or one whose storage was
+    // written by hand or by a migration, has a set in there already; merged back in it would
+    // freeze that build's hosts for ever and no release could move them. None of the three is live
+    // yet, so this is the failure that would ship.
+    const storage = mapStorage();
+    storage.local.set('settings', {
+      theme: 'dark', autoLockMin: 5,
+      rpcUrls: ['https://rpc-from-an-older-build.example', 'https://another.example'],
+    });
+    const { backend } = build({ storage, core: coreOn([URL_A, URL_B]) });
+    const s = await backend.settings.get();
+    assert.deepEqual(s.rpcUrls, [URL_A, URL_B], 'a persisted endpoint set was read back as the wallet-s');
+    // …and everything that IS a user setting survived being read past.
+    assert.equal(s.theme, 'dark');
+    assert.equal(s.autoLockMin, 5);
+    // The next write does not carry it back either.
+    await backend.settings.set({ theme: 'light' });
     assert.equal(Object.prototype.hasOwnProperty.call(storage.local.get('settings'), 'rpcUrls'), false);
   });
 

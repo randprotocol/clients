@@ -223,13 +223,45 @@ export function checkFee(reply) {
   return unitsField('rand_estimateFee', 'the fee', reply);
 }
 
-/** `rand_getAssets` → the bridge registry, ascending by index; `[]` on a chain without a bridge. */
+/** No page of the token registry may be larger than the node's own `MAX_TOKEN_PAGE`. */
+export const MAX_TOKEN_PAGE = 1000;
+/** A token's `name`/`symbol`/`id_text` are node-controlled text and go straight into the UI. */
+const MAX_TOKEN_TEXT = 128;
+
+/**
+ * The three decimal-string amounts and the UTC day number every **backing** row carries since the
+ * bridge-hardening amendment, checked in the one place both `rand_getAssets` rows and
+ * `rand_getTokens`' `authority.backings` pass through.
+ *
+ * `decimals` is the **source coin's**, not the token's eight on Rand — 18 for USDT on BSC — and it
+ * is what `wallet-core`'s `burn_is_possible` derives the release unit from through the chain's own
+ * `tokens::release_unit`. A `decimals` a node made up would change what the wallet believes a
+ * whole unit is, so it is bounded to the `u8` the chain stores.
+ */
+function backingFields(m, what, row) {
+  if (row.decimals !== undefined && row.decimals !== null) intField(m, `${what} decimals`, row.decimals, { max: 0xff });
+  for (const key of ['locked', 'mint_cap_per_day', 'minted_today']) {
+    if (row[key] !== undefined && row[key] !== null) unitsField(m, `${what} ${key}`, row[key]);
+  }
+  // A UTC day number, not an amount — the node renders it as a plain integer, deliberately.
+  if (row.mint_day !== undefined && row.mint_day !== null) intField(m, `${what} mint_day`, row.mint_day);
+}
+
+/**
+ * `rand_getAssets` → the bridge registry, ascending by index; `[]` on a chain without a bridge.
+ *
+ * **One row per BACKING since chain 14**, not one per asset: several rows share an `index` (zUSD
+ * is seven rows at index 1), and which of them a burn names is the difference between a release
+ * and `NotABacking`. Nothing here collapses them — that is `assets.list()`'s job, and it keeps
+ * them all.
+ */
 export function checkAssets(reply, { max = 4096 } = {}) {
   const m = 'rand_getAssets';
   const rows = arrayReply(m, reply, max);
   rows.forEach((row, i) => {
     if (!row || typeof row !== 'object') fail(m, `row ${i} is not an object`, row);
     intField(m, `row ${i} index`, row.index);
+    backingFields(m, `row ${i}`, row);
     // `chain` is a **bridge chain id**, the same thing `checkBridgeState` bounds its derived
     // `chains` to, and a `u16` on the chain's side (`AssetInfo.chain`, and
     // `Action::BridgeBurn.to_chain`). Bounded here rather than at either caller because both of
@@ -243,6 +275,84 @@ export function checkAssets(reply, { max = 4096 } = {}) {
     if (row.asset_id !== undefined && row.asset_id !== null) hexField(m, `row ${i} asset_id`, row.asset_id, 64);
   });
   return rows;
+}
+
+/**
+ * `rand_getTokens` → `{enabled, next_index, registration_fee, tokens: [...]}` — chain 14's RPL
+ * token registry, and the only place a token's real `name`, `symbol`, `decimals` and `id_text`
+ * exist. (`rand_getAssets` carries the bridge's backing rows and no names at all; before chain 14
+ * a wallet had nothing better than `RPL#<index>` at nine decimals, which is now a lie — a bridged
+ * token is eight decimals on Rand and says so.)
+ *
+ * The one reshaping this does: a **bridged** token's coins live under `authority.backings`, and a
+ * native one has none. They are lifted to a plain `backings` array — empty for a native token —
+ * because every caller wants "which coins hold this token's value", and none of them wants to
+ * branch on an authority kind to find out. `authority` itself is dropped: nothing in this wallet
+ * mints, and its `key`/`program` are bytes no screen has any use for.
+ *
+ * `enabled: false` (a chain with no `tokens` section) is an answer, not an error.
+ */
+export function checkTokens(reply, { max = MAX_TOKEN_PAGE } = {}) {
+  const m = 'rand_getTokens';
+  const r = objectReply(m, reply);
+  const rows = arrayReply(m, r.tokens === undefined || r.tokens === null ? [] : r.tokens, max);
+  const tokens = rows.map((row, i) => {
+    if (!row || typeof row !== 'object') fail(m, `row ${i} is not an object`, row);
+    // Index 0 is RAND and is never listed (the node's own docs say so). A row claiming it is a
+    // node lying about the native token, and it would collide with `assets.list()`'s own entry.
+    const index = intField(m, `row ${i} index`, row.index);
+    if (index < 1) fail(m, `row ${i} index is 0, which is RAND and is never in the registry`);
+    hexField(m, `row ${i} id`, row.id, 64);
+    // A token's own decimals on Rand: the chain stores 0..=9 (`ledger::tokens`), and a bridged
+    // one is always 8. Anything else would misprint every balance of it.
+    const decimals = intField(m, `row ${i} decimals`, row.decimals, { max: 9 });
+    unitsField(m, `row ${i} total_supply`, row.total_supply);
+    const text = (what, value, required) => {
+      if (value === undefined || value === null) {
+        if (required) fail(m, `row ${i} ${what} is missing`);
+        return undefined;
+      }
+      if (typeof value !== 'string' || value.length > MAX_TOKEN_TEXT) {
+        fail(m, `row ${i} ${what} is not text of at most ${MAX_TOKEN_TEXT} characters`, value);
+      }
+      return value;
+    };
+    const authority = row.authority && typeof row.authority === 'object' && !Array.isArray(row.authority)
+      ? row.authority
+      : {};
+    const raw = Array.isArray(authority.backings) ? authority.backings : [];
+    if (raw.length > max) fail(m, `row ${i} has ${raw.length} backings`);
+    const backings = raw.map((b, j) => {
+      if (!b || typeof b !== 'object') fail(m, `row ${i} backing ${j} is not an object`, b);
+      // The same bound `checkAssets` puts on a registry row's chain: a `u16` `to_chain`.
+      intField(m, `row ${i} backing ${j} chain`, b.chain, { max: 0xffff });
+      hexField(m, `row ${i} backing ${j} token`, b.token, 64);
+      backingFields(m, `row ${i} backing ${j}`, b);
+      return {
+        chain: b.chain,
+        token: b.token,
+        locked: b.locked === undefined || b.locked === null ? '0' : String(b.locked),
+        decimals: Number(b.decimals ?? 0),
+      };
+    });
+    const out = {
+      index, id: row.id, symbol: text('symbol', row.symbol, true), decimals,
+      totalSupply: String(row.total_supply), backings,
+    };
+    const name = text('name', row.name, false);
+    if (name) out.name = name;
+    const idText = text('id_text', row.id_text, false);
+    if (idText) out.idText = idText;
+    return out;
+  });
+  return {
+    enabled: r.enabled === true,
+    next_index: r.next_index === undefined || r.next_index === null ? 0 : intField(m, 'next_index', r.next_index),
+    registration_fee: r.registration_fee === undefined || r.registration_fee === null
+      ? '0'
+      : unitsField(m, 'registration_fee', r.registration_fee),
+    tokens,
+  };
 }
 
 /**
@@ -337,23 +447,33 @@ export function checkSubmitted(method, reply) {
 }
 
 /**
- * `rand_getBridgeState` → `{enabled, chains, assets}`.
+ * `rand_getBridgeState` → `{enabled, chains, assets, mintPaused}`.
  *
  * **There is no `chains` field on the wire.** The node's own reply (fullnode
  * `randprotocol-node/src/rpc.rs`, `"rand_getBridgeState"`) is `{enabled, emitter, emitters:
- * {"<chain>": "<addr hex>"}, guardian_set_index, guardians, burn_sequence, next_index, assets}`
- * when a bridge is configured, and the single field `{enabled: false}` when it is not. The set of
- * chains this bridge knows is the **keys of `emitters`**, derived here so nobody goes looking for
- * a summary the node never sends.
+ * {"<chain>": "<addr hex>"}, guardian_set_index, guardians, pq_guardians, mint_paused,
+ * pause_nonce, list_nonce, pause_key, registration_fee, burn_sequence, assets}` when a bridge is
+ * configured, and the single field `{enabled: false}` when it is not. The set of chains this
+ * bridge knows is the **keys of `emitters`**, derived here so nobody goes looking for a summary
+ * the node never sends.
  *
  * `assets` is the same registry `rand_getAssets` returns — both are built by the node's one
- * `assets_json(&bridge)` — and it is what says whether a given asset index was ever deposited.
- * `burnIsPossible` (backend-shared.js) reads exactly these two fields.
+ * `assets_json(&bridge)`, one row per backing — and it is what `wallet-core`'s `burn_is_possible`
+ * reads to decide whether a burn is worth proving. It is passed through whole, extra fields and
+ * all, because that function needs a row's `decimals` and `locked`, not just its index.
+ *
+ * `mintPaused` (bridge hardening B1) is reported rather than folded into `enabled`: while it is
+ * true the chain refuses every transfer attest, so nothing arrives — but burns stay open, so a
+ * wallet can still withdraw and should be able to say why nothing is coming in.
+ *
+ * **`next_index` is gone** from chain 14's reply and is not read here: a bridged token is listed
+ * under an index its registration already fixed, so there is no index left to predict.
  */
 export function checkBridgeState(reply) {
   const m = 'rand_getBridgeState';
   const state = objectReply(m, reply);
   const enabled = state.enabled === true;
+  const mintPaused = state.mint_paused === true;
   const chains = [];
   const emitters = state.emitters;
   if (emitters && typeof emitters === 'object' && !Array.isArray(emitters)) {
@@ -371,5 +491,5 @@ export function checkBridgeState(reply) {
   // Absent on a bridge-less chain, and validated exactly as the registry call's own rows are —
   // one implementation, because they are one reply.
   const assets = state.assets === undefined || state.assets === null ? [] : checkAssets(state.assets);
-  return { enabled, chains, assets };
+  return { enabled, chains, assets, mintPaused };
 }

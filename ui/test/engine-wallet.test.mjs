@@ -74,6 +74,23 @@ function stubClient(table = {}) {
 const GENESIS_A = 'aa'.repeat(32);
 const GENESIS_B = 'bb'.repeat(32);
 
+/**
+ * A chain-14 `prove_transfer` result: FOUR slots in slot order, plus the three `payment_*`
+ * scalars that say which of them is the payment. Slot 0 of a RAND transfer is a zero-value dummy
+ * sealed to a throwaway wallet, so `tx_keys[0]`/`commitments[0]` here are deliberately NOT the
+ * payment's — a wallet that reads them hands its recipient a key that opens nothing.
+ */
+const PAYMENT_KEY = HEX64('a2');
+const PAYMENT_CM = HEX64('cc');
+const PROVED = {
+  tx_hex: 'ab', spent_indices: [0], time: 1, asset: 0, amount: '1', change: '0', fee_change: '0',
+  fee: '1', tier: 14, proof_bytes: 1, tx_bytes: 2, hash: HEX64('dd'), proofs: 1,
+  nullifiers: [HEX64('01'), HEX64('02'), HEX64('03'), HEX64('04')],
+  commitments: [HEX64('d0'), HEX64('d1'), PAYMENT_CM, HEX64('d3')],
+  tx_keys: [HEX64('e0'), HEX64('e1'), PAYMENT_KEY, HEX64('e3')],
+  payment_slot: 2, payment_tx_key: PAYMENT_KEY, payment_commitment: PAYMENT_CM,
+};
+
 test('BUNDLE_INPUTS is the chain rule, written down once', () => {
   assert.equal(BUNDLE_INPUTS, 2);
 });
@@ -665,13 +682,10 @@ test('the proof commits to the VERIFIED chain, not to whatever settings say', as
   // backend will copy this file's shape.
   const proofs = [];
   const core = stubCore({
-    select_inputs: ({ notes }) => ({ chosen: notes.slice(0, 1), need: '1', change: '0' }),
+    plan_transfer: ({ notes }) => ({ inputs: notes.slice(0, 1), fee_inputs: [], need: '1', change: '0', fee_change: '0', fee: '1', proofs: 1 }),
     prove_transfer: (req) => {
       proofs.push(req.chain_id);
-      return {
-        tx_hex: 'ab', spent_indices: [0], time: 1, amount: '1', change: '0', fee: '1',
-        tier: 14, proof_bytes: 1, tx_keys: ['aa'], commitments: [HEX64('cc')], hash: HEX64('dd'),
-      };
+      return PROVED;
     },
     parse_address: () => ({ valid: true, pk: HEX64('ee'), error: null }),
   });
@@ -697,7 +711,7 @@ test('the proof commits to the VERIFIED chain, not to whatever settings say', as
 
 test('a proof is refused when the store and the verified identity disagree', async () => {
   const core = stubCore({
-    select_inputs: ({ notes }) => ({ chosen: notes.slice(0, 1), need: '1', change: '0' }),
+    plan_transfer: ({ notes }) => ({ inputs: notes.slice(0, 1), fee_inputs: [], need: '1', change: '0', fee_change: '0', fee: '1', proofs: 1 }),
     prove_transfer: () => { throw new Error('prove_transfer must not be reached'); },
   });
   const note = {
@@ -724,11 +738,8 @@ test('PROBE: send\'s post-commit re-scan stays on the client the gate verified',
   // the re-scan to a node the gate never verified — exactly the shape of bug fix round 5 closed
   // everywhere else in this file.
   const core = stubCore({
-    select_inputs: ({ notes }) => ({ chosen: notes.slice(0, 1), need: '1', change: '0' }),
-    prove_transfer: () => ({
-      tx_hex: 'ab', spent_indices: [0], time: 1, amount: '1', change: '0', fee: '1',
-      tier: 14, proof_bytes: 1, tx_keys: ['aa'], commitments: [HEX64('cc')], hash: HEX64('dd'),
-    }),
+    plan_transfer: ({ notes }) => ({ inputs: notes.slice(0, 1), fee_inputs: [], need: '1', change: '0', fee_change: '0', fee: '1', proofs: 1 }),
+    prove_transfer: () => PROVED,
     parse_address: () => ({ valid: true, pk: HEX64('ee'), error: null }),
   });
   const note = {
@@ -770,13 +781,10 @@ test('send falls back to the store\'s chain_id when the gate hands back no ident
   // B) — but the fallback below it is the load-bearing safety net if that ever regresses, and it
   // must keep working: the store's `chain_id` was itself just verified by the scan that wrote it.
   const core = stubCore({
-    select_inputs: ({ notes }) => ({ chosen: notes.slice(0, 1), need: '1', change: '0' }),
+    plan_transfer: ({ notes }) => ({ inputs: notes.slice(0, 1), fee_inputs: [], need: '1', change: '0', fee_change: '0', fee: '1', proofs: 1 }),
     prove_transfer: (req) => {
       assert.equal(req.chain_id, 13, 'did not fall back to the verified store\'s chain id');
-      return {
-        tx_hex: 'ab', spent_indices: [0], time: 1, amount: '1', change: '0', fee: '1',
-        tier: 14, proof_bytes: 1, tx_keys: ['aa'], commitments: [HEX64('cc')], hash: HEX64('dd'),
-      };
+      return PROVED;
     },
     parse_address: () => ({ valid: true, pk: HEX64('ee'), error: null }),
   });
@@ -793,4 +801,110 @@ test('send falls back to the store\'s chain_id when the gate hands back no ident
   const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({ chainId: 99 }), annotate: false });
   // No `identity` at all — the shape a caller gets from a gate whose verdict carried none.
   await wallet.send(SPEND_KEY, { to: 'rand1x', amountUnits: '1', feeUnits: '1', wait: false, client });
+});
+
+// ------------------------------------------------------------------------- task 6.2 -----------
+
+/**
+ * **The payment is not slot 0.** Chain 14's bundle has four slots and two layouts: a RAND transfer
+ * pays from slot 2 (slots 0–1 are dummies sealed to a throwaway wallet `build_bundle` drops), a
+ * token transfer pays from slot 0. The core resolves it and reports `payment_tx_key` /
+ * `payment_commitment`; a wallet that keeps indexing at 0 produces a receipt that opens nothing,
+ * silently, for every RAND transfer it ever makes.
+ */
+test('the submission records the PAYMENT’s key and commitment, not slot 0’s', async () => {
+  const core = stubCore({
+    plan_transfer: ({ notes }) => ({ inputs: notes.slice(0, 1), fee_inputs: [], need: '1', change: '0', fee_change: '0', fee: '1', proofs: 1 }),
+    prove_transfer: () => PROVED,
+    parse_address: () => ({ valid: true, pk: HEX64('ee'), error: null }),
+  });
+  const note = {
+    index: 0, note: '00'.repeat(112), cm: HEX64('0b'), nf: HEX64('0c'),
+    amount: '5000000000', asset: 0, time: 4, from: '00'.repeat(32), height: 4, spent: false, pending: null,
+  };
+  const store = memoryStore({ ...emptyNoteStore(), notes: [note], chain_id: 13, genesis: GENESIS_A, scanned_index: 1 });
+  const client = stubClient({
+    anchor: () => ({ height: 20, root: HEX64('ab') }),
+    witness: () => ({ index: 0, root: HEX64('ab'), path: Array.from({ length: 32 }, () => HEX64('00')) }),
+    sendTransaction: () => HEX64('dd'),
+  });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+  const sub = await wallet.send(SPEND_KEY, {
+    to: 'rand1x', amountUnits: '1', feeUnits: '1', wait: false, client, identity: { chainId: 13, genesis: GENESIS_A },
+  });
+
+  assert.equal(sub.tx_key, PAYMENT_KEY, 'the receipt carries a dummy slot’s key: it opens nothing');
+  assert.equal(sub.commitment, PAYMENT_CM);
+  assert.notEqual(PROVED.tx_keys[0], PAYMENT_KEY, 'the fixture no longer distinguishes the two');
+  assert.equal(store.current.submissions[0].tx_key, PAYMENT_KEY);
+});
+
+test('a TOKEN transfer threads its asset and its RAND fee group into one proof, off one anchor', async () => {
+  const proved = [];
+  const core = stubCore({
+    plan_transfer: ({ notes, asset }) => ({
+      inputs: notes.filter((n) => Number(n.asset) === Number(asset)),
+      fee_inputs: notes.filter((n) => Number(n.asset) === 0),
+      need: '100', change: '400', fee_change: '4999000000', fee: '1000000', proofs: 1,
+    }),
+    prove_transfer: (req) => { proved.push(req); return { ...PROVED, asset: 1, payment_slot: 0, payment_tx_key: PROVED.tx_keys[0], payment_commitment: PROVED.commitments[0] }; },
+    parse_address: () => ({ valid: true, pk: HEX64('ee'), error: null }),
+  });
+  const rand = {
+    index: 0, note: '00'.repeat(112), cm: HEX64('0b'), nf: HEX64('0c'),
+    amount: '5000000000', asset: 0, time: 4, from: '00'.repeat(32), height: 4, spent: false, pending: null,
+  };
+  const token = { ...rand, index: 1, cm: HEX64('1b'), nf: HEX64('1c'), amount: '500', asset: 1 };
+  const store = memoryStore({ ...emptyNoteStore(), notes: [rand, token], chain_id: 13, genesis: GENESIS_A, scanned_index: 2 });
+  let anchors = 0;
+  const client = stubClient({
+    anchor: () => { anchors += 1; return { height: 20, root: HEX64('ab') }; },
+    witness: (i) => ({ index: i, root: HEX64('ab'), path: Array.from({ length: 32 }, () => HEX64('00')) }),
+    sendTransaction: () => HEX64('dd'),
+  });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await wallet.send(SPEND_KEY, {
+    to: 'rand1x', asset: 1, amountUnits: '100', feeUnits: '1000000', wait: false,
+    client, identity: { chainId: 13, genesis: GENESIS_A },
+  });
+
+  assert.equal(proved.length, 1, 'a token transfer is ONE proof, like a RAND one');
+  assert.equal(proved[0].asset, 1);
+  assert.equal(proved[0].inputs.length, 1);
+  assert.equal(Number(proved[0].inputs[0].note.asset), 1);
+  assert.equal(proved[0].fee_inputs.length, 1);
+  assert.equal(Number(proved[0].fee_inputs[0].note.asset), 0);
+  // Both groups' witnesses were folded against ONE root, which is the only way `prove_transfer`'s
+  // single `anchor_root` can be true of both.
+  assert.equal(anchors, 1, `the transfer fetched ${anchors} anchors`);
+  assert.equal(proved[0].inputs[0].path.length, 32);
+  assert.equal(proved[0].fee_inputs[0].path.length, 32);
+});
+
+/**
+ * **`err.failure`, never `code === -1`.** `-1` is the code `engine/rpc.js` puts on a transport
+ * failure so this function can tell a silent node from a refusing one — but it is also a perfectly
+ * legal application-defined JSON-RPC code (the reserved range is −32768..−32000), and a node is
+ * entitled to answer `{"error":{"code":-1}}`. Read as a dead wire, that answer would make an
+ * honest node look unreachable, and `chainIdentity` would report `reachable: false` — which the
+ * chain gate turns into "could not verify this node", for a node that answered perfectly clearly.
+ */
+test('a node’s OWN error code -1 is an answer, not an unreachable node', async () => {
+  const refusing = stubClient({
+    chainId: () => { const e = new Error('this node does not serve that'); e.code = -1; throw e; },
+    genesis: () => { const e = new Error('nor that'); e.code = -1; throw e; },
+  });
+  const wallet = makeWallet({ core: stubCore(), store: memoryStore(), rpc: () => refusing, settings: async () => ({}) });
+  const answered = await wallet.chainIdentity(refusing);
+  assert.equal(answered.reachable, true, 'a node that answered twice was recorded as never reached');
+  assert.equal(answered.chainId, null);
+  assert.equal(answered.genesis, null);
+
+  // …and a real transport failure, which `rpc.js` marks with `failure`, still is one.
+  const dead = stubClient({
+    chainId: () => { const e = new Error('cannot reach'); e.code = -1; e.failure = 'connect'; throw e; },
+    genesis: () => { const e = new Error('cannot reach'); e.code = -1; e.failure = 'timeout'; throw e; },
+  });
+  const nothing = await wallet.chainIdentity(dead);
+  assert.equal(nothing.reachable, false, 'a node that was never reached was recorded as having answered');
 });

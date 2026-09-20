@@ -4,7 +4,7 @@
 // client — and until task 5.1 each hand-wrote its own subset of the node's ~15 most-used methods
 // as `(args..., options) => call(wireName, [args...], options)`. That list had drifted well behind
 // the vendored node (`core/vendor/fullnode/crates/randprotocol-node/src/rpc.rs`), which now
-// dispatches 48 `rand_` methods. This file is the one place that list lives: `METHODS` names every
+// dispatches 51 `rand_` methods. This file is the one place that list lives: `METHODS` names every
 // method the node's dispatch table answers (see the "covers exactly the methods the vendored node
 // dispatches" test in `ui/test/rpc-methods.test.mjs`, which pins the *set* — not the tool's own
 // guess — against that source file), and `typed(call)` turns it into one async function per
@@ -87,6 +87,18 @@ export const METHODS = {
   getBridgeBurn: { params: ['sequence'], explore: 'bridge' },
   bridgeAssetId: { params: ['tokenChain', 'tokenAddress'], explore: 'bridge' },
   getAssets: { params: [], explore: 'assets' },
+
+  // -- the RPL token registry (chain 14) ---------------------------------------------------------
+  // `rand_getTokens` is what `assets.list()` reads: every token, bridged and native, with its real
+  // name, symbol, decimals, `id_text` and — for a bridged one — each backing coin. Both of its
+  // arguments are optional on the node (`0` and `1000`), but this wallet PAGES the registry, so it
+  // passes both and `params` is two long. `rand_getToken` and `rand_getTokenSupply` are per-token
+  // lookups; the node's own docs warn that asking about one token tells the node which token the
+  // caller cares about, so a wallet about to send reads the whole registry instead and these two
+  // are here for an explorer view, not for the send path.
+  getTokens: { params: ['fromIndex', 'limit'], explore: 'assets' },
+  getToken: { params: ['token'], explore: 'lookup' },
+  getTokenSupply: { params: ['token'], explore: 'assets' },
 
   // -- submitting & fees --------------------------------------------------------------------
   estimateFee: { params: ['shape'] },

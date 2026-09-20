@@ -9,7 +9,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { makeWasmBackend } from '../../../ui/engine/backend-wasm.js';
-import { BUNDLE_INPUTS } from '../../../ui/engine/wallet.js';
+import { BUNDLE_INPUTS, coreApi } from '../../../ui/engine/wallet.js';
+import { burnIsPossible } from '../../../ui/engine/backend-shared.js';
+import { checkBridgeState, checkTokens } from '../../../ui/engine/validate.js';
 import { assertBackend } from '../../../ui/backend.js';
 
 const CORE_JS = new URL('../../../extension/shared/core/rand_wallet.js', import.meta.url);
@@ -208,6 +210,104 @@ test('BUNDLE_INPUTS matches what the real core will actually select', { skip }, 
   if (constants.bundle_inputs !== undefined) {
     assert.equal(constants.bundle_inputs, BUNDLE_INPUTS, 'the core now reports a different input count');
   }
+});
+
+// ------------------------------------------------------------------------- the chain-14 core ---
+
+test('the artefact this wallet loads is built for chain 14’s hidden-asset bundle', { skip }, async () => {
+  // The wasm is git-ignored build output, so "is it the current one" is a real question: a stale
+  // artefact would answer every offline call above perfectly while proving against a guest the
+  // chain no longer runs. These are the constants that moved, and a stale build fails here.
+  const core = await realCore();
+  const k = await core.call('version');
+  assert.equal(k.default_chain_id, 14);
+  assert.equal(k.rpl_transfer, true, 'a token transfer is admitted on chain 14');
+  assert.equal(k.transfer_proofs, 1);
+  assert.equal(k.bridge_burn_proofs, 1, 'a burn was two proofs on chain 13 and is one now');
+  assert.equal(k.bundle_slots, 4);
+  assert.equal(k.bundle_asset_slots, 2);
+  assert.equal(k.bundle_inputs, BUNDLE_INPUTS, 'per GROUP, on a four-slot bundle');
+});
+
+/**
+ * The refusal table `burnIsPossible` adapts, asserted against the **real** implementation rather
+ * than a stub of it. This is where the one-implementation choice is paid for: the rule (including
+ * the chain's own `release_unit` and the per-backing `locked` amount) lives in `wallet-core`, and
+ * what JavaScript owns is only the adaptation — so this is the test that the two fit together.
+ *
+ * The bridge state is a real `rand_getBridgeState` shape put through the wallet's own validator
+ * first, exactly as `bridge.withdraw` does it, so a validator that dropped a field the core needs
+ * would fail here too.
+ */
+test('burn_is_possible, through the wallet’s own adapter, on the real core', { skip }, async () => {
+  const core = coreApi(await realCore());
+  const USDT = '000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7';
+  const USDC = '000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+  const BSC = '00000000000000000000000055d398326f99059ff775485246999027b3197955';
+  const row = (chain, token, decimals, locked) => ({
+    index: 1, chain, token, decimals, locked, asset_id: 'ab'.repeat(32),
+    mint_cap_per_day: '10000000000000', minted_today: '0', mint_day: 20716,
+  });
+  const state = checkBridgeState({
+    enabled: true,
+    emitters: { 2: 'aa'.repeat(20), 3: 'bb'.repeat(20) },
+    mint_paused: false,
+    assets: [row(2, USDT, 6, '900000000'), row(2, USDC, 6, '0'), row(3, BSC, 18, '900000000')],
+  });
+
+  // The happy path: a coin that backs this asset, on its own chain, holding enough, in whole
+  // release units (six decimals on the source coin ⇒ multiples of 100).
+  assert.deepEqual(await burnIsPossible(core, state, 1, 2, USDT, '400', '100'), { ok: true });
+
+  const cases = [
+    ['a chain with no bridge', [checkBridgeState({ enabled: false }), 1, 2, USDT, '400', '0'], /no bridge/i],
+    ['an index nothing was registered under', [state, 7, 2, USDT, '400', '0'], /not in this chain's registry/],
+    ['a coin that backs nothing', [state, 1, 2, 'ff'.repeat(32), '400', '0'], /does not back asset 1/],
+    ['the right coin on the wrong chain', [state, 1, 3, USDT, '400', '0'], /does not back asset 1/],
+    ['an amount that is not a whole release unit', [state, 1, 2, USDT, '401', '0'], /must be multiples of 100/],
+    ['a relayer fee that is not one either', [state, 1, 2, USDT, '400', '1'], /must be multiples of 100/],
+    ['more than that one coin is holding', [state, 1, 2, USDC, '400', '0'], /^Only 0 is locked in that coin on chain 2/],
+  ];
+  for (const [what, args, pattern] of cases) {
+    const answer = await burnIsPossible(core, ...args);
+    assert.equal(answer.ok, false, what);
+    assert.match(answer.reason, pattern, what);
+    // Shown verbatim in a banner: the words are the chain's, the sentence shape is the wallet's.
+    // A reason that opens on a coin's hex id keeps it as it is — upper-casing an identifier would
+    // be a change to the fact, not to the punctuation.
+    assert.match(answer.reason, /^[A-Z0-9]/, what);
+    assert.match(answer.reason, /[.!?]$/, what);
+  }
+
+  // `locked` is a decimal STRING on chain 14 and a JSON number on an older node; both are read.
+  const older = checkBridgeState({ enabled: true, emitters: {}, assets: [{ ...row(2, USDT, 6, '900000000'), locked: 900000000 }] });
+  assert.deepEqual(await burnIsPossible(core, older, 1, 2, USDT, '400', '100'), { ok: true });
+});
+
+/** The other half of the same contract: the validator accepts what the node really sends. */
+test('checkTokens accepts a real chain-14 token registry, backings and all', { skip }, async () => {
+  const reply = checkTokens({
+    enabled: true,
+    registration_fee: '1000000000',
+    next_index: 2,
+    tokens: [{
+      index: 1,
+      id: '32e5ab28c782c663e14da2650a3feb12f16a12db85599f4f62dc169d26f37b1f',
+      id_text: 'rpl1xtj6k2x8strx8c2d5fjs50ltztck5ykms4ve7nmzmstf6fhn0v0spelqtx',
+      name: 'Shielded USD', symbol: 'zUSD', decimals: 8, mint_nonce: 0,
+      total_supply: '3600000000', registered_at: 256,
+      authority: {
+        kind: 'bridge',
+        backings: [{
+          chain: 2, decimals: 6, locked: '900000000', mint_cap_per_day: '10000000000000',
+          mint_day: 20716, minted_today: '1000000000',
+          token: '000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7',
+        }],
+      },
+    }],
+  });
+  assert.equal(reply.tokens[0].symbol, 'zUSD');
+  assert.equal(reply.tokens[0].backings[0].decimals, 6);
 });
 
 test('the real core refuses a vault this build cannot understand, without a KDF', { skip }, async () => {

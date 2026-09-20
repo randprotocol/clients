@@ -28,15 +28,15 @@
 // Everything else — the session lifecycle, the vault, the note store, scanning, the unlock
 // throttle and, above all, the verified-chain gate that task 1.6 hardened over five rounds — is
 // `backend-shared.js`, unchanged and shared byte for byte with the browser shells.
-import { makeSharedBackend, UNLOCKED_SESSION_KEY, RPL_SEND_DISABLED_TEXT, unlockDelayMs } from './backend-shared.js';
-import { RpcError } from './rpc.js';
+import { makeSharedBackend, UNLOCKED_SESSION_KEY, unlockDelayMs } from './backend-shared.js';
+import { RpcError, isTransportFailure } from './rpc.js';
 
-export { UNLOCKED_SESSION_KEY, RPL_SEND_DISABLED_TEXT, unlockDelayMs };
+export { UNLOCKED_SESSION_KEY, unlockDelayMs };
 
 /**
  * How much memory a machine must report before this wallet will attempt a bundle proof.
  *
- * The proof itself peaks at ~5.6 GB (`wallet-core`'s own `PROVER_PEAK_MEMORY_BYTES`). 8 GiB is
+ * The proof itself peaks at ~5.7 GB (`wallet-core`'s own `PROVER_PEAK_MEMORY_BYTES`). 8 GiB is
  * that plus room for the operating system, the webview and whatever else the user has open: a
  * machine that only just clears the peak would swap for the whole proof, or be killed part-way
  * through — and a transfer killed after `rand_sendTransaction` is the one outcome this wallet
@@ -63,22 +63,19 @@ export function cannotProveReason(gib) {
  * the UI decides what a failure means** (see `classify` below), so a phase the UI does not know is
  * not a cosmetic problem.
  */
+// Chain 14 retired `'prove-asset'`. It named the FIRST of a burn's two bundle proofs; a burn is
+// now one bundle and one proof, exactly like a transfer, so `'proving'` covers both and there is
+// no second half for a phase to name.
 const UI_PHASE = Object.freeze({
   select: 'selecting',
   witness: 'witness',
   prove: 'proving',
-  // A burn's one opaque two-bundle proof. `prove_burn` proves the asset bundle first and the RAND
-  // fee bundle second, sequentially, and reports nothing in between — so this phase covers both,
-  // named for the one that is proved first. The contract's `'proving'` stays the single-bundle
-  // name a transfer uses (and the name a future core that reported per-bundle progress would use
-  // for the second half); the Withdraw screen labels both and shows two rings throughout.
-  'prove-asset': 'proving-asset',
   submit: 'submitting',
   wait: 'confirming',
 });
 
 /** Phases at which nothing has left this device yet, so a failure is definitely "not sent". */
-const BEFORE_THE_WIRE = Object.freeze(['select', 'witness', 'prove', 'prove-asset']);
+const BEFORE_THE_WIRE = Object.freeze(['select', 'witness', 'prove']);
 
 /**
  * Decides whether a failed transfer is a **definite** failure, which is the difference between
@@ -88,9 +85,14 @@ const BEFORE_THE_WIRE = Object.freeze(['select', 'witness', 'prove', 'prove-asse
  *   - before `'submit'`, because `wallet.js` reports `'submit'` *before* it hands the transaction
  *     to the node, so nothing can have been broadcast yet;
  *   - at `'submit'`, only when the node itself answered and refused — a JSON-RPC error reply,
- *     which `rpc.js` raises as an `RpcError` with the node's own code. Its code `-1` is reserved
- *     for "the request never got an answer" (transport failure, HTTP status, timeout), and that
- *     is exactly the case where the transaction may well be in a mempool.
+ *     which `rpc.js` raises as an `RpcError` carrying the node's own code. A request that never
+ *     got an answer at all (transport failure, HTTP status, timeout) is exactly the case where the
+ *     transaction may well be in a mempool, and it is told apart by **`isTransportFailure`**, i.e.
+ *     by `err.failure`, which `rpc.js` sets only where no JSON-RPC reply existed. It is NOT told
+ *     apart by `err.code === -1`: that is the code `rpc.js` puts on such a failure, but it is also
+ *     a legal application-defined JSON-RPC code (the reserved range is -32768..-32000), so a node
+ *     answering `{"error":{"code":-1,…}}` used to be read here as a dead wire — and the user was
+ *     denied a retry they could safely make, for a transfer the node had plainly refused.
  * Everything else — a transport failure at `'submit'`, anything at all during `'confirming'` — is
  * left unknown on purpose.
  *
@@ -101,7 +103,7 @@ function classify(err, phase) {
   if (err.name === 'AbortError') return err;
   if (err.definite !== undefined) return err;
   if (phase === null || BEFORE_THE_WIRE.includes(phase)) err.definite = true;
-  else if (phase === 'submit' && err instanceof RpcError && err.code !== -1) err.definite = true;
+  else if (phase === 'submit' && err instanceof RpcError && !isTransportFailure(err)) err.definite = true;
   return err;
 }
 
@@ -126,19 +128,21 @@ function makeCanProve(systemMemoryGiB) {
  * `wallet.js`'s `send()` takes a `client` at all.
  */
 async function executeSend({ req, onPhase, options, client, identity, sendTransfer, requireUnlocked, bundleFee }) {
+  // Chain 14 admits a shielded→shielded transfer of an RPL token — one bundle, the token in slots
+  // 0–1 and the RAND fee in slots 2–3 — so the blanket "RPL transfers are not available on this
+  // network" refusal that used to stand here is gone. `asset` goes through to the engine, and the
+  // only thing that can still refuse a token transfer is the core's own selection: a wallet with
+  // no spendable RAND cannot pay the fee, and `plan_transfer` says so at the `'select'` phase,
+  // before a witness is fetched.
   const asset = Number(req && req.asset) || 0;
-  if (asset !== 0) {
-    // The ledger admits only asset-0 transfers, on every shell — being able to prove does not make
-    // an RPL transfer possible. Checked before the session is read or the node is asked anything.
-    const err = new Error(RPL_SEND_DISABLED_TEXT);
-    err.definite = true;
-    throw err;
-  }
-  const { spend_key: spendKey } = await requireUnlocked();
-  const fee = await bundleFee(client);
 
   // The last phase the engine reported, which is what says whether the transaction can have left
   // this device. Recorded here rather than inferred from the error, because only the engine knows.
+  // `null` means "not one phase has been reported yet", which `classify` reads as definitely-not-
+  // sent — so everything that happens before the first phase belongs INSIDE this try. Reading the
+  // session and asking the node for a fee were outside it, and a wallet locked or wiped between
+  // the gate and here therefore rejected with no `definite` at all: the UI refused a retry it
+  // could safely offer and sent the user looking for a transfer that was never begun.
   let phase = null;
   const report = (p) => {
     phase = p;
@@ -146,8 +150,11 @@ async function executeSend({ req, onPhase, options, client, identity, sendTransf
   };
 
   try {
+    const { spend_key: spendKey } = await requireUnlocked();
+    const fee = await bundleFee(client);
     const submission = await sendTransfer(spendKey, {
       to: String((req && req.to) || ''),
+      asset,
       amountUnits: String((req && req.amount) ?? '0'),
       feeUnits: fee.toString(),
       wait: true,
@@ -169,21 +176,22 @@ async function executeSend({ req, onPhase, options, client, identity, sendTransf
 }
 
 /**
- * The real withdrawal: a `BridgeBurn`, which is two bundles, two proofs and about three and a
- * half minutes on this machine. Reached only after `bridge.withdraw`'s three gates
- * (backend-shared.js) — this device can prove, this node is on this wallet's chain, and the
- * bridge is enabled with this asset in its registry — so everything left here is the chain's own
- * business, and it is `wallet.js`'s `burn()` that does it, with `ctx.client` throughout.
+ * The real withdrawal: a `BridgeBurn`, which since chain 14 is **one bundle and one proof** — the
+ * token burned from slots 0–1, the RAND fee paid from slots 2–3, about a minute and a half on this
+ * machine rather than three and a half. Reached only after `bridge.withdraw`'s gates
+ * (backend-shared.js) — this device can prove, this node is on this wallet's chain, and the core's
+ * own `burn_is_possible` said the chain would accept it — so everything left here is the chain's
+ * own business, and it is `wallet.js`'s `burn()` that does it, with `ctx.client` throughout.
  *
- * Memory: the two proofs are sequential and peak at 5.70 GB together (measured), against a single
- * bundle's 5.63 GB — allocator retention between them, not a second working set. So `MIN_PROVE_GIB`
- * is the right gate for a burn too, and `canProve()` is the right question, **as long as the two
- * proofs stay sequential**; proving them at once would need ~11 GB and would kill exactly the
- * machines that only just pass today.
+ * Memory: one bundle proof, measured at 5.64 GB peak — the same working set a transfer has, since
+ * it is the same bundle. `MIN_PROVE_GIB` is therefore exactly as right a gate for a burn as for a
+ * transfer, and `canProve()` exactly the right question; chain 13's caveat about keeping two
+ * proofs sequential no longer applies, because there is only one.
  */
 async function executeWithdraw({ req, onPhase, options, client, identity, sendBurn, requireUnlocked }) {
-  const { spend_key: spendKey } = await requireUnlocked();
-
+  // `phase` starts `null` and everything before the first reported phase runs inside the try, for
+  // the reason spelled out in `executeSend`: `classify(err, null)` is what makes a failure before
+  // any work began a DEFINITE one, and reading the session outside it lost that.
   let phase = null;
   const report = (p) => {
     phase = p;
@@ -191,11 +199,15 @@ async function executeWithdraw({ req, onPhase, options, client, identity, sendBu
   };
 
   try {
+    const { spend_key: spendKey } = await requireUnlocked();
     const submission = await sendBurn(spendKey, {
       asset: Number(req.asset),
       amountUnits: String(req.amount ?? '0'),
       relayerFeeUnits: String(req.relayerFee ?? '0'),
       toChain: Number(req.toChain),
+      // The coin being redeemed on the far side. One token can be backed by several, and
+      // `Action::BridgeBurn` names the one this burn releases.
+      token: String(req.token || ''),
       to: String(req.to || ''),
       feeUnits: String(req.fee),
       wait: true,

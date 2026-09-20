@@ -23,12 +23,16 @@ function defaultSettings() {
 function defaultAssets() {
   return [
     { index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0' },
-    // A registry asset carries its **origin chain** (and the token address on it), exactly as the
-    // real `assets.list()` now threads them through from `rand_getAssets`. Chain 2 is an EVM
-    // chain, so the Withdraw flow validates a 20-byte address against it.
+    // A bridged token carries **every backing** — the coins on other chains that are holding its
+    // value — exactly as the real `assets.list()` threads them through from `rand_getTokens`. One
+    // token can have several (zUSD has seven), and a burn names the one it redeems, so the
+    // Withdraw flow picks a backing rather than a chain. Chain 2 is an EVM chain, so that flow
+    // validates a 20-byte address against it.
     {
-      index: 1, id: 'wrapped-eth', name: 'Wrapped Ether', symbol: 'wETH', decimals: 9,
-      balance: '120000000', pending: '0', chain: 2, token: 'ee'.repeat(32),
+      index: 1, id: 'wrapped-eth', idText: `rpl1${'q'.repeat(58)}`,
+      name: 'Wrapped Ether', symbol: 'wETH', decimals: 8,
+      balance: '120000000', pending: '0',
+      backings: [{ chain: 2, token: 'ee'.repeat(32), locked: '900000000', decimals: 18 }],
     },
   ];
 }
@@ -216,12 +220,13 @@ function createBackend(initial = {}, overrides = {}) {
   // `canWithdraw`) to cover the shells that cannot withdraw at all.
   const BURN_FEE = 10000000n; // gas::BRIDGE_BURN_FEE, 0.01 RAND
   const bridgeDefs = {
-    state: () => ({ enabled: state.bridgeEnabled, chains: state.bridgeChains.slice() }),
+    state: () => ({ enabled: state.bridgeEnabled, chains: state.bridgeChains.slice(), mintPaused: false }),
     canWithdraw: () => (state.bridgeEnabled
       ? { ok: true }
       : { ok: false, reason: 'This chain has no bridge, so there is nothing to withdraw to.' }),
-    estimate: ({ asset, amount, relayerFee = '0' } = {}) => {
+    estimate: ({ asset, amount, relayerFee = '0', token } = {}) => {
       if (Number(asset) < 1) throw new Error('RAND is not a bridged asset, so it cannot be withdrawn.');
+      if (!token) throw new Error('A withdrawal names the coin it redeems.');
       const units = BigInt(amount || '0');
       const relayer = BigInt(relayerFee || '0');
       if (units <= 0n) throw new Error('A withdrawal of zero moves nothing.');
@@ -232,17 +237,18 @@ function createBackend(initial = {}, overrides = {}) {
         receive: (units - relayer).toString(),
         change: '0',
         feeChange: '0',
-        proofs: 2,
+        // Chain 14: one bundle, one proof — for a burn exactly as for a transfer.
+        proofs: 1,
       };
     },
     // Reports every phase the contract declares, in order, so a screen that labels one of them
-    // wrong fails a test rather than a user. The real native backend reports a subset (it cannot
-    // see inside `prove_burn`); what the UI must handle is the whole vocabulary.
+    // wrong fails a test rather than a user. `'proving-asset'` left the vocabulary with chain 14's
+    // single-bundle burn; a phase this list does not contain is one no backend may report.
     withdraw: async (_req, onPhase, options) => {
       const signal = options && options.signal;
       if (signal && signal.aborted) throw abortError();
       if (typeof onPhase === 'function') {
-        for (const phase of ['selecting', 'witness', 'proving-asset', 'proving', 'submitting', 'confirming']) {
+        for (const phase of ['selecting', 'witness', 'proving', 'submitting', 'confirming']) {
           onPhase(phase);
         }
       }

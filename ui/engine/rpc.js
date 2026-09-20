@@ -47,12 +47,13 @@ import { typed } from '../lib/rpc-methods.js';
 
 export class RpcError extends Error {
   /**
-   * `code` is the node's own JSON-RPC error code, or **-1** for "no usable answer came back".
-   * Callers depend on that: `chainIdentity` (engine/wallet.js) reads `code !== -1` as "the node
-   * answered, even if with a refusal".
+   * `code` is the node's own JSON-RPC error code, or **-1** where no usable answer came back.
+   * It is for showing and for logging, never for deciding: `-1` is also a legal
+   * application-defined code, so "did this request get an answer at all" is `failure`'s question
+   * and `isTransportFailure` below is the one way to ask it.
    *
-   * `failure` refines the -1 case and exists for exactly one decision — whether repeating the
-   * request on another endpoint is safe:
+   * `failure` is set ONLY where no JSON-RPC reply existed, and it names which kind — which is what
+   * decides whether repeating the request on another endpoint is safe:
    *   'connect'  nothing was ever sent (DNS, TLS, connection refused). Safe to repeat anywhere.
    *   'timeout'  something may well have been received and acted on. NEVER safe to repeat for a
    *              submission: a timed-out `rand_sendTransaction` may have landed.
@@ -120,8 +121,18 @@ export function rpcUrlList(urls) {
  * carrying the node's own refusal to a second endpoint, which is the one thing this file promises
  * never to do. `failure` is set only where a request genuinely produced no JSON-RPC reply, so it
  * is the discriminator everything that ROUTES uses.
+ *
+ * **Exported**, because this file is not the only place the distinction decides something. Two
+ * others used to spell it `err.code === -1` and had exactly the bug above:
+ *   * `chainIdentity` (engine/wallet.js) reports whether a node answered at all, and a node's own
+ *     `-1` made an honest node look unreachable — which the chain gate turns into "could not
+ *     verify this node";
+ *   * `classify` (engine/backend-native.js) decides whether a failed submit is a DEFINITE failure,
+ *     and a node's own `-1` refusal read as a dead wire would deny the user a retry they could
+ *     safely make and send them looking for a transaction that was never accepted.
+ * One predicate, one meaning, in one place.
  */
-function isTransportFailure(err) {
+export function isTransportFailure(err) {
   return !!(err && err.failure);
 }
 
@@ -308,7 +319,7 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
    * The named convenience methods, over whichever `call` they are given.
    *
    * `typed(call)` (task 5.1, `ui/lib/rpc-methods.js`) generates one async function per method the
-   * vendored node's dispatch table answers — all ~48 of them, not the dozen or so this file used
+   * vendored node's dispatch table answers — all 51 of them, not the dozen or so this file used
    * to hand-write — from the one `METHODS` table, so a client built here always has the full
    * surface. The names below it are pre-typed()-era short aliases (`head`, `commitments`,
    * `witness`, `anchor`, `blockByHeight`, `bridgeState`, `assets`, `treeInfo`, `nullifiers`) that

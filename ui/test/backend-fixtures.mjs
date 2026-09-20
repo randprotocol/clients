@@ -81,8 +81,41 @@ export const CORE_VERSION = Object.freeze({
   version: '0.1.0', default_chain_id: 13, default_rpc_url: 'https://rpc.randprotocol.org',
   explorer_url: 'https://randscan.org', address_hrp: 'rand1', token_symbol: 'RAND',
   token_decimals: 9, units_per_rand: '1000000000', bundle_base_fee: '1000000',
-  prover_peak_memory_bytes: 5600000000,
+  prover_peak_memory_bytes: 5700000000,
+  // Chain 14: one bundle, four slots, one proof for a transfer AND for a burn.
+  bundle_inputs: 2, bundle_slots: 4, bundle_asset_slots: 2,
+  transfer_proofs: 1, bridge_burn_proofs: 1, rpl_transfer: true,
+  bridge_burn_fee: '10000000',
 });
+
+/**
+ * `wallet-core`'s `NO_SPENDABLE_RAND`, verbatim — a token transfer pays its fee in RAND out of
+ * slots 2–3 of the same bundle, so a wallet holding only the token cannot send it at all. Exported
+ * because both the stub core below and the tests that assert the refusal need the same sentence.
+ */
+export const NO_SPENDABLE_RAND = 'a transfer pays its fee in RAND, and this wallet holds no '
+  + 'spendable RAND: receive some RAND (on a testnet, `rand faucet`) and retry';
+
+/** The spendable notes of one asset, largest first, capped at what one bundle group can spend. */
+function group(notes, asset) {
+  return (notes || [])
+    .filter((n) => !n.spent && n.pending == null && BigInt(n.amount) > 0n && (Number(n.asset) || 0) === asset)
+    .sort((a, b) => (BigInt(b.amount) > BigInt(a.amount) ? 1 : -1))
+    .slice(0, 2);
+}
+
+/** `select_groups`, as the core does it: take notes of `asset` until `want` is covered, or refuse. */
+function take(notes, asset, want, message) {
+  let sum = 0n;
+  const chosen = [];
+  for (const n of group(notes, asset)) {
+    if (sum >= want) break;
+    sum += BigInt(n.amount);
+    chosen.push(n);
+  }
+  if (sum < want) throw new Error(message);
+  return { chosen, change: sum - want };
+}
 
 export function stubCore(overrides = {}) {
   const calls = [];
@@ -110,6 +143,79 @@ export function stubCore(overrides = {}) {
       if (sum < BigInt(need)) throw new Error('insufficient balance');
       return { chosen, need: String(need), change: (sum - BigInt(need)).toString() };
     },
+    /**
+     * Chain 14's one planning call, for RAND and for a token alike (task 6.1 §1). Asset 0 pays
+     * value *and* fee from `inputs` and `fee_inputs` is empty; asset ≥ 1 spends notes of that
+     * token from `inputs` and RAND from `fee_inputs`, and `need` is the amount ALONE.
+     */
+    plan_transfer: ({ notes = [], asset = 0, amount, fee }) => {
+      const index = Number(asset) || 0;
+      if (index === 0) {
+        const need = BigInt(amount) + BigInt(fee);
+        const { chosen, change } = take(notes, 0, need, 'insufficient balance');
+        return {
+          inputs: chosen, fee_inputs: [], need: need.toString(),
+          change: change.toString(), fee_change: '0', fee: String(fee), proofs: 1,
+        };
+      }
+      const a = take(notes, index, BigInt(amount), `insufficient balance: need ${amount} units of asset ${index}`);
+      const r = take(notes, 0, BigInt(fee), NO_SPENDABLE_RAND);
+      return {
+        inputs: a.chosen, fee_inputs: r.chosen, need: String(amount),
+        change: a.change.toString(), fee_change: r.change.toString(), fee: String(fee), proofs: 1,
+      };
+    },
+
+    /** The most one bundle can move, and — for a token — `reason` when the RAND fee is the blocker. */
+    max_sendable: ({ notes = [], asset = 0, fee }) => {
+      const index = Number(asset) || 0;
+      const held = group(notes, index);
+      const have = held.reduce((a, n) => a + BigInt(n.amount), 0n);
+      if (index === 0) {
+        const amount = have > BigInt(fee) ? have - BigInt(fee) : 0n;
+        return { amount: amount.toString(), fee: String(fee), inputs: held.length, fee_inputs: 0, reason: null };
+      }
+      const rand = group(notes, 0);
+      const randHeld = rand.reduce((a, n) => a + BigInt(n.amount), 0n);
+      if (randHeld < BigInt(fee)) {
+        return { amount: '0', fee: String(fee), inputs: 0, fee_inputs: 0, reason: NO_SPENDABLE_RAND };
+      }
+      // A token's max does NOT subtract the fee: the fee is RAND, from the other group.
+      return { amount: have.toString(), fee: String(fee), inputs: held.length, fee_inputs: rand.length, reason: null };
+    },
+
+    /**
+     * The core's own pure pre-flight check over a `rand_getBridgeState` reply the client fetched
+     * (task 6.1 §1). The real one derives the release unit through the chain's `release_unit`;
+     * this stub mirrors its order and its sentences closely enough to pin the JS side's plumbing.
+     * The refusal table itself is asserted against the REAL core in
+     * `web/wallet/test/core.integration.test.mjs`.
+     */
+    burn_is_possible: ({ bridge_state: state, asset, to_chain: toChain, token, amount, relayer_fee: relayerFee }) => {
+      if (!state || state.enabled !== true) throw new Error('this chain has no bridge, so there is nothing to burn to');
+      const rows = Array.isArray(state.assets) ? state.assets : [];
+      const ofAsset = rows.filter((r) => Number(r && r.index) === Number(asset));
+      if (ofAsset.length === 0) {
+        const known = rows.map((r) => Number(r && r.index)).filter((i) => Number.isFinite(i));
+        throw new Error(`asset ${asset} is not in this chain's registry, so no note of it was ever deposited${known.length ? ` (registered: ${known.join(', ')})` : ' (the registry is empty)'}`);
+      }
+      const backing = ofAsset.find((r) => Number(r.chain) === Number(toChain) && r.token === token);
+      if (!backing) {
+        const coins = ofAsset.map((r) => `chain ${r.chain} token ${r.token}`).join(', ');
+        throw new Error(`coin ${token} on chain ${toChain} does not back asset ${asset}; its backings are: ${coins}`);
+      }
+      const decimals = Number(backing.decimals ?? 8);
+      const unit = 10n ** BigInt(Math.max(0, 8 - decimals));
+      if (BigInt(amount) % unit !== 0n || BigInt(relayerFee || '0') % unit !== 0n) {
+        throw new Error(`${token} on chain ${toChain} has ${decimals} decimals: the amount and the relayer fee must be multiples of ${unit}`);
+      }
+      const locked = BigInt(String(backing.locked ?? '0'));
+      if (BigInt(amount) > locked) {
+        throw new Error(`only ${locked} is locked in that coin on chain ${toChain}; choose another backing or a smaller amount`);
+      }
+      return true;
+    },
+
     prove_transfer: () => { throw new Error('prove_transfer must never run in wasm'); },
     format_amount: ({ units }) => String(units),
   };
@@ -136,6 +242,8 @@ export function stubFetch(table = {}) {
     rand_getNullifiers: () => [],
     rand_getBridgeState: () => ({ enabled: false }),
     rand_getAssets: () => [],
+    // Chain 14's RPL token registry. A chain with no `tokens` section answers exactly this.
+    rand_getTokens: () => ({ enabled: false, tokens: [] }),
     rand_estimateFee: () => '1000000',
     rand_status: () => ({ height: 100, peer_count: 3, syncing: false }),
     rand_chainId: () => 13,
@@ -177,6 +285,51 @@ export function nodeWithout(missing, table = {}) {
   const gone = {};
   for (const method of missing) gone[method] = () => { throw new Error(`unknown method ${method}`); };
   return stubFetch({ ...gone, ...table });
+}
+
+/**
+ * One `rand_getTokens` row, modelled on what the live chain-14 node actually answers for zUSD:
+ * a bridged token at index 1, eight decimals on Rand, backed by **seven coins across four chains**
+ * — which is the whole reason `assets.list()` carries `backings` instead of one `chain`.
+ *
+ * `USDT_ETH` is the first of them, and is the coin the withdraw fixtures burn to.
+ */
+export const USDT_ETH = '000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec7';
+export const USDC_ETH = '000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+export const USDT_BSC = '00000000000000000000000055d398326f99059ff775485246999027b3197955';
+
+export function backing(chain, token, { decimals = 6, locked = '900000000' } = {}) {
+  return { chain, token, decimals, locked, mint_cap_per_day: '10000000000000', minted_today: '0', mint_day: 20716 };
+}
+
+export function zusd(backings = [backing(2, USDT_ETH), backing(2, USDC_ETH, { locked: '0' }), backing(3, USDT_BSC, { decimals: 18 })]) {
+  return {
+    index: 1,
+    id: '32e5ab28c782c663e14da2650a3feb12f16a12db85599f4f62dc169d26f37b1f',
+    id_text: 'rpl1xtj6k2x8strx8c2d5fjs50ltztck5ykms4ve7nmzmstf6fhn0v0spelqtx',
+    name: 'Shielded USD', symbol: 'zUSD', decimals: 8, mint_nonce: 0,
+    total_supply: '3600000000', registered_at: 256,
+    authority: { kind: 'bridge', backings },
+  };
+}
+
+/** The whole `rand_getTokens` reply around a list of token rows. */
+export function tokenRegistry(tokens = [zusd()], { nextIndex } = {}) {
+  return {
+    enabled: true,
+    registration_fee: '1000000000',
+    next_index: nextIndex ?? (tokens.reduce((m, t) => Math.max(m, t.index), 0) + 1),
+    tokens,
+  };
+}
+
+/** `rand_getAssets` / `rand_getBridgeState.assets` — the same registry, one row per backing. */
+export function assetRows(token = zusd()) {
+  return (token.authority.backings || []).map((b, i) => ({
+    index: token.index, chain: b.chain, token: b.token, decimals: b.decimals, locked: b.locked,
+    mint_cap_per_day: b.mint_cap_per_day, minted_today: b.minted_today, mint_day: b.mint_day,
+    asset_id: `${String(i + 10).repeat(32)}`.slice(0, 64),
+  }));
 }
 
 export function stubPlatform() {
@@ -317,6 +470,7 @@ export function node({ chainId, genesis, height = 100, hold }) {
     rand_getNullifiers: [],
     rand_getBridgeState: { enabled: false },
     rand_getAssets: [],
+    rand_getTokens: { enabled: false, tokens: [] },
     rand_estimateFee: '1000000',
     rand_status: { height, peer_count: 1, syncing: false },
     rand_chainId: chainId,

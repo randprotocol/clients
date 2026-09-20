@@ -5,10 +5,25 @@
  * Shapes the screens read out of the methods below. Amounts are decimal strings of *units* and
  * are only ever handled as BigInt (`formatUnits`), never `Number()`.
  *
- * `assets.list()` → `[{index, id, symbol, decimals, balance, pending, name?}]`, index 0 (RAND, the
- * native token) first; every other index is a registry ("RPL") asset, whose `symbol` may be no
- * more than `RPL#<index>`.
- *  - `name?` — OPTIONAL. A display name ("Wrapped Ether"). Screens fall back to `symbol`.
+ * `assets.list()` → `[{index, id, symbol, decimals, balance, pending, name?, idText?, backings?,
+ * unlisted?}]`, index 0 (RAND, the native token) first; every other index is an RPL token, read
+ * from the chain's own token registry.
+ *  - `name?`     — OPTIONAL. A display name ("Shielded USD"). Screens fall back to `symbol`.
+ *  - `idText?`   — OPTIONAL. The token id in its checksummed text form (`rpl1…`, bech32m over the
+ *                  32 id bytes). For showing and for copying; `id` is the same 32 bytes as hex.
+ *  - `backings?` — OPTIONAL, `[{chain, token, locked, decimals}]`. The coins on other chains that
+ *                  hold this token's value: `chain` a bridge chain id, `token` that coin's address
+ *                  there (32 bytes hex), `locked` a units string of how much of it that coin is
+ *                  holding, `decimals` that coin's OWN precision on its own chain (not the
+ *                  token's on Rand). **A withdrawal names one of them** — `bridge.withdraw`'s
+ *                  `toChain` and `token` are a backing's two fields — because one token can be
+ *                  backed by several coins and burning to a pair that does not back it, or to one
+ *                  that is not holding enough, is refused by the chain. Present only where the
+ *                  node listed at least one; absent for a native RPL token and for RAND.
+ *  - `unlisted?` — OPTIONAL, `true`. This wallet holds notes of this index but the node's registry
+ *                  does not list it, so `symbol` is the wallet's own `RPL#<index>` fallback and
+ *                  `decimals` a guess. The balance is real; the name is not the chain's word, and
+ *                  a screen may say so. Such a row never carries `backings`.
  *
  * Screens treat returned objects as read-only; backends may return cached objects.
  *
@@ -84,18 +99,28 @@
  *
  * ---- sending (task 1.5) ----
  *
- * A **send request** is `{asset, to, amount}` — `asset` an asset index (only 0, the native token,
- * can be transferred on this network), `to` a `rand1…` address, `amount` a units string.
+ * A **send request** is `{asset, to, amount}` — `asset` an asset index, `to` a `rand1…` address,
+ * `amount` a units string **in units of `asset`**. Every index can be transferred: chain 14's
+ * bundle carries a private asset in slots 0–1 and RAND in slots 2–3, so a token transfer is one
+ * transaction and one proof, exactly like a RAND one. Its fee is still RAND, out of the same
+ * bundle, so a wallet holding a token and no RAND cannot send that token; the backend refuses
+ * with the core's own sentence before any work is done.
  *
  * `send.canProve()` → `{ok, reason?}`. `ok: false` means this shell cannot produce the transfer
- * proof at all (the wasm shells: the proof needs ~5.6 GB and wasm32 stops at 4 GiB); `reason` is
- * shown to the user verbatim, so it is written for them, not for a log.
+ * proof at all (the wasm shells: the proof needs ~5.7 GB and wasm32 stops at 4 GiB); `reason` is
+ * shown to the user verbatim, so it is written for them, not for a log. **A shell whose
+ * `canProve()` is false never simulates a send**: `send.send` rejects there, before anything is
+ * selected, whatever the asset.
  *
- * `send.estimate(req)` → `{fee, inputs, change, proofs}` — `fee` and `change` units strings in the
- * *native* asset, `proofs` the number of proofs the transfer needs (always 1 for a send; a
- * withdrawal is what makes it 2). A request that cannot be built — this chain spends exactly two
- * notes, so an amount that would need three — **rejects**, and its message is written for the user
- * (the UI shows it verbatim, escaped): it is what tells them to consolidate first.
+ * `send.estimate(req)` → `{fee, inputs, feeInputs, change, feeChange, proofs}`. `fee` and
+ * `feeChange` are units strings in the *native* asset; `change` is in units of `asset`. `inputs`
+ * is how many notes of `asset` would be spent and `feeInputs` how many RAND notes would pay the
+ * fee — always 0 for a RAND transfer, whose fee comes out of `inputs` itself. `proofs` is the
+ * number of proofs the transfer needs, from the chain rather than from a constant; on chain 14 it
+ * is 1 for a transfer of anything and 1 for a withdrawal. A request that cannot be built — this
+ * chain spends exactly two notes per group, so an amount that would need three — **rejects**, and
+ * its message is written for the user (the UI shows it verbatim, escaped): it is what tells them
+ * to consolidate first, or that they hold no RAND for the fee.
  *
  * `send.send(req, onPhase, options?)` → `{hash, txKey}`.
  *  - `onPhase(phase)` is called as the transfer moves through
@@ -120,12 +145,17 @@
  *    - `hash?` — the transaction hash, when the backend got far enough to have one before failing.
  *      Node-controlled, so the UI validates it before it reaches a URL.
  *
- * `send.maxSendable?({asset, to?})` → `{amount, fee}` — OPTIONAL. The largest amount that can
- * actually be sent, and the fee that would be paid, both units strings. A backend that knows how
- * it selects notes can answer this exactly; the UI's "Max" button uses it when it is there. Where
- * it is missing the UI falls back to estimating a one-unit transfer to learn the fee and
+ * `send.maxSendable?({asset, to?})` → `{amount, fee, reason?}` — OPTIONAL. The largest amount that
+ * can actually be sent, and the fee that would be paid, both units strings. A backend that knows
+ * how it selects notes can answer this exactly; the UI's "Max" button uses it when it is there.
+ * Where it is missing the UI falls back to estimating a one-unit transfer to learn the fee and
  * subtracting that from the balance, which is why `send.estimate` must answer for a one-unit
  * request even when the balance could not cover a real one. `amount` may be `'0'`.
+ *  - For a TOKEN the fee is RAND out of the other half of the bundle, so it is **not** subtracted:
+ *    the answer is what those notes hold.
+ *  - `reason?` — OPTIONAL, and set only when `amount` is `'0'` **because the RAND fee cannot be
+ *    paid**. A zero with no reason simply means the wallet holds none of that asset. A screen
+ *    showing "you can send 0" has this sentence to show with it.
  *
  * ---- what a failed unlock can mean ----
  *
@@ -231,35 +261,42 @@
  *    fire-and-forget — the shell ignores whatever it returns and never waits on it.
  *    A backend may still postpone a lock it has decided on while a *user-initiated* operation is
  *    in flight (a transfer being proved), so a proof is never cut in half; a scan does not count.
- *  - `bridge?` — a whole OPTIONAL GROUP, for withdrawing a registry (RPL) asset back to its origin
- *    chain as a `BridgeBurn`. Present only on a shell that can carry one out; most cannot, which
- *    is why it is here and not in BACKEND_SHAPE. **A screen must feature-detect the group before
- *    it offers anything** — `ctx.backend.bridge?.canWithdraw` — and then honour `canWithdraw()`'s
- *    answer, exactly as the send flow honours `send.canProve()`.
- *     · `bridge.state()` → `{enabled, chains}`. Whether this chain has a bridge at all, and which
- *       destination chain ids it knows. `chains` is **derived**: the node's `rand_getBridgeState`
- *       has no such field — it carries an `emitters` map keyed by chain id, and that map's keys
- *       are the answer (see `checkBridgeState`, ui/engine/validate.js).
+ *  - `bridge?` — a whole OPTIONAL GROUP, for withdrawing an RPL token out of the shielded pool as
+ *    a `BridgeBurn`, releasing one of the coins that back it on that coin's own chain. Present
+ *    only on a shell that can carry one out; most cannot, which is why it is here and not in
+ *    BACKEND_SHAPE. **A screen must feature-detect the group before it offers anything** —
+ *    `ctx.backend.bridge?.canWithdraw` — and then honour `canWithdraw()`'s answer, exactly as the
+ *    send flow honours `send.canProve()`.
+ *     · `bridge.state()` → `{enabled, chains, mintPaused}`. Whether this chain has a bridge at
+ *       all, which destination chain ids it knows, and whether minting is paused. `chains` is
+ *       **derived**: the node's `rand_getBridgeState` has no such field — it carries an `emitters`
+ *       map keyed by chain id, and that map's keys are the answer (see `checkBridgeState`,
+ *       ui/engine/validate.js). `mintPaused` is the bridge refusing *deposits*; burns are
+ *       unaffected, which is why it is reported rather than folded into `enabled`.
  *     · `bridge.canWithdraw()` → `{ok, reason?}`, in the same shape and with the same rules as
- *       `send.canProve()`. It asks two questions in a fixed order: can this device prove at all
- *       (a burn is TWO bundle proofs, ~3.5 minutes; the answer is `send.canProve()`'s own 5.5 GB
- *       sentence, verbatim), and is the bridge enabled. Both must pass. On every wasm shell the
- *       first is unconditionally false, so this is too, and no node is asked.
- *     · `bridge.estimate({asset, amount, relayerFee, toChain, to})` → `{fee, relayerFee, receive,
- *       change, feeChange, proofs}`. `fee` is RAND (a burn pays for both of its bundles);
- *       `relayerFee` is in units of the asset and is taken **on the destination chain**, out of
- *       `amount`, so `receive` is `amount - relayerFee`. `proofs` is 2 and comes from the plan,
- *       not from a constant. Rejects — before anything is proved — for asset 0, a zero amount, a
- *       relayer fee larger than the amount, an asset the chain's registry does not list, and any
- *       note selection that cannot be built.
+ *       `send.canProve()`. It asks two questions in a fixed order: can this device prove at all (a
+ *       burn is ONE bundle proof, the same one a transfer is — ~5.7 GB, about a minute and a half;
+ *       the answer is `send.canProve()`'s own sentence, verbatim), and is the bridge enabled. Both
+ *       must pass. On every wasm shell the first is unconditionally false, so this is too, and no
+ *       node is asked.
+ *     · `bridge.estimate({asset, amount, relayerFee, toChain, token, to})` → `{fee, relayerFee,
+ *       receive, change, feeChange, proofs}`. `toChain` and `token` are one of the asset's
+ *       `backings` — the coin this withdrawal releases. `fee` is RAND; `relayerFee` is in units of
+ *       the asset and is taken **on the destination chain**, out of `amount`, so `receive` is
+ *       `amount - relayerFee`. `proofs` comes from the plan, not from a constant, and is 1 on
+ *       chain 14. Rejects — before anything is proved — for asset 0, a zero amount, a relayer fee
+ *       larger than the amount, an index the chain's registry does not list, a coin that does not
+ *       back this asset, a coin that is not holding enough of it, an amount or relayer fee that is
+ *       not a whole release unit of that coin, and any note selection that cannot be built.
  *     · `bridge.withdraw(req, onPhase, options?)` → `{hash}`. `req` is `estimate`'s object plus an
  *       optional `fee` (pass back whatever `estimate` returned, so the plan and the proof agree).
- *       `onPhase` receives `'selecting' | 'witness' | 'proving' | 'proving-asset' | 'submitting' |
- *       'confirming'`. `'proving-asset'` is the two-bundle proof: the core proves the asset bundle
- *       and then the RAND fee bundle sequentially and reports nothing in between, so one phase
- *       covers both and the UI shows two rings for the whole of it. Rejections carry `definite`
- *       exactly as `send.send`'s do, and every refusal that can be known — including the two
- *       bridge facts — is made before a proof starts, because a wrong one costs the user both.
+ *       `onPhase` receives `'selecting' | 'witness' | 'proving' | 'submitting' | 'confirming'` —
+ *       the same five a transfer reports, because since chain 14 a burn is the same single bundle
+ *       and the same single proof. (`'proving-asset'` named the first of chain 13's two and is no
+ *       longer part of this contract; a backend must not report it.) Rejections carry `definite`
+ *       exactly as `send.send`'s do, and **it refuses exactly what `estimate` refuses, before a
+ *       proof starts** — the two run one shared list, because a gate on one and not the other is
+ *       a proof spent on a transaction the chain was always going to refuse.
  *  - `dispose?()` — OPTIONAL, on the **backend itself**, not a group. Releases whatever it holds
  *    outside its own object (a BroadcastChannel, a port, a watcher). The shell calls it from
  *    `destroy()`, last, after the wallet session has ended; it must be idempotent and must not
