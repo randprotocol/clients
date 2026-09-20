@@ -568,6 +568,24 @@ is deleted — a compact block answers every nullifier it has, whatever the coun
 - [ ] **Step 5:** Commit `engine: scan with rand_getCompactBlocks — checkable ranges, no
   per-block nullifier limit, a fast first sync`.
 
+**Carried forward from Task 1.6's final review (round 5, cap adjudicated 2026-09-20):** two items
+ruled REQUIRED here rather than spent on a 6th round of 1.6, because they live in exactly the
+functions this task rewrites, and both are load-bearing for Task 3.1 (the Tauri desktop backend
+reuses this engine and can really send/mint). (A) `ui/engine/wallet.js`'s `send()` calls its
+post-commit re-scan (`await scan(spendKey, {}, s)`) without the verified client, so that one call
+resolves its own client instead of reusing the one `requireVerifiedChain()` verified for the
+send — thread it through, with a test. (B) `scan`/`rescan` record `recordVerdict(url, 'ok')` with
+no identity, so `requireVerifiedChain()` afterwards returns `identity: undefined` and `send()`
+silently falls back to the store's `chain_id` — safe today only because that chain id was itself
+just verified by the same scan, but undocumented; either record the identity on the scan path too
+or state the fallback explicitly in `ui/backend.js`'s JSDoc, and add a test that pins whichever is
+chosen. Also, while these functions are open: fix the stale `chainIdentity` docstring
+(`ui/engine/wallet.js:441-448`, still describes a deleted fallback); correct
+`task-1.6-report.md`'s two remaining wrong line-citations; make `ui/screens/home.js`'s rescan path
+re-scan on a `staleNode` result the way its scan path already does; update the `chainState` map's
+type comment in `ui/engine/backend-wasm.js`; and make `scan`'s and `rescan`'s `scan-done`
+broadcast-on-`staleNode` behaviour consistent with each other.
+
 ---
 
 ## Phase 2 — Extension on `ui/`
