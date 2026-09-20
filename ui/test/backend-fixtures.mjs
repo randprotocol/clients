@@ -69,16 +69,26 @@ export async function drain(times = 20) {
 }
 
 // ---------------------------------------------------------------------------------- stub core --
+/**
+ * The core's `version` reply, as one value rather than a literal buried in `stubCore`.
+ *
+ * Exported because the endpoint set a wallet defaults to comes FROM here (`default_rpc_urls`,
+ * task 5.0) and is deliberately not writable through `settings.set` — so a test that wants a
+ * different default set supplies a core that reports one, which is also the only way a real
+ * build's set will ever change. `coreOn([...])` below is the short form.
+ */
+export const CORE_VERSION = Object.freeze({
+  version: '0.1.0', default_chain_id: 13, default_rpc_url: 'https://rpc.randprotocol.org',
+  explorer_url: 'https://randscan.org', address_hrp: 'rand1', token_symbol: 'RAND',
+  token_decimals: 9, units_per_rand: '1000000000', bundle_base_fee: '1000000',
+  prover_peak_memory_bytes: 5600000000,
+});
+
 export function stubCore(overrides = {}) {
   const calls = [];
   const info = { spend_key: SPEND_KEY, viewing_key: VIEWING_KEY, pk: PK, address: ADDRESS, key_file: '{"version":2}' };
   const defaults = {
-    version: () => ({
-      version: '0.1.0', default_chain_id: 13, default_rpc_url: 'https://rpc.randprotocol.org',
-      explorer_url: 'https://randscan.org', address_hrp: 'rand1', token_symbol: 'RAND',
-      token_decimals: 9, units_per_rand: '1000000000', bundle_base_fee: '1000000',
-      prover_peak_memory_bytes: 5600000000,
-    }),
+    version: () => ({ ...CORE_VERSION }),
     keygen: () => ({ ...info }),
     wallet_info: () => ({ ...info }),
     import_key: () => ({ ...info }),
@@ -267,6 +277,11 @@ export function nodeFarm(nodes) {
   fn.held = held;
   fn.callsTo = (port) => log.filter((line) => line.startsWith(`${port}:`));
   return fn;
+}
+
+/** A stub core whose build defaults to this endpoint set — the only way one is ever configured. */
+export function coreOn(urls, overrides = {}) {
+  return stubCore({ version: () => ({ ...CORE_VERSION, default_rpc_urls: [...urls] }), ...overrides });
 }
 
 /**

@@ -380,7 +380,15 @@ export function makeSharedBackend({
 
   async function getSettings() {
     const stored = (await storage.get(K.settings)) || {};
-    const merged = { ...(await defaults()), ...stored };
+    const base = await defaults();
+    // `rpcUrls` is **always taken fresh**, never from storage, even if a value is sitting there
+    // from an older build. It is not a user setting: it is what this wallet ships with, and the
+    // three hosts are not live yet, so the set is likely to change before launch. Merging a
+    // persisted copy back in would freeze whatever a wallet happened to save once and no release
+    // could ever move it — the same staleness trap the retired-`rpcUrl` migration below exists to
+    // undo, one level up. `setSettings` refuses to write it in the first place; this is the other
+    // half, for storage that already has one.
+    const merged = { ...base, ...stored, rpcUrls: base.rpcUrls };
     // Migration (task 5.0). `setSettings` writes the WHOLE settings object back, defaults
     // included, so anyone who ever changed their theme has the RETIRED single default URL sitting
     // in storage. Read as an override it would pin that wallet to a host that is being replaced,
@@ -396,14 +404,23 @@ export function makeSharedBackend({
   async function setSettings(patch) {
     const previous = await getSettings();
     const next = { ...previous, ...(patch || {}) };
-    await storage.set(K.settings, next);
+    // **`rpcUrls` is read-only, and that is enforced here rather than asked for in a comment.**
+    // This function writes the whole merged object, so without this line the FIRST `settings.set`
+    // a wallet ever makes — a theme change, an auto-lock change, anything at all — would freeze
+    // the default endpoint set of that build into storage, where it would win every future merge
+    // for ever. A screen that tried to write one simply cannot; `ui/backend.js`'s contract says
+    // as much, and now the implementation says it too.
+    const { rpcUrls: readOnly, ...persisted } = next;
+    void readOnly;
+    await storage.set(K.settings, persisted);
     // A new node is a new question — but only about *that* node: `chainState` is keyed by URL and
     // each entry stands on its own. `behindUrls` is deliberately NOT cleared here: "two different
     // nodes both say your wallet is ahead of them" is only ever learned by changing nodes, and
     // clearing the tally on that very action made the hint unreachable.
-    void next;
     if (patch && Object.prototype.hasOwnProperty.call(patch, 'autoLockMin')) await rearmAutoLock();
-    return next;
+    // Read back rather than returned from `next`, so a caller sees exactly what `settings.get()`
+    // would now say — the fresh `rpcUrls`, and the retired-URL migration applied.
+    return getSettings();
   }
 
   // --------------------------------------------------------------- the verified-chain gate ------

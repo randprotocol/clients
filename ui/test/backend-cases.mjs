@@ -21,7 +21,7 @@ import { unlockDelayMs } from '../engine/backend-shared.js';
 import {
   SPEND_KEY, VIEWING_KEY, PASSWORD, PK, ADDRESS, GENESIS, URL_A, URL_B, URL_C,
   mapStorage, casStorage, drain, stubCore, stubFetch, stubPlatform, chainFetch, nodeWithout,
-  nodeFarm, node, unreachable, withKdfSpy, assertKeyNeverLeaked, capturingMapWrites,
+  nodeFarm, node, unreachable, coreOn, withKdfSpy, assertKeyNeverLeaked, capturingMapWrites,
 } from './backend-fixtures.mjs';
 
 /**
@@ -1715,8 +1715,7 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     // and then stops existing, exactly where the scan starts reading the tree.
     const fetch = unreachable(farm, (url, method) => url === URL_A && method === 'rand_getCommitments');
     const storage = mapStorage();
-    const { backend } = build({ storage, fetch });
-    await backend.settings.set({ rpcUrls: [URL_A, URL_B] });
+    const { backend } = build({ storage, fetch, core: coreOn([URL_A, URL_B]) });
     await backend.wallet.create(PASSWORD);
 
     // The scan fails. It does NOT quietly finish on B.
@@ -1752,8 +1751,7 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
       [URL_B]: node({ chainId: 14, genesis: 'cc'.repeat(32) }),
     });
     const fetch = unreachable(farm, (url) => url === URL_A);
-    const { backend } = build({ storage: mapStorage(), fetch });
-    await backend.settings.set({ rpcUrls: [URL_A, URL_B] });
+    const { backend } = build({ storage: mapStorage(), fetch, core: coreOn([URL_A, URL_B]) });
     await backend.wallet.create(PASSWORD);
 
     await assert.rejects(() => backend.faucet.request(), (err) => {
@@ -1778,8 +1776,7 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
       [URL_A]: node({ chainId: 14, genesis: 'cc'.repeat(32) }),
       [URL_B]: node({ chainId: 13, genesis: GENESIS, height: 150 }),
     });
-    const { backend } = build({ storage: mapStorage(), fetch: farm });
-    await backend.settings.set({ rpcUrls: [URL_A, URL_B] });
+    const { backend } = build({ storage: mapStorage(), fetch: farm, core: coreOn([URL_A, URL_B]) });
     await backend.wallet.create(PASSWORD);
 
     const answer = await backend.sync.scan(() => {});
@@ -1790,6 +1787,32 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     const { hash } = await backend.faucet.request();
     assert.ok(hash);
     assert.equal(farm.log.includes('7400:rand_mint'), false);
+  });
+
+  scoped('FAILOVER: the default endpoint set is never frozen into storage by an unrelated setting', async () => {
+    // `setSettings` writes the whole merged object, so without `rpcUrls` being read-only the very
+    // first `settings.set` a wallet ever made — a theme change — would nail that build's endpoint
+    // set into storage, where it would win every future merge. None of the three hosts is live
+    // yet, so the set is likely to change before launch and no wallet would ever see it.
+    const storage = mapStorage();
+    const { backend } = build({ storage, core: coreOn([URL_A, URL_B]) });
+    assert.deepEqual((await backend.settings.get()).rpcUrls, [URL_A, URL_B]);
+
+    const returned = await backend.settings.set({ theme: 'light' });
+    assert.deepEqual(returned.rpcUrls, [URL_A, URL_B], 'settings.set answered without the endpoint set');
+    assert.equal(Object.prototype.hasOwnProperty.call(storage.local.get('settings'), 'rpcUrls'), false,
+      'a screen changing the theme wrote the endpoint set into storage');
+
+    // The same storage, read by a build that ships a different set: it gets the NEW one.
+    const moved = build({ storage, core: coreOn([URL_C]) }).backend;
+    const after = await moved.settings.get();
+    assert.deepEqual(after.rpcUrls, [URL_C], 'the wallet was stuck on the endpoint set it first saved');
+    assert.equal(after.theme, 'light', 'the settings that ARE the user-s were lost with it');
+
+    // Even a caller that passes one explicitly cannot persist it.
+    await moved.settings.set({ rpcUrls: [URL_A, URL_B] });
+    assert.deepEqual((await moved.settings.get()).rpcUrls, [URL_C]);
+    assert.equal(Object.prototype.hasOwnProperty.call(storage.local.get('settings'), 'rpcUrls'), false);
   });
 
   scoped('FAILOVER: the retired single default in old storage is not read as the user-s choice', async () => {
@@ -1818,8 +1841,7 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
       [URL_A]: node({ chainId: 13, genesis: GENESIS, height: 100 }),
       [URL_C]: node({ chainId: 13, genesis: GENESIS, height: 300 }),
     });
-    const { backend } = build({ storage: mapStorage(), fetch: farm });
-    await backend.settings.set({ rpcUrls: [URL_A] });
+    const { backend } = build({ storage: mapStorage(), fetch: farm, core: coreOn([URL_A]) });
     await backend.wallet.create(PASSWORD);
     await backend.settings.set({ rpcUrl: URL_C });
 
