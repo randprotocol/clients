@@ -149,7 +149,7 @@ Upstream's crates are `GPL-3.0-only` and every binary here links them. Add the v
 
 ### Task 0.6: `text_mute` reaches AA in every client (owner's decision, 2026-09-19)
 
-`design/tokens.json` `dark.text_mute` and `light.text_mute` measure 3.5–4.4:1 on `bg`/`surface`. Pick the closest values in the same hue that reach ≥ 4.5:1 on both `bg` and `surface` in each theme (the Task 1.1 report proposes values); extend `ui/test/tokens.test.mjs`'s contrast test to cover `text_mute`; regenerate `ui/tokens.css`; mirror the two values in the hand-copied palettes — iOS (`ios/RandWallet/**` colour definitions / asset catalog), Android (`android/app/src/main/res/values*/colors.xml`), desktop (`desktop/src/theme.rs` until Task 3.1 deletes it). Rebuild desktop, iOS and Android to prove nothing broke. Commit `design: text_mute meets AA; palettes in sync`.
+`design/tokens.json` `dark.text_mute` and `light.text_mute` measure 3.5–4.4:1 on `bg`/`surface`. Pick the closest values in the same hue that reach ≥ 4.5:1 on both `bg` and `surface` in each theme (the Task 1.1 report proposes values); extend `ui/test/tokens.test.mjs`'s contrast test to cover `text_mute`; regenerate `ui/tokens.css`; mirror the two values in the hand-copied palettes — iOS (`ios/RandWallet/**` colour definitions / asset catalog), Android (`android/app/src/main/res/values*/colors.xml`), desktop (`desktop/src/theme.rs` until Task 3.2 deletes it). Rebuild desktop, iOS and Android to prove nothing broke. Commit `design: text_mute meets AA; palettes in sync`.
 
 ---
 
@@ -545,8 +545,8 @@ blocks for a recent window only, prefix-paging below it. None is scheduled.
 
 **What Task 1.8 actually builds** is the two items below, carried forward from Task 1.6's final
 review (round 5, cap adjudicated 2026-09-20) as REQUIRED regardless of the scan mechanism above,
-because both are load-bearing for Task 3.1 (the Tauri desktop backend reuses this engine and can
-really send/mint):
+because both are load-bearing for Phase 3 (Tasks 3.1–3.2, the Tauri desktop backend reuses this
+engine and can really send/mint):
 
 - [ ] **(A)** `ui/engine/wallet.js`'s `send()` calls its post-commit re-scan
   (`await scan(spendKey, {}, s)`) without the verified client, so that one call resolves its own
@@ -714,13 +714,73 @@ key, not `store.js`'s).
 
 ## Phase 3 — Tauri desktop
 
-### Task 3.1: Scaffold Tauri — the same hardened engine, native proving
+### Task 3.1: Extract the shared backend factory (behavior-preserving refactor)
 
-**Rewritten 2026-09-20.** The original version of this task predates `ui/`, `ui/backend.js` and
-`ui/engine/*.js` entirely — it was written before Task 1.1 and planned a from-scratch native Rust
-reimplementation of everything the JS engine now does (scanning, chain-identity verification,
-atomic rescan, password throttling, the vault). Facts established by reading the current code
-before rewriting this task (not assumed):
+**Split from the original Task 3.1 rewrite, 2026-09-20.** Given the stakes of Phase 3 — this is
+where real money moves for the first time in the whole project — the original single "scaffold
+Tauri" task is split into two sequentially-reviewable pieces. This task is the first: a
+refactor-only change with no new capability and no Tauri code at all, small enough to review on
+its own and prove safe before Task 3.2 builds native proving on top of it. Facts established by
+reading the current code (not assumed):
+
+- `backend-wasm.js`'s only gate on real proving is one early return inside `send.send`
+  (`ui/engine/backend-wasm.js:1046-1128`: `canProve()` returns `{ok:false, reason:
+  CANNOT_PROVE_REASON}`, checked first, and `send.send` throws before calling `wallet.js`'s
+  `send()` if it isn't `ok`). `canProve` and the send-execution function are the *only* two things
+  that differ between a shell that can prove and one that can't — everything else in
+  `backend-wasm.js` (session lifecycle, storage, chain-identity verification, scan, rescan,
+  password throttle — roughly 1100 lines) has nothing to do with wasm specifically and is exactly
+  what Task 3.2's native backend also needs, unchanged.
+- Reusing that logic via a shared factory — instead of duplicating or reimplementing it — means
+  Task 3.2 inherits Task 1.6's five rounds of adversarial node-trust hardening for free, in the one
+  shell that can lose real money to a mistake there. That is the entire reason this refactor exists.
+
+**Ruling:** extract the ~1100 lines of session/storage/chain-identity/scan/throttle logic that has
+nothing to do with wasm specifically into a factory, with `canProve` and the send-execution
+function as parameters that `makeWasmBackend` and (in Task 3.2) `makeNativeBackend` each supply.
+**This refactor must be behavior-preserving for the wasm path**: the full existing
+`ui/test/backend-wasm.test.mjs` and `ui/test/engine-wallet.test.mjs` suites pass with zero
+modifications after it, proving nothing regressed. No native code, no `desktop/` changes, and no
+new capability are in scope for this task — those are Task 3.2, built on this task's reviewed
+result.
+
+**Files:**
+- Create or modify: extract the shared factory as a new `ui/engine/backend-shared.js` with
+  `backend-wasm.js` reduced to a thin wrapper supplying wasm's `canProve`/send-execution — or, if
+  the extraction is cleanest some other way, choose that shape instead. Whichever shape you choose,
+  `backend-wasm.js`'s exported names and behavior must not change, and the factory's parameter
+  shape (`canProve`, the send-execution function, and whatever else a second backend will need to
+  supply) must be documented in the file, since Task 3.2 depends on it directly.
+
+**Interfaces — Produces:** the shared factory's signature (name and parameter shape are this
+task's choice, but must be recorded in `ui/engine/backend-shared.js`'s own header comment) — Task
+3.2's `makeNativeBackend` is built on this factory and needs its exact name, parameters, and
+return shape.
+
+- [ ] **Step 1: Failing tests (the safety net, not new behavior).** Run the full existing
+  `node --test ui/test/backend-wasm.test.mjs ui/test/engine-wallet.test.mjs` and record the
+  baseline pass count — this is what "behavior-preserving" is checked against. There is no new
+  test to write for new behavior, because this task adds none; the "failing" step is confirming
+  you have a precise baseline to hold the refactor to.
+- [ ] **Step 2:** Do the extraction. `backend-wasm.js` keeps its current exported names and
+  behavior exactly.
+- [ ] **Step 3:** `node --test ui/test/backend-wasm.test.mjs ui/test/engine-wallet.test.mjs` passes
+  with the exact same count as the Step-1 baseline and **zero test-file edits** — this is the proof
+  the refactor is safe. If a test needed to change to keep passing, the refactor changed behavior:
+  stop and reconsider the extraction rather than editing the test to match.
+- [ ] **Step 4:** `node --test ui/test web/wallet/test` still fully green (whatever the current
+  full count is); `core/scripts/check-rename.sh` still `rename clean`.
+- [ ] **Step 5:** Commit `ui: extract the shared backend factory; canProve and send-execution
+  become parameters`.
+
+### Task 3.2: Scaffold Tauri — native proving on the shared factory
+
+**Split from the original Task 3.1 rewrite, 2026-09-20; depends on Task 3.1's reviewed shared
+factory.** The original version of this task (before either the 2026-09-20 rewrite or this split)
+predates `ui/`, `ui/backend.js` and `ui/engine/*.js` entirely — it was written before Task 1.1 and
+planned a from-scratch native Rust reimplementation of everything the JS engine now does (scanning,
+chain-identity verification, atomic rescan, password throttling, the vault). Facts established by
+reading the current code before rewriting this task (not assumed):
 
 - `desktop/Cargo.toml` already depends on `wallet-core` **directly as a Rust crate**, not through
   the C ABI (`wallet-ffi` is for iOS/Android only). `core/crates/wallet-core/src/lib.rs:926`:
@@ -731,20 +791,13 @@ before rewriting this task (not assumed):
   browser shell is a property of **wasm**, not of the host machine's memory — running natively
   removes it entirely, with no size limit but the machine's real RAM. Desktop is the one shell
   where a transfer can actually complete.
-- `ui/engine/wallet.js`'s `send()` (the function `backend-wasm.js`'s `send.send` calls when
+- `ui/engine/wallet.js`'s `send()` (the function the send-execution parameter calls when
   `canProve()` is true) is **already a complete, correct implementation**: it selects inputs, gets
   the anchor and witnesses, calls `core.call('prove_transfer', …)`, submits, waits for
   confirmation, and — because of Task 1.8's fix — re-scans afterward with the *same verified
   client* the send used, not a freshly resolved one. It has simply never run end-to-end in
   production because every existing caller of `core` is wasm. **Nothing about proving needs to be
   written from scratch; it needs a `core` that doesn't trap.**
-- `backend-wasm.js`'s only gate on real proving is one early return inside `send.send`
-  (`ui/engine/backend-wasm.js:1046-1128`: `canProve()` returns `{ok:false, reason:
-  CANNOT_PROVE_REASON}`, checked first, and `send.send` throws before calling `wallet.js`'s
-  `send()` if it isn't `ok`). Reusing the ~1100 lines of session/chain-identity/scan/throttle
-  logic around that gate — instead of duplicating it in Rust — means this task inherits Task 1.6's
-  five rounds of adversarial hardening for free, in the one shell that can lose real money to a
-  mistake there.
 - `ui/engine/rpc.js`'s `makeRpc(url, {fetch})` already takes an injectable `fetch`
   (`ui/engine/rpc.js:36-38`) matching the standard Fetch API shape (`fetch(url, {method, headers,
   body, signal}) -> {ok, status, json()}`) — a Tauri webview's own built-in `fetch()` satisfies
@@ -756,28 +809,19 @@ before rewriting this task (not assumed):
   it as a side effect of using the same vault format everywhere, not as a separate migration.
 
 **Ruling:** do not port the trust boundary to Rust. Reuse `ui/` and `ui/engine/{wallet,validate,
-crypto,rpc}.js` completely unmodified. The only native work is: (1) one generic Tauri command
-proxying `core.call` to real `wallet-core`; (2) a real `send.canProve()` (a system-memory check);
-(3) a storage adapter (a JSON file for the persistent half, in-memory Rust state for the session
-half — the same vault-as-an-encrypted-blob format as every other shell, no OS keyring); (4) a
-`platform` adapter (open-in-browser, clipboard, app version). Everything else — the webview, the
-screens, the scanning, the RPC calls, the chain-identity gate — is identical code, identical
-tests, running unmodified.
-
-Because `backend-wasm.js`'s `canProve`/`send.send` are the *only* two things that differ between a
-shell that can prove and one that can't, refactor rather than fork: extract the ~1100 lines of
-session/storage/chain-identity/scan/throttle logic that has nothing to do with wasm specifically
-into a factory both backends build on, with `canProve` and the send-execution function as
-parameters. **This refactor must be behavior-preserving for the wasm path**: the full existing
-`ui/test/backend-wasm.test.mjs` and `ui/test/engine-wallet.test.mjs` suites pass with zero
-modifications after it, proving nothing regressed, before any new native-specific code is added.
+crypto,rpc}.js` completely unmodified, and build on Task 3.1's shared factory rather than
+duplicating what it extracted. The only native work is: (1) one generic Tauri command proxying
+`core.call` to real `wallet-core`; (2) a real `send.canProve()` (a system-memory check); (3) a
+storage adapter (a JSON file for the persistent half, in-memory Rust state for the session half —
+the same vault-as-an-encrypted-blob format as every other shell, no OS keyring); (4) a `platform`
+adapter (open-in-browser, clipboard, app version). Everything else — the webview, the screens, the
+scanning, the RPC calls, the chain-identity gate — is identical code, identical tests, running
+unmodified.
 
 **Files:**
 - Create: `ui/engine/backend-native.js` (`makeNativeBackend({core, storage, platform, fetch})`,
-  built on the extracted shared factory with a real `canProve` and a `send.send` that calls
-  `wallet.js`'s `send()` for real). If the extraction is cleanest as a new
-  `ui/engine/backend-shared.js` with `backend-wasm.js` reduced to a thin wrapper, do that;
-  whichever shape you choose, `backend-wasm.js`'s exported names and behavior must not change.
+  built on Task 3.1's shared factory with a real `canProve` and a `send.send` that calls
+  `wallet.js`'s `send()` for real).
 - Create: `desktop/src-tauri/{Cargo.toml, tauri.conf.json, capabilities/default.json,
   src/{main.rs,commands.rs,storage.rs}}`, `desktop/ui-shell/{index.html,main.js,backend-tauri.js}`,
   `desktop/scripts/stage-ui.sh` (copies `ui/` — minus `test`, `scripts`, `gallery.*`, `dev.*`,
@@ -795,6 +839,10 @@ modifications after it, proving nothing regressed, before any new native-specifi
   `serde_json`, `dirs`; drop `eframe`, `egui` (obsolete), `keyring` (vault is a file now), `ureq`
   (RPC is webview `fetch`, not native HTTP), `qrcode` (QR is drawn in JS via `ui/lib/qr.js`),
   `open` (superseded by `tauri-plugin-opener`).
+
+**Interfaces — Consumes:** Task 3.1's shared factory (`ui/engine/backend-shared.js`, or whatever
+shape that task chose) — read its header comment for the exact signature before writing
+`backend-native.js`.
 
 **Interfaces — Produces:**
 
@@ -847,9 +895,7 @@ before assuming it), the fallback is a generic `http_post(url, body) -> Result<S
 Tauri command and a thin `fetch`-shaped JS wrapper passed as `rpc.js`'s injectable `fetch` — do not
 build this unless the plain path is actually observed to fail.
 
-- [ ] **Step 1: Failing tests.** First, the refactor's safety net: run the full existing
-  `node --test ui/test/backend-wasm.test.mjs ui/test/engine-wallet.test.mjs` and record the
-  baseline pass count. Then write `ui/test/backend-native.test.mjs` (stub `core`/`storage`/
+- [ ] **Step 1: Failing tests.** Write `ui/test/backend-native.test.mjs` (stub `core`/`storage`/
   `platform`, mirroring `backend-wasm.test.mjs`'s fixtures): `canProve()` reflects an injected
   memory value (`{ok:true}` at 8 GiB, `{ok:false, …}` at 4 GiB, with the real number in the
   message); `send.send()` on a `canProve: {ok:true}` backend actually calls through to
@@ -864,11 +910,8 @@ build this unless the plain path is actually observed to fail.
   plausible positive number.
 - [ ] **Step 2:** `node --test ui/test/backend-native.test.mjs` and
   `cd desktop/src-tauri && cargo test` — FAIL (module/commands don't exist).
-- [ ] **Step 3:** Do the `backend-wasm.js` refactor FIRST, in its own commit, and confirm
-  `node --test ui/test/backend-wasm.test.mjs ui/test/engine-wallet.test.mjs` still passes with the
-  exact same count as the Step-1 baseline and zero test-file edits — this is the proof the
-  refactor is safe. Then implement `backend-native.js`, the Tauri scaffold, `backend-tauri.js`,
-  `stage-ui.sh`.
+- [ ] **Step 3:** Implement `backend-native.js` on Task 3.1's shared factory, the Tauri scaffold,
+  `backend-tauri.js`, `stage-ui.sh`.
 - [ ] **Step 4:** All new tests GREEN; `node --test ui/test web/wallet/test` still fully green
   (429+ , exact count depends on what Step 1 added); `cargo test` in `desktop/src-tauri` PASS;
   `cargo tauri dev` — the app opens at 1100×760 with the sidebar; create a wallet (real native
@@ -880,11 +923,10 @@ build this unless the plain path is actually observed to fail.
   not a footnote); narrow the window below 900 px → tab bar (Task 1.7's breakpoint). Verify the
   `connect-src` CSP question from the Interfaces section empirically against a real `http://`
   tunnel if one is available.
-- [ ] **Step 5:** Commit the refactor (`ui: extract the shared backend factory; canProve and
-  send-execution become parameters`) and the Tauri scaffold (`desktop: Tauri shell on the shared
-  ui — native proving, egui removed`) as two commits.
+- [ ] **Step 5:** Commit the Tauri scaffold (`desktop: Tauri shell on the shared ui — native
+  proving, egui removed`).
 
-### Task 3.2: Packaging and platform READMEs
+### Task 3.3: Packaging and platform READMEs
 
 **Files:** Modify `desktop/scripts/*` (replace cargo-bundle calls with `cargo tauri build`),
 `desktop/README.md`, `macosx/README.md`, `linux/README.md`, `windows/README.md`, root `README.md`
@@ -893,7 +935,7 @@ table row (`Rust (Tauri)`), `web/clients.astro` if it names egui.
 - [ ] **Step 1:** `cd desktop/src-tauri && cargo tauri build --bundles dmg` — expected: a `.dmg`
   under `target/release/bundle/dmg/`.
 - [ ] **Step 2:** Mount it, launch the app from the image, confirm the window renders. **Do not
-  reference a keyring prompt** (Task 3.1 deleted OS-keyring use) — instead confirm the vault file
+  reference a keyring prompt** (Task 3.2 deleted OS-keyring use) — instead confirm the vault file
   exists under the platform's config directory (`~/Library/Application Support/RandWallet` /
   `%APPDATA%\RandWallet` / `~/.config/RandWallet`) after creating a wallet, and that it is the
   same encrypted-blob format `ui/engine/crypto.js` produces (starts the same way a browser
@@ -1021,7 +1063,7 @@ Two proofs, generated one after the other (≈ 2 × 98 s, 5.6 GB peak each, neve
 - [ ] **Step 6:** All suites PASS; screenshots of the four steps in both themes; commit
   `bridge: withdraw an RPL asset to its origin chain (BridgeBurn), desktop only`.
 
-Runs after Task 4.3 and Task 3.1 (it needs the desktop backend).
+Runs after Task 4.3 and Task 3.2 (it needs the desktop backend).
 
 ---
 
