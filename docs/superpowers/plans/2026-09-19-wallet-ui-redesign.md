@@ -1365,3 +1365,140 @@ test('typed() maps positional params', async () => {
 - [ ] Visual pass, both themes, 360 px and ≥ 900 px, in: web wallet (Chrome), extension popup + tab (Chrome and Firefox), Tauri app. Check: focus rings visible by keyboard, no layout shift when balances load, sheets trap focus, reduced-motion honoured, long addresses wrap, amounts align.
 - [ ] Desktop end-to-end against a tunnelled node: faucet → sync → send 0.1 RAND to a second wallet → appears in the recipient after sync.
 - [ ] Update `README.md` (table, new `ui/` and `web/wallet/` sections, RAND wording) and the memory notes. Commit.
+
+---
+
+## Phase 6 — Chain 14 (added 2026-09-20; this is ledger "Task 0.7", grown into a phase)
+
+Phases 0–5 were built against chain 13 (`core/vendor/fullnode` @ `142e1f7`). Upstream finished
+cutting **chain 14** on 2026-09-20: all 18 validators run v0.5.1 = `9c142c1`, and a synced,
+faucet-enabled node answers on this machine's `127.0.0.1:8545`. Read-only research before writing
+this phase (the full fact sheet, with paths and line pointers, is
+`.superpowers/sdd/2026-09-19-wallet-ui-redesign/chain14-research.md` in the SDD workspace; verify
+each pointer against the submodule, never trust it blind) found this is **not a constant bump**:
+
+- The bundle guest is replaced by a 4-slot **hidden-asset bundle** (slots 0–1 a private asset `A`,
+  slots 2–3 RAND for the fee); `prove_bundle` takes a transaction binding; `Bundle` carries
+  `burn_a/burn_r/burn_asset`. `wallet-core` does not compile against the pin, and every artefact
+  (wasm, iOS, Android, desktop) must be rebuilt (`hc_bundle` changed).
+- **Shielded RPL transfers now exist** — one proof, fee always in RAND from the same bundle. The
+  owner's 2026-09-19 "RPL = withdraw only" followed from chain 13's ledger and is superseded by the
+  chain, as is `RPL_TRANSFER_UNAVAILABLE` / `RPL_SEND_DISABLED_TEXT`. (The original request was
+  "transfer RAND, RPL transfers".)
+- `Action::BridgeBurn` is a **single bundle** with a `token` field naming the backing; Task 4.4's
+  two-proof burn is chain-13 only. `rand_getAssets` is one row per backing; tokens have a real
+  name/symbol/decimals through three new RPC methods (`rand_getTokens`, `rand_getToken`,
+  `rand_getTokenSupply`); u64 amounts on the wire are decimal strings.
+
+**Mirror upstream, never improvise** (the rule Task 4.4 ran under): the reference implementation is
+`core/vendor/fullnode/crates/randprotocol-client/src/wallet.rs` at the pin — `Plan`, `Plan::select`,
+`Plan::outputs`, `prove_transaction`, `submit_transfer`, `submit_burn`, `burn_is_possible`.
+
+### Task 6.1: `wallet-core` on the hidden-asset bundle (Rust only)
+
+**Files:** `core/vendor/fullnode` (submodule → `9c142c1`; never edited), `core/Cargo.toml`,
+`core/crates/wallet-core/src/lib.rs`, `core/crates/wallet-core/examples/prove_fixture.rs`,
+`core/README.md`, `core/vendor/circuits/` only if the new guest needs newer compiled guests (say
+so in the report before copying anything).
+
+**Interfaces — Produces** (the JSON contract Tasks 6.2–6.4 build on; write the final shapes into
+the report exactly, as Task 4.4's report did):
+- `plan_transfer {notes, asset, amount, fee}` → `{inputs, fee_inputs, need, change, fee_change,
+  fee, proofs: 1}`. `asset == 0`: `inputs` are RAND notes covering `amount + fee`, `fee_inputs`
+  empty. `asset ≥ 1`: `inputs` are asset notes covering `amount`, `fee_inputs` RAND notes covering
+  `fee`; no spendable RAND → upstream's own refusal sentence. `RPL_TRANSFER_UNAVAILABLE` is deleted.
+- `prove_transfer` gains optional `asset` (default 0) and `fee_inputs`; **a request shaped exactly
+  like today's (no `asset`, no `fee_inputs`) must still prove a RAND transfer** — the iOS and
+  Android apps send that shape and are not rewritten in this phase.
+- `plan_burn {notes, asset, amount, fee?}` → same shape, `proofs: 1`; `prove_burn` gains required
+  `token` (64 hex, parsed like `to` — plain bytes, `hex::decode`, with a byte-order-discriminating
+  test) and produces ONE bundle: `Spend{asset, to: None, fee, burn_a: amount, burn_r: 0}`.
+- `max_sendable {notes, asset, fee}` answers for any asset (RAND: two largest minus fee; asset ≥ 1:
+  two largest asset notes, and `0` with a reason when no RAND covers the fee).
+- `rebuilt_deposit` reads `action.amount` as a decimal string (chain 14) — and the
+  `js_engine_contract` test pins the new shape.
+- `version`: `default_chain_id: 14`, `chain_build: "9c142c1"`, `rpl_transfer: true`,
+  `bridge_burn: true`, `bridge_burn_proofs: 1`, `bridge_burn_fee`, and `prover_peak_memory_bytes`
+  **re-measured** with `prove_fixture` (report the number and how it was taken).
+
+- [ ] **Step 1:** Bump the submodule to `9c142c1`; `cargo check -p wallet-core` — record the
+  compile errors (that list is the porting checklist).
+- [ ] **Step 2: Failing tests** (shape tests on an unproven build split, as Task 4.4 did, so they
+  run in milliseconds): RAND transfer → outputs `[nobody, nobody, pay, change_r]`, `burn_asset == 0`;
+  token transfer → `[pay, change_a, change_r, nobody]`, fee from slots 2–3, `burn_asset == 0`;
+  token transfer with no RAND refused before proving; burn → one bundle, `burn_a == amount`,
+  `burn_r == 0`, `burn_asset == asset`, action carries `token` byte-exact; legacy-shaped
+  `prove_transfer` request still accepted; `rebuilt_deposit` on a string amount; plan/max
+  consistency property test extended to asset ≥ 1; every amount addition checked.
+- [ ] **Step 3:** Port by mirroring upstream (`Plan`, `prove_transaction`'s bind-then-prove order).
+- [ ] **Step 4:** `cargo test -p wallet-core` PASS, clippy clean; `prove_fixture -- transfer`,
+  `-- token` and `-- burn` each prove for real and `Ledger::validate` accepts each transaction;
+  peak RSS recorded. `core/scripts/check-rename.sh` clean.
+- [ ] **Step 5:** Commit `core: chain 14 — the hidden-asset bundle, RPL transfers, single-proof burn`.
+
+### Task 6.2: Engine and backends on chain 14 (JS + the wasm artefact)
+
+**Files:** `ui/engine/{wallet,validate,backend-shared,backend-native,backend-wasm}.js`,
+`ui/lib/rpc-methods.js`, `ui/backend.js`, `ui/test/*`, the wasm artefacts (rebuilt with
+`--profile wasm`, never `wasm-pack --release`), `extension/`, `web/wallet/`.
+
+- `FALLBACK.chainId` 14; tests asserting the *default* move, fake-node ids stay.
+- `rpc-methods.js` +3 methods (the dispatch-table test pins the set); `validate.js` validators for
+  token rows (`checkTokens`) and the grown `getAssets`/`getBridgeState` rows (one row per backing;
+  `mint_paused`; no `next_index`).
+- `assets.list()`: RAND, then every token from `rand_getTokens` (real `name`/`symbol`/`decimals`,
+  `id_text`) joined with local note sums, plus any held index the registry does not list (fallback
+  name only there). Each bridged asset carries `backings: [{chain, token, locked}]` instead of one
+  `chain`; cached for an offline start as today.
+- `send`: `estimate`/`send`/`maxSendable` pass `asset` through `plan_transfer`; `executeSend`'s
+  RPL refusal goes; `engine.send()` threads `fee_inputs` and witnesses for both groups from ONE
+  anchor. Everything still goes through `requireVerifiedChain()`'s pinned client — no new client
+  source, `sendTransfer`/`sendBurn` stay the only engine capabilities `ctx` carries.
+- `bridge`: `burnIsPossible(state, asset, toChain, token, amount, relayerFee)` re-ported from the
+  pin; `estimate`/`withdraw` take `token`; phases lose `'proving-asset'` (one proof: `'proving'`),
+  and `BEFORE_THE_WIRE` follows; `proofs` comes from the plan.
+- Parked findings that live in these files are closed here rather than carried again: Task 4.5 M4
+  (withdraw's gates narrower than estimate's → one shared helper), M5 (dead ctx members), M7 (stale
+  comment); Task 5.0 N1 (test `getSettings`' read side of `rpcUrls`), and the three
+  `code !== -1` sites (`wallet.js` `chainIdentity`, `backend-native.js` `classify`) move to
+  `err.failure`.
+- [ ] Failing tests first (token send reaches `prove_transfer` with asset + fee_inputs and the
+  verified chain id; token send with no RAND refused before any witness fetch; multi-backing
+  `assets.list()`; re-ported `burnIsPossible` table; single-proof withdraw phases) → implement →
+  full `node --test ui/test web/wallet/test`, extension smoke (packed tree), rename guard → commit
+  `engine: chain 14 — token registry, RPL send, single-proof withdraw`.
+
+### Task 6.3: Screens on chain 14
+
+**Files:** `ui/screens/{asset,send,withdraw,home,activity,detail,explore}.js`, `ui/screens/send/*`,
+tests beside them, `README.md`, `web/clients.astro`, `core/README.md`, per-platform READMEs.
+
+- Send works for any asset the wallet holds where `send.canProve().ok`: asset picker, amounts in the
+  asset's own decimals, "Network fee … RAND" always shown in RAND, and the no-RAND-for-the-fee
+  refusal before Review. Asset detail's disabled-Send copy goes; the wasm shells keep the
+  cannot-prove explanation unchanged.
+- Withdraw: the destination step lists the asset's **backings** (chain + token), one ring, no
+  typed-confirmation change. Parked 4.5 findings closed here: M1 (receipt test actually asserts the
+  chain/amount rows), M2 (moot with one ring — confirm), M6 (an unlisted asset says so at the first
+  step), M8 (fee decimals read, not written), T1, T4. Task 5.3's parked CLS note: reserve the sync
+  bar's height in the hero.
+- Docs: chain 14 / `9c142c1` everywhere chain 13 / `142e1f7` was; README's "Known limitation"
+  section names all five shells (Task 5.3 review I1) and the two Minors from that review; RPL
+  wording says transfers work where the shell can prove.
+- [ ] Failing tests → implement → full suites → headless visual pass of Send (RPL) and Withdraw in
+  both themes at 360/1280 → commit `ui: chain 14 — send any asset, withdraw to a backing`.
+
+### Task 6.4: Artefacts, mobile constants, and the first real transfer
+
+- Rebuild and restage: desktop (`cargo tauri build --bundles dmg`), iOS xcframework
+  (`core/scripts/build-ios.sh`), Android `.so` (`core/scripts/build-android.sh`); iOS
+  `Settings.swift` / Android `Prefs.java` stale fallback chain id `8` → take it from the core's
+  `version` (no other Swift/Java change; both apps build).
+- **End-to-end on the real chain, against `127.0.0.1:8545` (chain 14):** drive the *native* engine
+  path headlessly (a small `wallet-core` stdin/stdout example as `core.call` under
+  `makeNativeBackend`, or the Tauri app if it can be driven): create wallet A and B → faucet to A →
+  scan until the note lands → send 0.1 RAND A→B (real proof) → scan B until it appears. Record
+  hashes, timings, peak memory. One faucet mint and one transfer only; never touch the node's
+  process, config or keys. If the node is not answering, report that and stop — do not start one.
+- [ ] Re-run Task 5.3's full automated checklist; commit `chain 14: artefacts rebuilt; first
+  end-to-end transfer recorded`.
