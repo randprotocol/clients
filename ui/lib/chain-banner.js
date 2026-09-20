@@ -61,42 +61,59 @@ export function wrongChainBannerMarkup(info, { canRescan = false } = {}) {
 }
 
 /**
- * The quiet one: this node's tip is below what the wallet has read.
+ * This node's tip is below what the wallet has read.
  *
- * Two readings, and the copy has to pick the right one. Normally the node is the odd one out (a
- * lagging replica, a snapshot restore) and the cure is another node. But when the gap is bigger
- * than any honest scan could have produced, or when *different* nodes keep saying it, the wallet
- * is what is wrong — a node once misreported its tip, or the user moved between networks — and
- * telling them to try yet another node would send them round in circles. The backend decides
- * which (`behind.walletAhead`); this only renders it.
+ * **Which side is wrong is not knowable from here**, so the banner does not guess: it always
+ * offers both ways out, and its copy assigns no blame. The previous version tried to decide, and
+ * the rule it used was unreachable on the only journey a user takes — so the one case that needed
+ * a Rescan button was the one that never got one.
+ *
+ * `walletAhead` survives as **emphasis only**: another node has said the same thing, or the gap is
+ * large, so Rescan becomes the primary action. Both buttons are there either way.
  */
 export function behindBannerMarkup(info, { canRescan = false } = {}) {
   const tip = String((info && info.tip) ?? '?');
   const wallet = String((info && info.wallet) ?? '?');
-  if (info && info.walletAhead) {
-    const rescan = raw(canRescan
-      ? h`<button class="btn sm" type="button" data-action="rescan-plain">Rescan</button>`
-      : '');
-    return h`
-      <div class="banner warn" data-role="behind">
-        <span class="ic">${raw(icons.warning())}</span>
-        <span>
-          <span class="banner-title">Your wallet's scan position is ahead of this network</span>
-          Your wallet has read to block ${wallet}; this network is at ${tip}. If you switched
-          networks, or a node misreported its height, rescan to read this one from the start.
-        </span>
-        <span class="banner-actions">
-          <a class="btn sm" href="#settings" data-go="settings">Settings</a>
-          ${rescan}
-        </span>
-      </div>`;
-  }
+  const emphasis = !!(info && info.walletAhead);
+  const rescan = raw(canRescan
+    ? h`<button class="btn sm${emphasis ? ' btn-primary' : ''}" type="button" data-action="rescan-plain">Rescan wallet</button>`
+    : '');
   return h`
     <div class="banner warn" data-role="behind">
-      <span class="ic">${raw(icons.info())}</span>
-      <span><span class="banner-title">This node is behind your wallet</span>It is at block ${tip}; your wallet has read to ${wallet}. Try another node in Settings.</span>
-      <span class="grow"></span>
-      <a class="btn sm" href="#settings" data-go="settings">Settings</a>
+      <span class="ic">${raw(emphasis ? icons.warning() : icons.info())}</span>
+      <span>
+        <span class="banner-title">This node's chain tip is below your wallet's scan position</span>
+        The node is at block ${tip}; your wallet has read to ${wallet}. If the node is catching up,
+        wait or try another node. If you switched networks, or a node misreported its height,
+        rescan to read this one from the start.
+      </span>
+      <span class="banner-actions">
+        <a class="btn sm" href="#settings" data-go="settings">Try another node</a>
+        ${rescan}
+      </span>
+    </div>`;
+}
+
+/**
+ * A node that would not name its chain at all, to a wallet that has none recorded yet.
+ *
+ * Blocking, and deliberately so: a wallet that adopts an unnamed chain can never afterwards tell
+ * that it has been moved to a different one, which is the whole of the wrong-chain protection.
+ * Nothing was read and nothing merged.
+ */
+export function identityUnknownBannerMarkup() {
+  return h`
+    <div class="banner negative" data-role="identity-unknown">
+      <span class="ic">${raw(icons.warning())}</span>
+      <span>
+        <span class="banner-title">This node did not identify its chain</span>
+        A node has to say which chain it is on before this wallet will read from it — otherwise
+        there is no way to notice later that it has changed. Nothing has been read. Choose another
+        node.
+      </span>
+      <span class="banner-actions">
+        <a class="btn sm btn-primary" href="#settings" data-go="settings">Choose another node</a>
+      </span>
     </div>`;
 }
 

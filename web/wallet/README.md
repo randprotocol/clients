@@ -14,6 +14,10 @@ RAND_WALLET_PORT=9000 web/wallet/serve.sh
 The first run builds the wasm core if it is not already there (`core/scripts/build-wasm.sh`,
 a few minutes). After that a build is a file copy. Ctrl-C stops the server.
 
+**`serve.sh` rebuilds `dist/` on every start** — it deletes the directory first, so what is served
+is always the tree you are looking at and never a stale copy of it. `dist/` is build output: it is
+git-ignored, and nothing in it is ever edited by hand.
+
 ## What it does
 
 - **Creates or imports a wallet.** The spend key is generated *inside* the core and encrypted
@@ -117,10 +121,16 @@ hands it. That means the honest limit of what it can tell you:
 
 ## Known limitations
 
-- **A block with more than 500 nullifiers stops the scan.** The wallet pages nullifiers by height
-  and cannot page *within* one height, so a single block that spends more than a page's worth
-  leaves it with an error rather than a wrong answer. It needs intra-height paging upstream; on
-  today's chain no block comes close.
+- **A block with 500 or more nullifiers stops the scan.** The wallet pages nullifiers by height
+  and cannot page *within* one height, so a single block that spends a whole page's worth leaves it
+  with an error (`too_many_nullifiers_in_block`) rather than a wrong answer. On today's chain no
+  block comes close. The real fix is upstream and is already available: `rand_getCompactBlocks`
+  serves a *range* of blocks with each block's commitments **and** nullifiers together, which would
+  also collapse a first sync from ~109 requests to a handful and give per-height coverage the
+  wallet can check rather than a prefix it has to reason about. Moving the scan onto it is a task
+  of its own.
+- **A reorg that shrinks the commitment tree below what the wallet has read is not noticed.**
+  Leaf indexes only ever grow in the wallet's model; a tree that gets shorter would need a rescan.
 - **No transfers from this shell**, for the memory reason above.
 
 ## More than one tab

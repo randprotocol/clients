@@ -1018,13 +1018,12 @@ test('home: a node without sync.rescan offers Settings only, not a dead button',
   assert.equal(banner.querySelector('[data-action="rescan-chain"]'), null);
 });
 
-test('home: a node behind the wallet is a quiet notice, not a failure', async (t) => {
+test('home: a node behind the wallet is a notice, not a failure, and names both heights', async (t) => {
   const b = scanAnswering({ behind: { tip: 12, wallet: 400 } });
   const { root } = await at(t, '#home', b);
   const banner = root.querySelector('[data-role="banner-slot"] .banner');
   assert.ok(banner, 'nothing was said');
   assert.equal(banner.classList.contains('negative'), false, 'a lagging node is not an error');
-  assert.match(banner.textContent, /behind your wallet/);
   assert.match(banner.textContent, /block 12/);
   assert.match(banner.textContent, /read to 400/);
 });
@@ -1103,23 +1102,6 @@ test('home: a node that will not identify itself is named as such', async (t) =>
   });
   const { root } = await at(t, '#home', b);
   assert.match(root.querySelector('[data-role="wrong-chain"]').textContent, /will not say which chain it is/);
-});
-
-test('home: a wallet ahead of the network is told so, and offered a plain rescan', async (t) => {
-  const b = scanAnswering({ behind: { tip: 12, wallet: 900_000, walletAhead: true } });
-  const { app, root } = await at(t, '#home', b);
-  const banner = root.querySelector('[data-role="behind"]');
-  assert.match(banner.textContent, /scan position is ahead of this network/);
-  assert.match(banner.textContent, /read to block 900000/);
-  assert.ok(banner.querySelector('[data-action="rescan-plain"]'), 'no way out is offered');
-
-  banner.querySelector('[data-action="rescan-plain"]').click();
-  await app.idle();
-  root.querySelector('[role="dialog"] [data-role="confirm"]').click();
-  await app.idle();
-  const call = b.calls.find(([name]) => name === 'sync.rescan');
-  assert.ok(call, 'the rescan never happened');
-  assert.notEqual(call[1] && call[1].forChain, true, 'a wallet that is merely ahead must keep its notes');
 });
 
 test('home: another tab finishing refreshes from the cache, without starting a scan', async (t) => {
@@ -1201,4 +1183,55 @@ test('send: with the chains agreeing, the flow is untouched', async (t) => {
   const { root } = await at(t, '#send/0');
   assert.ok(root.querySelector('textarea[name=to]'), 'the ordinary send flow broke');
   assert.equal(root.querySelector('[data-role="wrong-chain"]'), null);
+});
+
+// ------------------------------------------------------------------------- fix round 4 --------
+test('home: a node that will not name its chain is blocking, and points at Settings', async (t) => {
+  const b = scanAnswering({ identityUnknown: true });
+  const { root } = await at(t, '#home', b);
+  const banner = root.querySelector('[data-role="identity-unknown"]');
+  assert.ok(banner, 'a wallet read from a chain nobody named, with no warning');
+  assert.ok(banner.classList.contains('negative'), 'this is blocking, not a note');
+  assert.match(banner.textContent, /did not identify its chain/);
+  assert.match(banner.textContent, /Nothing has been read/);
+  assert.ok(banner.querySelector('[data-go="settings"]'));
+});
+
+test('home: the behind banner always offers both ways out', async (t) => {
+  // The old copy blamed the node and offered no rescan unless an unreachable rule fired, so the
+  // one case that needed a rescan was the one case that never got the button.
+  const b = scanAnswering({ behind: { tip: 40, wallet: 100_000 } });
+  const { root } = await at(t, '#home', b);
+  const banner = root.querySelector('[data-role="behind"]');
+  assert.match(banner.textContent, /chain tip is below your wallet's scan position/);
+  assert.match(banner.textContent, /wait or try another node/);
+  assert.ok(banner.querySelector('[data-go="settings"]'), 'no "try another node"');
+  assert.ok(banner.querySelector('[data-action="rescan-plain"]'), 'no "rescan wallet"');
+  // …and no blame either way.
+  assert.doesNotMatch(banner.textContent, /This node is behind your wallet/);
+});
+
+test('home: walletAhead only changes which button is primary', async (t) => {
+  const plain = scanAnswering({ behind: { tip: 40, wallet: 100_000 } });
+  const { root: a } = await at(t, '#home', plain);
+  assert.equal(a.querySelector('[data-action="rescan-plain"]').classList.contains('btn-primary'), false);
+
+  const flagged = scanAnswering({ behind: { tip: 40, wallet: 100_000, walletAhead: true } });
+  const { root: c } = await at(t, '#home', flagged);
+  const btn = c.querySelector('[data-action="rescan-plain"]');
+  assert.equal(btn.classList.contains('btn-primary'), true, 'the emphasised case does not emphasise anything');
+  // Both actions are still there.
+  assert.ok(c.querySelector('[data-go="settings"]'));
+});
+
+test('home: the behind banner’s rescan is the plain one, behind its confirm', async (t) => {
+  const b = scanAnswering({ behind: { tip: 40, wallet: 100_000, walletAhead: true } });
+  const { app, root } = await at(t, '#home', b);
+  root.querySelector('[data-action="rescan-plain"]').click();
+  await app.idle();
+  root.querySelector('[role="dialog"] [data-role="confirm"]').click();
+  await app.idle();
+  const call = b.calls.find(([name]) => name === 'sync.rescan');
+  assert.ok(call, 'the rescan never happened');
+  assert.notEqual(call[1] && call[1].forChain, true, 'a wallet that is merely ahead must keep its notes');
 });

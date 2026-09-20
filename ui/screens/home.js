@@ -20,7 +20,7 @@ import { registerScreen } from '../app.js';
 import { formatUnits, shortAddress, timeAgo } from '../lib/format.js';
 import { totalInRand } from '../lib/assets.js';
 import { assetRowMarkup, activityRowMarkup, listMarkup } from '../lib/rows.js';
-import { wrongChainBannerMarkup, behindBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
+import { wrongChainBannerMarkup, behindBannerMarkup, identityUnknownBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
 import { wireSelection } from '../lib/panes.js';
 
 const ACTIONS = [
@@ -299,6 +299,7 @@ registerScreen('home', {
     /** One place decides what a scan result has to say, so the branches cannot drift apart. */
     function paintScanNotice(fresh) {
       if (fresh && fresh.wrongChain) { showWrongChainBanner(fresh.wrongChain); return; }
+      if (fresh && fresh.identityUnknown) { el.banner.innerHTML = identityUnknownBannerMarkup(); return; }
       if (fresh && fresh.behind) { showBehindBanner(fresh.behind); return; }
       if (fresh && fresh.recovered) { showRecoveredBanner(); return; }
       if (fresh && fresh.otherTab) { showOtherTabBanner(); return; }
