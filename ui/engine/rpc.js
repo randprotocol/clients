@@ -43,6 +43,8 @@
 // judges the endpoint this file hands back. It exists to keep a permanently-wrong-chain endpoint
 // out of the failover rotation entirely, so a healthy `rpc3` is preferred over a misconfigured
 // `rpc2` without the user ever being shown a refusal.
+import { typed } from '../lib/rpc-methods.js';
+
 export class RpcError extends Error {
   /**
    * `code` is the node's own JSON-RPC error code, or **-1** for "no usable answer came back".
@@ -302,29 +304,37 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
   }
 
   // -------------------------------------------------------------------------- the two clients ---
-  /** The named convenience methods, over whichever `call` they are given. */
+  /**
+   * The named convenience methods, over whichever `call` they are given.
+   *
+   * `typed(call)` (task 5.1, `ui/lib/rpc-methods.js`) generates one async function per method the
+   * vendored node's dispatch table answers — all ~48 of them, not the dozen or so this file used
+   * to hand-write — from the one `METHODS` table, so a client built here always has the full
+   * surface. The names below it are pre-typed()-era short aliases (`head`, `commitments`,
+   * `witness`, `anchor`, `blockByHeight`, `bridgeState`, `assets`, `treeInfo`, `nullifiers`) that
+   * `ui/engine/backend-shared.js` and `ui/engine/wallet.js` still call by those exact names —
+   * `typed()`'s naming convention mirrors the node's own method name (`getHead`, `getCommitments`,
+   * …), which is a different spelling for the methods that predate this table, so the aliases stay
+   * rather than every existing call site being rewritten. `chainId`, `status`, `sendTransaction`,
+   * `getTransaction`, `mint` and `estimateFee` already spell the same in both conventions and need
+   * no alias.
+   */
   function surface(call) {
+    const t = typed(call);
     return {
-      rpc: call,
-      chainId: (o) => call('rand_chainId', [], o),
-      status: (o) => call('rand_status', [], o),
-      head: (o) => call('rand_getHead', [], o),
-      treeInfo: (o) => call('rand_getTreeInfo', [], o),
-      commitments: (from, limit = 500, o) => call('rand_getCommitments', [from, limit], o),
-      nullifiers: (fromHeight, limit = 500, o) => call('rand_getNullifiers', [fromHeight, limit], o),
-      anchor: (o) => call('rand_getAnchor', [], o),
-      witness: (index, o) => call('rand_getWitness', [index], o),
-      sendTransaction: (hex, o) => call('rand_sendTransaction', [hex], o),
-      getTransaction: (hash, o) => call('rand_getTransaction', [hash], o),
-      mint: (address, o) => call('rand_mint', [address], o),
-      blockByHeight: (h, o) => call('rand_getBlockByHeight', [h], o),
-      bridgeState: (o) => call('rand_getBridgeState', [], o),
+      ...t,
+      rpc: call, // the raw escape hatch — backend-shared.js's `rpc.call` group reads this directly
+      head: t.getHead,
+      treeInfo: t.getTreeInfo,
+      commitments: t.getCommitments,
+      nullifiers: t.getNullifiers,
+      anchor: t.getAnchor,
+      witness: t.getWitness,
+      blockByHeight: t.getBlockByHeight,
+      bridgeState: t.getBridgeState,
       // The bridge's asset registry: `[{index, chain, token, asset_id}]`, ascending by index, or
       // `[]` on a chain without a bridge. No symbols and no decimals — see assets.list().
-      assets: (o) => call('rand_getAssets', [], o),
-      // `[spec]`, one of {kind:'bundle'} | {kind:'deploy',…} | {kind:'call',…}; the minimum fee in
-      // units as a decimal string.
-      estimateFee: (spec = { kind: 'bundle' }, o) => call('rand_estimateFee', [spec], o),
+      assets: t.getAssets,
     };
   }
 
