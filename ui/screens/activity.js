@@ -6,7 +6,7 @@ import { registerScreen } from '../app.js';
 import { groupByDay } from '../lib/assets.js';
 import { activityRowMarkup, listMarkup } from '../lib/rows.js';
 import { wireSelection } from '../lib/panes.js';
-import { wrongChainBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
+import { wrongChainBannerMarkup, identityUnknownBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
 
 function skeletonMarkup() {
   return h`
@@ -65,10 +65,13 @@ registerScreen('activity', {
     // user who comes straight here sees the same blocking banner as one who stayed on home, and
     // knows this history was read from a chain the current node is not on.
     let wrongChain = sync.wrongChain || null;
+    let identityUnknown = !!sync.identityUnknown;
 
     function paint() {
       const items = active === 'all' ? all : all.filter((a) => String(a.asset) === active);
-      const banner = raw(wrongChain ? wrongChainBannerMarkup(wrongChain, { canRescan: canRescan(ctx) }) : '');
+      const banner = raw(wrongChain
+        ? wrongChainBannerMarkup(wrongChain, { canRescan: canRescan(ctx) })
+        : (identityUnknown ? identityUnknownBannerMarkup() : ''));
       root.innerHTML = h`
         <h1 class="sr-only">Activity</h1>
         <div class="topbar"><span class="topbar-title">Activity</span></div>
@@ -102,6 +105,7 @@ registerScreen('activity', {
       const fresh = await confirmRescan(ctx, { forChain: true });
       if (!fresh || !ctx.isCurrent()) return;
       wrongChain = fresh.wrongChain || null;
+      identityUnknown = !!fresh.identityUnknown;
       all.length = 0;
       all.push(...[...(fresh.activity || [])].sort((a, b) => b.time - a.time));
       paint();

@@ -298,6 +298,9 @@ registerScreen('home', {
 
     /** One place decides what a scan result has to say, so the branches cannot drift apart. */
     function paintScanNotice(fresh) {
+      // A result from a node the wallet has since been pointed away from: its numbers are sound
+      // but they are not this node's, so say nothing and let the fresh scan below speak.
+      if (fresh && fresh.staleNode) { el.banner.innerHTML = ''; return; }
       if (fresh && fresh.wrongChain) { showWrongChainBanner(fresh.wrongChain); return; }
       if (fresh && fresh.identityUnknown) { el.banner.innerHTML = identityUnknownBannerMarkup(); return; }
       if (fresh && fresh.behind) { showBehindBanner(fresh.behind); return; }
@@ -329,6 +332,10 @@ registerScreen('home', {
           paintScanNotice(fresh);
           setScanning(false);
           applyData(1, freshAssets, fresh);
+          // The node changed underneath that scan, so what just landed describes the old one.
+          // Read the new one rather than leaving its tip on screen (guarded: the fresh scan
+          // cannot itself be stale unless the user changes node again, which starts this over).
+          if (fresh && fresh.staleNode && live()) attachScan();
         },
         (err) => {
           if (!live()) return;

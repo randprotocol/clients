@@ -1101,7 +1101,8 @@ test('home: a node that will not identify itself is named as such', async (t) =>
     wrongChain: { expected: { chainId: 13, genesis: 'aaaaaaaabbbb' }, got: { chainId: null, genesis: null, unknown: true } },
   });
   const { root } = await at(t, '#home', b);
-  assert.match(root.querySelector('[data-role="wrong-chain"]').textContent, /will not say which chain it is/);
+  assert.match(root.querySelector('[data-role="wrong-chain"]').textContent, /would not say which chain it is/);
+  assert.match(root.querySelector('[data-role="wrong-chain"]').textContent, /did not fully identify its chain/);
 });
 
 test('home: another tab finishing refreshes from the cache, without starting a scan', async (t) => {
@@ -1234,4 +1235,69 @@ test('home: the behind banner’s rescan is the plain one, behind its confirm', 
   const call = b.calls.find(([name]) => name === 'sync.rescan');
   assert.ok(call, 'the rescan never happened');
   assert.notEqual(call[1] && call[1].forChain, true, 'a wallet that is merely ahead must keep its notes');
+});
+
+// ------------------------------------------------------------------------- fix round 5 --------
+test('a partially identified node does not produce a self-contradicting banner', async (t) => {
+  // "This node is on a different chain (chain 13) — your wallet's history was read from
+  // chain 13 · aaaaaaaa…" reads as a bug in the wallet, not a problem with the node.
+  const cases = [
+    { got: { chainId: 13, genesis: null, unknown: true }, expect: /chain 13 · genesis unknown/ },
+    { got: { chainId: null, genesis: 'ccccccccdddd', unknown: true }, expect: /chain unknown · cccccccc…/ },
+    { got: { chainId: null, genesis: null, unknown: true }, expect: /would not say which chain it is/ },
+  ];
+  for (const { got, expect } of cases) {
+    const b = scanAnswering({ wrongChain: { expected: { chainId: 13, genesis: 'aaaaaaaabbbb' }, got } });
+    const { root, app } = await at(t, '#home', b);
+    const text = root.querySelector('[data-role="wrong-chain"]').textContent;
+    assert.match(text, /did not fully identify its chain/, `${JSON.stringify(got)}: wrong headline`);
+    assert.match(text, expect);
+    assert.doesNotMatch(text, /is on a different chain/, `${JSON.stringify(got)}: claims more than it knows`);
+    app.destroy();
+  }
+});
+
+test('a fully identified mismatch still says "is on a different chain"', async (t) => {
+  const b = scanAnswering({ wrongChain: SAME_ID_DIFFERENT_CHAIN });
+  const { root } = await at(t, '#home', b);
+  const text = root.querySelector('[data-role="wrong-chain"]').textContent;
+  assert.match(text, /is on a different chain/);
+  assert.doesNotMatch(text, /did not fully identify/);
+});
+
+test('activity and send show the blocking banner for an unnamed chain too', async (t) => {
+  // `identityUnknown` is declared blocking in the contract, but only home rendered it.
+  const cached = () => ({
+    notes: [], activity: [], scannedHeight: 1, head: 1, lastSyncMs: Date.now(), identityUnknown: true,
+  });
+  const forActivity = unlockedBackend({ sync: { cached, scan: () => new Promise(() => {}) } });
+  const { root: a, app: appA } = await at(t, '#activity', forActivity);
+  assert.ok(a.querySelector('[data-role="identity-unknown"]'), 'activity showed history from an unnamed chain');
+  appA.destroy();
+
+  const forSend = unlockedBackend({ sync: { cached, scan: () => new Promise(() => {}) } });
+  const { root: c } = await at(t, '#send/0', forSend);
+  assert.ok(c.querySelector('[data-role="identity-unknown"]'), 'the send flow started on an unnamed chain');
+  assert.equal(c.querySelector('textarea[name=to]'), null);
+  assert.equal(forSend.calls.some(([name]) => name === 'send.estimate'), false);
+});
+
+test('home: a scan whose node changed underneath it triggers a fresh scan, not a stale tip', async (t) => {
+  // `staleNode` means "a consistent scan of the node it started against, which is no longer the
+  // one we are pointed at". Showing its tip as the current node's would be a lie.
+  let calls = 0;
+  const b = unlockedBackend({
+    sync: {
+      scan: async () => {
+        calls += 1;
+        return calls === 1
+          ? { notes: [], activity: [], scannedHeight: 9, head: 9, lastSyncMs: Date.now(), staleNode: true }
+          : { notes: [], activity: [], scannedHeight: 2, head: 2, lastSyncMs: Date.now() };
+      },
+    },
+  });
+  const { app, root } = await at(t, '#home', b);
+  assert.equal(calls, 2, 'the stale result was left on screen instead of being re-read');
+  assert.equal(root.querySelector('[data-role="banner-slot"]').innerHTML, '', 'a stale scan raised a banner');
+  await app.idle();
 });

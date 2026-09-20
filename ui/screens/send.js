@@ -24,7 +24,7 @@
 import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
-import { wrongChainBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
+import { wrongChainBannerMarkup, identityUnknownBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
 import { parseUnits, formatUnits, elapsed } from '../lib/format.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink } from '../lib/explorer.js';
@@ -77,8 +77,10 @@ registerScreen('send', {
     // These notes were read from a different chain than the node is on, so there is no honest
     // transfer to build: the backend refuses (definitely) and this says why before the user has
     // typed an address. The same banner as home and activity — one implementation, three screens.
-    if (cached.wrongChain) {
-      root.querySelector('[data-role="step"]').innerHTML = wrongChainBannerMarkup(cached.wrongChain, { canRescan: canRescan(ctx) });
+    if (cached.wrongChain || cached.identityUnknown) {
+      root.querySelector('[data-role="step"]').innerHTML = cached.wrongChain
+        ? wrongChainBannerMarkup(cached.wrongChain, { canRescan: canRescan(ctx) })
+        : identityUnknownBannerMarkup();
       const offChainRescan = on(root, '[data-action="rescan-chain"]', 'click', async (evt) => {
         evt.preventDefault();
         const fresh = await confirmRescan(ctx, { forChain: true });

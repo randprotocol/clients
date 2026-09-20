@@ -19,15 +19,23 @@ import { icons } from './icons.js';
  */
 export function chainLabel(identity) {
   if (!identity || (identity.chainId === null && identity.genesis === null)) {
-    return identity && identity.unknown ? 'a node that will not say which chain it is' : 'an unknown chain';
+    return identity && identity.unknown ? 'a node that would not say which chain it is' : 'an unknown chain';
   }
   const id = identity.chainId === null || identity.chainId === undefined || identity.chainId === ''
-    ? 'an unknown chain'
+    ? 'chain unknown'
     : `chain ${identity.chainId}`;
+  // A missing half is named as missing rather than silently dropped. Without this, a node that
+  // gave its id but not its genesis rendered as "different chain (chain 13) … read from chain 13",
+  // which reads as a bug in the wallet rather than a problem with the node.
   const genesis = typeof identity.genesis === 'string' && identity.genesis
-    ? ` · ${identity.genesis.slice(0, 8)}…`
-    : '';
-  return `${id}${genesis}`;
+    ? `${identity.genesis.slice(0, 8)}…`
+    : 'genesis unknown';
+  return `${id} · ${genesis}`;
+}
+
+/** True when the node could not name every part the wallet wanted to compare. */
+export function partlyIdentified(info) {
+  return !!(info && info.got && info.got.unknown);
 }
 
 /**
@@ -44,11 +52,16 @@ export function wrongChainBannerMarkup(info, { canRescan = false } = {}) {
   const rescan = raw(canRescan
     ? h`<button class="btn sm" type="button" data-action="rescan-chain">Rescan</button>`
     : '');
+  // "On a different chain" is a claim; when the node would not fully identify itself, the honest
+  // headline is that it did not, not that it is somewhere else.
+  const title = partlyIdentified(info)
+    ? `This node did not fully identify its chain (${chainLabel(got)})`
+    : `This node is on a different chain (${chainLabel(got)})`;
   return h`
     <div class="banner negative" data-role="wrong-chain">
       <span class="ic">${raw(icons.warning())}</span>
       <span>
-        <span class="banner-title">This node is on a different chain (${chainLabel(got)})</span>
+        <span class="banner-title">${title}</span>
         Your wallet's history was read from ${chainLabel(expected)} — nothing has been changed, and
         this wallet will not send or request funds until the two agree.
         Switch node in Settings, or rescan this wallet for the new chain.
