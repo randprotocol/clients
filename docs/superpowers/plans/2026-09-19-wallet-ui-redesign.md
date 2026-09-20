@@ -1030,59 +1030,183 @@ criteria. Cost if wrong: none found on inspection; if a gap surfaces later (e.g.
 it is a small, separately-scoped follow-up against `assets.list()` directly, not a reason to redo
 this task.
 
-### Task 4.4: RPL bridge withdrawal (`BridgeBurn`) — desktop only
+### Task 4.4: `plan_burn`/`prove_burn` in `wallet-core` — the two-bundle `BridgeBurn` (Rust only)
 
 Added 2026-09-19 on the owner's instruction, after Task 4.1 established that the ledger admits no
 shielded→shielded transfer of an asset ≥ 1 (`ledger/mod.rs` rejects a transaction bundle with
 `asset != 0`): the one thing an RPL note can do is be burned back to its origin chain.
 
-**What the chain requires** (mirror `randprotocol-client`'s `wallet::submit_burn`, never improvise):
-one `Transaction { bundle: <RAND fee bundle: asset 0, fee ≥ BRIDGE_BURN_FEE = 10_000_000 units, burn 0>,
-action: Action::BridgeBurn { asset_bundle: <asset bundle: asset = index, fee 0, burn == amount, both
-outputs back to the sender>, asset, amount, relayer_fee ≤ amount, to_chain: u16, to: [u8; 32] } }`.
-Two proofs, generated one after the other (≈ 2 × 98 s, 5.6 GB peak each, never concurrently).
+**Split from the original single "RPL bridge withdrawal" task, 2026-09-20**, on the same reasoning
+as Phase 3's split: this is money-moving core crypto, and it should be reviewed on its own — proved
+for real, against upstream's own stateless validation — before Task 4.5 builds the backend and UI
+on top of it. This task is core-only: no `desktop/`, no `ui/` changes.
 
-**Files:** `core/crates/wallet-core/src/lib.rs` (+ `examples/`), `desktop/src-tauri/src/{commands,engine}.rs`,
-`ui/backend.js`, `ui/test/fake-backend.mjs`, `ui/engine/backend-wasm.js`, `ui/screens/{asset,withdraw}.js`,
-`ui/test/withdraw.test.mjs`.
+**Facts established by reading the current code before rewriting this task** (the original text
+predated Task 3.2 and cited a Rust file layout that no longer exists — corrected below; the core
+substance was already right and is unchanged):
+
+- `core/crates/wallet-core/src/lib.rs` has no existing two-bundle/two-proof pattern to adapt —
+  `plan_transfer` (line 438) and `prove_transfer` (line 570) are both single-bundle. `plan_burn`/
+  `prove_burn` are new, built by mirroring the vendored fullnode client's own burn implementation —
+  **read `core/vendor/fullnode/crates/randprotocol-client/src/wallet.rs:1119-1183`
+  (`submit_burn`) in full before writing anything; mirror it, do not improvise.** Its shape: refuse
+  `asset==0`, `amount==0`, `relayer_fee > amount` before touching the network; two `Plan::select`
+  calls against the *same* note store — one for the asset bundle (`asset: <index>`, `fee: 0`,
+  `burn: amount`) and one for the RAND fee bundle (`asset: 0`, `fee: <fee>`, `burn: 0`) — "they can
+  never collide, since they hold different assets"; both proved (never concurrently — see below);
+  the **RAND fee bundle becomes the transaction's main `bundle`**, and the **asset bundle rides
+  inside `Action::BridgeBurn.asset_bundle`** (not the other way around — get this backwards and the
+  fee/asset bundles swap places on the wire and the chain rejects the transaction).
+- `Action::BridgeBurn` (`core/vendor/fullnode/crates/randprotocol-core/src/types/transaction.rs:139`):
+  `{ asset_bundle: Bundle, asset: u32, amount: u64, relayer_fee: u64, to_chain: u16, to: [u8; 32] }`
+  — confirmed, exact field list.
+- `BRIDGE_BURN_FEE` (`core/vendor/fullnode/crates/randprotocol-core/src/gas.rs:92`):
+  `10 * BUNDLE_BASE`, pinned by that crate's own test to `10_000_000` units (0.01 RAND) — confirmed
+  exact value, use this constant, do not hard-code the number.
+- The plain-bundle `asset != 0` rejection this task exists to route around is
+  `core/vendor/fullnode/crates/randprotocol-core/src/ledger/mod.rs:942`.
+- Existing `TransferPlan`'s `proofs` field is already documented as "always 1 today... so a client
+  never hard-codes it" — the wire shape already anticipates `proofs: 2`; `plan_burn`'s result
+  should populate it the same way, honestly, rather than adding a second ad hoc field.
+- **Proving is never concurrent in this workspace** (a file-lock semaphore caps it, per that
+  workspace's own recorded notes), and two sequential burn proofs have been measured at ~190 s
+  total elsewhere in this project — consistent with this task's "≈2×98s, never concurrently"
+  estimate. `prove_burn` must prove the two bundles one after the other, not in parallel (in
+  addition to being how the vendored code already works, running them concurrently would double
+  the ~5.6 GB peak and could OOM a machine that only just clears `MIN_PROVE_GIB` in
+  `ui/engine/backend-native.js`).
+
+**Files:** `core/crates/wallet-core/src/lib.rs`, `core/crates/wallet-core/examples/` (extend the
+existing `prove_fixture` example, which already proves `prove_transfer` fixtures — do not write a
+second example binary).
 
 **Interfaces — Produces:**
-- `wallet-core` dispatch `plan_burn {notes, asset, amount, fee?}` → `{inputs, fee_inputs, change, fee_change, fee, proofs: 2}`
-  (errors: no RAND for the fee → message containing "RAND" and "fee"; `asset == 0` → "RAND is not a bridged asset";
-  amount above the two largest notes → the existing consolidate-first message) and `prove_burn {spend_key, asset,
-  amount, relayer_fee, to_chain, to, inputs, fee_inputs, witnesses…}` → `{tx, hash, tx_bytes, proofs: 2}`. `version`
-  reply gains `"bridge_burn": true` and `"bridge_burn_fee"`.
-- Backend group `bridge: ['state', 'canWithdraw', 'estimate', 'withdraw']`: `state()` → `rand_getBridgeState`
-  summary `{enabled, chains: [...]}`; `canWithdraw()` → `{ok, reason?}` (false on the wasm shells with the 5.5 GB
-  sentence; false when the bridge is disabled); `estimate({asset, amount, relayerFee, toChain, to})` →
-  `{fee, relayerFee, receive, proofs: 2}`; `withdraw(req, onPhase)` → `{hash}` with phases
-  `'selecting'|'witness'|'proving'|'proving-asset'|'submitting'|'confirming'`.
-- UI: asset detail for `index ≥ 1` gains a **Withdraw** action beside the disabled Send (`#withdraw/<index>`).
-  Steps: destination chain (from `bridge.state()`, preselected to the asset's origin `chain`) → destination
-  address (validated per chain family: 20-byte hex for EVM chains, left-padded to 32 bytes; anything else must be
-  64 hex characters) → amount (Max; relayer fee shown as "deducted on the destination chain") → review with an
-  explicit warning "This leaves the shielded pool. The destination address and amount become public on the other
-  chain." and a typed confirmation of the last 4 characters of the destination → proving (two rings) → done,
-  linking to the burn in randscan. No Withdraw button where `canWithdraw().ok` is false; the reason is shown instead.
+- `plan_burn {notes, asset, amount, fee?}` → `{inputs, fee_inputs, change, fee_change, fee, proofs: 2}`
+  (errors: no RAND for the network fee → a message containing both "RAND" and "fee"; `asset == 0` →
+  "RAND is not a bridged asset"; amount above what the largest asset notes can cover → the existing
+  consolidate-first message, mirrored from `plan_transfer`'s equivalent case).
+- `prove_burn {spend_key, asset, amount, relayer_fee, to_chain, to, inputs, fee_inputs, witnesses…}`
+  → `{tx, hash, tx_bytes, proofs: 2}` — the exact witness/anchor parameter shape should mirror
+  `prove_transfer`'s `ProveRequest` as closely as the two-bundle structure allows; name every
+  divergence explicitly in the report so Task 4.5's implementer isn't guessing at the wire shape.
+- `version` reply gains `"bridge_burn": true` and `"bridge_burn_fee"` (the constant, as a string
+  amount matching this project's existing amount-is-a-string rule for `wallet-core` replies).
 
 - [ ] **Step 1: Failing core tests** — `plan_burn_picks_fee_notes_separately`, `plan_burn_without_rand_for_fee_says_so`,
   `plan_burn_refuses_asset_zero`, and `burn_bundles_have_the_ledger_shape` (asset bundle: `fee == 0`,
   `burn == amount`, `asset == index`; fee bundle: `asset == 0`, `burn == 0`, `fee ≥ BRIDGE_BURN_FEE`), built on a
   `build_burn_unproven` split so the shape is testable without a 3-minute proof; plus `fixture_burn_request(profile)`.
 - [ ] **Step 2:** `cd core && cargo test -p wallet-core burn` — FAIL.
-- [ ] **Step 3:** Implement by mirroring upstream `submit_burn` line for line (input selection `Plan::select`
-  semantics, output addressing, action fields); take `BRIDGE_BURN_FEE` from `randprotocol_core::gas`.
+- [ ] **Step 3:** Implement by mirroring `wallet.rs:1119-1183`'s `submit_burn` line for line (input
+  selection `Plan::select` semantics, output addressing, action fields, bundle/action assignment);
+  take `BRIDGE_BURN_FEE` from `randprotocol_core::gas`.
 - [ ] **Step 4:** `cargo test -p wallet-core` PASS; `cargo run --release --example prove_fixture -- burn` proves both
-  bundles and upstream's own stateless validation accepts the transaction (name the function used in the report).
-- [ ] **Step 5:** Failing UI tests (`ui/test/withdraw.test.mjs`, fake backend): no Withdraw button when
-  `canWithdraw` is false, reason shown; EVM address validation and padding; relayer fee > amount refused before
-  `estimate`; the typed confirmation gates the button; phases include `'proving-asset'`; lands on `#withdrawn/<hash>`.
-  Implement the screen, the fake, the wasm backend (`canWithdraw` false) and the Tauri commands
-  (`bridge_state`, `bridge_can_withdraw`, `bridge_estimate`, `bridge_withdraw`) with Rust tests against the stub RPC.
-- [ ] **Step 6:** All suites PASS; screenshots of the four steps in both themes; commit
-  `bridge: withdraw an RPL asset to its origin chain (BridgeBurn), desktop only`.
+  bundles sequentially and upstream's own stateless validation accepts the transaction (name the function used in
+  the report — the same one `submit_burn`'s own tests call, if it has one, rather than a new hand-rolled check).
+- [ ] **Step 5:** Commit `core: plan_burn/prove_burn — mirror submit_burn's two-bundle BridgeBurn`.
 
-Runs after Task 4.3 and Task 3.2 (it needs the desktop backend).
+### Task 4.5: RPL bridge withdrawal — backend and UI (desktop only; depends on Task 4.4)
+
+**Split from the original single "RPL bridge withdrawal" task, 2026-09-20; builds on Task 4.4's
+reviewed `plan_burn`/`prove_burn`.** This half is pure JS plus one small screen — no Rust, and,
+contrary to the original task text (written before Task 3.2's rewrite), **no new Tauri commands**.
+
+**Facts established by reading the current code before rewriting this task:**
+
+- `desktop/src-tauri/src/commands.rs`'s own header states the design philosophy this codebase has
+  settled on: the wallet's logic is `ui/engine/*.js`, running unmodified in the webview, "not
+  ported here and must not be." There are exactly 9 commands today (`core_call`,
+  `system_memory_gib`, `app_version`, `storage_get/set/remove/clear`,
+  `storage_session_get/set/remove`) — **no per-feature command exists for anything**, not even for
+  the already-shipped Send, which reaches `wallet-core` through the one generic `core_call('prove_transfer',
+  …)`. `plan_burn`/`prove_burn` reach the desktop app the same way, through that same existing
+  `core_call` — do not add `bridge_state`/`bridge_can_withdraw`/`bridge_estimate`/`bridge_withdraw`
+  Tauri commands; they would duplicate what `core_call` already does generically. **No
+  `desktop/src-tauri/` files are touched by this task at all.**
+- `rand_getBridgeState` and `rand_getAssets` are **already wired**: `ui/engine/rpc.js:83`
+  (`bridgeState`) and `:86` (`assets`) both already exist and are already used by
+  `assets.list()`. No new RPC plumbing is needed either — only a new `bridge` group in the shared
+  backend that calls the RPC methods that already exist.
+- The real `rand_getBridgeState` reply (`core/vendor/fullnode/.../rpc.rs:1565-1588`) is
+  `{enabled, emitter, emitters: {chain: addr}, guardian_set_index, guardians, burn_sequence,
+  next_index, assets}` when enabled, or `{enabled: false}` otherwise — there is no ready-made
+  `chains: [...]` summary; derive it from `Object.keys(emitters)` when building `bridge.state()`'s
+  simplified reply, and say so in a comment so a future reader doesn't go looking for a `chains`
+  field on the node's own reply.
+- `rand_getAssets`' row shape is `{index, chain, token, asset_id}` (`rpc.rs:663-676`) — the `chain`
+  field (an asset's **origin chain**, exactly what the Withdraw flow needs to preselect a
+  destination) already exists in the registry reply, but `ui/engine/backend-shared.js`'s
+  `assets.list()` (around lines 1056-1066) currently discards `chain` and `token` when building its
+  own `RPL#<index>` rows, keeping only `asset_id`. **Thread `chain` (and `token`, for completeness)
+  through into `assets.list()`'s output as part of this task**, since the Withdraw screen needs it
+  and nothing else currently reads or drops it deliberately — add one test case to whichever file
+  already covers `assets.list()` (`ui/test/backend-cases.mjs`) confirming `chain` survives into a
+  listed RPL row.
+- There is no existing `bridge` group anywhere (`ui/backend.js`, `ui/engine/backend-shared.js`,
+  `ui/test/fake-backend.mjs` all confirmed clean) — this is new contract surface, add it as an
+  OPTIONAL `Backend` member (`bridge?`) per `ui/backend.js`'s existing convention for shell-specific
+  capabilities, the same way `platform.ensureHostPermission?` etc. are optional.
+- `ui/engine/backend-shared.js`'s factory already receives a `canProve` parameter (Task 3.1) that
+  answers exactly the question `bridge.canWithdraw()` also needs to ask (can this machine run a
+  native proof at all) — **reuse it, do not add a second memory-check mechanism.**
+  `bridge.canWithdraw()` should be `{ok:false, reason: <the same 5.5GB sentence>}` whenever
+  `canProve()` says so, and otherwise `{ok:false, reason: <bridge disabled>}` when
+  `bridge.state().enabled` is false, and `{ok:true}` only when both checks pass. Since `canProve()`
+  is unconditionally false on every wasm shell, `bridge.canWithdraw()` is unconditionally false
+  there too — the wasm backend's `bridge` group can be a thin, always-`{ok:false}` implementation,
+  matching how `send.canProve()` already works.
+- `ui/screens/asset.js` already knows about RPL — it renders an `RPL` chip for `asset.index >= 1`
+  and has a comment noting RPL assets can't be sent — but has **no Withdraw action or hook of any
+  kind** today; this is genuinely new UI, not a stub to fill in. There is **no `ui/screens/
+  withdraw.js`** yet either.
+
+**Files:** `ui/backend.js`, `ui/test/fake-backend.mjs`, `ui/engine/backend-shared.js`,
+`ui/engine/backend-wasm.js`, `ui/engine/backend-native.js`, `ui/screens/{asset,withdraw}.js`,
+`ui/test/withdraw.test.mjs`.
+
+**Interfaces — Produces:**
+- Backend group `bridge: ['state', 'canWithdraw', 'estimate', 'withdraw']`: `state()` → a
+  simplified `{enabled, chains: [...]}` derived from `rand_getBridgeState` as described above;
+  `canWithdraw()` → `{ok, reason?}` per the `canProve()`-reuse rule above; `estimate({asset, amount,
+  relayerFee, toChain, to})` → `{fee, relayerFee, receive, proofs: 2}` (calls `core.call('plan_burn',
+  …)` on the native backend; on wasm, since `canWithdraw().ok` is always false, `estimate` need not
+  be reachable from the UI at all — implement it honestly rather than leaving it undefined, but no
+  screen should call it there); `withdraw(req, onPhase)` → `{hash}` with phases
+  `'selecting'|'witness'|'proving'|'proving-asset'|'submitting'|'confirming'`, calling
+  `core.call('plan_burn', …)` then `core.call('prove_burn', …)` through the existing `core_call`
+  Tauri command — no new native surface.
+- UI: asset detail for `index ≥ 1` gains a **Withdraw** action beside the disabled Send
+  (`#withdraw/<index>`), shown only when `bridge.canWithdraw().ok` — otherwise the reason is shown
+  in its place (mirroring how Send already handles `canProve().ok === false`). Steps: destination
+  chain (from `bridge.state()`, preselected to the asset's origin `chain`, now available per the
+  `assets.list()` threading above) → destination address (validated per chain family: 20-byte hex
+  for EVM chains, left-padded to 32 bytes; anything else must be 64 hex characters) → amount (Max;
+  relayer fee shown as "deducted on the destination chain") → review with an explicit warning "This
+  leaves the shielded pool. The destination address and amount become public on the other chain."
+  and a typed confirmation of the last 4 characters of the destination → proving (two rings, since
+  this is a two-proof operation and the user should see that it's not stuck) → done, linking to the
+  burn in randscan.
+
+- [ ] **Step 1: Failing UI tests** (`ui/test/withdraw.test.mjs`, fake backend): no Withdraw button
+  when `canWithdraw` is false, reason shown; EVM address validation and padding; relayer fee >
+  amount refused before `estimate`; the typed confirmation gates the button; phases include
+  `'proving-asset'`; lands on `#withdrawn/<hash>`. Also extend `ui/test/backend-cases.mjs` with the
+  `assets.list()` `chain`-survives case named above, run against both backends.
+- [ ] **Step 2:** `node --test ui/test/withdraw.test.mjs` — FAIL.
+- [ ] **Step 3:** Implement the screen, the fake backend, the `bridge` group in both
+  `backend-wasm.js` (always `{ok:false}`) and `backend-native.js` (real, via `core_call`), and the
+  `assets.list()` `chain`/`token` threading in `backend-shared.js`.
+- [ ] **Step 4:** All suites PASS (`node --test ui/test web/wallet/test`); no live node is likely
+  reachable to exercise a real withdrawal end-to-end (same constraint Task 3.2 hit) — if one is
+  reachable, attempt it and report; if not, say so plainly rather than skipping the note. Screenshot
+  the four Withdraw steps in both themes from the real desktop app if `cargo tauri dev` can run and
+  render here (the wasm/extension shells can only ever show the "no Withdraw button" state, since
+  `canWithdraw()` is always false there — screenshot that state too, but the multi-step flow itself
+  can only be exercised for real on desktop).
+- [ ] **Step 5:** Commit `bridge: withdraw an RPL asset to its origin chain (BridgeBurn), desktop only`.
+
+Task 4.5 depends on Task 4.4 (needs `plan_burn`/`prove_burn`) and Task 3.2 (needs the desktop
+backend — already complete).
 
 ---
 
