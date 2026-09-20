@@ -19,8 +19,16 @@ vendor/circuits      randprotocol-zkvm's sibling-checkout path dependencies: the
 
 Every reply is `{"ok":true,"value":…}` or `{"ok":false,"error":"…"}`; a panic in the prover is
 caught and reported the same way. Methods and parameter shapes are documented on
-`wallet_core::dispatch` in `crates/wallet-core/src/lib.rs`. Nothing here does I/O: the clients
-fetch commitments, anchors and witnesses over JSON-RPC and pass them in.
+`wallet_core::dispatch` in `crates/wallet-core/src/lib.rs` — including `plan_transfer` (which
+notes a send will spend, and the resulting change) and `max_sendable` (the largest one-bundle
+send). Nothing here does I/O: the clients fetch commitments, anchors and witnesses over JSON-RPC
+and pass them in.
+
+A transfer today moves only the native asset (RAND, asset index 0): the chain's ledger rejects any
+bundle with `asset != 0`, so a registry asset ("RPL" in this wallet, index ≥ 1) cannot move between
+two shielded addresses yet — `plan_transfer`, `max_sendable` and `prove_transfer` all refuse it
+with the same sentence (`RPL_TRANSFER_UNAVAILABLE`). `version`'s reply carries `bundle_inputs` (2),
+`rpl_transfer` and `bridge_burn` (both `false` today) so a client never hard-codes these.
 
 ```bash
 cargo test --release            # includes a full proved transfer checked by the chain's verifier

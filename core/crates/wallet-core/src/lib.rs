@@ -55,6 +55,18 @@ pub const EXPLORER_URL: &str = "https://randscan.org";
 /// figure below, so the published requirement is unchanged.
 pub const PROVER_PEAK_MEMORY_BYTES: u64 = 5_600_000_000;
 
+/// A bundle spends exactly this many input notes (2-in-2-out). `select_inputs` enforces it; a
+/// client that wants the number without re-deriving it reads `bundle_inputs` from `version`.
+pub const BUNDLE_INPUTS: usize = 2;
+
+/// The chain's ledger accepts a transaction bundle only when `asset == 0`
+/// (`randprotocol_core::ledger::TxError::UnsupportedAsset`, `core/vendor/fullnode/crates/
+/// randprotocol-core/src/ledger/mod.rs`): a registry asset (index ≥ 1, "RPL" in this wallet)
+/// cannot move between two shielded addresses on this network. The only planned way out is a
+/// `BridgeBurn` (a later task). Every layer — `plan_transfer`, `max_sendable`, `prove_transfer` —
+/// refuses with exactly this sentence, so the UI can show it verbatim.
+pub const RPL_TRANSFER_UNAVAILABLE: &str = "RPL transfers are not available on this network.";
+
 // ------------------------------------------------------------------ errors
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -370,7 +382,7 @@ pub fn select_inputs(notes: &[OwnedNote], asset: u32, need: u64) -> Result<Selec
     }
     let mut chosen = Vec::new();
     let mut sum = 0u64;
-    for n in sorted.iter().take(2) {
+    for n in sorted.iter().take(BUNDLE_INPUTS) {
         if sum >= need {
             break;
         }
@@ -384,6 +396,68 @@ pub fn select_inputs(notes: &[OwnedNote], asset: u32, need: u64) -> Result<Selec
         ));
     }
     Ok(Selection { chosen, need: need.to_string(), change: (sum - need).to_string() })
+}
+
+/// What a client needs to build one transfer: which notes to spend and what the bundle's numbers
+/// come out to, before it ever fetches a witness or opens the prover. `inputs` is exactly what
+/// `select_inputs` chose; `change` is `sum(inputs) - need`; `proofs` is always 1 today (a plain
+/// transfer is one bundle) so a client never hard-codes it.
+#[derive(Serialize, Debug)]
+pub struct TransferPlan {
+    pub inputs: Vec<OwnedNote>,
+    pub need: String,
+    pub change: String,
+    pub fee: String,
+    pub proofs: u8,
+}
+
+/// Plan a transfer of `asset`: pick inputs, compute `need = amount + fee` and the resulting
+/// change. Registry assets (`asset >= 1`) are refused outright — see [`RPL_TRANSFER_UNAVAILABLE`]
+/// — since the ledger admits only `asset == 0` bundles today.
+pub fn plan_transfer(notes: &[OwnedNote], asset: u32, amount: u64, fee: u64) -> Result<TransferPlan> {
+    if asset != 0 {
+        return bad(RPL_TRANSFER_UNAVAILABLE);
+    }
+    if amount == 0 {
+        return bad("amount must be greater than zero");
+    }
+    if fee < gas::BUNDLE_BASE {
+        return bad(format!(
+            "fee must be at least {} RAND (the bundle floor)",
+            format_amount(gas::BUNDLE_BASE)
+        ));
+    }
+    let need = amount.checked_add(fee).ok_or("amount + fee overflows")?;
+    let selection = select_inputs(notes, 0, need)?;
+    Ok(TransferPlan {
+        inputs: selection.chosen,
+        need: need.to_string(),
+        change: selection.change,
+        fee: fee.to_string(),
+        proofs: 1,
+    })
+}
+
+/// The largest amount one bundle can send, for a client's "max" button: the sum of the
+/// `BUNDLE_INPUTS` largest spendable notes of `asset`, minus `fee`, floored at zero rather than
+/// erroring (a wallet that cannot cover the fee can still be shown "0"). `inputs` is how many
+/// notes that sum actually used (0, 1 or `BUNDLE_INPUTS`).
+#[derive(Serialize, Debug)]
+pub struct MaxSendable {
+    pub amount: String,
+    pub fee: String,
+    pub inputs: usize,
+}
+
+pub fn max_sendable(notes: &[OwnedNote], asset: u32, fee: u64) -> Result<MaxSendable> {
+    if asset != 0 {
+        return bad(RPL_TRANSFER_UNAVAILABLE);
+    }
+    let mut sorted: Vec<&OwnedNote> = notes.iter().filter(|n| n.is_spendable() && n.asset == 0).collect();
+    sorted.sort_by_key(|n| std::cmp::Reverse(n.units()));
+    sorted.truncate(BUNDLE_INPUTS);
+    let sum: u64 = sorted.iter().map(|n| n.units()).sum();
+    Ok(MaxSendable { amount: sum.saturating_sub(fee).to_string(), fee: fee.to_string(), inputs: sorted.len() })
 }
 
 // ------------------------------------------------------------------ proving a transfer
@@ -497,7 +571,7 @@ pub fn prove_transfer(req: &ProveRequest) -> Result<ProveResult> {
             return bad(format!("note at leaf {} is not owned by this wallet", input.note.index));
         }
         if note.asset != 0 {
-            return bad("a transfer spends RAND notes only (asset 0)");
+            return bad(RPL_TRANSFER_UNAVAILABLE);
         }
         if note.amount == 0 {
             return bad(format!("note at leaf {} is worth nothing", input.note.index));
@@ -628,6 +702,11 @@ pub fn constants() -> Value {
         "token_decimals": 9,
         "units_per_rand": UNITS_PER_RAND.to_string(),
         "bundle_base_fee": gas::BUNDLE_BASE.to_string(),
+        "bundle_inputs": BUNDLE_INPUTS,
+        // Registry assets (index >= 1) cannot be transferred between shielded addresses on this
+        // network yet (see RPL_TRANSFER_UNAVAILABLE); a burn-to-bridge withdrawal is a later task.
+        "rpl_transfer": false,
+        "bridge_burn": false,
         "faucet_max_units": FAUCET_MAX_UNITS.to_string(),
         "time_window": TIME_WINDOW,
         "anchor_window": randprotocol_core::ledger::ANCHOR_WINDOW,
@@ -662,6 +741,11 @@ fn u64_param(p: &Value, name: &str) -> Result<u64> {
 /// - `rebuilt_deposit` `{spend_key, action}` → owned note or null
 /// - `pending_cleared` `{note, read_through}` → bool
 /// - `select_inputs` `{notes, asset?, need}` → `{chosen, need, change}`
+/// - `plan_transfer` `{notes, asset?, amount, fee}` → `{inputs, need, change, fee, proofs}`; asset
+///   defaults to 0 (RAND); `asset >= 1` fails with [`RPL_TRANSFER_UNAVAILABLE`] (registry assets
+///   are not transferable on this network yet — see `select_inputs`/`prove_transfer`, which agree)
+/// - `max_sendable` `{notes, asset?, fee}` → `{amount, fee, inputs}`; the largest one-bundle send,
+///   floored at zero; `asset >= 1` fails the same way
 /// - `prove_transfer` `{…ProveRequest}` → ProveResult (slow)
 /// - `open_with_tx_key` `{cm, envelope, tx_key}` → note or null
 /// - `format_amount` `{units}` → `"1.5"`; `parse_amount` `{text}` → units string
@@ -697,6 +781,21 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
                 serde_json::from_value(params.get("notes").cloned().unwrap_or(Value::Array(vec![]))).map_err(|e| format!("notes: {e}"))?;
             let asset = params.get("asset").and_then(Value::as_u64).unwrap_or(0) as u32;
             Ok(ser(&select_inputs(&notes, asset, u64_param(params, "need")?)?))
+        }
+        "plan_transfer" => {
+            let notes: Vec<OwnedNote> =
+                serde_json::from_value(params.get("notes").cloned().unwrap_or(Value::Array(vec![]))).map_err(|e| format!("notes: {e}"))?;
+            let asset = params.get("asset").and_then(Value::as_u64).unwrap_or(0) as u32;
+            let amount = u64_param(params, "amount")?;
+            let fee = u64_param(params, "fee")?;
+            Ok(ser(&plan_transfer(&notes, asset, amount, fee)?))
+        }
+        "max_sendable" => {
+            let notes: Vec<OwnedNote> =
+                serde_json::from_value(params.get("notes").cloned().unwrap_or(Value::Array(vec![]))).map_err(|e| format!("notes: {e}"))?;
+            let asset = params.get("asset").and_then(Value::as_u64).unwrap_or(0) as u32;
+            let fee = u64_param(params, "fee")?;
+            Ok(ser(&max_sendable(&notes, asset, fee)?))
         }
         "prove_transfer" => {
             let req: ProveRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
@@ -760,6 +859,24 @@ mod tests {
 
     fn wallet(n: u32) -> Wallet {
         Wallet::from_spend_key(SpendKey([n; 8]))
+    }
+
+    /// A minimal `OwnedNote` for coin-selection tests: no real note bytes, commitment or
+    /// nullifier, because `select_inputs`/`plan_transfer`/`max_sendable` never look at them.
+    fn owned(index: u64, asset: u32, amount: u64) -> OwnedNote {
+        OwnedNote {
+            index,
+            note: String::new(),
+            cm: String::new(),
+            nf: String::new(),
+            amount: amount.to_string(),
+            asset,
+            time: 1,
+            from: String::new(),
+            height: 1,
+            spent: false,
+            pending: None,
+        }
     }
 
     #[test]
@@ -856,6 +973,173 @@ mod tests {
         assert_eq!(select_inputs(&held, 0, 25).unwrap().chosen.len(), 2);
         assert!(pending_cleared(&held[1], 3 + TIME_WINDOW + 1));
         assert!(!pending_cleared(&held[1], 3 + TIME_WINDOW));
+    }
+
+    #[test]
+    fn plan_transfer_selects_inputs_and_computes_change() {
+        let notes = vec![owned(0, 0, 5_000_000_000), owned(1, 0, 2_000_000_000)];
+        let plan = plan_transfer(&notes, 0, 1_000_000_000, gas::BUNDLE_BASE).unwrap();
+        // The largest note alone covers amount + fee, so only one input is chosen.
+        assert_eq!(plan.inputs.iter().map(|n| n.index).collect::<Vec<_>>(), vec![0]);
+        assert_eq!(plan.need, (1_000_000_000 + gas::BUNDLE_BASE).to_string());
+        assert_eq!(plan.change, (5_000_000_000 - 1_000_000_000 - gas::BUNDLE_BASE).to_string());
+        assert_eq!(plan.fee, gas::BUNDLE_BASE.to_string());
+        assert_eq!(plan.proofs, 1);
+    }
+
+    #[test]
+    fn plan_transfer_exact_amount_has_zero_change() {
+        let fee = gas::BUNDLE_BASE;
+        let amount = 2_000_000_000u64;
+        let notes = vec![owned(0, 0, amount + fee)];
+        let plan = plan_transfer(&notes, 0, amount, fee).unwrap();
+        assert_eq!(plan.change, "0");
+        assert_eq!(plan.inputs.len(), 1);
+    }
+
+    #[test]
+    fn plan_transfer_refuses_rpl_assets_with_the_exact_sentence() {
+        let notes = vec![owned(0, 1, 10)];
+        let err = plan_transfer(&notes, 1, 5, gas::BUNDLE_BASE).unwrap_err();
+        assert_eq!(err, RPL_TRANSFER_UNAVAILABLE);
+        assert_eq!(err, "RPL transfers are not available on this network.");
+    }
+
+    #[test]
+    fn plan_transfer_refuses_zero_amount() {
+        let err = plan_transfer(&[], 0, 0, gas::BUNDLE_BASE).unwrap_err();
+        assert_eq!(err, "amount must be greater than zero");
+    }
+
+    #[test]
+    fn plan_transfer_refuses_fee_below_the_bundle_floor() {
+        let err = plan_transfer(&[], 0, 1, gas::BUNDLE_BASE - 1).unwrap_err();
+        assert!(err.contains("RAND"), "{err}");
+        assert!(err.contains("0.001"), "{err}");
+    }
+
+    #[test]
+    fn plan_transfer_amount_plus_fee_overflow_is_an_error_not_a_panic() {
+        let err = plan_transfer(&[], 0, u64::MAX, gas::BUNDLE_BASE).unwrap_err();
+        assert!(err.contains("overflow"), "{err}");
+    }
+
+    #[test]
+    fn plan_transfer_insufficient_balance_still_says_rand() {
+        let notes = vec![owned(0, 0, 100)];
+        let err = plan_transfer(&notes, 0, 1_000_000_000, gas::BUNDLE_BASE).unwrap_err();
+        assert!(err.contains("insufficient"), "{err}");
+        assert!(err.contains("RAND"), "{err}");
+    }
+
+    #[test]
+    fn plan_transfer_three_notes_whose_two_largest_do_not_cover_says_consolidate() {
+        let notes = vec![owned(0, 0, 1_000_000_000), owned(1, 0, 1_000_000_000), owned(2, 0, 1_000_000_000)];
+        // Total (3 RAND) covers amount + fee, but the two largest (2 RAND) alone do not.
+        let err = plan_transfer(&notes, 0, 2_000_000_000, gas::BUNDLE_BASE).unwrap_err();
+        assert!(err.contains("consolidate"), "{err}");
+    }
+
+    #[test]
+    fn max_sendable_with_two_notes() {
+        let notes = vec![owned(0, 0, 5_000_000_000), owned(1, 0, 3_000_000_000)];
+        let r = max_sendable(&notes, 0, gas::BUNDLE_BASE).unwrap();
+        assert_eq!(r.amount, (8_000_000_000u64 - gas::BUNDLE_BASE).to_string());
+        assert_eq!(r.fee, gas::BUNDLE_BASE.to_string());
+        assert_eq!(r.inputs, 2);
+    }
+
+    #[test]
+    fn max_sendable_with_one_note() {
+        let notes = vec![owned(0, 0, 5_000_000_000)];
+        let r = max_sendable(&notes, 0, gas::BUNDLE_BASE).unwrap();
+        assert_eq!(r.amount, (5_000_000_000u64 - gas::BUNDLE_BASE).to_string());
+        assert_eq!(r.inputs, 1);
+    }
+
+    #[test]
+    fn max_sendable_with_five_notes_uses_the_two_largest() {
+        let notes: Vec<OwnedNote> = (0..5).map(|i| owned(i, 0, (i + 1) * 1_000_000_000)).collect();
+        // Amounts 1..5 RAND; the two largest are 4 and 5 RAND.
+        let r = max_sendable(&notes, 0, gas::BUNDLE_BASE).unwrap();
+        assert_eq!(r.amount, (9_000_000_000u64 - gas::BUNDLE_BASE).to_string());
+        assert_eq!(r.inputs, 2);
+    }
+
+    #[test]
+    fn max_sendable_ignores_spent_and_pending_notes() {
+        let mut notes = vec![owned(0, 0, 5_000_000_000), owned(1, 0, 4_000_000_000), owned(2, 0, 3_000_000_000)];
+        notes[0].spent = true;
+        notes[1].pending = Some(3);
+        let r = max_sendable(&notes, 0, gas::BUNDLE_BASE).unwrap();
+        // Only the 3 RAND note is still spendable.
+        assert_eq!(r.amount, (3_000_000_000u64 - gas::BUNDLE_BASE).to_string());
+        assert_eq!(r.inputs, 1);
+    }
+
+    #[test]
+    fn max_sendable_below_the_fee_floors_at_zero_not_an_error() {
+        let notes = vec![owned(0, 0, 100)];
+        let r = max_sendable(&notes, 0, gas::BUNDLE_BASE).unwrap();
+        assert_eq!(r.amount, "0");
+    }
+
+    #[test]
+    fn max_sendable_refuses_rpl_assets() {
+        let err = max_sendable(&[], 1, gas::BUNDLE_BASE).unwrap_err();
+        assert_eq!(err, RPL_TRANSFER_UNAVAILABLE);
+    }
+
+    #[test]
+    fn version_reports_bundle_and_rpl_constants() {
+        let v = constants();
+        assert_eq!(v["bundle_inputs"], 2);
+        assert!(v["bundle_inputs"].is_number());
+        assert_eq!(v["bundle_base_fee"], gas::BUNDLE_BASE.to_string());
+        assert!(v["bundle_base_fee"].is_string());
+        assert_eq!(v["rpl_transfer"], false);
+        assert!(v["rpl_transfer"].is_boolean());
+        assert_eq!(v["bridge_burn"], false);
+        assert!(v["bridge_burn"].is_boolean());
+    }
+
+    /// This is what upstream's `BUNDLE_BASE` actually is today (`core/vendor/fullnode/crates/
+    /// randprotocol-core/src/gas.rs`); a change here means upstream moved the floor.
+    #[test]
+    fn bundle_base_fee_is_the_documented_value() {
+        assert_eq!(gas::BUNDLE_BASE, 1_000_000);
+    }
+
+    #[test]
+    fn dispatch_plan_transfer_and_max_sendable_round_trip_json() {
+        let notes = json!([{
+            "index": 0, "note": "", "cm": "", "nf": "", "amount": "5000000000", "asset": 0,
+            "time": 1, "from": "", "height": 1, "spent": false, "pending": null,
+        }]);
+        let params = json!({ "notes": notes, "amount": "1000000000", "fee": gas::BUNDLE_BASE.to_string() });
+        let v: Value = serde_json::from_str(&call("plan_transfer", &params.to_string())).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["value"]["proofs"], 1);
+        assert_eq!(v["value"]["need"], (1_000_000_000u64 + gas::BUNDLE_BASE).to_string());
+        assert_eq!(v["value"]["change"], (4_000_000_000u64 - gas::BUNDLE_BASE).to_string());
+
+        let params = json!({ "notes": notes, "fee": gas::BUNDLE_BASE.to_string() });
+        let v: Value = serde_json::from_str(&call("max_sendable", &params.to_string())).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["value"]["inputs"], 1);
+        assert_eq!(v["value"]["amount"], (5_000_000_000u64 - gas::BUNDLE_BASE).to_string());
+
+        let rpl_params = json!({ "notes": notes, "asset": 1, "amount": "1", "fee": gas::BUNDLE_BASE.to_string() });
+        let v: Value = serde_json::from_str(&call("plan_transfer", &rpl_params.to_string())).unwrap();
+        assert_eq!(v["ok"], false);
+        assert_eq!(v["error"], "RPL transfers are not available on this network.");
+
+        for bad_amount in ["1.5", "-1", "abc"] {
+            let params = json!({ "notes": notes, "amount": bad_amount, "fee": gas::BUNDLE_BASE.to_string() });
+            let v: Value = serde_json::from_str(&call("plan_transfer", &params.to_string())).unwrap();
+            assert_eq!(v["ok"], false, "amount {bad_amount:?} should have been refused");
+            assert!(v["error"].as_str().unwrap().contains("decimal integer"), "{v}");
+        }
     }
 
     #[test]
