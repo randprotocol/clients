@@ -1,0 +1,129 @@
+// Rand Wallet's Backend (ui/backend.js) for the browser extension.
+//
+// The same composition `web/wallet/main.js` does for a web page, over `chrome.storage` instead of
+// IndexedDB: the shared engine (`ui/engine/backend-wasm.js`) is the wallet, and this file is only
+// the three things that engine takes — where the bytes are kept, how to reach the wasm core, and
+// what the UI may ask the browser for — plus the extension's own auto-lock.
+//
+// Nothing here is chain crypto and nothing here is a screen. `ui/engine/backend-wasm.js` never
+// learns it is running in an extension, and `ui/screens/*` never learn there is a `chrome`.
+//
+// ---- what this shell cannot do ----
+//
+// Produce a transfer proof: it needs about 5.5 GB and wasm32 stops at 4 GiB, so `send.canProve()`
+// is `{ok: false, reason}` and Send ends in that explanation rather than a Prove button. Which is
+// also why the popup needs no escape into a tab (`platform.openFlowInTab`): the long-running steps
+// that would outlive a closed 360×600 window are never reached. Everything else — keys, the
+// address, scanning a real node, the note store, the faucet, viewing keys — is real.
+import { makeWasmBackend, UNLOCKED_SESSION_KEY } from './ui/engine/backend-wasm.js';
+import { ext, IS_FIREFOX } from './lib/browser.js';
+import { call } from './lib/core.js';
+import { wireIdleLock } from './lib/idle-lock.js';
+
+/**
+ * The `storage` half of `makeWasmBackend`, over the two `chrome.storage` areas.
+ *
+ *   local    the encrypted vault, the public wallet facts, the settings, the cached asset
+ *            registry and the note store — a cache of chain data, rebuildable from leaf 0.
+ *            Nothing in it is a secret at rest.
+ *   session  the unlocked spend key, and only while the wallet is unlocked. MV3's session area is
+ *            memory the *browser* holds, not the page: it is emptied when the browser closes and
+ *            is unreadable from a content script (its default access level is trusted contexts
+ *            only), and — the reason the extension's auto-lock can work at all — it survives the
+ *            popup being destroyed and the service worker being evicted, so deleting one key from
+ *            it is a lock that every open page of this extension can see happen.
+ *
+ * `compareAndSet` is deliberately absent. It is OPTIONAL in the storage contract and feature-
+ * detected at both of its call sites (the note store and the unlock-failure counter), which fall
+ * back to a plain `set`; `chrome.storage` has no conditional write to build it out of. What that
+ * costs is the guard against a popup and an app tab writing the note store at the same instant —
+ * the same race the web wallet's IndexedDB transaction closes. It is not destructive: the engine
+ * merges rather than truncates, so the worst case is a scan redone, never a note lost.
+ */
+function extensionStorage() {
+  const local = ext.storage.local;
+  const session = ext.storage.session;
+  // `chrome.storage` answers with an object keyed by what was asked for; the contract's storage
+  // answers with the value itself.
+  const one = (bag, key) => (bag && Object.prototype.hasOwnProperty.call(bag, key) ? bag[key] : undefined);
+  return {
+    async get(key) { return one(await local.get(key), key); },
+    async set(key, value) { await local.set({ [key]: value }); },
+    async remove(key) { await local.remove(key); },
+    async clear() {
+      await local.clear();
+      // `wallet.wipe()` is the only caller, and a wipe that left the unlocked spend key sitting in
+      // the session area would be a wipe in name only.
+      try { await session.clear(); } catch { /* nothing to clear */ }
+    },
+    session: {
+      async get(key) { return one(await session.get(key), key); },
+      async set(key, value) { await session.set({ [key]: value }); },
+      async remove(key) { await session.remove(key); },
+    },
+  };
+}
+
+/**
+ * The `platform` group: everything the UI is allowed to ask the browser for, and nothing else.
+ * Each member is here because a screen uses it; every optional one is genuinely optional and a
+ * screen that does not find it renders no control for it rather than a control that does nothing.
+ */
+function makePlatform() {
+  const platform = {
+    name: IS_FIREFOX ? 'firefox' : 'chrome',
+    // A new tab, never this popup's window: an explorer must get no handle on the wallet.
+    openExternal: (url) => { ext.tabs.create({ url: String(url) }); },
+    copy: (text) => navigator.clipboard.writeText(String(text ?? '')),
+
+    /**
+     * OPTIONAL in the contract, and the reason it exists: an extension may only reach a host it
+     * has permission for, and Firefox grants one only while it is still handling the user's own
+     * click. The settings screen calls this inside its submit handler, before saving a new RPC
+     * URL, and abandons the save when it answers false.
+     *
+     * A pattern that is not in `optional_host_permissions` (the default node, say) makes the call
+     * throw rather than answer — nothing to grant, because it is already granted.
+     */
+    ensureHostPermission: async (url) => {
+      let origin;
+      try { origin = `${new URL(String(url)).origin}/*`; } catch { return false; }
+      try { return await ext.permissions.request({ origins: [origin] }); } catch { return true; }
+    },
+  };
+  // Reading the clipboard needs a permission some contexts will not have: where it is missing the
+  // send screen offers no Paste button at all.
+  if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+    platform.paste = () => navigator.clipboard.readText();
+  }
+  return platform;
+}
+
+/**
+ * `extensionBackend()` → a Backend, ready for `mount()`. Called once by each page (the popup and
+ * the app tab), which is one backend per page: `storage` is the browser's, so the two see the same
+ * wallet, and the engine's own multi-tab coordination (Web Locks, a BroadcastChannel) works
+ * between them exactly as it does between two tabs of the web wallet.
+ *
+ * The idle lock is wired here, before the backend is handed to anyone: `mount()` snapshots every
+ * group it is given, so a method replaced afterwards would never be the one the UI calls.
+ */
+export function extensionBackend() {
+  const backend = makeWasmBackend({
+    core: { call },            // lib/core.js: the wasm core in a Web Worker, as `call(method, params)`
+    storage: extensionStorage(),
+    platform: makePlatform(),
+  });
+
+  const disposeIdleLock = wireIdleLock(backend, ext, { sessionKey: UNLOCKED_SESSION_KEY });
+
+  // `dispose?()` is OPTIONAL in the contract and is called by the shell's `destroy()`, last. It
+  // must be idempotent and must not throw, so both halves run whatever the other does.
+  const disposeEngine = typeof backend.dispose === 'function' ? backend.dispose.bind(backend) : null;
+  backend.dispose = () => {
+    try { disposeIdleLock(); } catch { /* already gone */ }
+    if (disposeEngine) { try { disposeEngine(); } catch { /* already gone */ } }
+  };
+
+  return backend;
+}

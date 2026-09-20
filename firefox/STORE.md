@@ -19,6 +19,6 @@ module.
 
 **Data collection** (privacy questionnaire): none — also declared in the manifest as `data_collection_permissions.required: ["none"]`.
 
-**Linter notes**: `web-ext lint` reports two UNSAFE_VAR_ASSIGNMENT warnings in `lib/views.js` (screens are rendered as template strings into `innerHTML`). Every dynamic value passes through `escapeHtml` in `lib/format.js`; no HTML from the network or from storage is ever inserted unescaped. Not a data collector; no telemetry.
+**Linter notes**: `web-ext lint` reports UNSAFE_VAR_ASSIGNMENT warnings in `ui/screens/*.js` (a screen renders itself as a template string into `innerHTML`). Every dynamic value goes through the `h` tagged template in `ui/lib/dom.js`, which escapes what it interpolates; the only unescaped values are the `raw(…)` ones, which are markup this repository wrote. Nothing from the network or from storage is ever inserted unescaped. Not a data collector; no telemetry.
 
 **Screenshots**: as in chrome/STORE.md.

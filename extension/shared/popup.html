@@ -1,13 +1,20 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rand Wallet</title>
-  <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<meta name="referrer" content="no-referrer">
+<title>Rand Wallet</title>
+<!-- No inline script and no inline style anywhere in this page. The manifest's CSP for extension
+     pages is `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'` — exactly enough to run
+     the wasm core in a Web Worker and nothing else. The three stylesheets are ui/'s own, in the
+     order they require; the 360×600 popup window comes from `body.compact.popup`, which the
+     shell sets for `mode: 'popup'`. -->
+<link rel="stylesheet" href="ui/tokens.css">
+<link rel="stylesheet" href="ui/base.css">
+<link rel="stylesheet" href="ui/components.css">
+<script src="popup.js" type="module"></script>
 </head>
-<body class="popup">
-  <div id="root" class="screen"></div>
-  <script type="module" src="popup.js"></script>
-</body>
+<body></body>
 </html>

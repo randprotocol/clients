@@ -43,6 +43,19 @@ import { makeRpc, isAllowedRpcMethod } from './rpc.js';
 import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, BUNDLE_INPUTS, HEIGHT_SPAN } from './wallet.js';
 import { checkFee, checkAssets, checkSubmitted } from './validate.js';
 
+/**
+ * The one key under `storage.session` — the unlocked wallet session, and the only place the
+ * plaintext spend key is ever written.
+ *
+ * Exported because a shell may have to recognise this key in storage it does not own: the browser
+ * extension's auto-lock is a `chrome.alarms` alarm whose background script deletes exactly this
+ * key, and the open popup learns that the wallet locked by watching `storage.onChanged` for it
+ * (`extension/shared/lib/idle-lock.js`). Exporting it is how those two stay one fact rather than
+ * two strings that drift. Nothing about *where* storage lives belongs in this file: it is handed
+ * a `storage` and never asks what is behind it.
+ */
+export const UNLOCKED_SESSION_KEY = 'unlocked';
+
 // Storage keys. `unlocked` is the only session one.
 const K = Object.freeze({
   settings: 'settings',
@@ -51,7 +64,7 @@ const K = Object.freeze({
   notes: 'notes',
   assets: 'assets', // the registry, cached so a reload starts with the symbols it had
   failures: 'unlockFailures',
-  unlocked: 'unlocked',
+  unlocked: UNLOCKED_SESSION_KEY,
 });
 
 const MIN_PASSWORD_LEN = 10;
@@ -59,9 +72,9 @@ const MIN_PASSWORD_LEN = 10;
  * Used **only** where the core's `version` reply is unavailable (it failed, or a stub core in a
  * test does not implement it). Every one of these is normally read from the core, which is built
  * against exactly one chain and says which — in particular `chainId` is never a number this file
- * decides. `rpcUrl` and `explorerUrl` match what `extension/shared/lib/store.js` ships today; its
- * `chainId` says 8, which is the stale chain-8 default the rename left behind and is deliberately
- * NOT copied here.
+ * decides. `rpcUrl` and `explorerUrl` are the ones the pre-redesign extension shipped (its
+ * `extension/shared/lib/store.js`, deleted in task 2.1); its `chainId` said 8, which is the stale
+ * chain-8 default the rename left behind and is deliberately NOT copied here.
  */
 const FALLBACK = Object.freeze({
   rpcUrl: 'https://rpc.randprotocol.org',

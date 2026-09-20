@@ -1,2 +1,4 @@
-import { mount } from './lib/views.js';
-mount(document.getElementById('root'), { mode: 'popup' });
+// The toolbar popup: the shared UI in its 360×600 mode, on the extension's Backend.
+import { boot } from './lib/boot.js';
+
+boot('popup');

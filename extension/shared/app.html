@@ -1,13 +1,19 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rand Wallet</title>
-  <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="referrer" content="no-referrer">
+<title>Rand Wallet</title>
+<!-- The same wallet as the popup, in a real tab: the manifest's `options_ui` opens
+     `app.html#settings` here, and `background.js` opens `app.html#welcome` on a fresh install.
+     Unlike the popup this window may be any width, so the shell's wide and two-pane layouts
+     apply. Same CSP, same stylesheets, no inline script. -->
+<link rel="stylesheet" href="ui/tokens.css">
+<link rel="stylesheet" href="ui/base.css">
+<link rel="stylesheet" href="ui/components.css">
+<script src="app.js" type="module"></script>
 </head>
-<body class="app">
-  <div class="frame"><div id="root" class="screen"></div></div>
-  <script type="module" src="app.js"></script>
-</body>
+<body></body>
 </html>
