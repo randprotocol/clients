@@ -1908,6 +1908,47 @@ mod tests {
         assert_eq!(hex::encode(to), req.to, "`to` is plain bytes, carried through unchanged");
     }
 
+    /// `to` keeps the byte order it was written in, pinned on a value that can tell.
+    ///
+    /// The assertion above, and every other `to` assertion in this file, runs on the fixture's
+    /// recipient — twelve `0x00` then twenty `0x11`. Every four-byte group of that value is
+    /// uniform, so it is *invariant under a per-word byte reversal*: it round-trips identically
+    /// whether or not anything between the hex string and the action permutes bytes within a
+    /// four-byte word, which is the class of mistake a future refactor through a word-oriented
+    /// decoder could introduce. An asymmetric value is the only kind that can fail, so this test
+    /// uses one: twenty ascending bytes after the required twelve-byte EVM pad. Reverse the bytes
+    /// inside any word and `[…, 0x01, 0x02, 0x03, 0x04, …]` becomes `[…, 0x04, 0x03, 0x02, 0x01,
+    /// …]`, and the first `assert_eq!` below fails on the first word it reaches.
+    #[test]
+    fn to_keeps_its_byte_order_through_parsing_and_into_the_action() {
+        let mut want = [0u8; 32];
+        want[12..].copy_from_slice(&[
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11,
+            0x12, 0x13, 0x14,
+        ]);
+        let hexed = "0000000000000000000000000102030405060708090a0b0c0d0e0f1011121314";
+        assert_eq!(hexed.len(), 64);
+        assert_eq!(parse_to(hexed).unwrap(), want, "the bytes come out in the order they were written");
+        // The same string `0x`-prefixed and upper-cased is the same bytes, still in order.
+        assert_eq!(
+            parse_to("0x0000000000000000000000000102030405060708090A0B0C0D0E0F1011121314").unwrap(),
+            want,
+            "a 0x prefix and upper case are cosmetic"
+        );
+
+        // And the order survives all the way onto the action the chain reads.
+        let mut req = fixture_burn_request("test").unwrap();
+        req["to"] = json!(hexed);
+        let req: BurnRequest = serde_json::from_value(req).unwrap();
+        let (_w, b) = build_burn_unproven(&req).unwrap();
+        assert_eq!(b.to, want, "no re-ordering between the request and the bundle");
+        let tx = burn_transaction(&req, b);
+        let Action::BridgeBurn { to, .. } = &tx.action else { panic!("a bridge burn") };
+        assert_eq!(*to, want, "nor between the bundle and the action");
+        assert_eq!(to[12], 0x01, "the recipient's first byte, not its word's last");
+        assert_eq!(to[31], 0x14, "the recipient's last byte, not its word's first");
+    }
+
     /// `prove_burn`'s refusals before anything is built, in `submit_burn`'s own order and words.
     #[test]
     fn prove_burn_refuses_what_could_never_be_admitted_before_building_anything() {
