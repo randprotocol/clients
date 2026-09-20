@@ -9,7 +9,7 @@ Wallets for the Rand Protocol RAND chain (the fully shielded pool served by
 | Android | Java | `android/` | Google Play (`.aab`) |
 | Chrome | JavaScript, Manifest V3 | `chrome/` + `extension/` | Chrome Web Store |
 | Firefox | JavaScript, Manifest V3 | `firefox/` + `extension/` | addons.mozilla.org |
-| Windows, Linux, macOS | Rust (egui) | `desktop/` | .msi / tarball / .dmg |
+| Windows, Linux, macOS | Tauri (shared UI + Rust core) | `desktop/` | .msi / .deb / AppImage / .dmg |
 
 Every client creates a wallet (spend key → viewing key → `rand1…` address), scans the
 commitment tree for its own notes, proves and submits shielded transfers, asks the testnet
@@ -103,7 +103,8 @@ firefox/         Firefox manifest, packaging, store notes
 web/             the /clients page for randprotocol.org
 design/          tokens.json, make-icons.py, generated icons
 docs/            design spec
-desktop/         Rust egui app for Windows, Linux and macOS (links wallet-core directly)
+desktop/         Tauri app for Windows, Linux and macOS: ui/ in a webview, wallet-core linked
+                 directly — the one client that can prove a transfer locally
 linux/ macosx/ windows/   per-OS packaging notes pointing at desktop/
 ```
 

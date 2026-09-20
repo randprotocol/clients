@@ -1,11 +1,12 @@
 # Rand Wallet — Linux
 
-The Linux client is the native Rust desktop app in [`../desktop`](../desktop): one codebase
-for Windows, Linux and macOS on the shared wallet core.
+The Linux client is the Tauri desktop app in [`../desktop`](../desktop): one codebase for
+Windows, Linux and macOS — the shared wallet UI in a system webview, over the shared Rust core.
+It is the one client that can prove a transfer locally.
 
 ```
-cd desktop && cargo run --release       # run from source
-desktop/scripts/build-linux.sh                                    # package for Linux (see desktop/README.md)
+cd desktop/src-tauri && cargo tauri dev     # run from source
+cd desktop/src-tauri && cargo tauri build   # package (AppImage / deb) — see desktop/README.md
 ```
 
 For every chain action the desktop app does not offer (bridge burns, staking, deploys and
