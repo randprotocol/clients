@@ -27,7 +27,13 @@
   "bundle": {
     "active": true,
     "targets": ["dmg", "msi", "appimage", "deb"],
-    "icon": ["../assets/icon.png", "../assets/icon-1024.png"],
+    "icon": [
+      "../assets/icons/32x32.png",
+      "../assets/icons/128x128.png",
+      "../assets/icons/128x128@2x.png",
+      "../assets/icons/icon.icns",
+      "../assets/icons/icon.ico"
+    ],
     "category": "Finance",
     "shortDescription": "A shielded wallet for RAND",
     "longDescription": "Rand Wallet holds RAND in shielded notes, scans a node's commitment tree locally, and proves transfers on this computer. Keys never leave the machine."

@@ -34,7 +34,27 @@ cargo test                     # the commands and the store (Rust 1.98.1 via rus
 ```
 
 The first build compiles the prover and takes a few minutes. The crate is its own workspace, so
-its `target/` is separate from `core/target/`. Linux needs the usual webkit2gtk build packages.
+its `target/` is separate from `core/target/`.
+
+**Build prerequisites, per OS:**
+
+- **Linux** — the webkit2gtk and appindicator dev packages Tauri's bundler and runtime link
+  against (Debian/Ubuntu names; other distros' package managers carry equivalents):
+  `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev`. `cargo tauri build` produces
+  an AppImage and a deb.
+- **Windows** — the WebView2 runtime, which the app's webview needs at run time. Nothing to
+  install for `cargo tauri build` itself: the `.msi` bundler embeds a WebView2 bootstrapper, so a
+  machine without it gets it installed alongside the app.
+- **macOS** — Xcode Command Line Tools (`xcode-select --install`) for the linker; nothing else.
+  `cargo tauri build --bundles dmg` produces the `.dmg` under
+  `src-tauri/target/release/bundle/dmg/`.
+
+`cargo tauri build` with no `--bundles` flag builds every target configured in
+`tauri.conf.json` (`dmg`, `msi`, `appimage`, `deb`) that the host OS can produce; pass
+`--bundles <target>` to build just one, as in the dmg command above. Every target lands under
+`src-tauri/target/release/bundle/<target>/` — `bundle/dmg/`, `bundle/msi/`, `bundle/deb/`,
+`bundle/appimage/` — a platform can only build its own targets, so a Linux CI runner never
+produces the dmg or msi and vice versa.
 
 ## What is native, and what is not
 
@@ -71,3 +91,10 @@ does have to answer the CORS preflight, exactly as it must for the web wallet.
   idle auto-lock waits for a transfer in flight rather than dropping the key mid-proof.
 - **Window.** 1100×760, minimum 380×600 — the same two-pane breakpoint the other shells use, so
   narrowing the window below 900 px swaps the sidebar for a tab bar.
+
+## Licence
+
+**GPL-3.0-only**, like the rest of this repository (see the root [`LICENSE`](../LICENSE)): this
+app links `wallet-core`, which vendors the fullnode's GPL-3.0-only crates directly as a Rust
+crate rather than over FFI, so the same terms apply to the compiled binary and to any bundle
+(`.dmg` / `.msi` / `.deb` / AppImage) built from it.
