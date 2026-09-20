@@ -14,8 +14,9 @@
 //!
 //! Wire conventions match `docs/rpc.md` of the fullnode: `Word8` values (keys, commitments,
 //! nullifiers, roots, witness levels) are 64 lowercase hex characters, little-endian word by
-//! word; amounts are decimal strings of units (1 RAND = 10^9 units); addresses are
-//! `rand1` + base58.
+//! word; amounts of value are decimal strings of units (1 RAND = 10^9 units), never a JSON number
+//! (see [`dispatch`]'s `amount_param`); heights, leaf indices and counts are plain JSON numbers
+//! (see `index_param`); addresses are `rand1` + base58.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -534,8 +535,14 @@ pub struct ProveResult {
     pub spent_indices: Vec<u64>,
 }
 
+/// `ProveRequest.amount`/`.fee` are typed `String` (so a JSON number is already refused at
+/// deserialization, before this runs) — this enforces the same `^[0-9]{1,20}$` shape
+/// [`amount_param`] does, for one rule across both amount-parsing paths in the crate.
 fn parse_units(s: &str, what: &str) -> Result<u64> {
-    s.trim().parse::<u64>().map_err(|_| format!("{what} must be a decimal string of units"))
+    if !is_decimal_digits(s) {
+        return bad(format!("{what} must be a decimal string of units"));
+    }
+    s.parse::<u64>().map_err(|_| format!("{what} is out of range"))
 }
 
 fn parse_path(levels: &[String]) -> Result<[Word8; DEPTH]> {
@@ -738,15 +745,34 @@ fn str_param<'a>(p: &'a Value, name: &str) -> Result<&'a str> {
     p.get(name).and_then(Value::as_str).ok_or_else(|| format!("missing string parameter {name:?}"))
 }
 
-/// Amounts (and every other numeric wire field this crate reads through this helper) are decimal
-/// strings of ASCII digits, `^[0-9]{1,20}$` — never a JSON number. A JavaScript caller has already
-/// lost precision past 2^53 before a bare number reaches us; requiring a string instead moves the
-/// precision boundary out to `u64::MAX` (20 digits), where `parse` catches the rest. No sign, no
-/// leading/trailing whitespace, no fractional part — a string is either exactly digits or refused.
-fn u64_param(p: &Value, name: &str) -> Result<u64> {
+// ---------------------------------------------------------------------------------------------
+// The wire rule this crate follows for every numeric parameter and field, matching the fullnode's
+// own chain-14 RPC convention: AMOUNTS of value (units of RAND, or any other asset) are decimal
+// strings of digits, because a JavaScript `number` cannot carry a `u64` past 2^53 without silently
+// losing precision and money must never round; HEIGHTS, leaf INDICES and COUNTS are ordinary JSON
+// numbers, because they are small, plain and every language already has a natural integer type for
+// them. `amount_param` and `index_param` are the two — and only two — ways this crate reads either
+// kind out of a JSON params object; nothing else in `dispatch` should hand-roll a third.
+// ---------------------------------------------------------------------------------------------
+
+/// Whether `s` is exactly `^[0-9]{1,20}$` — ASCII digits only, no sign, no whitespace, no
+/// fractional part, 1 to 20 characters (`u64::MAX` is 20 digits, so nothing shorter can ever
+/// overflow and nothing this crate needs to parse is longer).
+fn is_decimal_digits(s: &str) -> bool {
+    !s.is_empty() && s.len() <= 20 && s.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// AMOUNTS: a JSON string matching `^[0-9]{1,20}$`, parsed as `u64` (out of range is still an
+/// error, since 20 digits alone does not guarantee the value fits). A JSON number is refused
+/// outright, never coerced — a JavaScript caller that already lost precision past 2^53 must not be
+/// able to hand that loss to us as a bare number silently rounded; requiring a string moves the
+/// precision boundary out to `u64::MAX` where `parse` catches the rest. Used for every amount of
+/// value this crate reads: `need`, `amount`, `fee`, `units` — never for a height, index or count
+/// (see [`index_param`]).
+fn amount_param(p: &Value, name: &str) -> Result<u64> {
     match p.get(name) {
         Some(Value::String(s)) => {
-            if s.is_empty() || s.len() > 20 || !s.bytes().all(|b| b.is_ascii_digit()) {
+            if !is_decimal_digits(s) {
                 return bad(format!("{name} must be a decimal string of ASCII digits"));
             }
             s.parse::<u64>().map_err(|_| format!("{name} is out of range"))
@@ -756,11 +782,47 @@ fn u64_param(p: &Value, name: &str) -> Result<u64> {
     }
 }
 
-/// `asset` is the one numeric parameter that is a JSON number, not a decimal string (it is a small
-/// index, never money) — but it must still be validated, not truncated: `as u32` on an oversized
-/// `u64` silently wraps (2^32 becomes 0, i.e. RAND), which would have let a client's typo or a
-/// hostile page redirect an RPL call onto the native asset. Absent means the default, asset 0;
-/// anything present that is not a whole number fitting `u32` is refused outright.
+/// The largest integer a JavaScript `number` can represent exactly (`Number.MAX_SAFE_INTEGER`,
+/// 2^53 − 1). A JS caller cannot have produced anything larger as a JSON *number* without already
+/// having lost precision, so [`index_param`] refuses a bare number above this rather than trust a
+/// value that may not be the one the caller meant.
+const JS_MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+
+/// HEIGHTS, leaf INDICES and COUNTS: a JSON number that is a non-negative integer no larger than
+/// [`JS_MAX_SAFE_INTEGER`] (negative, fractional, or too large — `as_u64()` already rejects the
+/// first two; the bound catches the third), or — for robustness, since a non-JavaScript caller
+/// (Swift, Java, the desktop app's own Rust) may reasonably send an exact value beyond 2^53 and a
+/// digit string carries it exactly either way — a JSON string of `^[0-9]{1,20}$` over the *full*
+/// `u64` range (no 2^53 cap on the string form, since a string never lost precision to begin with).
+/// Used for `read_through`, `asset`, and any other index/height/count parameter; never for money
+/// (see [`amount_param`]).
+fn index_param(p: &Value, name: &str) -> Result<u64> {
+    match p.get(name) {
+        Some(Value::Number(n)) => {
+            let v = n.as_u64().ok_or_else(|| format!("{name} must be a non-negative integer"))?;
+            if v > JS_MAX_SAFE_INTEGER {
+                return bad(format!("{name} is above 2^53 - 1; send it as a decimal string instead"));
+            }
+            Ok(v)
+        }
+        Some(Value::String(s)) => {
+            if !is_decimal_digits(s) {
+                return bad(format!("{name} must be a non-negative integer or a decimal string of digits"));
+            }
+            s.parse::<u64>().map_err(|_| format!("{name} is out of range"))
+        }
+        Some(_) => bad(format!("{name} must be a non-negative integer")),
+        None => bad(format!("missing parameter {name:?}")),
+    }
+}
+
+/// `asset` is a COUNT (a small registry index, never money), always a JSON number here — every
+/// asset index fits comfortably under [`JS_MAX_SAFE_INTEGER`] (u32::MAX is ~4.29e9, `2^53 - 1` is
+/// ~9.007e15), so unlike [`index_param`] a digit-string form buys nothing and is refused, keeping
+/// exactly one accepted shape. Absent means the default, asset 0; anything else that is not a
+/// whole number fitting `u32` is refused outright — critically, an oversized `u64` is refused
+/// rather than truncated: `as u32` on 2^32 silently wraps to 0 (i.e. RAND), which would have let a
+/// client's typo or a hostile page redirect an RPL call onto the native asset.
 fn asset_param(p: &Value) -> Result<u32> {
     match p.get("asset") {
         None => Ok(0),
@@ -782,7 +844,8 @@ fn asset_param(p: &Value) -> Result<u32> {
 /// - `parse_address` `{address}` → `{valid, pk, error}`
 /// - `scan_page` `{spend_key, rows: [getCommitments rows]}` → `{received, sent, next_index, rows}`
 /// - `rebuilt_deposit` `{spend_key, action}` → owned note or null
-/// - `pending_cleared` `{note, read_through}` → bool
+/// - `pending_cleared` `{note, read_through}` → bool; `read_through` is a block height (a JSON
+///   number, or a digit string for a non-JS caller — never an amount)
 /// - `select_inputs` `{notes, asset?, need}` → `{chosen, need, change}`
 /// - `plan_transfer` `{notes, asset?, amount, fee}` → `{inputs, need, change, fee, proofs}`; asset
 ///   defaults to 0 (RAND); `asset >= 1` fails with [`RPL_TRANSFER_UNAVAILABLE`] (registry assets
@@ -817,26 +880,28 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
         }
         "pending_cleared" => {
             let note: OwnedNote = serde_json::from_value(params.get("note").cloned().unwrap_or(Value::Null)).map_err(|e| format!("note: {e}"))?;
-            Ok(Value::Bool(pending_cleared(&note, u64_param(params, "read_through")?)))
+            // `read_through` is a block height, not an amount of value: a JSON number, as every
+            // caller today already sends it.
+            Ok(Value::Bool(pending_cleared(&note, index_param(params, "read_through")?)))
         }
         "select_inputs" => {
             let notes: Vec<OwnedNote> =
                 serde_json::from_value(params.get("notes").cloned().unwrap_or(Value::Array(vec![]))).map_err(|e| format!("notes: {e}"))?;
-            Ok(ser(&select_inputs(&notes, asset_param(params)?, u64_param(params, "need")?)?))
+            Ok(ser(&select_inputs(&notes, asset_param(params)?, amount_param(params, "need")?)?))
         }
         "plan_transfer" => {
             let notes: Vec<OwnedNote> =
                 serde_json::from_value(params.get("notes").cloned().unwrap_or(Value::Array(vec![]))).map_err(|e| format!("notes: {e}"))?;
             let asset = asset_param(params)?;
-            let amount = u64_param(params, "amount")?;
-            let fee = u64_param(params, "fee")?;
+            let amount = amount_param(params, "amount")?;
+            let fee = amount_param(params, "fee")?;
             Ok(ser(&plan_transfer(&notes, asset, amount, fee)?))
         }
         "max_sendable" => {
             let notes: Vec<OwnedNote> =
                 serde_json::from_value(params.get("notes").cloned().unwrap_or(Value::Array(vec![]))).map_err(|e| format!("notes: {e}"))?;
             let asset = asset_param(params)?;
-            let fee = u64_param(params, "fee")?;
+            let fee = amount_param(params, "fee")?;
             Ok(ser(&max_sendable(&notes, asset, fee)?))
         }
         "prove_transfer" => {
@@ -848,7 +913,7 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
             Ok(open_with_tx_key(str_param(params, "cm")?, &env, str_param(params, "tx_key")?)?.unwrap_or(Value::Null))
         }
         "fixture_prove_request" => Ok(fixture_prove_request(params.get("profile").and_then(Value::as_str).unwrap_or("test"))?),
-        "format_amount" => Ok(Value::String(format_amount(u64_param(params, "units")?))),
+        "format_amount" => Ok(Value::String(format_amount(amount_param(params, "units")?))),
         "parse_amount" => Ok(Value::String(parse_amount(str_param(params, "text")?).map_err(|e| e.to_string())?.to_string())),
         other => bad(format!("unknown method {other:?}")),
     }
@@ -1309,8 +1374,8 @@ mod tests {
     }
 
     #[test]
-    fn u64_param_requires_a_strict_ascii_digit_string() {
-        let get = |v: Value| u64_param(&json!({ "amount": v }), "amount");
+    fn amount_param_requires_a_strict_ascii_digit_string() {
+        let get = |v: Value| amount_param(&json!({ "amount": v }), "amount");
         assert_eq!(get(json!("5")).unwrap(), 5);
         assert_eq!(get(json!("00000000000000000001")).unwrap(), 1, "leading zeros are still digits");
         assert_eq!(get(json!(u64::MAX.to_string())).unwrap(), u64::MAX);
@@ -1323,6 +1388,65 @@ mod tests {
         assert!(err.contains("decimal strings"), "{err}");
         assert!(get(json!(5.0)).is_err(), "a JSON number is refused even when integral");
         assert!(get(json!(null)).is_err());
+    }
+
+    #[test]
+    fn amount_param_rejects_numbers_for_every_amount_field_across_dispatch() {
+        // `need` (select_inputs), `amount`/`fee` (plan_transfer), `fee` (max_sendable) and `units`
+        // (format_amount) must all refuse a bare JSON number the same way.
+        let notes = json!([]);
+        let cases = [
+            ("select_inputs", json!({ "notes": notes, "need": 5 })),
+            ("plan_transfer", json!({ "notes": notes, "amount": 5, "fee": 1 })),
+            ("plan_transfer", json!({ "notes": notes, "amount": "5", "fee": 1 })),
+            ("max_sendable", json!({ "notes": notes, "fee": 5 })),
+            ("format_amount", json!({ "units": 5 })),
+        ];
+        for (method, params) in cases {
+            let v: Value = serde_json::from_str(&call(method, &params.to_string())).unwrap();
+            assert_eq!(v["ok"], false, "{method} should refuse a bare number amount: {params}");
+            assert!(v["error"].as_str().unwrap().contains("decimal strings"), "{v}");
+        }
+    }
+
+    #[test]
+    fn index_param_accepts_numbers_and_digit_strings_rejects_the_rest() {
+        let get = |v: Value| index_param(&json!({ "n": v }), "n");
+        assert_eq!(get(json!(0)).unwrap(), 0);
+        assert_eq!(get(json!(12345)).unwrap(), 12345);
+        assert_eq!(get(json!("12345")).unwrap(), 12345, "a digit string is also accepted, for non-JS callers");
+        assert_eq!(get(json!(JS_MAX_SAFE_INTEGER)).unwrap(), JS_MAX_SAFE_INTEGER);
+        // A digit string is not bound by 2^53 - 1: it never lost precision to begin with.
+        assert_eq!(get(json!(u64::MAX.to_string())).unwrap(), u64::MAX);
+        assert!(get(json!(JS_MAX_SAFE_INTEGER + 1)).is_err(), "above 2^53 - 1 as a bare number is refused");
+        assert!(get(json!(-1)).is_err(), "negative");
+        assert!(get(json!(1.5)).is_err(), "fractional");
+        assert!(get(json!("abc")).is_err(), "not digits");
+        assert!(get(json!(null)).is_err());
+        assert!(get(json!(true)).is_err());
+    }
+
+    #[test]
+    fn pending_cleared_dispatch_accepts_read_through_as_number_or_digit_string() {
+        let note = json!({
+            "index": 0, "note": "", "cm": "", "nf": "", "amount": "5", "asset": 0,
+            "time": 1, "from": "", "height": 1, "spent": false, "pending": 3,
+        });
+        // As a bare JSON number — exactly what ui/engine/wallet.js and the extension send today.
+        let v: Value = serde_json::from_str(&call("pending_cleared", &json!({ "note": note, "read_through": 999 }).to_string())).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["value"], true);
+        // As a digit string too, for a non-JS caller.
+        let v: Value =
+            serde_json::from_str(&call("pending_cleared", &json!({ "note": note, "read_through": "999" }).to_string())).unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["value"], true);
+
+        for bad in [json!(-1), json!(1.5), json!(9_007_199_254_740_992u64), json!("abc"), json!(null)] {
+            let v: Value =
+                serde_json::from_str(&call("pending_cleared", &json!({ "note": note, "read_through": bad }).to_string())).unwrap();
+            assert_eq!(v["ok"], false, "read_through {bad:?} should have been refused");
+        }
     }
 
     #[test]
@@ -1422,5 +1546,125 @@ mod tests {
         assert_eq!(exec.bundle_proof_digest(&bundle.proof).unwrap(), recomputed);
         exec.verify_bundle(&randprotocol_zkvm::executor::ZkExecutor::hc_bundle(), &bundle.proof).unwrap();
         assert!(open_with_tx_key(&rows[0].cm, &rows[0].envelope, &res.tx_keys[0]).unwrap().is_some());
+    }
+
+    /// Mirrors exactly the param shapes `ui/engine/wallet.js`'s `core` binding (its `call(...)`
+    /// wrappers, `wallet.js:214-226`) and `ui/engine/backend-wasm.js`'s `select_inputs` call site
+    /// (`:1002-1003`) send today (read-only source inspection — nothing there was changed). If a
+    /// future core change ever breaks one of these shapes, it fails here in `cargo test`, not in
+    /// a browser.
+    mod js_engine_contract {
+        use super::*;
+
+        #[test]
+        fn wallet_info_import_key_and_parse_address() {
+            // wallet.js:216 `walletInfo: (spend_key) => call('wallet_info', { spend_key })`
+            let sk = wallet(31).spend_key_hex();
+            let v: Value = serde_json::from_str(&call("wallet_info", &json!({ "spend_key": sk }).to_string())).unwrap();
+            assert_eq!(v["ok"], true);
+            assert_eq!(v["value"]["spend_key"], sk);
+
+            // wallet.js:217 `importKey: (input) => call('import_key', { input })`
+            let v: Value = serde_json::from_str(&call("import_key", &json!({ "input": sk }).to_string())).unwrap();
+            assert_eq!(v["ok"], true);
+
+            // wallet.js:218 `parseAddress: (address) => call('parse_address', { address })`
+            let addr = wallet_info(&wallet(31)).address;
+            let v: Value = serde_json::from_str(&call("parse_address", &json!({ "address": addr }).to_string())).unwrap();
+            assert_eq!(v["ok"], true);
+            assert_eq!(v["value"]["valid"], true);
+        }
+
+        #[test]
+        fn scan_page_shape() {
+            // wallet.js:219 `scanPage: (spend_key, rows) => call('scan_page', { spend_key, rows })`;
+            // `rows` are node `rand_getCommitments` rows — `index`/`height` are JSON numbers,
+            // everything else hex strings.
+            let sender = wallet(32);
+            let receiver = wallet(33);
+            let (row, _) = sealed_row(&sender, &receiver, 1_000_000_000, 5);
+            let params = json!({
+                "spend_key": receiver.spend_key_hex(),
+                "rows": [{
+                    "index": row.index, "cm": row.cm, "height": row.height,
+                    "envelope": {
+                        "kem_ct": row.envelope.kem_ct, "to_receiver": row.envelope.to_receiver,
+                        "to_sender": row.envelope.to_sender, "body": row.envelope.body,
+                    },
+                }],
+            });
+            let v: Value = serde_json::from_str(&call("scan_page", &params.to_string())).unwrap();
+            assert_eq!(v["ok"], true);
+            assert_eq!(v["value"]["received"][0]["amount"], "1000000000");
+            assert_eq!(v["value"]["next_index"], 6);
+        }
+
+        #[test]
+        fn select_inputs_shape() {
+            // wallet.js:222 `selectInputs: (notes, need, asset = 0) => call('select_inputs',
+            // { notes, need: String(need), asset })` and backend-wasm.js:1003
+            // `c.selectInputs(st.notes || [], need.toString(), 0)`: `need` a decimal string,
+            // `asset` a bare number.
+            let notes = json!([{
+                "index": 0, "note": "", "cm": "", "nf": "", "amount": "5000000000", "asset": 0,
+                "time": 1, "from": "", "height": 1, "spent": false, "pending": null,
+            }]);
+            let params = json!({ "notes": notes, "need": "1000000000", "asset": 0 });
+            let v: Value = serde_json::from_str(&call("select_inputs", &params.to_string())).unwrap();
+            assert_eq!(v["ok"], true);
+            assert_eq!(v["value"]["chosen"][0]["amount"], "5000000000");
+        }
+
+        #[test]
+        fn pending_cleared_shape() {
+            // wallet.js:221 `pendingCleared: (note, read_through) => call('pending_cleared',
+            // { note, read_through })`, called with `read_through = st.scanned_height - 1`
+            // (`wallet.js:716,718`) — a bare JSON number, never a string.
+            let note = json!({
+                "index": 0, "note": "", "cm": "", "nf": "", "amount": "1", "asset": 0,
+                "time": 1, "from": "", "height": 1, "spent": false, "pending": 3,
+            });
+            let params = json!({ "note": note, "read_through": 999 });
+            let v: Value = serde_json::from_str(&call("pending_cleared", &params.to_string())).unwrap();
+            assert_eq!(v["ok"], true);
+            assert_eq!(v["value"], true);
+        }
+
+        #[test]
+        fn format_amount_and_parse_amount_shape() {
+            // wallet.js:225 `formatAmount: (units) => call('format_amount', { units: String(units) })`
+            // wallet.js:226 `parseAmount: (text) => call('parse_amount', { text })`
+            let v: Value = serde_json::from_str(&call("format_amount", &json!({ "units": "1500000000" }).to_string())).unwrap();
+            assert_eq!(v["value"], "1.5");
+            let v: Value = serde_json::from_str(&call("parse_amount", &json!({ "text": "1.5" }).to_string())).unwrap();
+            assert_eq!(v["value"], "1500000000");
+        }
+
+        #[test]
+        fn rebuilt_deposit_shape() {
+            // wallet.js:220 `rebuiltDeposit: (spend_key, action) => call('rebuilt_deposit',
+            // { spend_key, action })`, where `action` is a raw node block-action object
+            // (`wallet.js:389-393`, straight from `rand_getBlockByHeight`) — NOT a wallet-core
+            // parameter this crate defines the shape of. Its `amount`/`asset_index`/`time` fields
+            // are read here as JSON numbers (`rebuilt_deposit`'s `action["amount"].as_u64()`,
+            // `lib.rs`), which is the node's own rendering, mirrored as-is.
+            let w = wallet(34);
+            let note = Note::new(w.vk.pk(), [0; 8], 2_000_000_000, 0, 7);
+            let cm = note.commitment();
+            let action = json!({
+                "kind": "bridge_attest",
+                "recipient": w.address.to_string(),
+                "amount": note.amount,
+                "asset_index": note.asset,
+                "time": note.time,
+                "r": word8_to_hex(&note.r),
+                "commitment": word8_to_hex(&cm),
+            });
+            let params = json!({ "spend_key": w.spend_key_hex(), "action": action });
+            let v: Value = serde_json::from_str(&call("rebuilt_deposit", &params.to_string())).unwrap();
+            assert_eq!(v["ok"], true);
+            assert_eq!(v["value"]["amount"], "2000000000");
+            assert_eq!(v["value"]["asset"], 0);
+        }
     }
 }
