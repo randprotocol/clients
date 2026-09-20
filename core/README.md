@@ -24,11 +24,21 @@ notes a send will spend, and the resulting change) and `max_sendable` (the large
 send). Nothing here does I/O: the clients fetch commitments, anchors and witnesses over JSON-RPC
 and pass them in.
 
-A transfer today moves only the native asset (RAND, asset index 0): the chain's ledger rejects any
+A transfer moves only the native asset (RAND, asset index 0): the chain's ledger rejects any
 bundle with `asset != 0`, so a registry asset ("RPL" in this wallet, index ≥ 1) cannot move between
-two shielded addresses yet — `plan_transfer`, `max_sendable` and `prove_transfer` all refuse it
-with the same sentence (`RPL_TRANSFER_UNAVAILABLE`). `version`'s reply carries `bundle_inputs` (2),
-`rpl_transfer` and `bridge_burn` (both `false` today) so a client never hard-codes these.
+two shielded addresses — `plan_transfer`, `max_sendable` and `prove_transfer` all refuse it with
+the same sentence (`RPL_TRANSFER_UNAVAILABLE`). The one thing a note of one can do is be burned
+back to its origin chain, which `plan_burn` and `prove_burn` build: a `BridgeBurn` is the chain's
+only two-bundle transaction (an asset bundle that burns, riding inside the action, and a RAND
+bundle that pays the fee, which is the transaction's own), so it proves **twice** — one after the
+other, never at once. `version`'s reply carries `bundle_inputs` (2), `rpl_transfer` (`false`),
+`bridge_burn` (`true`) and `bridge_burn_fee` (0.01 RAND, the chain's `BRIDGE_BURN_FEE`) so a
+client never hard-codes these.
+
+```bash
+# both bundles, proved for real, then put in front of the chain's own Ledger::validate
+cargo run --release --example prove_fixture -- burn
+```
 
 ```bash
 cargo test --release            # includes a full proved transfer checked by the chain's verifier
