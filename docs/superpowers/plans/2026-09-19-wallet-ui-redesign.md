@@ -1001,15 +1001,34 @@ fn asset_bundle_has_zero_fee() {
 - [ ] **Step 2–4:** Implement `plan_transfer` for asset 0 only plus that error and flag; in `ui/screens/send.js` assets with `index ≥ 1` stay listed with balance but their Send row is disabled with that sentence (add a `send.test.mjs` case using a fake whose `send.estimate` rejects with it). Tests PASS.
 - [ ] **Step 5:** Commit `core, ui: RPL balances shown; RPL send reported unavailable on chain 8`.
 
-### Task 4.3: Per-asset balances in every backend
+### Task 4.3: Per-asset balances in every backend — ALREADY SATISFIED (marked done 2026-09-20, no dispatch)
 
-**Files:** `ui/engine/backend-wasm.js`, `ui/engine/wallet.js`, `desktop/src-tauri/src/{commands,store,engine}.rs`, tests beside each.
+**Found already complete** while preparing this task's dispatch, by reading the current code rather
+than assuming the brief's premise still held. This task's file list (`desktop/src-tauri/src/
+{commands,store,engine}.rs`) no longer exists — Task 3.2 deleted the old egui app's Rust-side
+`store.rs`/`engine.rs` entirely, because Phase 3's whole design (Task 3.1's ruling) is that the
+desktop backend reuses the shared JS engine unmodified rather than reimplementing note-store logic
+in Rust. Per-asset balancing is accordingly JS-only, in `ui/engine/backend-shared.js`'s `assets.list()`
+(built during Phase 1's screens work, then carried through Task 3.1's extraction unmodified — it
+was never wasm-specific to begin with, so it was shared, not duplicated, from the start): it joins
+local note sums (grouped by `Number(n.asset)`) with the node's registry (`client.assets()` →
+`rand_getAssets`, renamed from this task's stale `shrugg_getAssets`), caches the registry in
+`storage` for an offline start, and falls back to `RPL#<index>` at 9 decimals for any index the
+registry doesn't name — exactly this task's Interfaces spec, verified line-for-line against the
+live file, not inferred. Every screen that shows a balance (`ui/screens/{home,asset,activity,
+detail,send}.js`) already consumes `assets.list()`, and `ui/test/backend-cases.mjs` already covers
+RAND-first ordering, `RPL#n` naming, the offline-registry fallback, and a note held in an asset the
+registry doesn't list — run against BOTH the wasm and native backend via the shared test-case file,
+so "every backend" is already true today, not pending. The Rust-side `NoteStore::balance(asset)`/
+`pending_out(asset)` this task specified belonged to the deleted egui app's Rust note store and has
+no equivalent need now that summation happens once, in the shared JS layer, for every shell.
 
-**Interfaces:** `assets.list()` joins local note sums with `shrugg_getAssets` (cache the registry in storage for offline start; unknown index → symbol `RPL#<index>`, decimals 9). `send.estimate/send` call `plan_transfer` and pass `asset` through. `NoteStore::balance(asset: u32)`, `pending_out(asset)`.
-
-- [ ] **Step 1: Failing tests:** in `ui/test/backend-wasm.test.mjs` — stub rpc returns `shrugg_getAssets` = `[{index:1, asset_id:'ee'.repeat(32), symbol:'wETH', decimals:18}]`, store holds notes of assets 0, 1 and 7 → `list()` is `[RAND, wETH(decimals 18), RPL#7]` with correct string sums, and with rpc throwing it still returns all three from cache/defaults. Rust: `store.balance(1)` sums only asset 1 and ignores spent/pending.
-- [ ] **Step 2–4:** FAIL → implement → `node --test ui/test && (cd desktop/src-tauri && cargo test)` PASS.
-- [ ] **Step 5:** Commit `multi-asset balances in the wasm and desktop backends`.
+**Ruling:** mark this task done without a dispatch. No code change, no new test — the existing
+implementation and existing tests already satisfy the brief's stated interface and acceptance
+criteria. Cost if wrong: none found on inspection; if a gap surfaces later (e.g. a per-asset
+`pending` figure beyond the native-only pending-faucet-mint case `assets.list()` already tracks),
+it is a small, separately-scoped follow-up against `assets.list()` directly, not a reason to redo
+this task.
 
 ### Task 4.4: RPL bridge withdrawal (`BridgeBurn`) — desktop only
 
