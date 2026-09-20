@@ -441,10 +441,12 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
   /**
    * Which chain is at the other end of this RPC URL: the chain id and the genesis hash.
    *
-   * Both, because the node's own documentation says id alone is not enough — "chain 11 and chain
-   * 12 could carry the same id on a misconfigured node". A node too old to answer
-   * `rand_getGenesisHash` yields `genesis: null`, and the check then falls back to the id alone
-   * rather than refusing to work with it.
+   * Both, because id alone is not enough — "chain 11 and chain 12 could carry the same id on a
+   * misconfigured node". This function reports exactly what the node said and nothing else: a
+   * missing method yields `chainId: null` or `genesis: null` for that field alone, with
+   * `reachable` saying whether the node answered anything at all. There is no fallback to
+   * `settings.chainId` here or anywhere below it — a node that omits a field is judged on that
+   * omission by `chainVerdict`, never quietly waved through on the id alone.
    */
   async function chainIdentity(client, signal) {
     // "The node said no" and "there was no node" are different facts, and the caller needs both:
@@ -842,7 +844,11 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
         const sub = after.submissions.find((x) => x.hash === hash);
         if (sub) { sub.status = 'committed'; sub.height = committed.height; }
         await persist(after);
-        await scan(spendKey, {}, s);
+        // The SAME client the gate verified for this send — not a fresh one. Calling `scan` with
+        // no client here would let it resolve its own via `rpcFor(s)`, which reads whatever
+        // `settings.rpcUrl` says *now*; a node saved between 'submit' and here would collect a
+        // verdict it never earned, exactly the bug `requireVerifiedChain()` exists to prevent.
+        await scan(spendKey, { client }, s);
       }
     }
     return submission;

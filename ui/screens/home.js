@@ -382,6 +382,10 @@ registerScreen('home', {
       paintScanNotice(fresh);
       setScanning(false);
       applyData(1, freshAssets, fresh);
+      // Same rule as a scan (see attachScan above): the node changed underneath the rescan, so
+      // what just landed describes the old one. Read the new one rather than leaving its tip on
+      // screen.
+      if (fresh.staleNode && live()) attachScan();
     }
 
     // The two banners' own ways out. `rescan-chain` drops the old chain's history; `rescan-plain`

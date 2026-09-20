@@ -166,6 +166,13 @@
  * that answer can never be wrong and does not need the network. The desktop backend, which can
  * send, inherits the gate by reusing the same engine.
  *
+ * A proof commits to the identity the gate verified, not to whatever `settings.chainId` says
+ * (they can diverge silently — the configured id is only compared when an identity is first
+ * adopted). When the gate's verdict for this URL carries no identity — reachable only if a
+ * caller bypasses `requireVerifiedChain()`'s own cache, which always fills it in on an `ok`
+ * verdict — the engine falls back to the note store's own `chain_id`, safe only because that id
+ * was itself just verified by the scan that wrote it.
+ *
  * `sync.onChanged?(cb)` → an unsubscribe function. OPTIONAL, and **synchronous** — like
  * `wallet.onLocked`, it registers rather than does, so the shell forwards it unwrapped. Fires when
  * *another tab* of the same wallet finished a scan or reset the store, with `{reason: 'scan' |

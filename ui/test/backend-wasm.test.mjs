@@ -1850,6 +1850,57 @@ test('PROBE: a URL change during the identity check does not price the fee on th
   assert.ok(fetch.log.includes('7400:rand_estimateFee'), 'the fee did not come from the verified node');
 });
 
+// =============================================================== task 1.8 =======================
+// Item B: `scan`/`rescan` used to call `recordVerdict(url, 'ok')` with no fourth argument, so
+// `requireVerifiedChain()`'s cache returned `identity: undefined` for the rest of the session even
+// though the scan that earned the verdict had just checked one. `chainState` is a private closure
+// variable with no getter in the Backend contract, so the only way to see what was recorded
+// without changing production code is to watch the `Map.set` call that writes it — the same kind
+// of black-box probe as the fetch log above, aimed at a different boundary. `mapStorage`'s own
+// `local`/`sessionMap` are real `Map`s too, so a scan writes several other entries through this
+// same patch (the note store, the wallet record, …) — none of them is `{state: 'ok', …}` shaped,
+// which is what the assertion below actually looks for, so they do not need filtering out by hand.
+async function capturingMapWrites(run) {
+  const captured = [];
+  const original = Map.prototype.set;
+  Map.prototype.set = function patched(key, value) { captured.push([key, value]); return original.call(this, key, value); };
+  try {
+    await run();
+  } finally {
+    Map.prototype.set = original;
+  }
+  return captured;
+}
+
+test('a scan records the identity it verified, not just the verdict', async () => {
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+
+  const writes = await capturingMapWrites(() => backend.sync.scan(() => {}));
+
+  const verdict = writes.find(([, value]) => value && value.state === 'ok');
+  assert.ok(verdict, 'no ok verdict was ever recorded');
+  assert.ok(verdict[1].identity, 'the verdict recorded no identity — requireVerifiedChain() would hand back identity: undefined');
+  assert.equal(verdict[1].identity.chainId, 13);
+  assert.equal(verdict[1].identity.genesis, GENESIS);
+});
+
+test('a rescan records the identity it verified too', async () => {
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+
+  const writes = await capturingMapWrites(() => backend.sync.rescan());
+
+  const verdict = writes.find(([, value]) => value && value.state === 'ok');
+  assert.ok(verdict, 'no ok verdict was ever recorded');
+  assert.ok(verdict[1].identity, 'the rescan\'s verdict recorded no identity');
+  assert.equal(verdict[1].identity.chainId, 13);
+  assert.equal(verdict[1].identity.genesis, GENESIS);
+});
+
 test('a store that knows only its chain id learns its genesis from a node whose id matches', async () => {
   // What round 3's code persisted. Without this it accepts chain 13 with ANY genesis for ever —
   // and this replaces the coverage deleted in round 4.

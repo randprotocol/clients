@@ -285,7 +285,7 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   //
   // This shell cannot send, but the desktop backend reuses this engine and can, so the gate lives
   // here rather than in the send screen.
-  const chainState = new Map(); // rpcUrl -> {state: 'ok' | 'wrong', wrongChain?}
+  const chainState = new Map(); // rpcUrl -> {state: 'ok' | 'wrong' | 'anonymous', wrongChain?, identity?}
   /** RPC URLs that have reported this wallet as ahead of them, for the emphasis flag. */
   const behindUrls = new Set();
 
@@ -797,10 +797,15 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
         const url = client.url;
         const st = await engine.scan(key, { signal, client, onProgress: (p) => report(p, onProgress) });
         const out = shape(st);
-        // The verdict belongs to the node that earned it, and to no other.
+        // The verdict belongs to the node that earned it, and to no other. A clean scan's `st`
+        // carries the identity `chainVerdict` just checked (adopted, matched, or partly adopted —
+        // never anything a scan wouldn't have refused), so the verdict records it too: otherwise
+        // `requireVerifiedChain()` hands back `identity: undefined` after every scan and callers
+        // that want the verified identity (not just the client) get nothing until the next
+        // from-scratch identity check.
         if (out.wrongChain) recordVerdict(url, 'wrong', out.wrongChain);
         else if (out.identityUnknown) recordVerdict(url, 'anonymous');
-        else recordVerdict(url, 'ok');
+        else recordVerdict(url, 'ok', undefined, { chainId: st.chain_id, genesis: st.genesis });
         if (out.behind) {
           // The tally survives a URL change — that is the whole point of it. It is cleared by a
           // clean scan, by a rescan and when the wallet session ends.
@@ -858,12 +863,17 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
         const out = shape(st);
         chainState.clear();
         behindUrls.clear();
+        // Same rule as `scan`: the identity `chainVerdict` just checked rides along with the
+        // verdict, not just the state.
         if (out.wrongChain) recordVerdict(url, 'wrong', out.wrongChain);
         else if (out.identityUnknown) recordVerdict(url, 'anonymous');
-        else recordVerdict(url, 'ok');
+        else recordVerdict(url, 'ok', undefined, { chainId: st.chain_id, genesis: st.genesis });
         const current = await rpcClient();
         if (current.url !== url) out.staleNode = true;
-        announce('scan-done');
+        // Same rule as `scan`'s broadcast: a result from a node the wallet has since left is not
+        // worth telling other tabs to reload — they would read the SAME reset-but-stale state this
+        // tab just painted around, not a fresh view of whatever node is current now.
+        if (!out.staleNode) announce('scan-done');
         return out;
       };
 

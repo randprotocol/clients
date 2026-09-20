@@ -715,3 +715,82 @@ test('a proof is refused when the store and the verified identity disagree', asy
     (err) => { assert.match(err.message, /different chain/); assert.equal(err.definite, true); return true; },
   );
 });
+
+// ------------------------------------------------------------------------- task 1.8 -----------
+test('PROBE: send\'s post-commit re-scan stays on the client the gate verified', async () => {
+  // `send()` captures ONE verified client at entry and must do every part of the operation with
+  // it — the fee, the witnesses, the broadcast, and the re-scan after commit. Resolving a fresh
+  // client for that last step via `rpcFor(s)` would let a URL saved between 'submit' and here hand
+  // the re-scan to a node the gate never verified — exactly the shape of bug fix round 5 closed
+  // everywhere else in this file.
+  const core = stubCore({
+    select_inputs: ({ notes }) => ({ chosen: notes.slice(0, 1), need: '1', change: '0' }),
+    prove_transfer: () => ({
+      tx_hex: 'ab', spent_indices: [0], time: 1, amount: '1', change: '0', fee: '1',
+      tier: 14, proof_bytes: 1, tx_keys: ['aa'], commitments: [HEX64('cc')], hash: HEX64('dd'),
+    }),
+    parse_address: () => ({ valid: true, pk: HEX64('ee'), error: null }),
+  });
+  const note = {
+    index: 0, note: '00'.repeat(112), cm: HEX64('0b'), nf: HEX64('0c'),
+    amount: '5000000000', asset: 0, time: 4, from: '00'.repeat(32), height: 4, spent: false, pending: null,
+  };
+  const store = memoryStore({ ...emptyNoteStore(), notes: [note], chain_id: 13, genesis: GENESIS_A, scanned_index: 1 });
+  const verified = stubClient({
+    anchor: () => ({ height: 20, root: HEX64('ab') }),
+    witness: () => ({ index: 0, root: HEX64('ab'), path: Array.from({ length: 32 }, () => HEX64('00')) }),
+    sendTransaction: () => HEX64('dd'),
+    getTransaction: () => ({ height: 21 }), // committed on the first check: no polling delay
+    chainId: () => 13, genesis: () => GENESIS_A,
+  });
+  const other = stubClient({ chainId: () => 14, genesis: () => GENESIS_B });
+  // Stands in for `settings.rpcUrl` having changed by the time the post-commit re-scan runs:
+  // whatever `rpcFor(s)` would resolve to if that scan asked for a client of its own is `other`.
+  const wallet = makeWallet({
+    core, store, rpc: () => other, settings: async () => ({ chainId: 99 }), annotate: false,
+  });
+
+  await wallet.send(SPEND_KEY, {
+    to: 'rand1x', amountUnits: '1', feeUnits: '1', wait: true,
+    client: verified, identity: { chainId: 13, genesis: GENESIS_A },
+  });
+
+  assert.deepEqual(other.calls, [], 'the post-commit re-scan reached the node the gate never verified');
+  // `scan()` reads `head` twice per call (once up front, once to detect the tree moving under it),
+  // and `send()` runs it twice — once before the transfer, once after commit — so a verified client
+  // that did BOTH scans sees four, not two.
+  assert.equal(
+    verified.calls.filter(([name]) => name === 'head').length, 4,
+    'the post-commit re-scan did not run against the verified client at all',
+  );
+});
+
+test('send falls back to the store\'s chain_id when the gate hands back no identity', async () => {
+  // `requireVerifiedChain()` always fills in `identity` on an `ok` verdict today (task 1.8, item
+  // B) — but the fallback below it is the load-bearing safety net if that ever regresses, and it
+  // must keep working: the store's `chain_id` was itself just verified by the scan that wrote it.
+  const core = stubCore({
+    select_inputs: ({ notes }) => ({ chosen: notes.slice(0, 1), need: '1', change: '0' }),
+    prove_transfer: (req) => {
+      assert.equal(req.chain_id, 13, 'did not fall back to the verified store\'s chain id');
+      return {
+        tx_hex: 'ab', spent_indices: [0], time: 1, amount: '1', change: '0', fee: '1',
+        tier: 14, proof_bytes: 1, tx_keys: ['aa'], commitments: [HEX64('cc')], hash: HEX64('dd'),
+      };
+    },
+    parse_address: () => ({ valid: true, pk: HEX64('ee'), error: null }),
+  });
+  const note = {
+    index: 0, note: '00'.repeat(112), cm: HEX64('0b'), nf: HEX64('0c'),
+    amount: '5000000000', asset: 0, time: 4, from: '00'.repeat(32), height: 4, spent: false, pending: null,
+  };
+  const store = memoryStore({ ...emptyNoteStore(), notes: [note], chain_id: 13, genesis: GENESIS_A, scanned_index: 1 });
+  const client = stubClient({
+    anchor: () => ({ height: 20, root: HEX64('ab') }),
+    witness: () => ({ index: 0, root: HEX64('ab'), path: Array.from({ length: 32 }, () => HEX64('00')) }),
+    sendTransaction: () => HEX64('dd'),
+  });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({ chainId: 99 }), annotate: false });
+  // No `identity` at all — the shape a caller gets from a gate whose verdict carried none.
+  await wallet.send(SPEND_KEY, { to: 'rand1x', amountUnits: '1', feeUnits: '1', wait: false, client });
+});
