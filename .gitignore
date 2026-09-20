@@ -24,6 +24,9 @@ ui/node_modules/
 xcuserdata/
 *.xcuserstate
 .idea/
-# Desktop
+# Desktop (Tauri: src-tauri/target, the staged webview payload, and Tauri's generated schemas)
 desktop/target/
 desktop/dist/
+desktop/dist-ui/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/

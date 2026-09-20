@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="system">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="referrer" content="no-referrer">
+<title>Rand Wallet</title>
+<!-- No inline script and no inline style anywhere in this page. The CSP in
+     src-tauri/tauri.conf.json is `default-src 'self'` with `img-src 'self' data:` for the QR
+     code and `connect-src` for the IPC channel plus whatever node the user points at — and
+     notably NO `wasm-unsafe-eval`, because this is the one shell that loads no wasm at all: the
+     chain crypto is the native `wallet-core` crate, one Tauri command away. -->
+<link rel="stylesheet" href="ui/tokens.css">
+<link rel="stylesheet" href="ui/base.css">
+<link rel="stylesheet" href="ui/components.css">
+<link rel="icon" href="data:,">
+<script src="main.js" type="module"></script>
+</head>
+<body>
+<noscript>Rand Wallet needs JavaScript: every key, every scan and every signature happens here.</noscript>
+</body>
+</html>

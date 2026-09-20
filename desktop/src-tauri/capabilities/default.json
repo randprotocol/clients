@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The main window. Core IPC, plus the one plugin permission this wallet needs: opening an explorer page in the user's real browser, and only on the two hosts this chain has.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://randscan.org/*" },
+        { "url": "https://randprotocol.org/*" }
+      ]
+    }
+  ]
+}

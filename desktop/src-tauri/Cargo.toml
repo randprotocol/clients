@@ -1,0 +1,48 @@
+[package]
+name = "rand-wallet-desktop"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+authors = ["RandProtocol Contributors"]
+description = "Rand Wallet for Windows, Linux and macOS: the shared wallet UI in a Tauri webview, with native proving on the shared Rust core"
+default-run = "rand-wallet"
+
+[[bin]]
+name = "rand-wallet"
+path = "src/main.rs"
+
+# Standalone: not a member of core/'s workspace, so it has its own target/ and never queues behind
+# the mobile and wasm builds for the cargo lock.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# The chain crypto, linked directly as a Rust crate — `wallet-ffi`'s C ABI is for iOS and Android.
+# This is the only dependency that is about the wallet rather than about being an app.
+wallet-core = { path = "../../core/crates/wallet-core" }
+tauri = { version = "2", features = [] }
+# `platform.openExternal` — scoped to the explorer in capabilities/default.json.
+tauri-plugin-opener = "2"
+# `system_memory_gib`, which is all `send.canProve()` has to go on. Only the system half.
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dirs = "6"
+
+# Gone with the egui app this replaces: `eframe`/`egui` (the screens are ui/ now), `keyring` (the
+# spend key is in the shared password-derived vault, not the OS credential store — see
+# storage.rs), `ureq` (JSON-RPC is the webview's own fetch, so no node reply passes through Rust),
+# `qrcode` (ui/lib/qr.js draws it), `open` (tauri-plugin-opener), `hex` (nothing here parses hex).
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "debuginfo"
+
+# The proof system is unusable in an unoptimised build; keep dependencies optimised in dev too, so
+# `cargo tauri dev` can actually prove a transfer rather than appearing to hang.
+[profile.dev.package."*"]
+opt-level = 3

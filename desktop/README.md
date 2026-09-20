@@ -1,55 +1,73 @@
 # Rand Wallet for Windows, Linux and macOS
 
-One native Rust binary for all three desktops, built on the shared core in `../core` (linked
-directly, no FFI) with an [egui](https://github.com/emilk/egui) interface that follows the same
-screens and colours as the mobile apps: Welcome / Import, balance card with Receive · Send ·
-Faucet, Activity with per-payment disclosure, Settings with the viewing key for randscan.org.
+A [Tauri](https://tauri.app) app: the **shared wallet UI** (`../ui`) in a system webview, over the
+**shared Rust core** (`../core/crates/wallet-core`) linked directly as a crate, no FFI.
+
+**This is the one shell in which a transfer can actually complete.** A bundle proof peaks at about
+5.6 GB and wasm32 stops at 4 GiB, so the web wallet and the browser extension do everything except
+the proof itself and say so (`send.canProve()`). Here the chain crypto is native, and the only
+limit is the machine's real RAM.
 
 ```
-src/main.rs      app state, screen routing
-src/ui.rs        every screen; QR rendering; a tiny PNG decoder for the window icon
-src/engine.rs    the worker thread: scan / send / faucet, exactly the rules of the design spec §3.2
-src/rpc.rs       JSON-RPC 2.0 over HTTP (ureq)
-src/store.rs     settings and the note store (JSON in the OS config directory), amounts
-src/secrets.rs   the spend key in the OS credential store (Keychain / Credential Manager / kernel keyring)
-src/theme.rs     design/tokens.json as egui visuals
-scripts/         build-macos.sh (.app + .dmg), build-linux.sh (tarball + .desktop), build-windows.ps1 (zip)
+src-tauri/src/main.rs        the window, the plugins, the command list
+src-tauri/src/commands.rs    core_call, system_memory_gib, app_version, storage_*
+src-tauri/src/storage.rs     the JSON file and the in-process session map
+src-tauri/tauri.conf.json    window, CSP, bundle targets
+src-tauri/capabilities/      what the webview may ask the app for
+ui-shell/                    index.html, main.js, backend-tauri.js — this shell's ~200 lines
+scripts/stage-ui.sh          assembles dist-ui/ (ui/ + ui-shell/) for the webview
 ```
+
+Everything else the user sees — every screen, the scanning, the note store, the JSON-RPC client,
+the verified-chain gate — is `../ui` and `../ui/engine/*.js`, running unmodified and covered by
+the same `node --test ui/test` suite the other shells are. There is no second implementation of
+any of it here, on purpose.
 
 ## Build and run
 
 ```bash
-cd desktop
-cargo run --release           # Rust 1.98.1 via rust-toolchain.toml; first build compiles the prover (~5 min)
-cargo test --release          # note-store and amount rules
+cargo install tauri-cli --version "^2.0.0" --locked   # once
+cd desktop/src-tauri
+cargo tauri dev                # stages dist-ui/ and opens the window
+cargo tauri build              # …and bundles a dmg / msi / AppImage / deb
+cargo test                     # the commands and the store (Rust 1.98.1 via rust-toolchain.toml)
 ```
 
-Linux needs the usual GUI build packages (see the header of `scripts/build-linux.sh`). The crate
-is its own workspace, so its `target/` is separate from `core/target/`.
+The first build compiles the prover and takes a few minutes. The crate is its own workspace, so
+its `target/` is separate from `core/target/`. Linux needs the usual webkit2gtk build packages.
 
-## Packaging
+## What is native, and what is not
 
-| platform | command | output |
-|---|---|---|
-| macOS | `scripts/build-macos.sh` (`CODESIGN_ID`, `NOTARIZE_PROFILE` optional) | `dist/Rand Wallet.app`, `dist/RandWallet-<v>-macos.dmg` (universal) |
-| Linux | `scripts/build-linux.sh` | `dist/rand-wallet-<v>-linux-<arch>.tar.gz` with `install.sh` |
-| Windows | `scripts/build-windows.ps1` | `dist\rand-wallet-<v>-windows-x64.zip` |
+Four commands, and nothing else crosses the boundary:
 
-Unsigned builds run after the usual "open anyway" step on macOS and SmartScreen prompt on
-Windows; sign with a Developer ID / Authenticode certificate for a clean install.
+| command | why it cannot be JavaScript |
+|---|---|
+| `core_call(method, params)` | a passthrough to `wallet_core::call` — the prover. Runs on the **blocking pool**, never the main thread: a proof takes minutes and would otherwise freeze the window. |
+| `system_memory_gib()` | a webview cannot see the machine. It is the whole of `send.canProve()`'s evidence; below 8 GiB the app refuses to start a proof rather than be killed half-way through one. |
+| `storage_*` | a JSON file under the data directory: the vault, the settings, the note store. |
+| `storage_session_*` | a `HashMap` in this process — where the plaintext spend key lives while unlocked, and nowhere else. |
 
-## What it does, and where things live
+**Not** native: HTTP. `ui/engine/rpc.js` takes an injectable `fetch` and the webview's own
+satisfies it, so every JSON-RPC call goes straight from JavaScript and no node reply ever passes
+through Rust. Verified empirically, not assumed: a `fetch` from the app's `tauri://localhost`
+origin to a plain `http://127.0.0.1:…` node is **not** blocked as mixed content, so a tunnelled
+local node (`ssh -N -L 8545:127.0.0.1:8545 root@<node>`) works with no native HTTP shim. The node
+does have to answer the CORS preflight, exactly as it must for the web wallet.
 
-- **Keys.** The spend key is generated by the core and stored in the OS credential store under
-  service `org.randprotocol.wallet`; on a system without one it falls back to an owner-only file
-  in the data directory. Lock clears it from memory; Unlock reads it back.
+## Where things live
+
+- **Keys.** The spend key is encrypted at rest with the same password-derived vault every other
+  shell uses (PBKDF2-SHA256, 600 000 iterations, AES-GCM) and stored as an opaque blob in the data
+  file. This replaces the previous desktop app's plaintext-in-the-OS-keyring, which was the one
+  shell that did not encrypt it. A native convenience-unlock (Keychain, Touch ID) is a possible
+  future enhancement and is deliberately not built: it would be a second way to reach the key.
 - **Data directory.** `~/Library/Application Support/RandWallet` (macOS), `%APPDATA%\RandWallet`
-  (Windows), `~/.config/RandWallet` (Linux): `settings.json` and `notes.json` (a cache of chain
-  data; "Rescan from the first leaf" rebuilds it).
-- **Network.** Only the RPC URL in Settings is contacted (default `https://rpc.randprotocol.org`,
-  which the operators have to stand up — see the repository README; a local node at
-  `http://127.0.0.1:8545` works out of the box), plus randscan.org when a link is clicked.
+  (Windows), `~/.config/RandWallet` (Linux) — one `wallet.json`, owner-only (0600 on Unix).
+- **Network.** Only the RPC URL in Settings, plus randscan.org / randprotocol.org when a link is
+  clicked. `openExternal` is scoped to those two hosts in `src-tauri/capabilities/default.json`,
+  so a URL from anywhere else cannot open anything.
 - **Proving.** A transfer is a tier-14 STARK proved on this computer's CPU, about a minute on a
-  laptop; the Send flow shows an elapsed timer and asks to keep the window open.
-- **Disclosure.** Settings shows the viewing key (paste on randscan.org/viewing); every sent
-  payment keeps its transaction key ("Disclose this payment") for the transaction's page.
+  laptop. The Send flow reports `selecting → witness → proving → submitting → confirming`, and the
+  idle auto-lock waits for a transfer in flight rather than dropping the key mid-proof.
+- **Window.** 1100×760, minimum 380×600 — the same two-pane breakpoint the other shells use, so
+  narrowing the window below 900 px swaps the sidebar for a tab bar.
