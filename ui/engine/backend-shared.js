@@ -38,7 +38,7 @@
 //                    point of the invariant this file enforces (see `requireVerifiedChain` below).
 //                    `ctx` is:
 //                      { req, onPhase, options, client, url, identity, reason,
-//                        engine, requireUnlocked, bundleFee }
+//                        sendTransfer, requireUnlocked, bundleFee }
 //                    `req`, `onPhase`, `options` are `send.send`'s own three arguments, passed
 //                    through unchanged; `client`, `url`, `identity` are exactly
 //                    `requireVerifiedChain()`'s return value; `reason` is whatever `canProve()`
@@ -47,12 +47,17 @@
 //
 //                    The last three are what a shell that can ACTUALLY send needs, and they are
 //                    handed over rather than rebuilt because there must be exactly one of each:
-//                      engine             this backend's own `makeWallet` (wallet.js) — the same
-//                                         instance every scan and rescan runs through, over the
-//                                         same note store. Its `send()` is already the whole
-//                                         transfer (select, witness, prove, submit, confirm,
-//                                         re-scan); an `executeSend` calls it and does not
-//                                         reimplement it. A second `makeWallet` over the same
+//                      sendTransfer(spendKey, opts)  this backend's own `engine.send`
+//                                         (`makeWallet`, wallet.js) — the same instance every scan
+//                                         and rescan runs through, over the same note store —
+//                                         wrapped down to the one capability `executeSend` uses,
+//                                         rather than handing out the whole `engine` (which also
+//                                         has `chainIdentity`, `chainVerdict`, `loadStore`, `scan`
+//                                         and `rescan`, several of which resolve or touch RPC
+//                                         clients on their own). `engine.send()` is already the
+//                                         whole transfer (select, witness, prove, submit, confirm,
+//                                         re-scan); an `executeSend` calls it through this and does
+//                                         not reimplement it. A second `makeWallet` over the same
 //                                         storage would be a second writer of the note store.
 //                      requireUnlocked()  -> `{spend_key, viewing_key}`, or throws "the wallet is
 //                                         locked". The plaintext spend key lives in
@@ -1148,8 +1153,12 @@ export function makeSharedBackend({ core, storage, platform, fetch: fetchImpl, l
           req, onPhase, options, client, url, identity, reason,
           // Not a fresh engine, not a fresh session read and not a second fee helper: the ones
           // this backend already uses, so a send cannot diverge from what the rest of the file
-          // sees. See the header on `executeSend` for why each is here.
-          engine, requireUnlocked, bundleFee,
+          // sees. `sendTransfer` is `engine.send` narrowed to the one capability `executeSend`
+          // uses — not the whole `engine` object, which also exposes `chainIdentity`,
+          // `chainVerdict`, `loadStore`, `scan` and `rescan`. See the header on `executeSend` for
+          // why each is here.
+          sendTransfer: (spendKey, opts) => engine.send(spendKey, opts),
+          requireUnlocked, bundleFee,
         });
       } finally {
         release();

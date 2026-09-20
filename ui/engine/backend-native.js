@@ -119,7 +119,7 @@ function makeCanProve(systemMemoryGiB) {
  * resolves an RPC client of its own; that is task 1.6's invariant and it is the reason
  * `wallet.js`'s `send()` takes a `client` at all.
  */
-async function executeSend({ req, onPhase, options, client, identity, engine, requireUnlocked, bundleFee }) {
+async function executeSend({ req, onPhase, options, client, identity, sendTransfer, requireUnlocked, bundleFee }) {
   const asset = Number(req && req.asset) || 0;
   if (asset !== 0) {
     // The ledger admits only asset-0 transfers, on every shell — being able to prove does not make
@@ -140,7 +140,7 @@ async function executeSend({ req, onPhase, options, client, identity, engine, re
   };
 
   try {
-    const submission = await engine.send(spendKey, {
+    const submission = await sendTransfer(spendKey, {
       to: String((req && req.to) || ''),
       amountUnits: String((req && req.amount) ?? '0'),
       feeUnits: fee.toString(),
