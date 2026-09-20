@@ -10,10 +10,24 @@
 //
 //     makeSharedBackend({ core, storage, platform, fetch, locks, broadcast, canProve, executeSend })
 //
-//   core, storage, platform, fetch, locks, broadcast   — exactly as documented at the top of
-//                                                          backend-wasm.js (that comment is the
-//                                                          canonical description; this file never
-//                                                          asks what shell it is running under).
+//   core       `{ call(method, params) -> Promise }` — the wallet core, however this shell reaches
+//              it (a Web Worker in both browser shells, a Tauri command to the native crate on the
+//              desktop, `initSync` directly under Node in a test). This file never asks which.
+//   storage    `{ get(key), set(key, value), remove(key), clear(), session: {get, set, remove},
+//               compareAndSet?(key, expectedRev, value) }`, all async. The persistent half survives
+//              a reload; **`session` is memory only** and is the one place the plaintext spend key
+//              is ever written. `compareAndSet` is OPTIONAL: where a shell's storage can write
+//              conditionally on a revision (web/wallet/idb.js does it in one IndexedDB
+//              transaction) the note store uses it so two tabs cannot overwrite each other; where
+//              it is missing, a plain `set`.
+//   platform   the `platform` group, passed through as given: `{name, openExternal, copy}` plus
+//              whatever optional members this shell has (`version`, `paste`, `openFlowInTab`,
+//              `ensureHostPermission`).
+//   fetch      optional; defaults to the global. Only the JSON-RPC client uses it.
+//   locks      optional; defaults to `navigator.locks`. Used with `ifAvailable` so only one tab
+//              scans at a time. `null` turns it off.
+//   broadcast  optional; defaults to `new BroadcastChannel('rand-wallet')`. How the scanning tab
+//              tells the others it has finished. `null` turns it off.
 //   canProve()   -> Promise<{ok, reason?}>   `send.canProve` verbatim (ui/backend.js). Called
 //                    first, before any network access, because "this shell cannot prove at all"
 //                    can never be wrong and costs nothing to say.

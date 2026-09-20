@@ -4,23 +4,10 @@
 //
 //     makeWasmBackend({ core, storage, platform, fetch, locks, broadcast })
 //
-//   core       `{ call(method, params) -> Promise }` — the wasm core, however this shell reaches
-//              it (a Web Worker in both browser shells, `initSync` directly under Node in a test).
-//   storage    `{ get(key), set(key, value), remove(key), clear(), session: {get, set, remove},
-//               compareAndSet?(key, expectedRev, value) }`, all async. The persistent half survives
-//              a reload; **`session` is memory only** and is the one place the plaintext spend key
-//              is ever written. `compareAndSet` is OPTIONAL: where a shell's storage can write
-//              conditionally on a revision (web/wallet/idb.js does it in one IndexedDB
-//              transaction) the note store uses it so two tabs cannot overwrite each other; where
-//              it is missing, a plain `set`.
-//   platform   the `platform` group, passed through as given: `{name, openExternal, copy}` plus
-//              whatever optional members this shell has (`version`, `paste`, `openFlowInTab`,
-//              `ensureHostPermission`).
-//   fetch      optional; defaults to the global. Only the JSON-RPC client uses it.
-//   locks      optional; defaults to `navigator.locks`. Used with `ifAvailable` so only one tab
-//              scans at a time. `null` turns it off.
-//   broadcast  optional; defaults to `new BroadcastChannel('rand-wallet')`. How the scanning tab
-//              tells the others it has finished. `null` turns it off.
+// See `./backend-shared.js` for the shared parameters; this file adds nothing to them. (Its
+// `core` is the wasm core, reached through a Web Worker in both browser shells and through
+// `initSync` under Node in a test — but that is a fact about this shell, not a different
+// parameter.)
 //
 // This file itself is only two things: `canProve()`, which is hard-coded `{ok: false}` because a
 // bundle proof cannot run in wasm at all (see below), and the `executeSend` this shell supplies to
