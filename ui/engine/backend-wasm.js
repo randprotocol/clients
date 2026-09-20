@@ -303,22 +303,35 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     return chainState.get(url);
   }
 
-  function recordVerdict(url, state, detail) {
-    chainState.set(url, detail ? { state, wrongChain: detail } : { state });
+  function recordVerdict(url, state, detail, identity) {
+    const entry = { state };
+    if (detail) entry.wrongChain = detail;
+    if (identity) entry.identity = identity;
+    chainState.set(url, entry);
   }
 
   /**
-   * Proves the chain before acting on the notes. Cheap: two RPC calls, cached per URL for the
-   * session — never a scan. Throws the definite refusal for a known-wrong chain, and a retryable
-   * one when the node could not be reached to answer at all.
+   * Proves the chain before acting on the notes, and **hands back the client it proved**.
+   *
+   * A verified chain is a property of ONE CLIENT OBJECT bound to ONE URL, and that is the whole
+   * rule: resolve the client once, verify that client, do every part of the operation with that
+   * client, record the verdict against that client's URL. The previous version verified one
+   * client and let its caller fetch another — so a URL saved during the identity round trip took
+   * the mint, and a fee for chain 14 was priced against notes from chain 13. The return value is
+   * how that is now hard to get wrong: the gated operations have no other way to obtain a client.
+   *
+   * Cheap: two RPC calls, cached per URL for the session — never a scan. Throws the definite
+   * refusal for a known-wrong chain, and a retryable one when the node could not be reached.
    */
   async function requireVerifiedChain() {
     const client = await rpcClient();
-    const known = verdictFor(client.url);
+    const url = client.url;
+    const known = verdictFor(url);
     if (known && known.state === 'wrong') {
       throw refusal(WRONG_CHAIN_REFUSAL, { definite: true, wrongChain: known.wrongChain });
     }
-    if (known && known.state === 'ok') return;
+    if (known && known.state === 'ok') return { client, url, identity: known.identity };
+    // 'anonymous' is remembered for the UI, never as a pass: it re-checks every time.
 
     let identity;
     try {
@@ -331,14 +344,17 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     const st = await loadNotes();
     const settings = await getSettings();
     const verdict = engine.chainVerdict(st, identity, settings.chainId);
-    if (verdict.kind === 'ok' || verdict.kind === 'adopt') { recordVerdict(client.url, 'ok'); return; }
+    if (verdict.kind === 'ok' || verdict.kind === 'adopt') {
+      recordVerdict(url, 'ok', undefined, identity);
+      return { client, url, identity };
+    }
     if (verdict.kind === 'identityUnknown') {
       // Not "wrong", but certainly not proven: a node that will not name its chain cannot be the
       // one this wallet acts on.
       throw refusal(UNVERIFIED_REFUSAL, { retryable: true, identityUnknown: true });
     }
     const detail = { expected: verdict.expected, got: verdict.got };
-    recordVerdict(client.url, 'wrong', detail);
+    recordVerdict(url, 'wrong', detail);
     throw refusal(WRONG_CHAIN_REFUSAL, { definite: true, wrongChain: detail });
   }
 
@@ -750,6 +766,9 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       try {
         const known = verdictFor((await rpcClient()).url);
         if (known && known.state === 'wrong') out.wrongChain = known.wrongChain;
+        // Declared blocking in ui/backend.js, so it has to reach every screen, not only the one
+        // that happened to scan.
+        if (known && known.state === 'anonymous') out.identityUnknown = true;
       } catch { /* no usable RPC URL yet: nothing to say */ }
       return out;
     },
@@ -769,23 +788,33 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       const { spend_key: key } = await requireUnlocked();
       const signal = options && options.signal;
       const runScan = async () => {
-        const st = await engine.scan(key, { signal, onProgress: (p) => report(p, onProgress) });
-        const out = shape(st);
-        // Remembered for the rest of this session, per URL: everything that would act on the
-        // notes proves the chain first (requireVerifiedChain), and `sync.cached()` carries the
-        // marker so every screen can say so, not only the one that happened to scan.
+        // ONE client, captured BEFORE the scan and used for all of it. A scan runs on the wallet
+        // SESSION's signal, so it keeps going while the user walks to Settings and saves a
+        // different node — an ordinary journey. Resolving the client when the scan *returned*
+        // recorded that new node as verified without ever asking it anything, and the next faucet
+        // minted on it.
         const client = await rpcClient();
-        if (out.wrongChain) recordVerdict(client.url, 'wrong', out.wrongChain);
-        else if (!out.identityUnknown) recordVerdict(client.url, 'ok');
+        const url = client.url;
+        const st = await engine.scan(key, { signal, client, onProgress: (p) => report(p, onProgress) });
+        const out = shape(st);
+        // The verdict belongs to the node that earned it, and to no other.
+        if (out.wrongChain) recordVerdict(url, 'wrong', out.wrongChain);
+        else if (out.identityUnknown) recordVerdict(url, 'anonymous');
+        else recordVerdict(url, 'ok');
         if (out.behind) {
           // The tally survives a URL change — that is the whole point of it. It is cleared by a
           // clean scan, by a rescan and when the wallet session ends.
-          behindUrls.add(client.url);
+          behindUrls.add(url);
           out.behind = withBehindHints(out.behind);
         } else if (!out.wrongChain && !out.identityUnknown) {
           behindUrls.clear();
         }
-        if (!out.wrongChain && !out.behind && !out.identityUnknown) announce('scan-done');
+        // The result is a consistent scan of `url`, and still worth keeping — but if the wallet is
+        // pointed somewhere else now, it is not that node's view, and the UI must not present A's
+        // tip as B's. It re-scans instead.
+        const current = await rpcClient();
+        if (current.url !== url) out.staleNode = true;
+        if (!out.wrongChain && !out.behind && !out.identityUnknown && !out.staleNode) announce('scan-done');
         return out;
       };
 
@@ -817,17 +846,23 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     async rescan(options = {}) {
       const { spend_key: key } = await requireUnlocked();
       const run = async () => {
+        // Same rule as `scan`: one client, captured first, and the verdict recorded against it.
+        const client = await rpcClient();
+        const url = client.url;
         const st = await engine.rescan(key, {
           forChain: options.forChain === true,
           signal: options.signal,
+          client,
           onProgress: (p) => report(p, options.onProgress),
         });
         const out = shape(st);
         chainState.clear();
         behindUrls.clear();
-        const client = await rpcClient();
-        if (out.wrongChain) recordVerdict(client.url, 'wrong', out.wrongChain);
-        else if (!out.identityUnknown) recordVerdict(client.url, 'ok');
+        if (out.wrongChain) recordVerdict(url, 'wrong', out.wrongChain);
+        else if (out.identityUnknown) recordVerdict(url, 'anonymous');
+        else recordVerdict(url, 'ok');
+        const current = await rpcClient();
+        if (current.url !== url) out.staleNode = true;
         announce('scan-done');
         return out;
       };
@@ -975,8 +1010,8 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     },
   };
 
-  async function bundleFee() {
-    const client = await rpcClient();
+  /** The node's own minimum bundle fee — from the client the gate verified, never a fresh one. */
+  async function bundleFee(client) {
     const answer = checkFee(await client.estimateFee({ kind: 'bundle' }));
     const fee = toUnits(answer);
     if (fee > 0n) return fee;
@@ -995,10 +1030,10 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      * which is written for the user (it is what tells them to consolidate).
      */
     async estimate(req = {}) {
-      await requireVerifiedChain();
+      const { client } = await requireVerifiedChain();
       const asset = Number(req.asset) || 0;
       if (asset !== 0) throw new Error(RPL_SEND_DISABLED_TEXT);
-      const fee = await bundleFee();
+      const fee = await bundleFee(client);
       const st = await loadNotes();
       const need = toUnits(req.amount) + fee;
       const selection = await c.selectInputs(st.notes || [], need.toString(), 0);
@@ -1018,8 +1053,8 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      * `select_inputs` rather than taking on trust.
      */
     async maxSendable({ asset = 0 } = {}) {
-      await requireVerifiedChain();
-      const fee = await bundleFee();
+      const { client } = await requireVerifiedChain();
+      const fee = await bundleFee(client);
       const index = Number(asset) || 0;
       if (index !== 0) return { amount: '0', fee: fee.toString() };
       const k = await constants();
@@ -1058,6 +1093,8 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
           err.definite = true;
           throw err;
         }
+        // The verified client and identity are what a shell that CAN send must carry through the
+        // fee, the witnesses, the broadcast and every retry — see the report's closing section.
         await requireVerifiedChain();
         const err = new Error(reason || CANNOT_PROVE_REASON);
         err.definite = true;
@@ -1077,10 +1114,9 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      */
     async request() {
       await requireUnlocked();
-      await requireVerifiedChain();
+      const { client } = await requireVerifiedChain();
       const w = await storage.get(K.wallet);
       if (!w || !w.address) throw new Error('no wallet on this device');
-      const client = await rpcClient();
       const hash = checkSubmitted('rand_mint', await client.mint(w.address));
       const st = await loadNotes();
       const k = await constants();

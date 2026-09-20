@@ -30,6 +30,12 @@
  *    read, on the same chain: a lagging replica, or one restored from a snapshot. Not an error and
  *    not a reason to move any cursor — the reply is the cached data and scanning resumes by itself
  *    once the node catches up. Home says so quietly.
+ *  - `staleNode?` — OPTIONAL, `true`. The scan was a *consistent* scan of the node it started
+ *    against, but the wallet is pointed at a different one now (the user saved a new RPC URL while
+ *    it ran — a scan uses the wallet **session's** signal, so it keeps going across screens). The
+ *    data is sound and worth keeping; what it is not is the current node's view, so the UI must
+ *    not present that tip as this node's. Home starts a fresh scan instead. Nothing was recorded
+ *    about the new node: a verdict belongs to the node that earned it.
  *  - `otherTab?` — OPTIONAL, `true`. Another tab of the same wallet is scanning and this one chose
  *    to wait rather than race it; the wait ran out, so this is the cached data. The scanning tab's
  *    result arrives through `sync.onChanged?` — a backend that sets this should offer that too,

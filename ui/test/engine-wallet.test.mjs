@@ -343,9 +343,12 @@ test('a node on another chain yields `wrongChain` and touches nothing', async ()
 
   const other = stubClient({ genesis: () => GENESIS_B, chainId: () => 14 });
   const answer = await makeWallet({ core: stubCore(), store, rpc: () => other, settings }).scan(SPEND_KEY, {});
-  assert.deepEqual(answer.wrongChain.expected, { chainId: 13, genesis: GENESIS_A });
-  assert.equal(answer.wrongChain.got.chainId, 14);
-  assert.equal(answer.wrongChain.got.genesis, GENESIS_B);
+  // Strict again: `got` is built field by field, so nothing internal (`reachable`) leaks into a
+  // shape the UI renders. Relaxing this assertion is what let that leak through in round 4.
+  assert.deepEqual(answer.wrongChain, {
+    expected: { chainId: 13, genesis: GENESIS_A },
+    got: { chainId: 14, genesis: GENESIS_B },
+  });
   assert.deepEqual(store.current, before, 'a wrong-chain node changed the store');
   assert.equal(other.calls.some(([name]) => name === 'commitments'), false, 'it scanned the wrong chain anyway');
 });
@@ -654,4 +657,61 @@ test('a rescan tells whoever is listening that the store was reset', async () =>
   await wallet.scan(SPEND_KEY, {});
   await wallet.rescan(SPEND_KEY, {});
   assert.deepEqual(resets, [1], 'other tabs were never told to drop their view');
+});
+
+// ------------------------------------------------------------------------- fix round 5 --------
+test('the proof commits to the VERIFIED chain, not to whatever settings say', async () => {
+  // Unreachable from wasm (it refuses before proving) but it is the desktop send path, and that
+  // backend will copy this file's shape.
+  const proofs = [];
+  const core = stubCore({
+    select_inputs: ({ notes }) => ({ chosen: notes.slice(0, 1), need: '1', change: '0' }),
+    prove_transfer: (req) => {
+      proofs.push(req.chain_id);
+      return {
+        tx_hex: 'ab', spent_indices: [0], time: 1, amount: '1', change: '0', fee: '1',
+        tier: 14, proof_bytes: 1, tx_keys: ['aa'], commitments: [HEX64('cc')], hash: HEX64('dd'),
+      };
+    },
+    parse_address: () => ({ valid: true, pk: HEX64('ee'), error: null }),
+  });
+  const note = {
+    index: 0, note: '00'.repeat(112), cm: HEX64('0b'), nf: HEX64('0c'),
+    amount: '5000000000', asset: 0, time: 4, from: '00'.repeat(32), height: 4, spent: false, pending: null,
+  };
+  const store = memoryStore({ ...emptyNoteStore(), notes: [note], chain_id: 13, genesis: GENESIS_A, scanned_index: 1 });
+  const client = stubClient({
+    anchor: () => ({ height: 20, root: HEX64('ab') }),
+    witness: () => ({ index: 0, root: HEX64('ab'), path: Array.from({ length: 32 }, () => HEX64('00')) }),
+    sendTransaction: () => HEX64('dd'),
+    getTransaction: () => null,
+  });
+  // Settings say 99; the verified identity says 13. The proof must commit to 13.
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({ chainId: 99 }), annotate: false });
+  await wallet.send(SPEND_KEY, {
+    to: 'rand1x', amountUnits: '1', feeUnits: '1', wait: false,
+    client, identity: { chainId: 13, genesis: GENESIS_A },
+  });
+  assert.deepEqual(proofs, [13], `the proof committed to chain ${proofs[0]}, not the verified 13`);
+});
+
+test('a proof is refused when the store and the verified identity disagree', async () => {
+  const core = stubCore({
+    select_inputs: ({ notes }) => ({ chosen: notes.slice(0, 1), need: '1', change: '0' }),
+    prove_transfer: () => { throw new Error('prove_transfer must not be reached'); },
+  });
+  const note = {
+    index: 0, note: '00'.repeat(112), cm: HEX64('0b'), nf: HEX64('0c'),
+    amount: '5000000000', asset: 0, time: 4, from: '00'.repeat(32), height: 4, spent: false, pending: null,
+  };
+  const store = memoryStore({ ...emptyNoteStore(), notes: [note], chain_id: 13, genesis: GENESIS_A, scanned_index: 1 });
+  const client = stubClient({
+    anchor: () => ({ height: 20, root: HEX64('ab') }),
+    witness: () => ({ index: 0, root: HEX64('ab'), path: Array.from({ length: 32 }, () => HEX64('00')) }),
+  });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await assert.rejects(
+    () => wallet.send(SPEND_KEY, { to: 'rand1x', amountUnits: '1', feeUnits: '1', wait: false, client, identity: { chainId: 14, genesis: GENESIS_B } }),
+    (err) => { assert.match(err.message, /different chain/); assert.equal(err.definite, true); return true; },
+  );
 });

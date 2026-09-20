@@ -472,11 +472,9 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
   /**
    * Which chain is at the other end, and what to do about it.
    *
-   * **The node's identity is the node's own word, and nothing else.** The previous version fell
-   * back to `settings.chainId` when `rand_chainId` failed — and the real backend always supplies
-   * one, so a node that simply did not implement `rand_chainId` and `rand_getGenesisHash` came
-   * back looking like a perfect match and bypassed the whole wrong-chain refusal. Omitting two
-   * methods is not a proof of anything.
+   * **The node's identity is the node's own word, and nothing else** — `chainIdentity` asks the
+   * node and reports exactly what it said, with no fallback to anything this wallet already
+   * believes. Omitting two methods is not a proof of anything.
    *
    *   store knows   node supplies              verdict
    *   ───────────   ───────────────────────    ──────────────────────────────────────────────────
@@ -506,13 +504,22 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
           got: { chainId: identity.chainId, genesis: identity.genesis },
         };
       }
+      // A first scan adopts what the node supplied, in full.
       return { kind: 'adopt' };
     }
 
+    // `got` is built field by field on purpose: `identity` carries `reachable`, which is this
+    // file's business and not something a banner should ever be handed.
+    const got = { chainId: identity.chainId, genesis: identity.genesis };
     const missing = (knows.chainId && !has.chainId) || (knows.genesis && !has.genesis);
-    if (missing) return wrong({ chainId: identity.chainId, genesis: identity.genesis, unknown: true });
-    if (knows.chainId && String(st.chain_id) !== String(identity.chainId)) return wrong(identity);
-    if (knows.genesis && st.genesis !== identity.genesis) return wrong(identity);
+    if (missing) return wrong({ ...got, unknown: true });
+    if (knows.chainId && String(st.chain_id) !== String(identity.chainId)) return wrong(got);
+    if (knows.genesis && st.genesis !== identity.genesis) return wrong(got);
+    // item 7: a store that knows only one half learns the other from a node whose known half
+    // matches — otherwise a chain-id-only store accepts chain 13 with ANY genesis for ever.
+    if (knows.chainId !== knows.genesis && (has.chainId && has.genesis)) {
+      return { kind: 'ok', adoptMissing: { chainId: identity.chainId, genesis: identity.genesis } };
+    }
     return { kind: 'ok' };
   }
 
@@ -533,7 +540,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    * submissions and the block annotations, because they describe a chain this wallet is no longer
    * on. The vault, the settings and the keys are untouched — this is a cache reset, not a wipe.
    */
-  async function rescan(spendKey, { forChain = false, onProgress, signal } = {}, settingsOverride) {
+  async function rescan(spendKey, { forChain = false, onProgress, signal, client } = {}, settingsOverride) {
     // Written as a RESET, never merged: on a lost compare-and-set race the reset is re-applied to
     // whatever the winner wrote, not folded into it. Merging a reset is how it silently no-ops.
     let written = null;
@@ -571,7 +578,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       throw err;
     }
     onReset?.(written.reset_epoch);
-    return scan(spendKey, { onProgress, signal }, settingsOverride);
+    return scan(spendKey, { onProgress, signal, client }, settingsOverride);
   }
 
   /**
@@ -579,10 +586,13 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    * receives `{phase, scanned, total}`. Saves the store and returns it. `signal` aborts the paging
    * and rejects with an AbortError.
    */
-  async function scan(spendKey, { onProgress, signal } = {}, settingsOverride) {
+  async function scan(spendKey, { onProgress, signal, client: given } = {}, settingsOverride) {
     throwIfAborted(signal);
     const s = settingsOverride || (await currentSettings());
-    const client = await rpcFor(s);
+    // One client for the whole scan. The caller may hand in the one it verified — and should:
+    // resolving a fresh one here would let a node saved mid-scan collect a verdict it never
+    // earned (see backend-wasm.js's `runScan`).
+    const client = given || (await rpcFor(s));
     const st = await loadStore();
     const before = { ...st };
     const head0 = checkHead(await client.head({ signal })).height;
@@ -613,6 +623,11 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     // A first scan adopts the identity the node gave in full; `chainVerdict` has already refused
     // anything less than that.
     if (verdict.kind === 'adopt') { st.chain_id = identity.chainId; st.genesis = identity.genesis; }
+    // A store that knew only one half now learns the other, persisted with this scan's page.
+    if (verdict.adoptMissing) {
+      st.chain_id = verdict.adoptMissing.chainId;
+      st.genesis = verdict.adoptMissing.genesis;
+    }
 
     const { deposits, through: attestThrough, unknown: bridgeUnknown } = await rebuildableDeposits(client, spendKey, st, head0, signal, onProgress);
     // The tree's leaf count, when the node serves it: a page may never claim a leaf beyond it.
@@ -766,19 +781,36 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    * Not reachable from the wasm shells: a bundle proof peaks at ~5.6 GB and wasm32 stops at
    * 4 GiB, so `backend-wasm.js` refuses before it ever gets here (see `send.canProve`).
    */
-  async function send(spendKey, { to, amountUnits, feeUnits, wait = true, onPhase, signal }, settingsOverride) {
+  async function send(spendKey, { to, amountUnits, feeUnits, wait = true, onPhase, signal, client: given, identity }, settingsOverride) {
     const s = settingsOverride || (await currentSettings());
-    const client = await rpcFor(s);
+    // The client the caller verified, for every step: the fee, the anchor, the witnesses, the
+    // broadcast and every retry. A transfer assembled from two nodes is not a transfer.
+    const client = given || (await rpcFor(s));
     onPhase?.('select');
-    const st = await scan(spendKey, { signal }, s);
+    const st = await scan(spendKey, { signal, client }, s);
     const need = toUnits(amountUnits) + toUnits(feeUnits);
     const sel = await c.selectInputs(st.notes, need.toString(), 0);
     onPhase?.('witness');
     const { anchor, paths } = await anchorAndWitnesses(client, sel.chosen, signal);
     onPhase?.('prove');
+    // The chain this proof commits to is the chain that was VERIFIED, not the one in settings.
+    // They can diverge silently: a store that knows chain 13 scans happily whatever
+    // `settings.chainId` says, because the configured id is only compared when an identity is
+    // first adopted. A proof bound to the wrong chain id is refused by the chain at best.
+    const provenChainId = identity && identity.chainId !== null && identity.chainId !== undefined
+      ? identity.chainId
+      : st.chain_id;
+    if (provenChainId === null || provenChainId === undefined) {
+      throw new Error('this wallet has no verified chain to prove against');
+    }
+    if (st.chain_id !== null && String(st.chain_id) !== String(provenChainId)) {
+      const err = new Error('This node is on a different chain — switch node or rescan.');
+      err.definite = true;
+      throw err;
+    }
     const res = await c.proveTransfer({
       spend_key: spendKey,
-      chain_id: s.chainId,
+      chain_id: provenChainId,
       to,
       amount: String(amountUnits),
       fee: String(feeUnits),

@@ -1683,3 +1683,208 @@ test('the core’s next_index cannot carry the leaf cursor past the page it was 
   await backend.sync.scan(() => {});
   assert.equal(storage.local.get('notes').scanned_index, 1, 'the cursor took the core’s word over the page');
 });
+
+// =============================================================== fix round 5 ====================
+// The reviewer's probes, as tests. Two scripted nodes on DISTINCT URLs, a reply held open and
+// released by hand, and the per-URL RPC log asserted line by line — because the defect is not
+// "the wrong answer" but "the right answer recorded against the wrong node".
+
+const URL_A = 'http://127.0.0.1:7400';
+const URL_B = 'http://127.0.0.1:7401';
+
+/**
+ * A fetch that serves several nodes, one per URL, and records every call as `port:method` in one
+ * shared log — so a test can assert not only what was asked but *whom*.
+ */
+function nodeFarm(nodes) {
+  const log = [];
+  const held = [];
+  const fn = async (url, init) => {
+    const body = JSON.parse(init.body);
+    const port = String(url).split(':').pop();
+    log.push(`${port}:${body.method}`);
+    const node = nodes[url];
+    if (!node) throw new Error(`no node at ${url}`);
+    const answer = node[body.method];
+    if (answer === undefined) {
+      return { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, error: { code: -32601, message: `unknown method ${body.method}` } }) };
+    }
+    let result;
+    try { result = typeof answer === 'function' ? await answer(body.params) : answer; } catch (err) {
+      return { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: err.message } }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, result }) };
+  };
+  fn.log = log;
+  fn.held = held;
+  fn.callsTo = (port) => log.filter((line) => line.startsWith(`${port}:`));
+  return fn;
+}
+
+/** The methods an honest node of a given chain answers. `hold` gates one method open. */
+function node({ chainId, genesis, height = 100, hold }) {
+  const base = {
+    rand_getHead: { height, hash: 'ff'.repeat(32) },
+    rand_getTreeInfo: { next_index: 0, root: '0'.repeat(64), nullifiers: 0 },
+    rand_getCommitments: [],
+    rand_getNullifiers: [],
+    rand_getBridgeState: { enabled: false },
+    rand_getAssets: [],
+    rand_estimateFee: '1000000',
+    rand_status: { height, peer_count: 1, syncing: false },
+    rand_chainId: chainId,
+    rand_getGenesisHash: genesis,
+    rand_mint: `0x${'ab'.repeat(32)}`,
+  };
+  if (hold) base[hold.method] = async () => { await hold.gate; return hold.value; };
+  return base;
+}
+
+test('PROBE: a scan of node A must not mark node B verified when B was saved mid-scan', async () => {
+  // The scan runs on the SESSION signal, so it keeps going while the user is on Settings — an
+  // ordinary journey. The verdict used to be stamped on whatever URL was current when the scan
+  // RETURNED, so B was recorded `ok` without ever being asked an identity question.
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const fetch = nodeFarm({
+    [URL_A]: node({ chainId: 13, genesis: GENESIS, hold: { method: 'rand_getCommitments', gate, value: [] } }),
+    [URL_B]: node({ chainId: 14, genesis: 'cc'.repeat(32) }),
+  });
+  const storage = mapStorage();
+  const { backend } = build({ storage, fetch });
+  await backend.settings.set({ rpcUrl: URL_A });
+  await backend.wallet.create(PASSWORD);
+
+  const scanning = backend.sync.scan(() => {});
+  await drain();
+  await backend.settings.set({ rpcUrl: URL_B }); // the user saves a new node mid-scan
+  release();
+  const result = await scanning;
+
+  // The scan of A is still a valid scan of A…
+  assert.equal(result.head, 100);
+  // …but it says so, so the UI can re-scan against B rather than show A's tip as B's.
+  assert.equal(result.staleNode, true, 'the result did not say it came from the node that is no longer current');
+
+  // …and B has been told nothing about itself.
+  assert.deepEqual(fetch.callsTo('7401'), [], 'the scan talked to B at all');
+
+  // The probe's payload: the faucet must now ask B who it is, and refuse.
+  await assert.rejects(() => backend.faucet.request(), /different chain/);
+  assert.deepEqual(
+    fetch.callsTo('7401'),
+    ['7401:rand_getGenesisHash', '7401:rand_chainId'],
+    'the faucet acted on B without asking it anything',
+  );
+  assert.equal(fetch.log.includes('7401:rand_mint'), false, 'it minted on the chain-14 node');
+});
+
+test('PROBE: the same for rescan', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const fetch = nodeFarm({
+    [URL_A]: node({ chainId: 13, genesis: GENESIS, hold: { method: 'rand_getCommitments', gate, value: [] } }),
+    [URL_B]: node({ chainId: 14, genesis: 'cc'.repeat(32) }),
+  });
+  const storage = mapStorage();
+  const { backend } = build({ storage, fetch });
+  await backend.settings.set({ rpcUrl: URL_A });
+  await backend.wallet.create(PASSWORD);
+
+  const rescanning = backend.sync.rescan();
+  await drain();
+  await backend.settings.set({ rpcUrl: URL_B });
+  release();
+  await rescanning;
+
+  await assert.rejects(() => backend.faucet.request(), /different chain/);
+  assert.equal(fetch.log.includes('7401:rand_mint'), false, 'a rescan of A blessed B');
+});
+
+test('PROBE: a URL change DURING the identity check does not send the mint to the new node', async () => {
+  // The gate captured one client at entry; the caller then did its own `await rpcClient()`, which
+  // after a URL change returns a different node. Log ended `7400:…, 7400:…, 7401:rand_mint`.
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const fetch = nodeFarm({
+    [URL_A]: node({ chainId: 13, genesis: GENESIS, hold: { method: 'rand_chainId', gate, value: 13 } }),
+    [URL_B]: node({ chainId: 14, genesis: 'cc'.repeat(32) }),
+  });
+  // No prior scan: A is unverified, so the faucet's own gate does the identity round trip — which
+  // is exactly the window this probe opens.
+  const storage = mapStorage();
+  const { backend } = build({ storage, fetch });
+  await backend.settings.set({ rpcUrl: URL_A });
+  await backend.wallet.create(PASSWORD);
+
+  const minting = backend.faucet.request();
+  await drain();
+  await backend.settings.set({ rpcUrl: URL_B }); // changes while the identity round trip is open
+  release();
+  await minting.catch(() => {});
+
+  assert.equal(fetch.log.includes('7401:rand_mint'), false, 'it minted on the node it never verified');
+  assert.ok(fetch.log.includes('7400:rand_mint'), 'the mint did not go to the node the gate verified');
+});
+
+test('PROBE: a URL change during the identity check does not price the fee on the new node', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const fetch = nodeFarm({
+    [URL_A]: node({ chainId: 13, genesis: GENESIS, hold: { method: 'rand_chainId', gate, value: 13 } }),
+    [URL_B]: node({ chainId: 14, genesis: 'cc'.repeat(32) }),
+  });
+  const storage = mapStorage();
+  const { backend } = build({ storage, fetch });
+  await backend.settings.set({ rpcUrl: URL_A });
+  await backend.wallet.create(PASSWORD);
+
+  const pricing = backend.send.maxSendable({ asset: 0 });
+  await drain();
+  await backend.settings.set({ rpcUrl: URL_B });
+  release();
+  await pricing.catch(() => {});
+
+  assert.equal(fetch.log.includes('7401:rand_estimateFee'), false,
+    'a chain-14 fee was fetched for chain-13 notes');
+  assert.ok(fetch.log.includes('7400:rand_estimateFee'), 'the fee did not come from the verified node');
+});
+
+test('a store that knows only its chain id learns its genesis from a node whose id matches', async () => {
+  // What round 3's code persisted. Without this it accepts chain 13 with ANY genesis for ever —
+  // and this replaces the coverage deleted in round 4.
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+  storage.local.set('notes', { ...storage.local.get('notes'), chain_id: 13, genesis: null });
+
+  const answer = await backend.sync.scan(() => {});
+  assert.equal(answer.wrongChain, undefined, 'a matching chain id was called a mismatch');
+  assert.equal(storage.local.get('notes').genesis, GENESIS, 'the missing half was never learned');
+
+  // …and from then on a different genesis on the same id is caught.
+  const other = build({ storage, fetch: chainFetch({ genesis: 'cc'.repeat(32), chainId: 13 }) }).backend;
+  assert.ok((await other.sync.scan(() => {})).wrongChain, 'chain 13 with any genesis was accepted');
+});
+
+test('a store that knows only its chain id refuses a node with a different one', async () => {
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+  storage.local.set('notes', { ...storage.local.get('notes'), chain_id: 13, genesis: null });
+
+  const moved = build({ storage, fetch: chainFetch({ genesis: GENESIS, chainId: 14 }) }).backend;
+  const answer = await moved.sync.scan(() => {});
+  assert.ok(answer.wrongChain, 'a chain-id-only store accepted another chain');
+  assert.equal(answer.wrongChain.got.chainId, 14);
+  assert.equal(storage.local.get('notes').genesis, null, 'it adopted the wrong chain’s genesis');
+});
+
+test('a store that knows only its genesis learns its chain id the same way', async () => {
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+  storage.local.set('notes', { ...storage.local.get('notes'), chain_id: null, genesis: GENESIS });
+  await backend.sync.scan(() => {});
+  assert.equal(storage.local.get('notes').chain_id, 13);
+});
