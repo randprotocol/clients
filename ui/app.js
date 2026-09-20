@@ -287,6 +287,7 @@ function ensureBuiltinScreensLoaded() {
       import('./screens/send.js'),
       import('./screens/withdraw.js'),
       import('./screens/settings.js'),
+      import('./screens/explore.js'),
     ]);
   }
   return screensLoaded;

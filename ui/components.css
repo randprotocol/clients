@@ -1287,4 +1287,15 @@ body.wide .narrow { max-width: 440px; margin: 0 auto; }
   background: var(--bg-soft);
   color: var(--text-mute);
 }
+
+/* ------------------------------------------------------------------------- the explore tree --- */
+/* A collapsible JSON tree (ui/screens/explore.js's Lookup result): one `<details>` per
+   object/array, native disclosure rather than a hand-rolled expand/collapse control. */
+.tree, .tree-children { display: flex; flex-direction: column; gap: var(--s-1); font-size: 13px; }
+.tree-children { padding-left: var(--s-4); border-left: 1px solid var(--border-soft); margin-top: var(--s-1); }
+.tree summary { cursor: pointer; color: var(--text-strong); }
+.tree summary::marker { color: var(--text-soft); }
+.tree-key { color: var(--text-soft); }
+.tree-summary { color: var(--text-soft); margin-left: var(--s-1); }
+.tree-null { color: var(--text-soft); font-style: italic; }
 .detail-empty .ic svg { width: 20px; height: 20px; }
