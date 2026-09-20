@@ -1076,7 +1076,13 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      * never called**: in wasm it would grind for minutes and then abort with an out-of-memory
      * trap, after the user had watched a progress bar for it.
      */
-    async send() {
+    /**
+     * `(req, onPhase, options?)` — the contract's signature, spelled out even though this shell
+     * refuses before it uses any of it. The desktop backend copies this file's shape, and a method
+     * that quietly declared no parameters would be copied that way too.
+     */
+    async send(req, onPhase, options = {}) {
+      void req; void onPhase; void options;
       // The hold is taken even though this shell gives up immediately: it is the rule, not the
       // special case — a transfer is user-initiated work the idle timer must never cut in half,
       // and the desktop backend's minutes-long proof reuses this exact wrapper.

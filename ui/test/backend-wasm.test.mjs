@@ -1888,3 +1888,17 @@ test('a store that knows only its genesis learns its chain id the same way', asy
   await backend.sync.scan(() => {});
   assert.equal(storage.local.get('notes').chain_id, 13);
 });
+
+test('send.send declares the contract signature the desktop backend will copy', async () => {
+  const { backend } = build();
+  await backend.wallet.create(PASSWORD);
+  assert.equal(backend.send.send.length, 2, '(req, onPhase, options = {}) — options has a default');
+  // …and it still refuses, taking its arguments without using them.
+  const phases = [];
+  const ac = new AbortController();
+  await assert.rejects(
+    () => backend.send.send({ asset: 0, to: ADDRESS, amount: '1' }, (p) => phases.push(p), { signal: ac.signal }),
+    (err) => { assert.equal(err.definite, true); return true; },
+  );
+  assert.deepEqual(phases, []);
+});
