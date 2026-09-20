@@ -513,78 +513,65 @@ moves focus to the detail pane's title; closing returns it to the row that opene
 
 ---
 
-### Task 1.8: Scan with `rand_getCompactBlocks`, not prefix-paged nullifiers
+### Task 1.8: Two residuals from Task 1.6 (the compact-blocks scan rewrite is DEFERRED)
 
-Added 2026-09-20 after Task 1.6's review found that prefix-paging `rand_getNullifiers`
-(`rand_getNullifiers(fromHeight, limit)`, an untrusted node's reply validated only as a *prefix*
-of the true set) makes a first sync cost about one request per 500 blocks (109 requests at
-chain 13's then-height 54 489) and cannot, even when honest, let the wallet CHECK that a page
-covers exactly the range it asked for — only bound how far a bad page can poison the cursor.
-`rand_getCompactBlocks(from_height, to_height)` already exists on the node
-(`crates/randprotocol-node/src/rpc.rs`) and answers per block: that block's commitments *and*
-nullifiers together, contiguous from `from_height`, with the first block always returned whole
-however many notes or nullifiers it holds. A reply is then checkable against the request by
-height alone — no prefix reasoning, no per-scan span cap standing in for a proof the wallet does
-not have — and a block with ≥ 500 nullifiers (Task 1.6's `NodeLimitError` dead end) is no longer
-special.
+Originally scoped as "scan with `rand_getCompactBlocks` instead of prefix-paged nullifiers", to
+close the last narrow gap in Task 1.6's node-trust boundary: prefix-paged `rand_getNullifiers`
+replies are validated only as a *prefix* of the true set (bounded, self-healing via rescan, never
+able to cause fund loss — the chain itself refuses a spend of an already-nullified note — but not
+literally checkable against the request). `rand_getCompactBlocks(from_height, to_height)` would
+make a reply checkable by height alone and remove the `NodeLimitError` dead end for a block with
+≥ 500 nullifiers.
 
-**Depends on:** Task 1.6 closed (this task reuses its chain-identity and validation machinery,
-does not re-litigate it). If Task 0.7 (chain 14) has landed first, re-check
-`rand_getCompactBlocks`'s reply shape against that chain's RPC docs before writing validators —
-the wire-format rule changed there (amounts as strings; indices/counts/heights as numbers).
+**DEFERRED 2026-09-20**, before any code was written, after the assigned implementer's mandated
+pre-flight read of the node's real handler (`core/vendor/fullnode/crates/randprotocol-node/src/rpc.rs:28-31,1063-1089`,
+pinned by node-side tests at `rpc.rs:3594-3619`, documented at `docs/rpc.md:146-172`) found
+`MAX_COMPACT_BLOCKS = 128` — not "a few thousand" as this task assumed when it was written. At
+chain 13's reference height 54 489 that makes the rewrite cost **426** requests for a first sync
+against today's **≈150** (`ceil(54489/500)` nullifier pages + leaf-paged commitments), a ~2.8×
+regression, and shrinks one scan's safe reach from 256 000 heights to 65 536. The cap has been
+128 since the RAND rename (`git log -S MAX_COMPACT_BLOCKS`) and predates every fleet this project
+has used, so it is not a chain-14 artifact that might lift on its own.
 
-**Files:** `ui/engine/wallet.js` (the scan loop), `ui/engine/validate.js` (`checkCompactBlocks`
-replacing `checkCommitments`/`checkNullifiers` for the paged range; keep the two page-shape
-validators for `select_inputs`-style calls that still use them elsewhere), `ui/engine/rpc.js` (a
-`compactBlocks(from, to)` method), `ui/test/engine-wallet.test.mjs`, `ui/test/validate.test.mjs`,
-`web/wallet/test/core.integration.test.mjs`.
+**Ruling:** given the residual risk the rewrite would close is already bounded and self-healing
+(Task 1.6, five rounds), and closing it fully would cost real, permanent first-sync time on an
+assumption already wrong once, this repository does NOT take that trade now. If request count or
+the `NodeLimitError` edge case ever becomes a real complaint, revisit with one of the priced
+options on record in `task-1.8-report.md` §3: (a) accept `RANGE = 128` and the 426-request cost;
+(b) add JSON-RPC batching to `ui/engine/rpc.js` (the node accepts batches up to 20 —
+`MAX_BATCH`, `rpc.rs:38-40` — giving 22 round trips at H = 54 489, but `rpc.js` has no batch path
+today: new wire code and a new id↔request trust surface, its own task); (c) a hybrid — compact
+blocks for a recent window only, prefix-paging below it. None is scheduled.
 
-**Interfaces — Produces:** the scan loop pages `rand_getCompactBlocks(scanned_height, min(scanned_height + RANGE, head))`
-in one call per `RANGE` (a few thousand) blocks instead of one call per `HEIGHT_SPAN` (500)
-blocks; each reply's blocks must be a contiguous run starting at exactly `from_height` (a gap or
-a wrong starting height is a `NodeReplyError`, nothing persisted); a block's commitments feed the
-existing `scan_page` trial-decryption path and its nullifiers feed the existing spent-note
-marking, both keyed by that block's own height rather than by an untrusted page cursor; the
-per-scan request cap and the chain-identity/`wrongChain`/`behind`/rescan machinery from Task 1.6
-are unchanged and still gate this loop. `NodeLimitError` for "too many nullifiers in one block"
-is deleted — a compact block answers every nullifier it has, whatever the count.
+**What Task 1.8 actually builds** is the two items below, carried forward from Task 1.6's final
+review (round 5, cap adjudicated 2026-09-20) as REQUIRED regardless of the scan mechanism above,
+because both are load-bearing for Task 3.1 (the Tauri desktop backend reuses this engine and can
+really send/mint):
 
-- [ ] **Step 1: Failing tests** — `checkCompactBlocks` rejects a non-contiguous run, a run not
-  starting at `from`, a block whose height exceeds `to`, and a block payload above the same
-  per-field size bounds Task 1.6 set for commitments/nullifiers; the scan loop test: an honest
-  chain of 54 489 blocks with sparse activity reaches the tip in a small, fixed number of
-  requests (assert the exact count for a `RANGE` you choose, e.g. `ceil(54489 / RANGE)`); a
-  hostile reply skipping a height range is refused, nothing persisted, cursor unmoved; a block
-  with 5 000 nullifiers is applied in one reply with no special-case error path.
-- [ ] **Step 2:** `node --test --test-timeout=20000 ui/test/engine-wallet.test.mjs ui/test/validate.test.mjs` — FAIL.
-- [ ] **Step 3:** Implement; delete the now-dead `HEIGHT_SPAN`/`MAX_HEIGHTS_PER_SCAN`
-  empty-page-counts-as-read logic and `checkNullifiers`'s prefix-trust rule; write the new rule's
-  proof sketch in a comment the way Task 1.6's was written, this time against
-  `rand_getCompactBlocks`'s real contiguity guarantee rather than a prefix.
-- [ ] **Step 4:** All of `ui/test` and `web/wallet/test` PASS under a watchdog; the real-wasm
-  integration test in `web/wallet/test/core.integration.test.mjs` still passes; update
-  `web/wallet/README.md`'s "Known limitations" section (the ≥500-nullifiers dead end is gone;
-  restate the first-sync request count).
-- [ ] **Step 5:** Commit `engine: scan with rand_getCompactBlocks — checkable ranges, no
-  per-block nullifier limit, a fast first sync`.
-
-**Carried forward from Task 1.6's final review (round 5, cap adjudicated 2026-09-20):** two items
-ruled REQUIRED here rather than spent on a 6th round of 1.6, because they live in exactly the
-functions this task rewrites, and both are load-bearing for Task 3.1 (the Tauri desktop backend
-reuses this engine and can really send/mint). (A) `ui/engine/wallet.js`'s `send()` calls its
-post-commit re-scan (`await scan(spendKey, {}, s)`) without the verified client, so that one call
-resolves its own client instead of reusing the one `requireVerifiedChain()` verified for the
-send — thread it through, with a test. (B) `scan`/`rescan` record `recordVerdict(url, 'ok')` with
-no identity, so `requireVerifiedChain()` afterwards returns `identity: undefined` and `send()`
-silently falls back to the store's `chain_id` — safe today only because that chain id was itself
-just verified by the same scan, but undocumented; either record the identity on the scan path too
-or state the fallback explicitly in `ui/backend.js`'s JSDoc, and add a test that pins whichever is
-chosen. Also, while these functions are open: fix the stale `chainIdentity` docstring
-(`ui/engine/wallet.js:441-448`, still describes a deleted fallback); correct
-`task-1.6-report.md`'s two remaining wrong line-citations; make `ui/screens/home.js`'s rescan path
-re-scan on a `staleNode` result the way its scan path already does; update the `chainState` map's
-type comment in `ui/engine/backend-wasm.js`; and make `scan`'s and `rescan`'s `scan-done`
-broadcast-on-`staleNode` behaviour consistent with each other.
+- [ ] **(A)** `ui/engine/wallet.js`'s `send()` calls its post-commit re-scan
+  (`await scan(spendKey, {}, s)`) without the verified client, so that one call resolves its own
+  client instead of reusing the one `requireVerifiedChain()` verified for the send — thread it
+  through, with a test (mirror Task 1.6's `p1-scan-race.mjs`-style probe: after a send, the
+  post-commit re-scan's RPC calls all target the verified client's URL even if `settings.rpcUrl`
+  changed in the same tick).
+- [ ] **(B)** `scan`/`rescan` record `recordVerdict(url, 'ok')` with no identity, so
+  `requireVerifiedChain()` afterwards returns `identity: undefined` and `send()` silently falls
+  back to the store's `chain_id` — safe today only because that chain id was itself just verified
+  by the same scan, but undocumented. Either record the identity on the scan path too (preferred)
+  or state the fallback explicitly in `ui/backend.js`'s JSDoc, and add a test that pins whichever
+  is chosen and would fail loudly if a future refactor removed the fallback.
+- [ ] While these functions are open, in the same commit(s): fix the stale `chainIdentity`
+  docstring (`ui/engine/wallet.js:441-448`, still describes a deleted settings-fallback); correct
+  `task-1.6-report.md`'s two remaining wrong line-citations (`chainIdentity` is `:449-470`, not
+  `:449-484`; `chainVerdict` is `:490-524`, not `:490-545`); make `ui/screens/home.js`'s rescan
+  path re-scan on a `staleNode` result the way its scan path already does (`home.js:377-385` vs
+  `:338`); update the `chainState` map's type comment in `ui/engine/backend-wasm.js:288` (it omits
+  `'anonymous'`/`identity`); and make `scan`'s and `rescan`'s `scan-done` broadcast-on-`staleNode`
+  behaviour consistent with each other.
+- [ ] `node --test --test-timeout=20000 ui/test web/wallet/test` PASS under a watchdog (exits by
+  itself, nothing left running); rename guard clean; commit
+  `engine: thread the verified client through send()'s re-scan; record identity with a scan
+  verdict`.
 
 ---
 
