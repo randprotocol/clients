@@ -187,6 +187,8 @@
 /* A note explaining an action (why Send is off) belongs under the row it explains, not hugging
    the left edge of a 720 px column. */
 .actions + .caption { text-align: center; margin-top: var(--s-1); }
+/* An RPL asset can carry two: why Send is off, and why Withdraw is (see screens/asset.js). */
+.actions + .caption + .caption { text-align: center; margin-top: var(--s-1); }
 
 /* ============================================================================= hero ========= */
 /* The balance card: the only large gradient surface in the app. A radial highlight from the top
@@ -994,6 +996,18 @@ body.wide .toast-area { bottom: var(--s-6); }
 /* Indeterminate: a short arc chasing its tail while the prover has no percentage yet. */
 .ring.spin .ring-bar { stroke-dasharray: 82 245; animation: ring-spin 1.2s linear infinite; }
 @keyframes ring-spin { to { stroke-dashoffset: -326.73px; } }
+
+/* A burn is TWO proofs, proved one after the other, so the withdraw flow shows two rings side by
+   side (ui/screens/withdraw.js). One ring that does not move for three and a half minutes is
+   indistinguishable from a wallet that has hung, so `data-state` is load-bearing rather than
+   decorative: 'pending' is dimmed and still, 'active' spins, 'done' is a complete ring with a
+   tick in it. */
+.ring.sm { width: 72px; height: 72px; }
+.ring[data-state="pending"] { opacity: 0.45; }
+.ring[data-state="pending"] .ring-bar { stroke: var(--border); filter: none; }
+.ring[data-state="done"] .ring-bar { stroke-dasharray: 326.73; stroke-dashoffset: 0; }
+.ring[data-state="done"] .ring-label svg { width: 22px; height: 22px; color: var(--accent); }
+.cluster.rings { gap: var(--s-4); justify-content: center; }
 
 /* ============================================================================ progress ========= */
 /* A thin sync progress bar, shown under the hero balance while a scan is running. Determinate

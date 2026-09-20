@@ -307,6 +307,61 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.ok(storage.local.get('assets'));
   });
 
+  scoped('assets.list carries a registry asset’s origin chain and token through', async () => {
+    const fetch = stubFetch({
+      rand_getAssets: () => [{ index: 1, chain: 2, token: 'aa'.repeat(32), asset_id: 'dd'.repeat(32) }],
+    });
+    const { backend } = build({ fetch });
+    await backend.wallet.create(PASSWORD);
+    const list = await backend.assets.list();
+    // `chain` is the asset's ORIGIN chain, and a burn's destination must be exactly it
+    // (`BridgeState::check_burn`). It used to be dropped here, which left the withdraw flow
+    // asking the user to re-enter a fact the node had already answered.
+    assert.equal(list[1].chain, 2);
+    assert.equal(list[1].token, 'aa'.repeat(32));
+    // RAND is not a registry asset and has neither.
+    assert.equal('chain' in list[0], false);
+  });
+
+  scoped('assets.list invents no chain for an asset the registry does not list', async () => {
+    const { backend, storage } = build();
+    await backend.wallet.create(PASSWORD);
+    const notes = storage.local.get('notes');
+    notes.notes = [{ index: 0, amount: '7', asset: 3, spent: false, pending: null, height: 1, cm: 'x', time: 1 }];
+    storage.local.set('notes', notes);
+    const list = await backend.assets.list();
+    assert.equal(list[1].index, 3);
+    assert.equal('chain' in list[1], false, 'a guessed origin chain would send a burn nowhere');
+  });
+
+  scoped('bridge.state and bridge.canWithdraw both refuse a chain with no bridge', async () => {
+    const { backend } = build();
+    await backend.wallet.create(PASSWORD);
+    // The default stub node answers `{enabled: false}` — a chain with no bridge at all.
+    assert.deepEqual(await backend.bridge.state(), { enabled: false, chains: [] });
+    const can = await backend.bridge.canWithdraw();
+    assert.equal(can.ok, false);
+    assert.ok(can.reason, 'and says why, in words meant for the user');
+  });
+
+  scoped('bridge.state derives its chains from the node’s emitters map', async () => {
+    const fetch = stubFetch({
+      rand_getBridgeState: () => ({
+        enabled: true,
+        emitter: 'ab'.repeat(32),
+        emitters: { 2: 'aa'.repeat(20), 4: 'bb'.repeat(20) },
+        guardian_set_index: 0,
+        guardians: [],
+        burn_sequence: 3,
+        next_index: 2,
+        assets: [{ index: 1, chain: 2, token: 'cc'.repeat(32), asset_id: 'dd'.repeat(32) }],
+      }),
+    });
+    const { backend } = build({ fetch });
+    await backend.wallet.create(PASSWORD);
+    assert.deepEqual(await backend.bridge.state(), { enabled: true, chains: [2, 4] });
+  });
+
   scoped('assets.list still answers when the registry RPC fails', async () => {
     const fetch = stubFetch({ rand_getAssets: () => { throw new Error('no bridge here'); } });
     const { backend } = build({ fetch });

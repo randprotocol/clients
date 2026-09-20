@@ -225,6 +225,35 @@
  *    fire-and-forget — the shell ignores whatever it returns and never waits on it.
  *    A backend may still postpone a lock it has decided on while a *user-initiated* operation is
  *    in flight (a transfer being proved), so a proof is never cut in half; a scan does not count.
+ *  - `bridge?` — a whole OPTIONAL GROUP, for withdrawing a registry (RPL) asset back to its origin
+ *    chain as a `BridgeBurn`. Present only on a shell that can carry one out; most cannot, which
+ *    is why it is here and not in BACKEND_SHAPE. **A screen must feature-detect the group before
+ *    it offers anything** — `ctx.backend.bridge?.canWithdraw` — and then honour `canWithdraw()`'s
+ *    answer, exactly as the send flow honours `send.canProve()`.
+ *     · `bridge.state()` → `{enabled, chains}`. Whether this chain has a bridge at all, and which
+ *       destination chain ids it knows. `chains` is **derived**: the node's `rand_getBridgeState`
+ *       has no such field — it carries an `emitters` map keyed by chain id, and that map's keys
+ *       are the answer (see `checkBridgeState`, ui/engine/validate.js).
+ *     · `bridge.canWithdraw()` → `{ok, reason?}`, in the same shape and with the same rules as
+ *       `send.canProve()`. It asks two questions in a fixed order: can this device prove at all
+ *       (a burn is TWO bundle proofs, ~3.5 minutes; the answer is `send.canProve()`'s own 5.5 GB
+ *       sentence, verbatim), and is the bridge enabled. Both must pass. On every wasm shell the
+ *       first is unconditionally false, so this is too, and no node is asked.
+ *     · `bridge.estimate({asset, amount, relayerFee, toChain, to})` → `{fee, relayerFee, receive,
+ *       change, feeChange, proofs}`. `fee` is RAND (a burn pays for both of its bundles);
+ *       `relayerFee` is in units of the asset and is taken **on the destination chain**, out of
+ *       `amount`, so `receive` is `amount - relayerFee`. `proofs` is 2 and comes from the plan,
+ *       not from a constant. Rejects — before anything is proved — for asset 0, a zero amount, a
+ *       relayer fee larger than the amount, an asset the chain's registry does not list, and any
+ *       note selection that cannot be built.
+ *     · `bridge.withdraw(req, onPhase, options?)` → `{hash}`. `req` is `estimate`'s object plus an
+ *       optional `fee` (pass back whatever `estimate` returned, so the plan and the proof agree).
+ *       `onPhase` receives `'selecting' | 'witness' | 'proving' | 'proving-asset' | 'submitting' |
+ *       'confirming'`. `'proving-asset'` is the two-bundle proof: the core proves the asset bundle
+ *       and then the RAND fee bundle sequentially and reports nothing in between, so one phase
+ *       covers both and the UI shows two rings for the whole of it. Rejections carry `definite`
+ *       exactly as `send.send`'s do, and every refusal that can be known — including the two
+ *       bridge facts — is made before a proof starts, because a wrong one costs the user both.
  *  - `dispose?()` — OPTIONAL, on the **backend itself**, not a group. Releases whatever it holds
  *    outside its own object (a BroadcastChannel, a port, a watcher). The shell calls it from
  *    `destroy()`, last, after the wallet session has ended; it must be idempotent and must not

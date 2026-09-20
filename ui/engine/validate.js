@@ -326,9 +326,36 @@ export function checkSubmitted(method, reply) {
   return hashField(method, 'the transaction hash', reply);
 }
 
-/** `rand_getBridgeState` → `{enabled, …}`; only `enabled` is read. */
+/**
+ * `rand_getBridgeState` → `{enabled, chains, assets}`.
+ *
+ * **There is no `chains` field on the wire.** The node's own reply (fullnode
+ * `randprotocol-node/src/rpc.rs`, `"rand_getBridgeState"`) is `{enabled, emitter, emitters:
+ * {"<chain>": "<addr hex>"}, guardian_set_index, guardians, burn_sequence, next_index, assets}`
+ * when a bridge is configured, and the single field `{enabled: false}` when it is not. The set of
+ * chains this bridge knows is the **keys of `emitters`**, derived here so nobody goes looking for
+ * a summary the node never sends.
+ *
+ * `assets` is the same registry `rand_getAssets` returns — both are built by the node's one
+ * `assets_json(&bridge)` — and it is what says whether a given asset index was ever deposited.
+ * `burnIsPossible` (backend-shared.js) reads exactly these two fields.
+ */
 export function checkBridgeState(reply) {
   const m = 'rand_getBridgeState';
   const state = objectReply(m, reply);
-  return { enabled: state.enabled === true };
+  const enabled = state.enabled === true;
+  const chains = [];
+  const emitters = state.emitters;
+  if (emitters && typeof emitters === 'object' && !Array.isArray(emitters)) {
+    for (const key of Object.keys(emitters).slice(0, 4096)) {
+      const id = Number(key);
+      // A bridge chain id is a u16 on the chain's side (`Action::BridgeBurn.to_chain`).
+      if (Number.isSafeInteger(id) && id >= 0 && id <= 0xffff) chains.push(id);
+    }
+    chains.sort((a, b) => a - b);
+  }
+  // Absent on a bridge-less chain, and validated exactly as the registry call's own rows are —
+  // one implementation, because they are one reply.
+  const assets = state.assets === undefined || state.assets === null ? [] : checkAssets(state.assets);
+  return { enabled, chains, assets };
 }

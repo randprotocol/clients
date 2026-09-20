@@ -342,3 +342,149 @@ test('a real send leaks neither the spend key nor the transaction key', async ()
   const onTheWire = JSON.stringify([env.fetch.requests, env.platform.copied || []]);
   assert.equal(onTheWire.includes(TX_KEY), false, 'the transaction key reached the network or the clipboard');
 });
+
+// ---------------------------------------------------- the bridge: two proofs are expensive -----
+//
+// `wallet-core` does no I/O, so it cannot know whether the bridge is enabled or whether an asset
+// is in the registry — and the chain refuses a burn for either. A burn is TWO bundle proofs,
+// about three and a half minutes, so the whole value of these gates is that they fire **before**
+// `plan_burn`, let alone `prove_burn`. Each case below asserts the refusal AND that the core was
+// never asked to plan or prove.
+
+const BURN_TX = `0x${'b4'.repeat(32)}`;
+
+/** The bridge state of a chain whose registry lists `indices`. */
+function bridgeOn(indices) {
+  return {
+    enabled: true,
+    emitter: 'ab'.repeat(32),
+    emitters: { 2: 'aa'.repeat(20) },
+    guardian_set_index: 0,
+    guardians: [],
+    burn_sequence: 0,
+    next_index: indices.length + 1,
+    assets: indices.map((index) => ({ index, chain: 2, token: 'cc'.repeat(32), asset_id: 'dd'.repeat(32) })),
+  };
+}
+
+const RPL_NOTE = {
+  index: 1, note: '11'.repeat(112), cm: '1b'.repeat(32), nf: '1c'.repeat(32),
+  amount: '500', asset: 1, time: 7, from: '00'.repeat(32), height: 7, spent: false, pending: null,
+};
+
+/** A core that can plan and prove a burn, recording what it was asked. */
+function burningCore(overrides = {}) {
+  return provingCore({
+    plan_burn: (p) => ({
+      inputs: (p.notes || []).filter((n) => Number(n.asset) === Number(p.asset)),
+      fee_inputs: (p.notes || []).filter((n) => Number(n.asset) === 0),
+      change: '100', fee_change: '4990000000', fee: String(p.fee ?? '10000000'), proofs: 2,
+    }),
+    prove_burn: (p) => ({
+      tx_hex: 'cd'.repeat(200), hash: BURN_TX, time: 7, asset: p.asset, amount: String(p.amount),
+      relayer_fee: String(p.relayer_fee), to_chain: p.to_chain, to: String(p.to).toLowerCase(),
+      change: '100', fee: String(p.fee), fee_change: '4990000000', tier: 14, proof_bytes: 2_832_141,
+      tx_bytes: 2_838_112,
+      nullifiers: ['a', 'b', 'c', 'd'], commitments: ['e', 'f', 'g', 'h'], tx_keys: ['i', 'j', 'k', 'l'],
+      spent_indices: [1, 0], proofs: 2,
+    }),
+    ...overrides,
+  });
+}
+
+async function burnableWallet(bridgeState, coreOverrides = {}) {
+  const env = build({
+    core: burningCore(coreOverrides),
+    fetch: sendableFetch({
+      rand_getBridgeState: () => bridgeState,
+      rand_sendTransaction: () => BURN_TX,
+      // An enabled bridge makes a scan walk blocks looking for attestations; this node has none.
+      rand_getBlockByHeight: () => ({ timestamp_ms: 1_700_000_000_000, transactions: [], actions: [] }),
+    }),
+  });
+  await env.backend.wallet.create(PASSWORD);
+  await env.backend.sync.scan(() => {});
+  const notes = env.storage.local.get('notes');
+  notes.notes = [NOTE, RPL_NOTE];
+  env.storage.local.set('notes', notes);
+  return env;
+}
+
+const plannedOrProved = (core) => core.calls.filter(([m]) => m === 'plan_burn' || m === 'prove_burn');
+
+test('BRIDGE: a disabled bridge refuses a withdrawal before anything is planned or proved', async () => {
+  const env = await burnableWallet({ enabled: false });
+  await assert.rejects(
+    () => env.backend.bridge.withdraw({ asset: 1, amount: '400', relayerFee: '0', toChain: 2, to: '00'.repeat(12) + '11'.repeat(20) }, () => {}),
+    (err) => {
+      assert.match(err.message, /no bridge/i);
+      assert.equal(err.definite, true, 'a chain with no bridge is not a maybe');
+      return true;
+    },
+  );
+  assert.deepEqual(plannedOrProved(env.core), [], 'two proofs were nearly spent on a chain with no bridge');
+  assert.equal(env.fetch.requests.some((r) => r.body.method === 'rand_sendTransaction'), false);
+});
+
+test('BRIDGE: an asset the registry does not list refuses the same way, and names what is listed', async () => {
+  const env = await burnableWallet(bridgeOn([4]));
+  await assert.rejects(
+    () => env.backend.bridge.withdraw({ asset: 1, amount: '400', relayerFee: '0', toChain: 2, to: '00'.repeat(12) + '11'.repeat(20) }, () => {}),
+    (err) => {
+      assert.match(err.message, /not in this chain's registry/);
+      assert.match(err.message, /registered: 4/);
+      assert.equal(err.definite, true);
+      return true;
+    },
+  );
+  assert.deepEqual(plannedOrProved(env.core), []);
+});
+
+test('BRIDGE: RAND is refused before the node is asked for anything at all', async () => {
+  const env = await burnableWallet(bridgeOn([1]));
+  await assert.rejects(() => env.backend.bridge.withdraw({ asset: 0, amount: '400', toChain: 2, to: '11'.repeat(32) }, () => {}), /not a bridged asset/);
+  assert.deepEqual(plannedOrProved(env.core), []);
+});
+
+test('BRIDGE: estimate is the core’s own plan, and reports two proofs from the plan', async () => {
+  const env = await burnableWallet(bridgeOn([1]));
+  const est = await env.backend.bridge.estimate({ asset: 1, amount: '400', relayerFee: '100', toChain: 2, to: '11'.repeat(32) });
+  assert.equal(est.fee, '10000000', 'gas::BRIDGE_BURN_FEE, from the core’s constants');
+  assert.equal(est.receive, '300', 'the relayer fee comes out of the amount, on the other chain');
+  assert.equal(est.relayerFee, '100');
+  assert.equal(est.proofs, 2);
+  // A relayer fee larger than the amount never reaches the core.
+  const before = env.core.calls.length;
+  await assert.rejects(() => env.backend.bridge.estimate({ asset: 1, amount: '400', relayerFee: '401', toChain: 2, to: '11'.repeat(32) }), /relayer fee/i);
+  assert.equal(env.core.calls.slice(before).some(([m]) => m === 'plan_burn'), false);
+});
+
+test('BRIDGE: a real withdrawal proves against the VERIFIED chain and reports its phases', async () => {
+  const env = await burnableWallet(bridgeOn([1]));
+  const phases = [];
+  const to = '0'.repeat(24) + '11'.repeat(20);
+  const result = await env.backend.bridge.withdraw(
+    { asset: 1, amount: '400', relayerFee: '100', toChain: 2, to },
+    (p) => phases.push(p),
+  );
+  assert.equal(result.hash, BURN_TX);
+  assert.equal(result.txKey, undefined, 'a burn addresses no note to anybody, so there is no key');
+  assert.deepEqual(phases, ['selecting', 'witness', 'proving-asset', 'submitting', 'confirming']);
+
+  const [, proved] = env.core.calls.find(([m]) => m === 'prove_burn');
+  assert.equal(proved.chain_id, 13, 'the chain that was checked, not the one in settings');
+  assert.equal(proved.asset, 1);
+  assert.equal(proved.to, to, 'the recipient’s bytes are carried through untouched');
+  assert.equal(proved.fee, '10000000');
+  assert.equal(proved.inputs.length, 1, 'the asset bundle');
+  assert.equal(proved.fee_inputs.length, 1, 'and the RAND bundle that pays for both');
+  assert.equal(Number(proved.inputs[0].note.asset), 1);
+  assert.equal(Number(proved.fee_inputs[0].note.asset), 0);
+  // One anchor for BOTH bundles, and a witness path per input of each.
+  assert.equal(proved.anchor_root, ROOT);
+  assert.equal(proved.inputs[0].path.length, 32);
+  assert.equal(proved.fee_inputs[0].path.length, 32);
+
+  assertKeyNeverLeaked(env);
+  assertKeyNeverLeaked(env, SPEND_KEY);
+});

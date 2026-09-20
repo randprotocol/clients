@@ -221,10 +221,40 @@ export function coreApi(core) {
     pendingCleared: (note, read_through) => call('pending_cleared', { note, read_through }),
     selectInputs: (notes, need, asset = 0) => call('select_inputs', { notes, need: String(need), asset }),
     proveTransfer: (req) => call('prove_transfer', req),
+    // A bridge burn's two halves. `plan_burn` selects BOTH bundles' notes (the asset to burn and
+    // the RAND to pay with) and costs nothing; `prove_burn` proves both, sequentially, and costs
+    // about 3.5 minutes. `fee` is optional on the plan (it defaults to the chain's
+    // `BRIDGE_BURN_FEE`) and **required** on the proof — see core/crates/wallet-core.
+    planBurn: (req) => call('plan_burn', req),
+    proveBurn: (req) => call('prove_burn', req),
     openWithTxKey: (cm, envelope, tx_key) => call('open_with_tx_key', { cm, envelope, tx_key }),
     formatAmount: (units) => call('format_amount', { units: String(units) }),
     parseAmount: (text) => call('parse_amount', { text }),
   };
+}
+
+/**
+ * The chain id a proof commits to: the chain that was **verified**, not the one in settings.
+ *
+ * They can diverge silently — a store that knows chain 13 scans happily whatever
+ * `settings.chainId` says, because the configured id is only compared when an identity is first
+ * adopted — and a proof bound to the wrong chain id is refused by the chain at best. Shared by
+ * `send` and `burn` so the two cannot drift; a burn costs two proofs, so getting this wrong there
+ * is twice as expensive.
+ */
+function provenChainIdOf(st, identity) {
+  const proven = identity && identity.chainId !== null && identity.chainId !== undefined
+    ? identity.chainId
+    : st.chain_id;
+  if (proven === null || proven === undefined) {
+    throw new Error('this wallet has no verified chain to prove against');
+  }
+  if (st.chain_id !== null && String(st.chain_id) !== String(proven)) {
+    const err = new Error('This node is on a different chain — switch node or rescan.');
+    err.definite = true;
+    throw err;
+  }
+  return proven;
 }
 
 export function makeWallet({ core, store, rpc, settings, annotate = true, onReset }) {
@@ -795,21 +825,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     onPhase?.('witness');
     const { anchor, paths } = await anchorAndWitnesses(client, sel.chosen, signal);
     onPhase?.('prove');
-    // The chain this proof commits to is the chain that was VERIFIED, not the one in settings.
-    // They can diverge silently: a store that knows chain 13 scans happily whatever
-    // `settings.chainId` says, because the configured id is only compared when an identity is
-    // first adopted. A proof bound to the wrong chain id is refused by the chain at best.
-    const provenChainId = identity && identity.chainId !== null && identity.chainId !== undefined
-      ? identity.chainId
-      : st.chain_id;
-    if (provenChainId === null || provenChainId === undefined) {
-      throw new Error('this wallet has no verified chain to prove against');
-    }
-    if (st.chain_id !== null && String(st.chain_id) !== String(provenChainId)) {
-      const err = new Error('This node is on a different chain — switch node or rescan.');
-      err.definite = true;
-      throw err;
-    }
+    const provenChainId = provenChainIdOf(st, identity);
     const res = await c.proveTransfer({
       spend_key: spendKey,
       chain_id: provenChainId,
@@ -854,6 +870,104 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     return submission;
   }
 
+  /**
+   * Plan, prove and submit a **bridge burn**: `amount` of a registry (RPL) asset leaves the
+   * shielded pool for `to` on `to_chain`, paid for out of a second bundle of RAND notes.
+   * `onPhase` receives 'select' | 'witness' | 'prove-asset' | 'submit' | 'wait'.
+   *
+   * This is `send()`'s shape with three differences, all of them the chain's:
+   *
+   *   1. **Two bundles, one anchor.** `plan_burn` selects the asset notes and the RAND fee notes
+   *      separately, and `prove_burn` takes ONE `anchor_height`/`anchor_root` for both — so the
+   *      witnesses for both lists are fetched in a single `anchorAndWitnesses` call, which is
+   *      also the only way to be sure the two halves agree about the tree.
+   *   2. **Two proofs, ~3.5 minutes, one opaque call.** `prove_burn` proves the asset bundle and
+   *      then the fee bundle, sequentially (proving them at once would need ~11 GB and OOM the
+   *      machines that only just clear the gate). The core reports nothing in between, so the
+   *      phase stays `'prove-asset'` — named for the bundle that is proved first — for the whole
+   *      of it, rather than this file inventing progress it cannot observe.
+   *   3. **Nothing is addressed to anybody inside the pool.** Every output of both bundles comes
+   *      back to this wallet; the recipient lives in the action's `to_chain`/`to`. So there is no
+   *      `to_pk`, no per-recipient transaction key to hand over, and the submission record is
+   *      what Activity shows.
+   *
+   * The two facts only the chain knows — the bridge is enabled, and this asset is in the registry
+   * — are NOT checked here. `wallet-core` does no I/O and neither does this function's plan step;
+   * `bridge.withdraw` (backend-shared.js) checks them off `rand_getBridgeState` before any of this
+   * runs, because getting them wrong costs the user both proofs for a transaction the chain was
+   * always going to refuse.
+   */
+  async function burn(spendKey, {
+    asset, amountUnits, relayerFeeUnits = '0', toChain, to, feeUnits,
+    wait = true, onPhase, signal, client: given, identity,
+  }, settingsOverride) {
+    const s = settingsOverride || (await currentSettings());
+    const client = given || (await rpcFor(s));
+    onPhase?.('select');
+    const st = await scan(spendKey, { signal, client }, s);
+    const plan = await c.planBurn({
+      notes: st.notes,
+      asset: Number(asset),
+      amount: String(amountUnits),
+      // Always explicit: the UI has already shown this number to the user as part of an estimate,
+      // and `prove_burn` has no default of its own, so the plan and the proof must agree.
+      ...(feeUnits === undefined || feeUnits === null ? {} : { fee: String(feeUnits) }),
+    });
+    const assetInputs = plan.inputs || [];
+    const feeInputs = plan.fee_inputs || [];
+    onPhase?.('witness');
+    // One fetch for both lists, so both bundles are folded against the same root — `prove_burn`
+    // takes a single anchor and the ledger checks both bundles against it.
+    const { anchor, paths } = await anchorAndWitnesses(client, [...assetInputs, ...feeInputs], signal);
+    onPhase?.('prove-asset');
+    const provenChainId = provenChainIdOf(st, identity);
+    const res = await c.proveBurn({
+      spend_key: spendKey,
+      chain_id: provenChainId,
+      asset: Number(asset),
+      amount: String(amountUnits),
+      relayer_fee: String(relayerFeeUnits ?? '0'),
+      to_chain: Number(toChain),
+      to: String(to),
+      fee: String(plan.fee),
+      anchor_height: anchor.height,
+      anchor_root: anchor.root,
+      inputs: assetInputs.map((note, i) => ({ note, path: paths[i] })),
+      fee_inputs: feeInputs.map((note, i) => ({ note, path: paths[assetInputs.length + i] })),
+      profile: 'production',
+    });
+    // The last point at which nothing has left this device.
+    throwIfAborted(signal);
+    onPhase?.('submit');
+    const hash = checkSubmitted('rand_sendTransaction', await client.sendTransaction(res.tx_hex));
+    const fresh = await loadStore();
+    // Both bundles' inputs, asset notes first then RAND — `spent_indices`' documented order.
+    for (const n of fresh.notes) if (res.spent_indices.includes(n.index)) n.pending = res.time;
+    const submission = {
+      hash, kind: 'burn', asset: res.asset, amount: res.amount, relayer_fee: res.relayer_fee,
+      // `to` comes back normalized (lower-cased, `0x` stripped); the bytes are unchanged.
+      to_chain: res.to_chain, to: res.to,
+      change: res.change, fee: res.fee, fee_change: res.fee_change, time: res.time, tier: res.tier,
+      proof_bytes: res.proof_bytes, spent_indices: res.spent_indices,
+      status: 'pending', created_ms: Date.now(),
+    };
+    fresh.submissions.unshift(submission);
+    await persist(fresh);
+    if (wait) {
+      onPhase?.('wait');
+      const committed = await waitForTransaction(client, hash, COMMIT_TIMEOUT_MS);
+      if (committed) {
+        const after = await loadStore();
+        const sub = after.submissions.find((x) => x.hash === hash);
+        if (sub) { sub.status = 'committed'; sub.height = committed.height; }
+        await persist(after);
+        // The SAME client the gate verified, for the same reason `send` does it.
+        await scan(spendKey, { client }, s);
+      }
+    }
+    return submission;
+  }
+
   /** Testnet faucet: RAND into a note only this wallet can open. */
   async function faucet(spendKey, address, settingsOverride) {
     const s = settingsOverride || (await currentSettings());
@@ -872,7 +986,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
   }
 
   return {
-    scan, rescan, send, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable,
+    scan, rescan, send, burn, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable,
     // Exposed so a backend can prove the chain WITHOUT scanning — the gate in front of send and
     // faucet is two RPC calls, not a page of leaves.
     chainIdentity, chainVerdict,

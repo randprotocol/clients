@@ -19,8 +19,30 @@ function skeletonMarkup(ctx) {
 }
 
 const HINT_ID = 'asset-send-hint';
+const WITHDRAW_HINT_ID = 'asset-withdraw-hint';
 
-function actionsMarkup(asset) {
+/**
+ * A registry asset cannot be *transferred*, but it can be **withdrawn**: burned back to its origin
+ * chain across the bridge. That is `#withdraw/<index>`, and it is offered only where the backend
+ * says it can actually be carried out — the `bridge` group is optional in the contract, and its
+ * `canWithdraw()` is false on every shell that cannot produce two bundle proofs. Where it says no,
+ * the reason goes in the action's place, exactly as Send's does.
+ */
+function withdrawMarkup(withdraw, index) {
+  if (!withdraw) return { button: '', hint: '' };
+  if (withdraw.ok) {
+    return {
+      button: raw(h`<button class="btn-round" type="button" data-go="withdraw/${index}"><span class="ic">${raw(icons.bridge())}</span><span class="cap">Withdraw</span></button>`),
+      hint: '',
+    };
+  }
+  return {
+    button: '',
+    hint: raw(h`<p class="caption" id="${WITHDRAW_HINT_ID}" data-role="withdraw-hint">${withdraw.reason || 'Withdrawals are not available here.'}</p>`),
+  };
+}
+
+function actionsMarkup(asset, withdraw = null) {
   const canSend = asset.index === 0;
   // `aria-disabled`, not `disabled`: a `disabled` button is skipped by the keyboard entirely, so
   // the reason it is off (the hint below, tied on with aria-describedby) would never be announced
@@ -29,15 +51,18 @@ function actionsMarkup(asset) {
     ? h`<button class="btn-round" type="button" data-go="send/0"><span class="ic">${raw(icons.arrowUpRight())}</span><span class="cap">Send</span></button>`
     : h`<button class="btn-round" type="button" aria-disabled="true" aria-describedby="${HINT_ID}"><span class="ic">${raw(icons.arrowUpRight())}</span><span class="cap">Send</span></button>`);
   const hint = raw(canSend ? '' : h`<p class="caption" id="${HINT_ID}" data-role="rpl-hint">${RPL_SEND_DISABLED_TEXT}</p>`);
+  const w = withdrawMarkup(withdraw, asset.index);
   return raw(h`
     <div class="actions">
       <button class="btn-round" type="button" data-go="receive"><span class="ic">${raw(icons.arrowDownLeft())}</span><span class="cap">Receive</span></button>
       ${sendBtn}
+      ${w.button}
     </div>
-    ${hint}`);
+    ${hint}
+    ${w.hint}`);
 }
 
-function bodyMarkup(ctx, { asset, activity, assetsByIndex }) {
+function bodyMarkup(ctx, { asset, activity, assetsByIndex, withdraw }) {
   const rplChip = raw(asset.index >= 1 ? h`<span class="chip xs">RPL</span>` : '');
   const pending = raw(asset.pending && asset.pending !== '0'
     ? h`<span class="sub">+${formatUnits(asset.pending, 6, asset.decimals)} ${asset.symbol} pending</span>`
@@ -52,7 +77,7 @@ function bodyMarkup(ctx, { asset, activity, assetsByIndex }) {
       <span class="amount">${formatUnits(asset.balance ?? '0', 6, asset.decimals)}<span class="unit">${asset.symbol}</span></span>
       ${pending}
     </div>
-    ${actionsMarkup(asset)}
+    ${actionsMarkup(asset, withdraw)}
     <h2 class="section-title">Activity</h2>
     ${activitySection}`;
 }
@@ -86,7 +111,18 @@ registerScreen('asset', {
     const assetsByIndex = new Map(assets.map((a) => [a.index, a]));
     const activity = (sync.activity || []).filter((a) => a.asset === index).sort((a, b) => b.time - a.time);
 
-    root.innerHTML = bodyMarkup(ctx, { asset, activity, assetsByIndex });
+    // Only a registry asset has anywhere to be withdrawn *to*, and only a shell with the optional
+    // `bridge` group can take it there — so RAND and a bridge-less shell ask nothing at all. A
+    // failure to answer is "no", never "yes": it must never show an action that cannot work.
+    let withdraw = null;
+    if (index >= 1 && ctx.backend.bridge && typeof ctx.backend.bridge.canWithdraw === 'function') {
+      try { withdraw = (await ctx.backend.bridge.canWithdraw()) || null; } catch (err) {
+        withdraw = { ok: false, reason: (err && err.message) || 'The bridge could not be asked.' };
+      }
+      if (!ctx.isCurrent()) return;
+    }
+
+    root.innerHTML = bodyMarkup(ctx, { asset, activity, assetsByIndex, withdraw });
     for (const el of root.querySelectorAll('.avatar[data-hue]')) el.style.setProperty('--hue', el.dataset.hue);
     // When this screen is the content pane's list (a transaction opened from it on a wide
     // screen), its rows carry the selection marker like any other list's.

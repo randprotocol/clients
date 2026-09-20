@@ -76,7 +76,7 @@
 import { encryptSecret, decryptSecret, checkVault, isVaultRecordError } from './crypto.js';
 import { makeRpc, isAllowedRpcMethod } from './rpc.js';
 import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, BUNDLE_INPUTS, HEIGHT_SPAN } from './wallet.js';
-import { checkFee, checkAssets, checkSubmitted } from './validate.js';
+import { checkFee, checkAssets, checkSubmitted, checkBridgeState } from './validate.js';
 
 /**
  * The one key under `storage.session` — the unlocked wallet session, and the only place the
@@ -118,12 +118,54 @@ const FALLBACK = Object.freeze({
   decimals: 9,
   autoLockMin: 15,
   theme: 'system',
+  // `gas::BRIDGE_BURN_FEE`, 0.01 RAND — the floor `plan_burn` and `prove_burn` both enforce.
+  // Normally read from the core's `version` reply (`bridge_burn_fee`), like every other constant
+  // here; this is only for a core that does not report it.
+  bridgeBurnFee: '10000000',
 });
 
 /** The same sentence ui/screens/asset.js shows on a registry asset; the ledger admits only
  *  asset-0 transfers, on every shell regardless of whether it can prove. Duplicated as a string
  *  rather than imported, because engine/ must not depend on a screen. */
 export const RPL_SEND_DISABLED_TEXT = 'RPL transfers are not available on this network.';
+
+/** Shown verbatim when `rand_getBridgeState` says this chain has no bridge at all. */
+export const BRIDGE_DISABLED_TEXT = 'This chain has no bridge, so there is nothing to withdraw to.';
+
+/** Asset 0 is RAND. `wallet-core`'s `RAND_NOT_BRIDGED`, in the user's words rather than the
+ *  chain's — this one is refused before the core is ever asked. */
+export const RAND_NOT_BRIDGED_TEXT = 'RAND is not a bridged asset, so it cannot be withdrawn.';
+
+/**
+ * The two facts only the chain knows, checked before a burn is proved: **the bridge is enabled**,
+ * and **this asset is in the registry**. Returns `{ok: true}` or `{ok: false, reason}`.
+ *
+ * A direct port of the fullnode client's own `burn_is_possible`
+ * (`core/vendor/fullnode/crates/randprotocol-client/src/wallet.rs`, 18 lines), which `submit_burn`
+ * calls before proving for exactly this reason. `wallet-core` deliberately does not do it —
+ * it performs no I/O at all — so unless it happens here it does not happen anywhere, and a typo
+ * costs the user **two proofs, about three and a half minutes**, for a transaction the chain
+ * refuses as `Bridge(Disabled)` / `Bridge(UnknownAsset)`.
+ *
+ * Deliberately NOT the rest of `BridgeState::check_burn` — the destination must be the asset's own
+ * chain, the recipient must be shaped for it — which is the bridge's own policy and stays stated in
+ * one place (upstream's comment says so, and `wallet-core` repeats the decision). The screen does
+ * screen `to`'s shape for friendliness; that is a courtesy, not a second copy of the rule.
+ *
+ * `state` is `checkBridgeState`'s output, i.e. `{enabled, chains, assets}`.
+ */
+export function burnIsPossible(state, asset) {
+  if (!state || state.enabled !== true) return { ok: false, reason: BRIDGE_DISABLED_TEXT };
+  const rows = Array.isArray(state.assets) ? state.assets : [];
+  const index = Number(asset);
+  if (rows.some((r) => Number(r && r.index) === index)) return { ok: true };
+  const known = rows.map((r) => Number(r && r.index)).filter((i) => Number.isFinite(i));
+  const where = known.length === 0 ? ' (the registry is empty)' : ` (registered: ${known.join(', ')})`;
+  return {
+    ok: false,
+    reason: `Asset ${index} is not in this chain's registry, so no note of it was ever deposited${where}.`,
+  };
+}
 
 /**
  * How long the *next* attempt waits, given how many have already failed.
@@ -217,7 +259,9 @@ function uiActivity(row, st) {
   return base;
 }
 
-export function makeSharedBackend({ core, storage, platform, fetch: fetchImpl, locks, broadcast, canProve, executeSend } = {}) {
+export function makeSharedBackend({
+  core, storage, platform, fetch: fetchImpl, locks, broadcast, canProve, executeSend, executeWithdraw,
+} = {}) {
   if (!core || typeof core.call !== 'function') throw new Error('makeSharedBackend needs a core with call()');
   if (!storage || typeof storage.get !== 'function' || !storage.session) throw new Error('makeSharedBackend needs a storage');
   if (!platform || typeof platform.name !== 'string' || !platform.name) throw new Error('makeSharedBackend needs a platform with a name');
@@ -1055,14 +1099,23 @@ export function makeSharedBackend({ core, storage, platform, fetch: fetchImpl, l
 
       for (const index of [...byIndex.keys()].sort((a, b) => a - b)) {
         const row = byIndex.get(index);
-        out.push({
+        const asset = {
           index,
           id: typeof row.asset_id === 'string' && row.asset_id ? row.asset_id : `rpl-${index}`,
           symbol: `RPL#${index}`,
           decimals: FALLBACK.decimals,
           balance: (balances.get(index) || 0n).toString(),
           pending: '0',
-        });
+        };
+        // The asset's **origin chain**, and the token address on it, straight from the registry
+        // row. They used to be dropped here. `chain` is what the Withdraw flow preselects as the
+        // destination — a burn's destination must be the asset's own chain
+        // (`BridgeState::check_burn`), so a wallet that discarded it would be asking the user to
+        // re-enter a fact the node had already told it. Both are omitted, rather than guessed,
+        // for an asset held in notes that the registry does not list.
+        if (Number.isInteger(Number(row.chain))) asset.chain = Number(row.chain);
+        if (typeof row.token === 'string' && row.token) asset.token = row.token;
+        out.push(asset);
       }
       return out;
     },
@@ -1191,6 +1244,148 @@ export function makeSharedBackend({ core, storage, platform, fetch: fetchImpl, l
     },
   };
 
+  // ------------------------------------------------------------------------------ the bridge --
+  /** The chain's burn fee floor, from the core's own constants — never a number this file picks. */
+  async function burnFee() {
+    const k = await constants();
+    const fee = toUnits(k.bridge_burn_fee || '0');
+    return fee > 0n ? fee : toUnits(FALLBACK.bridgeBurnFee);
+  }
+
+  /** `rand_getBridgeState`, validated, off the client the chain gate proved. */
+  async function bridgeStateFull() {
+    const { client } = await requireVerifiedChain();
+    return { client, state: checkBridgeState(await client.bridgeState()) };
+  }
+
+  function definite(message) {
+    const err = new Error(message);
+    err.definite = true;
+    return err;
+  }
+
+  /**
+   * OPTIONAL in the Backend contract (ui/backend.js): present only where a shell supplied an
+   * `executeWithdraw`. Everything here is shell-independent; the one shell-specific thing — how a
+   * burn that CAN be proved is actually carried out — is that parameter, exactly as `executeSend`
+   * is for a transfer.
+   *
+   * The whole reason this group exists rather than the screen calling `rpc.call` itself: a burn
+   * costs **two proofs, about three and a half minutes**, and there are two ways to spend that on
+   * a transaction the chain will refuse outright — a disabled bridge and an unregistered asset.
+   * `wallet-core` cannot check either (it does no I/O), so `withdraw` checks both, off the node,
+   * before `executeWithdraw` is called at all (`burnIsPossible`, above).
+   */
+  const bridge = {
+    /**
+     * `{enabled, chains}` — the chains this bridge can burn to.
+     *
+     * `chains` is derived from the node's `emitters` map; there is no `chains` field on the wire.
+     * See `checkBridgeState` (engine/validate.js) for the reply's real shape.
+     */
+    async state() {
+      const { state } = await bridgeStateFull();
+      return { enabled: state.enabled, chains: state.chains };
+    },
+
+    /**
+     * Whether a withdrawal can be attempted **on this device, on this chain**, in that order.
+     *
+     * `canProve()` answers first and without touching the network — the same question, and the
+     * same sentence, a transfer asks (`send.canProve`): a burn is two bundle proofs, so a shell
+     * that cannot produce one certainly cannot produce two. Since `canProve()` is unconditionally
+     * false on every wasm shell, so is this, and no node is ever asked there.
+     */
+    async canWithdraw() {
+      const prove = await canProve();
+      if (!prove || !prove.ok) {
+        return { ok: false, reason: (prove && prove.reason) || 'Proving is not available here.' };
+      }
+      let state;
+      try {
+        ({ state } = await bridgeStateFull());
+      } catch (err) {
+        return { ok: false, reason: (err && err.message) || 'The bridge could not be asked.' };
+      }
+      if (!state.enabled) return { ok: false, reason: BRIDGE_DISABLED_TEXT };
+      return { ok: true };
+    },
+
+    /**
+     * What a withdrawal would cost and what would arrive: `{fee, relayerFee, receive, change,
+     * proofs}`. The real coin selection, over this wallet's real notes, via the core's own
+     * `plan_burn` — so a selection that cannot be built fails here, for nothing, instead of after
+     * two proofs.
+     *
+     * `fee` is the RAND fee (a burn pays for both of its bundles); `relayerFee` is in units of the
+     * asset and is deducted **on the destination chain**, out of `amount` — so `receive` is
+     * `amount - relayerFee` and the two never add up to more than the burn.
+     */
+    async estimate(req = {}) {
+      const asset = Number(req.asset);
+      if (!Number.isInteger(asset) || asset < 1) throw new Error(RAND_NOT_BRIDGED_TEXT);
+      const amount = toUnits(req.amount);
+      const relayerFee = toUnits(req.relayerFee ?? '0');
+      if (amount <= 0n) throw new Error('A withdrawal of zero moves nothing.');
+      // Refused here, before `plan_burn` is asked anything: the chain's own rule
+      // (`relayer_fee <= amount`), and the one the user is most likely to trip.
+      if (relayerFee > amount) {
+        throw new Error('The relayer fee is more than the amount being withdrawn.');
+      }
+      const { state } = await bridgeStateFull();
+      const possible = burnIsPossible(state, asset);
+      if (!possible.ok) throw definite(possible.reason);
+      const fee = req.fee === undefined || req.fee === null ? await burnFee() : toUnits(req.fee);
+      const st = await loadNotes();
+      const plan = await c.planBurn({
+        notes: st.notes || [], asset, amount: amount.toString(), fee: fee.toString(),
+      });
+      return {
+        fee: String(plan.fee),
+        relayerFee: relayerFee.toString(),
+        receive: (amount - relayerFee).toString(),
+        change: String(plan.change ?? '0'),
+        feeChange: String(plan.fee_change ?? '0'),
+        // From the plan, never hard-coded: it is the chain's number of proofs, not this file's.
+        proofs: Number(plan.proofs) || 2,
+      };
+    },
+
+    /**
+     * `(req, onPhase, options?)` — `{asset, amount, relayerFee, toChain, to, fee?}` in, `{hash}`
+     * out. Phases: `'selecting' | 'witness' | 'proving' | 'proving-asset' | 'submitting' |
+     * 'confirming'`.
+     *
+     * The order of the gates is the point. `canProve()` first, because it needs no node and its
+     * answer can never be wrong; then the verified-chain gate, which is every other operation's;
+     * then the two bridge facts, off the client that gate proved. Only then is a proof started.
+     */
+    async withdraw(req = {}, onPhase, options = {}) {
+      // A burn is user-initiated work that takes minutes; the idle timer must not cut it in half.
+      const release = holdUnlock();
+      try {
+        const { ok, reason } = await canProve();
+        if (!ok) throw definite(reason);
+        const { client, url, identity } = await requireVerifiedChain();
+        const asset = Number(req.asset);
+        if (!Number.isInteger(asset) || asset < 1) throw definite(RAND_NOT_BRIDGED_TEXT);
+        const state = checkBridgeState(await client.bridgeState());
+        const possible = burnIsPossible(state, asset);
+        if (!possible.ok) throw definite(possible.reason);
+        const fee = req.fee === undefined || req.fee === null ? (await burnFee()).toString() : String(req.fee);
+        return await executeWithdraw({
+          req: { ...req, asset, fee }, onPhase, options, client, url, identity, reason, bridgeState: state,
+          // `engine.burn` narrowed to the one capability, for the same reasons `sendTransfer` is
+          // (see this file's header): one `makeWallet`, one writer of the note store.
+          sendBurn: (spendKey, opts) => engine.burn(spendKey, opts),
+          requireUnlocked, burnFee,
+        });
+      } finally {
+        release();
+      }
+    },
+  };
+
   const rpc = {
     /** The raw escape hatch — but only into this chain's own namespaces. */
     async call(method, params = []) {
@@ -1217,5 +1412,11 @@ export function makeSharedBackend({ core, storage, platform, fetch: fetchImpl, l
     closeChannel();
   }
 
-  return { wallet, sync, assets, send, faucet, rpc, settings, platform, dispose };
+  const backend = { wallet, sync, assets, send, faucet, rpc, settings, platform, dispose };
+  // `bridge` is OPTIONAL in the contract and is not in BACKEND_SHAPE: a shell that supplied no
+  // `executeWithdraw` simply does not have the group, and every screen feature-detects it
+  // (`ctx.backend.bridge?.canWithdraw`). Both real shells do supply one — the wasm shell's always
+  // refuses, which is honest rather than absent, and proves the shape out.
+  if (typeof executeWithdraw === 'function') backend.bridge = bridge;
+  return backend;
 }

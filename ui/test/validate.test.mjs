@@ -158,10 +158,26 @@ test('submitted: a transaction hash, with or without 0x', () => {
   rejects(() => checkSubmitted('rand_sendTransaction', null), /rand_sendTransaction/);
 });
 
-test('bridge state: only `enabled`, and only when it is exactly true', () => {
-  assert.deepEqual(checkBridgeState({ enabled: true, extra: 1 }), { enabled: true });
-  assert.deepEqual(checkBridgeState({ enabled: 'yes' }), { enabled: false });
+test('bridge state: `enabled` only when exactly true, and the chains are derived', () => {
+  assert.deepEqual(checkBridgeState({ enabled: true, extra: 1 }), { enabled: true, chains: [], assets: [] });
+  assert.deepEqual(checkBridgeState({ enabled: 'yes' }), { enabled: false, chains: [], assets: [] });
   rejects(() => checkBridgeState(null), /not an object/);
+
+  // There is NO `chains` field on the wire: the node sends an `emitters` map keyed by chain id,
+  // and its keys are the answer. Sorted, numeric, and only the ids a u16 `to_chain` could hold.
+  const state = checkBridgeState({
+    enabled: true,
+    emitters: { 4: 'aa'.repeat(20), 2: 'bb'.repeat(20), '99999': 'cc'.repeat(20), notanumber: 'dd' },
+    assets: [{ index: 1, chain: 2, token: 'ee'.repeat(32), asset_id: 'ff'.repeat(32) }],
+  });
+  assert.deepEqual(state.chains, [2, 4], 'out-of-range and non-numeric keys are not chains');
+  assert.equal(state.assets.length, 1);
+  assert.equal(state.assets[0].chain, 2, 'the registry rows come through as `rand_getAssets` gives them');
+
+  // A `chains: [...]` that a node volunteered is ignored — it is not a field this chain has.
+  assert.deepEqual(checkBridgeState({ enabled: true, chains: [7, 8] }).chains, []);
+  // And a malformed registry is still refused, by the registry call's own validator.
+  rejects(() => checkBridgeState({ enabled: true, assets: [{ index: 'one' }] }), /rand_getAssets/);
 });
 
 test('the primitives are usable on their own', () => {

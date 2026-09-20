@@ -19,7 +19,13 @@ function defaultSettings() {
 function defaultAssets() {
   return [
     { index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0' },
-    { index: 1, id: 'wrapped-eth', name: 'Wrapped Ether', symbol: 'wETH', decimals: 9, balance: '120000000', pending: '0' },
+    // A registry asset carries its **origin chain** (and the token address on it), exactly as the
+    // real `assets.list()` now threads them through from `rand_getAssets`. Chain 2 is an EVM
+    // chain, so the Withdraw flow validates a 20-byte address against it.
+    {
+      index: 1, id: 'wrapped-eth', name: 'Wrapped Ether', symbol: 'wETH', decimals: 9,
+      balance: '120000000', pending: '0', chain: 2, token: 'ee'.repeat(32),
+    },
   ];
 }
 
@@ -73,6 +79,8 @@ function createBackend(initial = {}, overrides = {}) {
     head: 1000,
     lastSyncMs: Date.now(),
     rescans: [],
+    bridgeEnabled: true,
+    bridgeChains: [2, 3, 4],
     ...initial,
   };
 
@@ -199,6 +207,45 @@ function createBackend(initial = {}, overrides = {}) {
     request: () => ({ hash: `0x${'11'.repeat(32)}` }),
   };
 
+  // OPTIONAL in the contract (ui/backend.js) — a whole group most shells do not have. Present here
+  // so the Withdraw flow can be driven; a test deletes `backend.bridge` (or overrides
+  // `canWithdraw`) to cover the shells that cannot withdraw at all.
+  const BURN_FEE = 10000000n; // gas::BRIDGE_BURN_FEE, 0.01 RAND
+  const bridgeDefs = {
+    state: () => ({ enabled: state.bridgeEnabled, chains: state.bridgeChains.slice() }),
+    canWithdraw: () => (state.bridgeEnabled
+      ? { ok: true }
+      : { ok: false, reason: 'This chain has no bridge, so there is nothing to withdraw to.' }),
+    estimate: ({ asset, amount, relayerFee = '0' } = {}) => {
+      if (Number(asset) < 1) throw new Error('RAND is not a bridged asset, so it cannot be withdrawn.');
+      const units = BigInt(amount || '0');
+      const relayer = BigInt(relayerFee || '0');
+      if (units <= 0n) throw new Error('A withdrawal of zero moves nothing.');
+      if (relayer > units) throw new Error('The relayer fee is more than the amount being withdrawn.');
+      return {
+        fee: BURN_FEE.toString(),
+        relayerFee: relayer.toString(),
+        receive: (units - relayer).toString(),
+        change: '0',
+        feeChange: '0',
+        proofs: 2,
+      };
+    },
+    // Reports every phase the contract declares, in order, so a screen that labels one of them
+    // wrong fails a test rather than a user. The real native backend reports a subset (it cannot
+    // see inside `prove_burn`); what the UI must handle is the whole vocabulary.
+    withdraw: async (_req, onPhase, options) => {
+      const signal = options && options.signal;
+      if (signal && signal.aborted) throw abortError();
+      if (typeof onPhase === 'function') {
+        for (const phase of ['selecting', 'witness', 'proving-asset', 'proving', 'submitting', 'confirming']) {
+          onPhase(phase);
+        }
+      }
+      return { hash: `0x${'be'.repeat(32)}` };
+    },
+  };
+
   const rpcDefs = {
     // The two methods the settings screen's "Test connection" uses; anything else echoes, as
     // before, so a test can assert on a call without this fake pretending to be a whole node.
@@ -235,6 +282,7 @@ function createBackend(initial = {}, overrides = {}) {
     assets: buildGroup('assets', assetsDefs, overrides.assets, calls),
     send: buildGroup('send', sendDefs, overrides.send, calls),
     faucet: buildGroup('faucet', faucetDefs, overrides.faucet, calls),
+    bridge: buildGroup('bridge', bridgeDefs, overrides.bridge, calls),
     rpc: buildGroup('rpc', rpcDefs, overrides.rpc, calls),
     settings: buildGroup('settings', settingsDefs, overrides.settings, calls),
     platform: buildGroup('platform', platformDefs, overrides.platform, calls),

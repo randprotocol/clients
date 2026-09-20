@@ -59,8 +59,22 @@ async function executeSend({ reason }) {
   throw err;
 }
 
+/**
+ * Never reached either, and for one more reason than `executeSend`: `bridge.canWithdraw()` asks
+ * `canProve()` first, so it is unconditionally `{ok: false}` here and no screen offers Withdraw
+ * at all. A withdrawal is *two* bundle proofs (~5.7 GB, ~3.5 minutes natively), so a shell that
+ * cannot produce one certainly cannot produce two. Present so the group's shape is real rather
+ * than missing, and so `bridge.withdraw()` refuses the way it always has if `canProve()` ever
+ * changes.
+ */
+async function executeWithdraw({ reason }) {
+  const err = new Error(reason || CANNOT_PROVE_REASON);
+  err.definite = true;
+  throw err;
+}
+
 export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, locks, broadcast } = {}) {
   return makeSharedBackend({
-    core, storage, platform, fetch: fetchImpl, locks, broadcast, canProve, executeSend,
+    core, storage, platform, fetch: fetchImpl, locks, broadcast, canProve, executeSend, executeWithdraw,
   });
 }

@@ -67,12 +67,18 @@ const UI_PHASE = Object.freeze({
   select: 'selecting',
   witness: 'witness',
   prove: 'proving',
+  // A burn's one opaque two-bundle proof. `prove_burn` proves the asset bundle first and the RAND
+  // fee bundle second, sequentially, and reports nothing in between — so this phase covers both,
+  // named for the one that is proved first. The contract's `'proving'` stays the single-bundle
+  // name a transfer uses (and the name a future core that reported per-bundle progress would use
+  // for the second half); the Withdraw screen labels both and shows two rings throughout.
+  'prove-asset': 'proving-asset',
   submit: 'submitting',
   wait: 'confirming',
 });
 
 /** Phases at which nothing has left this device yet, so a failure is definitely "not sent". */
-const BEFORE_THE_WIRE = Object.freeze(['select', 'witness', 'prove']);
+const BEFORE_THE_WIRE = Object.freeze(['select', 'witness', 'prove', 'prove-asset']);
 
 /**
  * Decides whether a failed transfer is a **definite** failure, which is the difference between
@@ -162,10 +168,55 @@ async function executeSend({ req, onPhase, options, client, identity, sendTransf
   }
 }
 
+/**
+ * The real withdrawal: a `BridgeBurn`, which is two bundles, two proofs and about three and a
+ * half minutes on this machine. Reached only after `bridge.withdraw`'s three gates
+ * (backend-shared.js) — this device can prove, this node is on this wallet's chain, and the
+ * bridge is enabled with this asset in its registry — so everything left here is the chain's own
+ * business, and it is `wallet.js`'s `burn()` that does it, with `ctx.client` throughout.
+ *
+ * Memory: the two proofs are sequential and peak at 5.70 GB together (measured), against a single
+ * bundle's 5.63 GB — allocator retention between them, not a second working set. So `MIN_PROVE_GIB`
+ * is the right gate for a burn too, and `canProve()` is the right question, **as long as the two
+ * proofs stay sequential**; proving them at once would need ~11 GB and would kill exactly the
+ * machines that only just pass today.
+ */
+async function executeWithdraw({ req, onPhase, options, client, identity, sendBurn, requireUnlocked }) {
+  const { spend_key: spendKey } = await requireUnlocked();
+
+  let phase = null;
+  const report = (p) => {
+    phase = p;
+    if (typeof onPhase === 'function') onPhase(UI_PHASE[p] || p);
+  };
+
+  try {
+    const submission = await sendBurn(spendKey, {
+      asset: Number(req.asset),
+      amountUnits: String(req.amount ?? '0'),
+      relayerFeeUnits: String(req.relayerFee ?? '0'),
+      toChain: Number(req.toChain),
+      to: String(req.to || ''),
+      feeUnits: String(req.fee),
+      wait: true,
+      onPhase: report,
+      signal: options && options.signal,
+      client,
+      identity,
+    });
+    // No transaction key: a burn addresses no note to anybody else, so there is nothing to
+    // disclose to a counterparty. What leaves the pool is public on the other chain instead.
+    return { hash: submission.hash };
+  } catch (err) {
+    throw classify(err, phase);
+  }
+}
+
 export function makeNativeBackend({ core, storage, platform, fetch: fetchImpl, locks, broadcast, systemMemoryGiB } = {}) {
   return makeSharedBackend({
     core, storage, platform, fetch: fetchImpl, locks, broadcast,
     canProve: makeCanProve(systemMemoryGiB),
     executeSend,
+    executeWithdraw,
   });
 }
