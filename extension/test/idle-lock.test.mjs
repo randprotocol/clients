@@ -214,6 +214,36 @@ test('a wipe this page asked for is not reported as an idle lock either', async 
   assert.deepEqual(seen, []);
 });
 
+test('a change delivered DURING lock()/wipe() does not open a second suppression window', async () => {
+  // The normal case, not an edge one: the engine removes the key *inside* the call, so the
+  // browser usually delivers the change before the call's promise settles. The listener consumes
+  // the suppression there and then — and if the wrapper re-stamps unconditionally on its way out,
+  // it opens a SECOND, unconsumed two-second window. A lock originating anywhere else inside that
+  // window is then swallowed, and the page keeps showing an unlocked wallet whose key is gone.
+  for (const method of ['lock', 'wipe']) {
+    const backend = fakeBackend();
+    const ext = fakeExt();
+    const engineMethod = backend.wallet[method].bind(backend.wallet);
+    backend.wallet[method] = async (...args) => {
+      const out = await engineMethod(...args);
+      ext.emit(REMOVED, 'session'); // delivered while the call is still in flight
+      return out;
+    };
+    wire(backend, ext);
+
+    const seen = [];
+    backend.wallet.onLocked((detail) => seen.push(detail));
+
+    await backend.wallet[method]();
+    assert.deepEqual(seen, [], `${method}: this page's own lock is not reported back to it`);
+
+    // Immediately — well inside the old window — a disappearance this page did NOT cause.
+    ext.emit(REMOVED, 'session');
+    assert.equal(seen.length, 1, `${method}: a lock from elsewhere must still reach the shell`);
+    assert.equal(seen[0].reason, 'idle');
+  }
+});
+
 test('the suppression expires, so a crashed lock cannot swallow a real one', async () => {
   const backend = fakeBackend();
   const ext = fakeExt();

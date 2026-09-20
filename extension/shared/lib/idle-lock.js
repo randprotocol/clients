@@ -140,8 +140,14 @@ export function wireIdleLock(backend, ext, options = {}) {
       try {
         return await original[name](...args);
       } finally {
-        // …and again after, so the window is measured from the end of the call, not its start.
-        selfLockAt = now();
+        // …and again after, so the window is measured from the end of the call, not its start —
+        // but ONLY while the stamp is still pending. The usual case is that the browser delivers
+        // the change *during* this call (the engine removes the key inside it), so the listener
+        // has already consumed the stamp by the time we get here; re-stamping unconditionally
+        // would open a second, unconsumed window with nothing left to spend it, and a lock
+        // originating anywhere else inside it would be swallowed — leaving this page showing an
+        // unlocked wallet whose key is gone. One lock, one suppression.
+        if (selfLockAt) selfLockAt = now();
         await clearAlarm();
       }
     };

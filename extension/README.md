@@ -28,6 +28,14 @@ shared/
 manifest into `dist/<browser>/`. That directory is the extension's root: every import in it has to
 resolve inside it, which is what `extension/test/smoke.mjs` packs and checks.
 
+**`backend-extension.js` and `lib/boot.js` import `./ui/…` and `../ui/…`, which exist only in the
+packed tree** — there is no `extension/shared/ui/`, exactly as there is no `web/wallet/ui/` for
+the shell that does the same thing. Neither file can be opened from the repo in a browser or
+imported under plain Node; the packed-tree check in `smoke.mjs` (every relative reference resolved
+against `dist/<browser>/`) is what stands in for a compiler here. `lib/idle-lock.js` deliberately
+imports nothing at all, which is what lets `extension/test/idle-lock.test.mjs` load it under Node
+and drive the whole auto-lock against a fake `ext`.
+
 ## Why the auto-lock is an alarm
 
 `makeWasmBackend` locks an idle wallet with a `setTimeout`. A popup's JavaScript context is

@@ -34,11 +34,25 @@ import { wireIdleLock } from './lib/idle-lock.js';
  *            it is a lock that every open page of this extension can see happen.
  *
  * `compareAndSet` is deliberately absent. It is OPTIONAL in the storage contract and feature-
- * detected at both of its call sites (the note store and the unlock-failure counter), which fall
- * back to a plain `set`; `chrome.storage` has no conditional write to build it out of. What that
- * costs is the guard against a popup and an app tab writing the note store at the same instant —
- * the same race the web wallet's IndexedDB transaction closes. It is not destructive: the engine
- * merges rather than truncates, so the worst case is a scan redone, never a note lost.
+ * detected at both of its call sites, which fall back to a plain `set`; `chrome.storage` has no
+ * conditional write to build it out of. Both call sites lose something, and it is worth naming
+ * both rather than only the obvious one:
+ *
+ *   1. **the note store.** Two contexts of this wallet (the popup and an app tab) scanning at the
+ *      same instant can overwrite each other's write. Not destructive — the engine merges rather
+ *      than truncates, and the scan lock and BroadcastChannel already keep them out of each
+ *      other's way most of the time — so the worst case is a scan redone, never a note lost.
+ *   2. **the unlock-failure counter** (`bumpFailures` in `ui/engine/backend-wasm.js`, which uses
+ *      `compareAndSet` where it exists so two contexts failing at the same instant still count as
+ *      two). Without it, a popup and an app tab can read the same count, both write count + 1,
+ *      and **two failed attempts are recorded as one** — the shared backoff grows more slowly
+ *      than the guessing actually did. It is a real under-count, not a theoretical one, and it
+ *      does not corrupt anything. What it is not is the wallet's at-rest protection: that is the
+ *      KDF (PBKDF2-SHA256, 600 000 iterations) paid in full on every single attempt, wrong
+ *      password or not. The backoff is there to make bulk guessing tedious, and the contract
+ *      already says so (ui/backend.js, "what a failed unlock costs, across tabs": N contexts can
+ *      each have one attempt in flight, so the rate scales with them even where the count does
+ *      not).
  */
 function extensionStorage() {
   const local = ext.storage.local;

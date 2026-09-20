@@ -29,6 +29,22 @@ const UNLOCKED_SESSION_KEY = 'unlocked';
 /** Its `K.wallet` — the public facts (address, public key), and only a marker here. */
 const WALLET_KEY = 'wallet';
 
+// ---- what this deliberately does NOT consult ----
+//
+// The engine has a way to postpone a lock it has decided on: `holdUnlock()` marks a stretch of
+// user-initiated work the idle timer must not cut in half (`unlockHolds` / `lockDeferred` in
+// `ui/engine/backend-wasm.js`), so a transfer is never left half-proved with its spend key pulled
+// out from under it. **This listener bypasses that entirely** — it deletes the key whatever any
+// page happens to be doing, because a background script has no handle on another context's
+// backend object to ask.
+//
+// That is harmless *today*, and only because of a fact that is checked elsewhere: the only caller
+// of `holdUnlock()` is `send.send`, and in this wasm backend `send.canProve()` is unconditionally
+// false, so `send.send` refuses before it holds anything for longer than a rejected promise. No
+// hold in this shell ever outlives a tick. If that ever changes — a shell here that can prove, or
+// any second caller of `holdUnlock()` — this listener becomes able to lock in the middle of it,
+// and the lock would have to be routed through a page that owns the backend (a message to the
+// open contexts, with this direct deletion as the fallback when none answers).
 ext.alarms.onAlarm.addListener(async (alarm) => {
   if (!alarm || alarm.name !== AUTOLOCK_ALARM) return;
   // A one-shot alarm is cleared by the browser once it fires, so there is nothing to cancel.
