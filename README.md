@@ -10,6 +10,13 @@ Wallets for the Rand Protocol RAND chain (the fully shielded pool served by
 | Chrome | JavaScript, Manifest V3 | `chrome/` + `extension/` | Chrome Web Store |
 | Firefox | JavaScript, Manifest V3 | `firefox/` + `extension/` | addons.mozilla.org |
 | Windows, Linux, macOS | Tauri (shared UI + Rust core) | `desktop/` | .msi / .deb / AppImage / .dmg |
+| Local web wallet | JavaScript + WebAssembly | `web/wallet/` + `ui/` | nothing — served from a checkout |
+
+The two extensions, the desktop app and the local web wallet share more than the core: `ui/` is one
+copy of the whole interface — the screens, the app shell and router, the design tokens, and
+`ui/engine/` (the vault, the JSON-RPC client and the scan/send orchestration). Each of them is only
+a shell around it, saying how to store a key and how to reach the core. iOS and Android have their
+own native UIs over the same `core/`.
 
 Every client creates a wallet (spend key → viewing key → `rand1…` address), scans the
 commitment tree for its own notes, proves and submits shielded transfers, asks the testnet
@@ -89,9 +96,13 @@ cd core && cargo test --release                # the core, including a real proo
 core/scripts/build-wasm.sh                     # → extension/shared/core/   (installs wasm-bindgen-cli)
 core/scripts/build-ios.sh                      # → ios/Frameworks/RandWalletCore.xcframework
 core/scripts/build-android.sh                  # → android/app/src/main/jniLibs/ (needs an NDK)
+
+node --test ui/test web/wallet/test            # the shared UI and the web wallet
+web/wallet/serve.sh                            # the local web wallet at http://127.0.0.1:8787/
 ```
 
-Then per platform: `ios/README.md`, `android/README.md`, `chrome/README.md`, `firefox/README.md`.
+Then per platform: `ios/README.md`, `android/README.md`, `chrome/README.md`, `firefox/README.md`,
+`desktop/README.md`, `web/wallet/README.md`.
 
 Toolchain: Rust 1.98.1 (pinned in `core/rust-toolchain.toml`; rustup installs it), Xcode 16+,
 JDK 17+ with Android SDK 35 and NDK 27, Node 20+.
@@ -100,12 +111,20 @@ JDK 17+ with Android SDK 35 and NDK 27, Node 20+.
 
 ```
 core/            Rust: wallet-core (library), wallet-ffi (C + JNI), wallet-wasm; vendored chain crates
+ui/              the shared interface, one copy for every JavaScript client: screens/, the app shell
+                 and router (app.js), design tokens and CSS, lib/ helpers, and engine/ — the vault,
+                 the JSON-RPC client and the scan/send orchestration. gallery.html and dev.html run
+                 it against a fake backend; test/ is its suite (node --test ui/test)
 ios/             xcodegen project.yml → RandWallet.xcodeproj; SwiftUI app
 android/         Gradle project; Java app
 extension/       the extension's code, one copy for both browsers
 chrome/          Chrome manifest, packaging, store notes
 firefox/         Firefox manifest, packaging, store notes
 web/             the /clients page for randprotocol.org
+web/wallet/      the local web wallet: index.html and main.js (the shell), worker.js (the wasm core
+                 off the UI thread), idb.js (IndexedDB, and a Map for what must never be written),
+                 and serve.mjs — a loopback-only static server. Built and served by serve.sh from a
+                 checkout; it is not deployed anywhere, and it cannot send (see web/wallet/README.md)
 design/          tokens.json, make-icons.py, generated icons
 docs/            design spec
 desktop/         Tauri app for Windows, Linux and macOS: ui/ in a webview, wallet-core linked
