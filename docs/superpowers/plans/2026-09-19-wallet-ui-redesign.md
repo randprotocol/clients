@@ -513,6 +513,63 @@ moves focus to the detail pane's title; closing returns it to the row that opene
 
 ---
 
+### Task 1.8: Scan with `rand_getCompactBlocks`, not prefix-paged nullifiers
+
+Added 2026-09-20 after Task 1.6's review found that prefix-paging `rand_getNullifiers`
+(`rand_getNullifiers(fromHeight, limit)`, an untrusted node's reply validated only as a *prefix*
+of the true set) makes a first sync cost about one request per 500 blocks (109 requests at
+chain 13's then-height 54 489) and cannot, even when honest, let the wallet CHECK that a page
+covers exactly the range it asked for — only bound how far a bad page can poison the cursor.
+`rand_getCompactBlocks(from_height, to_height)` already exists on the node
+(`crates/randprotocol-node/src/rpc.rs`) and answers per block: that block's commitments *and*
+nullifiers together, contiguous from `from_height`, with the first block always returned whole
+however many notes or nullifiers it holds. A reply is then checkable against the request by
+height alone — no prefix reasoning, no per-scan span cap standing in for a proof the wallet does
+not have — and a block with ≥ 500 nullifiers (Task 1.6's `NodeLimitError` dead end) is no longer
+special.
+
+**Depends on:** Task 1.6 closed (this task reuses its chain-identity and validation machinery,
+does not re-litigate it). If Task 0.7 (chain 14) has landed first, re-check
+`rand_getCompactBlocks`'s reply shape against that chain's RPC docs before writing validators —
+the wire-format rule changed there (amounts as strings; indices/counts/heights as numbers).
+
+**Files:** `ui/engine/wallet.js` (the scan loop), `ui/engine/validate.js` (`checkCompactBlocks`
+replacing `checkCommitments`/`checkNullifiers` for the paged range; keep the two page-shape
+validators for `select_inputs`-style calls that still use them elsewhere), `ui/engine/rpc.js` (a
+`compactBlocks(from, to)` method), `ui/test/engine-wallet.test.mjs`, `ui/test/validate.test.mjs`,
+`web/wallet/test/core.integration.test.mjs`.
+
+**Interfaces — Produces:** the scan loop pages `rand_getCompactBlocks(scanned_height, min(scanned_height + RANGE, head))`
+in one call per `RANGE` (a few thousand) blocks instead of one call per `HEIGHT_SPAN` (500)
+blocks; each reply's blocks must be a contiguous run starting at exactly `from_height` (a gap or
+a wrong starting height is a `NodeReplyError`, nothing persisted); a block's commitments feed the
+existing `scan_page` trial-decryption path and its nullifiers feed the existing spent-note
+marking, both keyed by that block's own height rather than by an untrusted page cursor; the
+per-scan request cap and the chain-identity/`wrongChain`/`behind`/rescan machinery from Task 1.6
+are unchanged and still gate this loop. `NodeLimitError` for "too many nullifiers in one block"
+is deleted — a compact block answers every nullifier it has, whatever the count.
+
+- [ ] **Step 1: Failing tests** — `checkCompactBlocks` rejects a non-contiguous run, a run not
+  starting at `from`, a block whose height exceeds `to`, and a block payload above the same
+  per-field size bounds Task 1.6 set for commitments/nullifiers; the scan loop test: an honest
+  chain of 54 489 blocks with sparse activity reaches the tip in a small, fixed number of
+  requests (assert the exact count for a `RANGE` you choose, e.g. `ceil(54489 / RANGE)`); a
+  hostile reply skipping a height range is refused, nothing persisted, cursor unmoved; a block
+  with 5 000 nullifiers is applied in one reply with no special-case error path.
+- [ ] **Step 2:** `node --test --test-timeout=20000 ui/test/engine-wallet.test.mjs ui/test/validate.test.mjs` — FAIL.
+- [ ] **Step 3:** Implement; delete the now-dead `HEIGHT_SPAN`/`MAX_HEIGHTS_PER_SCAN`
+  empty-page-counts-as-read logic and `checkNullifiers`'s prefix-trust rule; write the new rule's
+  proof sketch in a comment the way Task 1.6's was written, this time against
+  `rand_getCompactBlocks`'s real contiguity guarantee rather than a prefix.
+- [ ] **Step 4:** All of `ui/test` and `web/wallet/test` PASS under a watchdog; the real-wasm
+  integration test in `web/wallet/test/core.integration.test.mjs` still passes; update
+  `web/wallet/README.md`'s "Known limitations" section (the ≥500-nullifiers dead end is gone;
+  restate the first-sync request count).
+- [ ] **Step 5:** Commit `engine: scan with rand_getCompactBlocks — checkable ranges, no
+  per-block nullifier limit, a fast first sync`.
+
+---
+
 ## Phase 2 — Extension on `ui/`
 
 ### Task 2.1: Extension backend and mounts
