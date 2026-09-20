@@ -110,22 +110,47 @@ test('the first endpoint being down does not make the wallet down: the second an
   const fetch = transports({ [A]: chain(13, { rand_status: REFUSED }), [B]: chain(13) });
   const pool = makeRpc([A, B], { fetch, chainId: 13 });
   assert.deepEqual(await pool.status(), { height: 1, peer_count: 1, syncing: false });
-  assert.deepEqual(fetch.to(A), ['rand_status']);
-  assert.deepEqual(fetch.to(B), ['rand_status']);
+  // A named its chain, so it was tried; it then dropped the real request and B was asked who it
+  // is BEFORE its answer was used.
+  assert.deepEqual(fetch.to(A), ['rand_chainId', 'rand_status']);
+  assert.deepEqual(fetch.to(B), ['rand_chainId', 'rand_status']);
   // …and the next request starts where the last one worked, rather than walking the dead one again.
   await pool.status();
-  assert.deepEqual(fetch.to(A), ['rand_status'], 'it went back to the endpoint it had just found dead');
+  assert.deepEqual(fetch.to(A), ['rand_chainId', 'rand_status'], 'it went back to the endpoint it had just found dead');
   assert.equal(pool.url, B);
+});
+
+test('the pool-s own request surface never uses an endpoint that has not named its chain', async () => {
+  // The rule is about the ENDPOINT, not about how it was reached: `acquire()` is not the only
+  // door. A pool method called directly must gate the same way, or the pool is a loaded gun
+  // pointed at the invariant that only happens to be safe because nothing pulls the trigger.
+  const fetch = transports({ [B]: chain(13) });     // A is not there at all
+  const pool = makeRpc([A, B], { fetch, chainId: 13 });
+  assert.deepEqual(await pool.head(), { height: 1, hash: 'ff'.repeat(32) });
+  assert.equal(fetch.to(B)[0], 'rand_chainId', 'B served a head before it said which chain it is on');
+  assert.deepEqual(fetch.to(B), ['rand_chainId', 'rand_getHead']);
+});
+
+test('the pool-s own request surface refuses a wrong-chain endpoint rather than trusting it', async () => {
+  const fetch = transports({ [B]: chain(14) });     // A is not there; B is on another chain
+  const pool = makeRpc([A, B], { fetch, chainId: 13 });
+  await assert.rejects(() => pool.head(), (err) => {
+    assert.match(err.message, /no endpoint could answer rand_getHead/);
+    assert.match(err.message, /b\.example \(is on chain 14, not 13\)/);
+    assert.match(err.message, /a\.example/);
+    return true;
+  });
+  assert.deepEqual(fetch.to(B), ['rand_chainId'], 'the chain-14 endpoint was asked for a head');
 });
 
 test('an HTTP 5xx and a non-JSON body are transport failures; a 4xx is the endpoint answering', async () => {
   const bad = transports({ [A]: chain(13, { rand_status: HTTP(503) }), [B]: chain(13) });
   assert.ok(await makeRpc([A, B], { fetch: bad, chainId: 13 }).status());
-  assert.deepEqual(bad.to(B), ['rand_status']);
+  assert.deepEqual(bad.to(B), ['rand_chainId', 'rand_status']);
 
   const html = transports({ [A]: chain(13, { rand_status: GARBAGE }), [B]: chain(13) });
   assert.ok(await makeRpc([A, B], { fetch: html, chainId: 13 }).status());
-  assert.deepEqual(html.to(B), ['rand_status']);
+  assert.deepEqual(html.to(B), ['rand_chainId', 'rand_status']);
 
   const refused = transports({ [A]: chain(13, { rand_status: HTTP(403) }), [B]: chain(13) });
   await assert.rejects(() => makeRpc([A, B], { fetch: refused, chainId: 13 }).status(), /HTTP 403/);
@@ -140,6 +165,32 @@ test('a JSON-RPC error reply is an ANSWER and is never asked of a second endpoin
   const pool = makeRpc([A, B], { fetch, chainId: 13 });
   await assert.rejects(() => pool.witness(7), (err) => err instanceof RpcError && err.code === -32000 && /no such leaf/.test(err.message));
   assert.deepEqual(fetch.to(B), [], 'the wallet went shopping for a reply it liked better');
+});
+
+test('an error reply carrying code -1 is still an ANSWER: not retried, and not a dead endpoint', async () => {
+  // -1 is the code THIS FILE puts on a transport failure so `chainIdentity` can tell a silent node
+  // from a refusing one — but it is also a perfectly legal application-defined JSON-RPC code (the
+  // reserved range is -32768..-32000). Routing on the number reads a node's own refusal as a dead
+  // wire: it marked a healthy endpoint down, and it carried the refusal to a second endpoint.
+  const fetch = transports({
+    [A]: chain(13, { rand_getWitness: ERROR('leaf 7 is not in the tree', -1) }),
+    [B]: chain(13, { rand_getWitness: { index: 7, path: [] } }),
+  });
+  const pool = makeRpc([A, B], { fetch, chainId: 13 });
+
+  await assert.rejects(() => pool.witness(7), (err) => err.code === -1 && err.failure === undefined);
+  assert.deepEqual(fetch.to(B), [], 'a node-s own refusal was carried to a second endpoint');
+
+  // A pinned client must not mark its endpoint down over it either: A answered, and is healthy.
+  const pinned = await pool.acquire();
+  assert.equal(pinned.url, A);
+  await assert.rejects(() => pinned.witness(7), (err) => err.code === -1);
+  assert.deepEqual(
+    pool.endpoints().map((e) => [e.url, e.state]),
+    [[A, 'ok'], [B, 'unknown']],
+    'a healthy endpoint was marked down because its refusal happened to use code -1',
+  );
+  assert.equal((await pool.acquire()).url, A, 'the next operation walked away from a healthy endpoint');
 });
 
 // ------------------------------------------------------------- never send a transaction twice ---
@@ -159,7 +210,7 @@ test('a timed-out submission is NEVER resubmitted elsewhere; a refused connectio
     const dead = transports({ [A]: chain(13, { [method]: REFUSED }), [B]: chain(13) });
     const ok = makeRpc([A, B], { fetch: dead, chainId: 13 });
     assert.ok(await ok.rpc(method, ['0xff']));
-    assert.deepEqual(dead.to(B), [method]);
+    assert.deepEqual(dead.to(B), ['rand_chainId', method], 'the endpoint it moved to was used unprobed');
   }
 });
 

@@ -32,9 +32,13 @@
 // object trusts" for the whole life of that object. Failover therefore happens BETWEEN operations
 // (the next `acquire()` picks a different endpoint), never inside one.
 //
-// Acquisition is also where this file does its own cheap sanity check: before an endpoint is
-// handed out it must answer `rand_chainId` (and `rand_getGenesisHash`, when an expected genesis
-// was configured) for the expected chain. That is NOT a replacement for `chainIdentity` /
+// Before an endpoint's reply is used for ANYTHING it must answer `rand_chainId` (and
+// `rand_getGenesisHash`, when an expected genesis was configured) for the expected chain. That
+// rule is about the endpoint, not about how it was reached, so both paths through this file —
+// `acquire()` handing one out, and the pool's own request surface moving to the next candidate —
+// go through the same `provenUsable` gate. An endpoint that has never been probed has no mark at
+// all, and "no mark" must never read as "fine to trust". That check is NOT a replacement for
+// `chainIdentity` /
 // `chainVerdict` — those still gate every operation that acts on the notes, and they are what
 // judges the endpoint this file hands back. It exists to keep a permanently-wrong-chain endpoint
 // out of the failover rotation entirely, so a healthy `rpc3` is preferred over a misconfigured
@@ -104,6 +108,22 @@ export function rpcUrlList(urls) {
 }
 
 /**
+ * Did this failure mean "no usable answer came back", as opposed to "the node answered"?
+ *
+ * **`failure`, never `code === -1`.** `-1` is the code this file *puts on* a transport failure so
+ * that `chainIdentity` (engine/wallet.js) can tell a silent node from a refusing one, but it is
+ * also a perfectly legal application-defined JSON-RPC error code: the reserved range is
+ * -32768..-32000, and a node is entitled to answer `{"error":{"code":-1,…}}`. Routing on the
+ * number would misread that answer as a dead wire — marking a healthy endpoint down and, worse,
+ * carrying the node's own refusal to a second endpoint, which is the one thing this file promises
+ * never to do. `failure` is set only where a request genuinely produced no JSON-RPC reply, so it
+ * is the discriminator everything that ROUTES uses.
+ */
+function isTransportFailure(err) {
+  return !!(err && err.failure);
+}
+
+/**
  * Whether a failed attempt may be repeated on a DIFFERENT endpoint.
  *
  * A JSON-RPC error reply is an answer — the node understood the request and said no — so it is
@@ -111,7 +131,7 @@ export function rpcUrlList(urls) {
  * answer to is how a wallet shops for the reply it likes.
  */
 function mayRetryElsewhere(err, method) {
-  if (!err || err.code !== -1) return false;           // an answer, or not ours at all
+  if (!isTransportFailure(err)) return false;          // an answer, or not ours at all
   if (SUBMITS.has(method)) return err.failure === 'connect';
   if (err.failure === 'http') return err.status === undefined || err.status >= 500 || err.status === 408 || err.status === 429;
   return true; // 'connect', 'timeout', 'body'
@@ -251,7 +271,7 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
         return value;
       } catch (err) {
         if (err && err.name === 'AbortError') throw err;
-        if (err && err.code !== -1) answered = true; // it answered, even if with a refusal
+        if (!isTransportFailure(err)) answered = true; // it answered, even if with a refusal
         return undefined;
       }
     };
@@ -322,7 +342,7 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
       try {
         return await request(url, method, params, options);
       } catch (err) {
-        if (err && err.name !== 'AbortError' && err.code === -1) {
+        if (err && err.name !== 'AbortError' && isTransportFailure(err)) {
           note(url, 'down', err.message);
           if (skipped.length > 0) {
             const also = skipped.map((s) => `${s.url} (${s.reason})`).join(', ');
@@ -347,18 +367,36 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
     return Object.freeze(client);
   }
 
-  /** The pool's own request path: one attempt per endpoint, under the rules in the header. */
+  /**
+   * "Has this endpoint named the chain we are looking for?" — the one gate every path through
+   * this file goes through before an endpoint's reply is used for anything.
+   *
+   * Shared by `acquire()` and by the pool's own request path on purpose. The rule the brief sets
+   * is about the ENDPOINT, not about how it was reached: an endpoint that has never been probed
+   * has no mark at all, and "no mark" must never read as "fine to trust".
+   */
+  async function provenUsable(url, options) {
+    if (state.get(url) === 'ok') return true;
+    return (await probe(url, options)) === 'ok';
+  }
+
+  /**
+   * The pool's own request path: one attempt per endpoint, under the rules in the header — and
+   * never an attempt against an endpoint that has not passed `provenUsable` first.
+   */
   async function failover(method, params = [], options) {
+    // Before any endpoint is touched, including by a probe: a method this wallet may not put on
+    // the wire is a caller's mistake, and it must not cost a round trip to say so.
+    if (!isAllowedRpcMethod(method)) throw new RpcError(`${method} is not allowed from this wallet`, -32601);
     let last = null;
     for (const url of order()) {
       if (state.get(url) === 'wrong') continue;
+      // eslint-disable-next-line no-await-in-loop -- endpoints are tried in order, by design
+      if (!(await provenUsable(url, options))) continue;
       try {
+        // eslint-disable-next-line no-await-in-loop -- see above
         const value = await request(url, method, params, options);
         select(url);
-        // Reachable, and that is ALL this proves. It deliberately does not mark the endpoint
-        // 'ok': that mark means "it named the chain we asked for", and letting a successful
-        // `rand_status` earn it would let an endpoint skip the pre-use check it has never passed.
-        if (state.get(url)) { state.delete(url); why.delete(url); }
         return value;
       } catch (err) {
         if (err && err.name === 'AbortError') throw err;
@@ -367,8 +405,20 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
         last = err;
       }
     }
+    // Nothing answered, or nothing that answered is on this chain. The endpoints that were
+    // refused are named, because "it did not work" without saying which node said what is not
+    // something an operator can act on.
+    const named = skippedNotes(null).map((s) => `${s.url} (${s.reason})`).join(', ');
     forgetTransientFailures();
-    throw last || new RpcError(`no endpoint could be reached for ${method}`, -1, 'connect');
+    if (last) {
+      if (named) { last.message = `${last.message}; also tried ${named}`; }
+      throw last;
+    }
+    throw new RpcError(
+      `no endpoint could answer ${method}${named ? `; tried ${named}` : ''}`,
+      -1,
+      'connect',
+    );
   }
 
   /**
@@ -400,7 +450,7 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
     for (const url of order()) {
       const mark = state.get(url);
       if (mark === 'ok') { select(url); return pinned(url, skippedNotes(url)); }
-      if (mark) continue;
+      if (mark) continue; // 'wrong' | 'down' | 'mute'
       // eslint-disable-next-line no-await-in-loop -- endpoints are tried in order, by design
       const got = await tryUrl(url);
       if (got) return got;
