@@ -1214,20 +1214,97 @@ backend — already complete).
 
 ### Task 5.0: Default RPC endpoints with failover (owner's decision, 2026-09-19)
 
-The default endpoint set is `https://rpc1.randprotocol.org`, `https://rpc2.randprotocol.org`, `https://rpc3.randprotocol.org` (replacing the single `https://rpc.randprotocol.org`). Settings keeps one user-editable "RPC URL" that, when set, overrides the list.
+The default endpoint set is `https://rpc1.randprotocol.org`, `https://rpc2.randprotocol.org`, `https://rpc3.randprotocol.org` (replacing the single `https://rpc.randprotocol.org`). Settings keeps one user-editable "RPC URL" that, when set, overrides the list. **The endpoints are not live yet** (owner decision log, `owner-decisions-2026-09-19`) — that blocks nothing in this task: everything below is client-side logic, tested against stub transports, with real endpoints as a future drop-in. Do not wait for them.
 
-**Interfaces:** `ui/engine/rpc.js` `makeRpc(urls: string | string[], opts)` — tries endpoints in order starting from the last one that worked; on a transport failure (unreachable, timeout, HTTP 5xx, non-JSON body) moves to the next and retries the same request once per remaining endpoint; a JSON-RPC *error reply* is an answer and is never retried elsewhere; `rand_sendTransaction` and `rand_mint` are retried on another endpoint only when the failure happened before any response bytes arrived (connection refused / DNS / TLS), never after a timeout — a timed-out submit may have landed. Every endpoint must answer `rand_chainId` with the expected chain id before it is used for anything else; one that reports a different chain or genesis (`rand_getGenesisHash`) is skipped and named in the error. The same policy in `desktop/src-tauri/src/rpc.rs`, Swift `RpcClient` and Java `RpcClient`. `settings.get()` gains `rpcUrls: string[]` (defaults) alongside `rpcUrl` (override, empty by default).
-**Tests:** stub transports — first endpoint down → second answers; error reply not retried; timed-out `sendTransaction` not resubmitted; wrong-chain endpoint skipped with a clear message; override URL disables the list. Extension manifests: `host_permissions` for the three hosts. CSP `connect-src` in the web wallet and Tauri stays as designed (web: `*`; Tauri: RPC goes through Rust).
+**Rewritten 2026-09-20**, before dispatch, after reading the current code rather than assuming the
+brief's premise still held:
+
+- `desktop/src-tauri/src/rpc.rs` **does not exist and must not be created.** Task 3.2's ruling (and
+  `desktop/src-tauri/src/commands.rs`'s own header comment) is explicit: RPC is the webview's own
+  `fetch`, never native Rust — `ui/engine/rpc.js` running unmodified in every shell's webview
+  already covers desktop. This task's failover logic lives entirely in `ui/engine/rpc.js`; nothing
+  in `desktop/src-tauri/` changes. (The CSP line the original brief wrote — "Tauri: RPC goes through
+  Rust" — was already wrong before this rewrite; correct model is the one above.)
+- **Swift `RpcClient`/Java `RpcClient` are out of scope for this task and this plan.** This whole
+  plan's Goal is "the Tauri desktop app, the Chrome/Firefox extension and a new local wasm web
+  wallet" — no other task in Phases 0-4 does feature work in `ios/`/`android/` (only Task 0.4's
+  mechanical rename and Task 0.6's two-color mirroring touch them, and both are cosmetic/mechanical,
+  not new logic). Real RPC-failover feature work in the iOS/Android apps would be a new, separate
+  task this plan never scoped — ruled out of scope here rather than silently expanded into.
+- `ui/engine/rpc.js`'s `makeRpc` currently takes a single `url: string`, not an array — confirmed by
+  reading the file (`makeRpc(url, {timeoutMs, fetch})`, line ~34). The client it returns exposes
+  `url` as a plain, static property, read directly by `backend-shared.js`'s `rpcClient()` (its cache
+  key: `rpcCache.url !== s.rpcUrl`) and `requireVerifiedChain()` (`const url = client.url;`,
+  looked up in the `chainState` Map keyed by URL). This task extends `makeRpc` to accept a list, but
+  the multi-URL client it returns must keep behaving, from `backend-shared.js`'s point of view,
+  **exactly like today's single-URL client**: one `.url` property naming the one endpoint this
+  client is currently trusting.
+
+**The one real design question this task must resolve, not improvise:** how does per-request
+failover interact with Task 1.6's hardened invariant — *"a verified chain is a property of ONE
+CLIENT OBJECT bound to ONE URL, resolved once per operation"* (`ui/engine/backend-shared.js:401-409`'s
+doc comment on `requireVerifiedChain`)? A client that silently reroutes a request from a dead `rpc1`
+to `rpc2` **mid-operation** would let a scan or a send trust data from a node `requireVerifiedChain()`
+never checked — exactly the class of bug Task 1.6 spent five adversarial rounds closing. **Ruling:**
+a `makeRpc(urls)` client's failover must never let an already-verified operation silently continue
+on a URL that has not itself passed the *same* `chainIdentity`/`chainVerdict` check the operation's
+starting URL passed. Build this on the *existing* per-URL `chainState` Map (`backend-shared.js:378`)
+rather than inventing a second trust system: give the multi-URL client a live `.url` (the endpoint it
+most recently used successfully, updated on every failover, not a static constructor argument), and
+change `rpcClient()`/`requireVerifiedChain()` so that whenever `client.url` differs from what was
+last verified for *this specific client instance*, the identity check re-runs before anything further
+from it is trusted. Concretely, the pragmatic and testable shape: `requireVerifiedChain()` already
+runs once at the top of every gated operation and pins the `{client, url, identity}` it returns for
+that whole operation — preserve that pinning exactly (an in-flight operation's `client` must not
+switch which URL it trusts once pinned; a transport failure on the pinned URL surfaces as an error to
+retry from the top, not a silent reroute), and confine `makeRpc`'s own per-request retry (the
+"failed, try the next endpoint" behavior the interface below describes) to the **acquisition** of a
+fresh client, i.e. what a *new* call to `rpcClient()`/`requireVerifiedChain()` resolves to, not to
+requests already in flight under a previously-pinned client. Write a test that proves this directly:
+back a client with two stub endpoints, let the first die mid-scan, and assert (a) nothing from the
+second endpoint is used until it has independently answered `rand_chainId` for the expected chain,
+and (b) a second endpoint that reports the *wrong* chain is refused mid-operation exactly as cleanly
+as if it had been the only endpoint configured — never silently trusted because "at least something
+answered."
+
+**Interfaces:** `ui/engine/rpc.js` `makeRpc(urls: string | string[], opts)` — tries endpoints in
+order starting from the last one that worked; on a transport failure (unreachable, timeout, HTTP
+5xx, non-JSON body) moves to the next and retries the same request once per remaining endpoint; a
+JSON-RPC *error reply* is an answer and is never retried elsewhere; `rand_sendTransaction` and
+`rand_mint` are retried on another endpoint only when the failure happened before any response
+bytes arrived (connection refused / DNS / TLS), never after a timeout — a timed-out submit may have
+landed. Every endpoint must answer `rand_chainId` with the expected chain id before it is used for
+anything else; one that reports a different chain or genesis (`rand_getGenesisHash`) is skipped and
+named in the error — this is `makeRpc`'s own cheap transport-level sanity check (it can run
+without the wallet's fuller `chainIdentity`/`chainVerdict`, which still gates real use per the
+ruling above; the two are not redundant — `makeRpc`'s check keeps a permanently-wrong-chain
+endpoint out of the failover rotation entirely, cheaply, while `requireVerifiedChain()`'s fuller
+check is what `send`/`estimate`/`maxSendable`/`faucet.request` actually gate on). `settings.get()`
+gains `rpcUrls: string[]` (defaults) alongside `rpcUrl` (override, empty by default).
+**Tests:** stub transports — first endpoint down → second answers; error reply not retried;
+timed-out `sendTransaction` not resubmitted; wrong-chain endpoint skipped with a clear message;
+override URL disables the list; the mid-operation pinning test described above. Extension
+manifests: `host_permissions` for the three hosts. CSP `connect-src` in the web wallet stays as
+designed (`*`); Tauri's CSP is unaffected by this task (RPC is the webview's own `fetch`, already
+covered by Task 3.2's `connect-src`, not native Rust).
 **Docs:** `docs/rpc-endpoints.md` — what a node operator must run for an endpoint to work (the Caddy recipe from the README with CORS, `POST`-only, request-size and rate limits, and the advice to front full nodes/observers rather than validators, ). **Owner's decision (2026-09-20): `rand_mint` IS reachable through the public proxy for now** — the recipe therefore allows it, with a much tighter per-IP rate limit on that one method than on reads (the node's own faucet cap still applies), and the doc says how to block it later (one matcher) when the faucet moves behind something else. The fleet is on DigitalOcean (the owner's personal account); DNS for `randprotocol.org` is on Cloudflare. The DNS records and the proxies themselves are infrastructure outside this repository.
 
 ### Task 5.1: Typed RPC client, all 27 methods
 
-**Files:** Create `ui/lib/rpc-methods.js`, `ui/test/rpc-methods.test.mjs`; modify `ui/engine/rpc.js`, `desktop/src-tauri/src/rpc.rs`.
+**Corrected 2026-09-20** (file list and code example only — the substance is unchanged): the
+original text predates the rename and, separately, Task 3.2's ruling that RPC never touches native
+Rust. `desktop/src-tauri/src/rpc.rs` does not exist and must not be created — same reasoning as
+Task 5.0's rewrite above; the desktop shell gets this typed client for free by running
+`ui/engine/rpc.js` unmodified. The code example below is corrected to `rand_`/`randprotocol-node`
+directly (rather than relying on the plan's global shrugg→rand substitution rule) since it is
+literal code meant to be transcribed, not prose.
+
+**Files:** Create `ui/lib/rpc-methods.js`, `ui/test/rpc-methods.test.mjs`; modify `ui/engine/rpc.js`.
 
 **Interfaces:**
 
 ```js
-export const RPC_NAMESPACE = 'shrugg';           // the node's; see spec §10
+export const RPC_NAMESPACE = 'rand';             // the node's; see spec §10/§11
 export const METHODS = {                          // name → {params: [...names], wallet?: true, explore?: 'group'}
   chainId: {params: []}, tokenInfo: {params: []}, status: {params: [], explore: 'network'},
   getHead: {params: [], explore: 'network'}, getEpoch: {params: [], explore: 'network'},
@@ -1258,20 +1335,20 @@ import { readFileSync } from 'node:fs';
 import { METHODS, wireName, typed } from '../lib/rpc-methods.js';
 
 test('covers exactly the methods the vendored node dispatches', () => {
-  const src = readFileSync(new URL('../../core/vendor/fullnode/crates/shrugg-node/src/rpc.rs', import.meta.url), 'utf8');
-  const node = new Set([...src.matchAll(/"(shrugg_[A-Za-z]+)"\s*(?:\||=>)/g)].map(m => m[1]));
-  node.delete('shrugg_syncStatus');                       // alias of shrugg_status
-  for (const gone of ['shrugg_getBalance', 'shrugg_getAccount', 'shrugg_getAssetBalance']) node.delete(gone);
+  const src = readFileSync(new URL('../../core/vendor/fullnode/crates/randprotocol-node/src/rpc.rs', import.meta.url), 'utf8');
+  const node = new Set([...src.matchAll(/"(rand_[A-Za-z]+)"\s*(?:\||=>)/g)].map(m => m[1]));
+  node.delete('rand_syncStatus');                       // alias of rand_status
+  for (const gone of ['rand_getBalance', 'rand_getAccount', 'rand_getAssetBalance']) node.delete(gone);
   assert.deepEqual(new Set(Object.keys(METHODS).map(wireName)), node);
 });
 test('typed() maps positional params', async () => {
   const seen = []; const rpc = typed(async (m, p) => { seen.push([m, p]); return 1; });
   await rpc.getCommitments(10, 500);
-  assert.deepEqual(seen[0], ['shrugg_getCommitments', [10, 500]]);
+  assert.deepEqual(seen[0], ['rand_getCommitments', [10, 500]]);
 });
 ```
 
-- [ ] **Step 2–4:** FAIL → implement; `ui/engine/rpc.js`'s hand-written list is replaced by `typed(rpc)`; `desktop/src-tauri/src/rpc.rs` gets `pub const RPC_NAMESPACE` and a `fn wire(name)`; grep confirms no other file spells `'shrugg_` except these two and tests → PASS.
+- [ ] **Step 2–4:** FAIL → implement; `ui/engine/rpc.js`'s hand-written list is replaced by `typed(rpc)` (desktop needs no separate change — it shares this file unmodified); grep confirms no other file spells `'rand_` as a literal method-name string except `ui/lib/rpc-methods.js` itself and its test → PASS.
 - [ ] **Step 5:** Commit `rpc: one typed client for every node method`.
 
 ### Task 5.2: Explore screen
