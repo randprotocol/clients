@@ -15,6 +15,7 @@ const VIEWING_KEY = 'b2'.repeat(32);
 const PK = 'c3'.repeat(32);
 const ADDRESS = 'rand1' + 'q'.repeat(60);
 const PASSWORD = 'correct-horse-battery-staple';
+const GENESIS = 'aa'.repeat(32);
 
 // ------------------------------------------------------------------------------- stub storage --
 /** The `storage` contract makeWasmBackend takes, over two Maps. `session` is memory-only. */
@@ -110,6 +111,11 @@ function stubFetch(table = {}) {
     rand_estimateFee: () => '1000000',
     rand_status: () => ({ height: 100, peer_count: 3, syncing: false }),
     rand_chainId: () => 13,
+    // An honest node names its chain. A node that serves neither this nor `rand_chainId` is
+    // refused outright now (it could otherwise bypass the wrong-chain check by omitting two
+    // methods), so the DEFAULT stub has to be an honest node — the anonymous one is a fixture
+    // some tests build deliberately.
+    rand_getGenesisHash: () => GENESIS,
   };
   const impl = { ...defaults, ...table };
   const fn = async (url, init) => {
@@ -1272,14 +1278,16 @@ test('a scan against a node on another chain reports it without scanning', async
   assert.equal(answer.wrongChain.got.chainId, 14);
 });
 
-test('a node older than rand_getGenesisHash still works', async () => {
+test('a node older than rand_getGenesisHash is refused, not trusted', async () => {
+  // It used to be accepted on `settings.chainId` alone — which the backend always supplies, so a
+  // node bypassed the entire wrong-chain check by not implementing two methods.
   const fetch = stubFetch({ rand_getGenesisHash: () => { throw new Error('unknown method'); } });
   const { backend, storage } = build({ fetch });
   await backend.wallet.create(PASSWORD);
   const answer = await backend.sync.scan(() => {});
-  assert.equal(answer.wrongChain, undefined);
-  assert.equal(storage.local.get('notes').genesis, null);
-  assert.equal(storage.local.get('notes').chain_id, 13);
+  assert.equal(answer.identityUnknown, true, 'a wallet pinned itself to a chain nobody named');
+  assert.equal(storage.local.get('notes').chain_id, null, 'it recorded an identity anyway');
+  assert.equal(storage.local.get('notes').scanned_index, 0, 'it scanned an unidentified chain');
 });
 
 // =============================================================== fix round 3 ====================
@@ -1315,7 +1323,6 @@ test('while the node is on another chain, nothing acts on the notes', async () =
   const refusals = [
     () => backend.send.estimate({ asset: 0, to: ADDRESS, amount: '1' }),
     () => backend.send.maxSendable({ asset: 0 }),
-    () => backend.send.send({ asset: 0, to: ADDRESS, amount: '1' }, () => {}),
     () => backend.faucet.request(),
   ];
   for (const call of refusals) {
@@ -1325,6 +1332,16 @@ test('while the node is on another chain, nothing acts on the notes', async () =
       return true;
     });
   }
+  // …and the faucet did not mint on the way to being refused.
+  assert.equal(fetch.requests.some((r) => r.body.method === 'rand_mint'), false, 'it minted against an unchecked chain');
+
+  // `send.send` answers with what can never be wrong first: this shell cannot prove at all, so it
+  // says so rather than asking the network about a transfer it could not make either way. A shell
+  // that CAN prove reaches the chain gate (see the ordering comment in backend-wasm.js).
+  await assert.rejects(
+    () => backend.send.send({ asset: 0, to: ADDRESS, amount: '1' }, () => {}),
+    (err) => { assert.match(err.message, /5\.5 GB/); assert.equal(err.definite, true); return true; },
+  );
 
   // …and every screen can see it, not just the one that happened to scan.
   assert.ok((await backend.sync.cached()).wrongChain, 'sync.cached() hid the state from the other screens');
@@ -1345,12 +1362,17 @@ test('the wrong-chain refusal is cleared by a good scan, by a rescan, and by cha
   await backend.sync.scan(() => {});
   await assert.doesNotReject(() => backend.send.maxSendable({ asset: 0 }));
 
-  // A settings change re-opens the question rather than leaving a stale verdict.
+  // A settings change re-opens the question for the NEW url — it does not bless it. The verdict
+  // is per URL, and an unverified node is checked on the spot rather than assumed good.
   state.genesis = 'cc'.repeat(32);
   await backend.sync.scan(() => {});
   await assert.rejects(() => backend.send.maxSendable({ asset: 0 }), /different chain/);
   await backend.settings.set({ rpcUrl: 'http://127.0.0.1:9999' });
-  await assert.doesNotReject(() => backend.send.maxSendable({ asset: 0 }), 'a new node kept the old verdict');
+  await assert.rejects(
+    () => backend.send.maxSendable({ asset: 0 }),
+    /different chain/,
+    'a new URL was taken on trust; the node behind it is still on the wrong chain',
+  );
 
   // …and a rescan adopts whatever chain the node is on.
   await backend.sync.scan(() => {});
@@ -1359,42 +1381,43 @@ test('the wrong-chain refusal is cleared by a good scan, by a rescan, and by cha
   await assert.doesNotReject(() => backend.send.maxSendable({ asset: 0 }));
 });
 
-test('a wallet far ahead of the node, or ahead of two of them, is told it may be the odd one', async () => {
+test('behind: a second node saying the same thing is what flags the wallet, across URL changes', async () => {
+  // The journey the old rule could not see: the tally was cleared on every `rpcUrl` change, i.e.
+  // on exactly the action that would fill it, so `walletAhead` was unreachable.
   const storage = mapStorage();
-  const { backend } = build({ storage, fetch: stubFetch({ rand_getHead: () => ({ height: 900_000, hash: 'ab'.repeat(32) }) }) });
+  const ahead = { rand_getHead: () => ({ height: 100, hash: 'ab'.repeat(32) }) };
+  const { backend } = build({ storage, fetch: stubFetch(ahead) });
   await backend.wallet.create(PASSWORD);
-  // One scan advances by at most MAX_HEIGHTS_PER_SCAN, so it takes a few to get far ahead.
-  for (let i = 0; i < 3; i += 1) await backend.sync.scan(() => {});
+  await backend.sync.scan(() => {});
 
-  // A gap no honest scan could have produced: the wallet, not the node, is the wrong one.
-  const behindOne = build({ storage, fetch: stubFetch({ rand_getHead: () => ({ height: 5, hash: 'ab'.repeat(32) }) }) }).backend;
-  const answer = await behindOne.sync.scan(() => {});
-  assert.ok(answer.behind, 'no behind marker at all');
-  assert.equal(answer.behind.walletAhead, true, 'the user is told to try another node when the wallet is the problem');
+  const lagging = stubFetch({ rand_getHead: () => ({ height: 60, hash: 'ab'.repeat(32) }) });
+  const one = build({ storage, fetch: lagging }).backend;
+  await one.settings.set({ rpcUrl: 'http://127.0.0.1:7001' });
+  const first = await one.sync.scan(() => {});
+  assert.ok(first.behind, 'no behind marker');
+  assert.equal(first.behind.walletAhead, undefined, 'one lagging node is just one lagging node');
 
-  // A small gap from one node is just that node.
-  const storage2 = mapStorage();
-  const near = build({ storage: storage2, fetch: stubFetch({ rand_getHead: () => ({ height: 100, hash: 'ab'.repeat(32) }) }) }).backend;
-  await near.wallet.create(PASSWORD);
-  await near.sync.scan(() => {});
-  const small = build({ storage: storage2, fetch: stubFetch({ rand_getHead: () => ({ height: 60, hash: 'ab'.repeat(32) }) }) }).backend;
-  const answer2 = await small.sync.scan(() => {});
-  assert.ok(answer2.behind);
-  assert.equal(answer2.behind.walletAhead, undefined, 'one lagging node is not the wallet’s fault');
+  await one.settings.set({ rpcUrl: 'http://127.0.0.1:7002' });
+  const second = await one.sync.scan(() => {});
+  assert.ok(second.behind);
+  assert.equal(second.behind.walletAhead, true, 'two different nodes agreeing did not flag the wallet');
 
-  // …but when two DIFFERENT nodes both say it, the odd one out is the wallet.
-  await small.settings.set({ rpcUrl: 'http://127.0.0.1:7001' });
-  await small.sync.scan(() => {});
-  await small.settings.set({ rpcUrl: 'http://127.0.0.1:7002' });
-  const answer3 = await small.sync.scan(() => {});
-  assert.equal(answer3.behind.walletAhead, undefined, 'a settings change resets the tally, as it should');
+  // A clean scan puts it away again.
+  const caughtUp = build({ storage, fetch: stubFetch(ahead) }).backend;
+  await caughtUp.settings.set({ rpcUrl: 'http://127.0.0.1:7002' });
+  const clean = await caughtUp.sync.scan(() => {});
+  assert.equal(clean.behind, undefined);
+});
 
-  const twoNodes = build({ storage: storage2, fetch: stubFetch({ rand_getHead: () => ({ height: 60, hash: 'ab'.repeat(32) }) }) }).backend;
-  await twoNodes.settings.set({ rpcUrl: 'http://127.0.0.1:7003' });
-  await twoNodes.sync.scan(() => {});
-  // Same backend, second URL: the tally is session-scoped and per URL.
-  const fourth = await twoNodes.sync.scan(() => {});
-  assert.ok(fourth.behind);
+test('behind: a large gap flags the wallet on its own', async () => {
+  const storage = mapStorage();
+  const { backend } = build({ storage, fetch: stubFetch({ rand_getHead: () => ({ height: 40_000, hash: 'ab'.repeat(32) }) }) });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+  const lagging = build({ storage, fetch: stubFetch({ rand_getHead: () => ({ height: 40, hash: 'ab'.repeat(32) }) }) }).backend;
+  const answer = await lagging.sync.scan(() => {});
+  assert.ok(answer.behind);
+  assert.equal(answer.behind.walletAhead, true, `a gap of ${answer.behind.wallet - answer.behind.tip} did not flag it`);
 });
 
 test('onChanged fires for another tab’s scan and reset, for as long as the backend lives', async () => {
@@ -1480,4 +1503,183 @@ test('a wallet created again after a wipe still coordinates with other tabs', as
   channel.fire('scan-done');
   assert.deepEqual(seen, ['changed'], 'a wallet created after a wipe never hears from another tab again');
   assert.equal(opened, 1, 'the injected channel is reused; a real one would be re-opened');
+});
+
+// =============================================================== fix round 4 ====================
+// Every test here drives the REAL makeWasmBackend. The round-3 versions used `makeWallet` with
+// `settings: async () => ({})` — a configuration the shell never produces — and passed while the
+// behaviour through the backend was different.
+
+/** A node that answers only the methods listed; anything else is an unknown-method RPC error. */
+function nodeWithout(missing, table = {}) {
+  const gone = {};
+  for (const method of missing) gone[method] = () => { throw new Error(`unknown method ${method}`); };
+  return stubFetch({ ...gone, ...table });
+}
+
+test('IDENTITY: a node that names neither its chain nor its genesis is refused on a first scan', async () => {
+  const { backend, storage } = build({ fetch: nodeWithout(['rand_chainId', 'rand_getGenesisHash']) });
+  await backend.wallet.create(PASSWORD);
+  const answer = await backend.sync.scan(() => {});
+  assert.equal(answer.identityUnknown, true, 'a wallet pinned itself to a chain nobody named');
+  assert.equal(answer.wrongChain, undefined);
+  assert.equal(storage.local.get('notes').scanned_index, 0, 'it scanned an unidentified chain');
+  assert.equal(storage.local.get('notes').chain_id, null);
+  assert.equal(storage.local.get('notes').genesis, null);
+});
+
+test('IDENTITY: half an identity is not an identity', async () => {
+  for (const missing of [['rand_chainId'], ['rand_getGenesisHash']]) {
+    const { backend, storage } = build({ fetch: nodeWithout(missing) });
+    await backend.wallet.create(PASSWORD);
+    const answer = await backend.sync.scan(() => {});
+    assert.equal(answer.identityUnknown, true, `a node without ${missing[0]} was adopted`);
+    assert.equal(storage.local.get('notes').chain_id, null);
+  }
+});
+
+test('IDENTITY: a node with both is adopted, and then has to keep matching both', async () => {
+  const state = { genesis: GENESIS, chainId: 13 };
+  const storage = mapStorage();
+  const { backend } = build({ storage, fetch: chainFetch(state) });
+  await backend.wallet.create(PASSWORD);
+  assert.equal((await backend.sync.scan(() => {})).wrongChain, undefined);
+  assert.equal(storage.local.get('notes').genesis, GENESIS);
+  assert.equal(storage.local.get('notes').chain_id, 13);
+
+  // Same id, different genesis — the case chain id alone cannot see.
+  state.genesis = 'cc'.repeat(32);
+  const differs = await backend.sync.scan(() => {});
+  assert.ok(differs.wrongChain, 'two chains sharing an id were treated as one');
+  assert.equal(differs.wrongChain.got.genesis, 'cc'.repeat(32));
+});
+
+test('IDENTITY: a node that stops naming its chain is a wrong chain, not a free pass', async () => {
+  // THE PROBE: store knows chain 13 / aa…, node answers neither method. It used to scan happily,
+  // because `chainIdentity` fell back to `settings.chainId`, which the backend always supplies.
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+  const height = storage.local.get('notes').scanned_height;
+  assert.ok(height > 0);
+
+  const mute = build({ storage, fetch: nodeWithout(['rand_chainId', 'rand_getGenesisHash']) }).backend;
+  const answer = await mute.sync.scan(() => {});
+  assert.ok(answer.wrongChain, 'omitting two methods bypassed the whole wrong-chain refusal');
+  assert.equal(answer.wrongChain.got.unknown, true);
+  assert.equal(storage.local.get('notes').scanned_height, height, 'it scanned anyway');
+
+  // Losing only one of the two it knows is enough.
+  const half = build({ storage, fetch: nodeWithout(['rand_getGenesisHash']) }).backend;
+  assert.ok((await half.sync.scan(() => {})).wrongChain, 'a node that dropped its genesis was accepted');
+});
+
+test('IDENTITY: a new wallet cannot be pinned to a chain it was not configured for', async () => {
+  // The configured chain id is used for exactly one thing: catching this.
+  const { backend, storage } = build({ fetch: chainFetch({ genesis: 'dd'.repeat(32), chainId: 14 }) });
+  await backend.wallet.create(PASSWORD);
+  const answer = await backend.sync.scan(() => {});
+  assert.ok(answer.wrongChain, 'a brand-new wallet adopted an attacker’s chain');
+  assert.equal(answer.wrongChain.expected.chainId, 13, 'the chain this wallet was built for');
+  assert.equal(answer.wrongChain.got.chainId, 14);
+  assert.equal(storage.local.get('notes').chain_id, null, 'it recorded the wrong chain anyway');
+});
+
+test('GATE: a URL change then an immediate faucet does not mint against an unchecked chain', async () => {
+  // The un-named window: right after a URL change `wrongChain` was null, which read as "fine".
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+
+  const wrongNode = chainFetch({ genesis: 'ee'.repeat(32), chainId: 14 }, { rand_mint: () => `0x${'ab'.repeat(32)}` });
+  const moved = build({ storage, fetch: wrongNode }).backend;
+  await moved.settings.set({ rpcUrl: 'http://127.0.0.1:7100' });
+  await assert.rejects(() => moved.faucet.request(), (err) => {
+    assert.match(err.message, /different chain/);
+    assert.equal(err.definite, true);
+    return true;
+  });
+  assert.equal(wrongNode.requests.some((r) => r.body.method === 'rand_mint'), false, 'it minted before checking');
+  // The check is cheap and cached: two calls, not a scan.
+  assert.equal(wrongNode.requests.some((r) => r.body.method === 'rand_getCommitments'), false);
+});
+
+test('GATE: a fresh session before any scan checks the chain before minting', async () => {
+  const storage = mapStorage();
+  const first = build({ storage }).backend;
+  await first.wallet.create(PASSWORD);
+  await first.sync.scan(() => {});
+
+  // A new backend over the same storage: a reload. Nothing has been verified in THIS session.
+  const rightNode = chainFetch({ genesis: GENESIS, chainId: 13 }, { rand_mint: () => `0x${'ab'.repeat(32)}` });
+  const fresh = build({ storage, fetch: rightNode }).backend;
+  await fresh.wallet.unlock(PASSWORD);
+  const res = await fresh.faucet.request();
+  assert.ok(res.hash);
+  const identityCalls = rightNode.requests.filter((r) => r.body.method === 'rand_getGenesisHash').length;
+  assert.equal(identityCalls, 1, `the chain was checked ${identityCalls} times, not once`);
+  assert.ok(rightNode.requests.some((r) => r.body.method === 'rand_mint'));
+
+  // …and cached for the session: a second faucet does not re-check.
+  await fresh.faucet.request();
+  assert.equal(rightNode.requests.filter((r) => r.body.method === 'rand_getGenesisHash').length, 1);
+});
+
+test('GATE: a node that cannot be reached is a retryable refusal, not a silent pass', async () => {
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+
+  const dead = async () => { throw new Error('connection refused'); };
+  dead.requests = [];
+  const offline = build({ storage, fetch: dead }).backend;
+  await offline.settings.set({ rpcUrl: 'http://127.0.0.1:7200' });
+  await assert.rejects(() => offline.faucet.request(), (err) => {
+    assert.match(err.message, /Could not verify this node's chain/);
+    assert.equal(err.retryable, true);
+    assert.notEqual(err.definite, true, 'an unreachable node is not proof of anything');
+    return true;
+  });
+  await assert.rejects(() => offline.send.maxSendable({ asset: 0 }), /Could not verify/);
+});
+
+test('GATE: an anonymous node cannot be acted on either', async () => {
+  const storage = mapStorage();
+  const { backend } = build({ storage });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+  const mute = build({ storage, fetch: nodeWithout(['rand_chainId', 'rand_getGenesisHash'], { rand_mint: () => `0x${'ab'.repeat(32)}` }) }).backend;
+  await mute.settings.set({ rpcUrl: 'http://127.0.0.1:7300' });
+  await assert.rejects(() => mute.faucet.request(), /different chain|Could not verify/);
+});
+
+test('a block at the page limit is a typed error naming the limit', async () => {
+  const rows = Array.from({ length: 500 }, () => ({ height: 0, nullifier: 'ab'.repeat(32) }));
+  const { backend } = build({ fetch: stubFetch({ rand_getNullifiers: () => rows }) });
+  await backend.wallet.create(PASSWORD);
+  await assert.rejects(() => backend.sync.scan(() => {}), (err) => {
+    assert.equal(err.name, 'NodeLimitError');
+    assert.equal(err.code, 'too_many_nullifiers_in_block');
+    assert.match(err.message, /500 or more nullifiers/);
+    return true;
+  });
+});
+
+test('the core’s next_index cannot carry the leaf cursor past the page it was given', async () => {
+  const core = stubCore({
+    scan_page: () => ({ received: [], sent: [], next_index: 9_000_000, rows: 1 }),
+  });
+  const fetch = stubFetch({
+    rand_getTreeInfo: () => ({ next_index: 50, root: '0'.repeat(64), nullifiers: 0 }),
+    rand_getCommitments: ([from]) => (from === 0
+      ? [{ index: 0, cm: '0a'.repeat(32), height: 1, envelope: { kem_ct: '', to_receiver: '', to_sender: '', body: '' } }]
+      : []),
+  });
+  const { backend, storage } = build({ core, fetch });
+  await backend.wallet.create(PASSWORD);
+  await backend.sync.scan(() => {});
+  assert.equal(storage.local.get('notes').scanned_index, 1, 'the cursor took the core’s word over the page');
 });

@@ -37,11 +37,15 @@
  *  - `bridgeUnknown?` — OPTIONAL, `true`. The bridge's state could not be read this scan, so the
  *    bridge-deposit cursor deliberately did not move (advancing it would skip blocks that were
  *    never examined). Nothing is wrong with the data; the next scan tries again.
- *  - `identityUnknown?` — OPTIONAL, `true`. This wallet has no chain identity recorded, because no
- *    node has supplied one — so `wrongChain` cannot be detected for it. Informational.
- *  - `behind.walletAhead?` — OPTIONAL, on the `behind` object. The *wallet*, not the node, is the
- *    odd one out: the gap is larger than any honest scan could produce, or several different nodes
- *    have said the same thing. The UI's copy changes from "try another node" to "rescan".
+ *  - `identityUnknown?` — OPTIONAL, `true`. **Blocking**, like `wrongChain`: the node would not
+ *    say which chain it is on (neither a chain id nor a genesis hash), and this wallet has none
+ *    recorded yet — so nothing was read and nothing merged. A wallet that adopted an unnamed chain
+ *    could never afterwards notice it had been moved to another one, which is the whole of the
+ *    wrong-chain protection. The UI says so and offers Settings.
+ *  - `behind.walletAhead?` — OPTIONAL, on the `behind` object, and **emphasis only**: another node
+ *    has reported the same thing this session, or the gap is large. Which side is wrong is not
+ *    knowable from a wallet, so the UI always offers both ways out (try another node, rescan) and
+ *    assigns no blame; this flag only decides which button is primary.
  * `options` is OPTIONAL and today carries one OPTIONAL field:
  *  - `signal?` — an `AbortSignal` that aborts when the wallet session the scan was started under
  *    ends (a lock, a wipe, an unlock, a new wallet, or the UI being torn down). A backend that
@@ -141,6 +145,20 @@
  * two methods, and treats every field of either answer as untrusted text:
  *  - `rand_status`   → `{height, …}` — `height` the node's current block height.
  *  - `rand_chainId`  → the chain's own id (a number or a string).
+ *
+ * ---- send and faucet are gated on a verified chain ----
+ *
+ * A backend must not act on the notes until it has established, **against the node it is pointed
+ * at right now**, that the chain matches the one those notes came from. Three states, per RPC URL,
+ * for the session: *unknown* (nothing checked yet — right after a URL change, or a fresh session
+ * before its first scan), *ok*, *wrong*. While unknown, `send.estimate`, `send.maxSendable`,
+ * `send.send` and `faucet.request` run the cheap identity check themselves (two RPC calls, never a
+ * scan) and proceed only on *ok*. On *wrong* they reject with the definite refusal above; on a
+ * check that could not complete they reject with `retryable: true` and 'Could not verify this
+ * node's chain — check your connection and try again.'
+ * A shell that structurally cannot prove a transfer answers that first (`send.canProve`), because
+ * that answer can never be wrong and does not need the network. The desktop backend, which can
+ * send, inherits the gate by reusing the same engine.
  *
  * `sync.onChanged?(cb)` → an unsubscribe function. OPTIONAL, and **synchronous** — like
  * `wallet.onLocked`, it registers rather than does, so the shell forwards it unwrapped. Fires when

@@ -113,7 +113,7 @@ const TRANSIENT = ['recovered', 'rev', 'behind', 'wrongChain', 'bridgeUnknown', 
  * height and repairs the view. The same is true of withheld *leaves*: a node that omits notes
  * makes them invisible, not lost. See web/wallet/README.md.
  */
-const HEIGHT_SPAN = PAGE;
+export const HEIGHT_SPAN = PAGE;
 /**
  * …and how many such replies one scan will take. Without it the loop is `tip / HEIGHT_SPAN`
  * iterations, which for a hostile tip near 2^53 is not a slow scan but an infinite one (the first
@@ -446,24 +446,74 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    * `rand_getGenesisHash` yields `genesis: null`, and the check then falls back to the id alone
    * rather than refusing to work with it.
    */
-  async function chainIdentity(client, s, signal) {
-    let genesis = null;
-    try { genesis = checkGenesisHash(await client.rpc('rand_getGenesisHash', [], { signal })); } catch (err) {
-      if (err && err.name === 'AbortError') throw err;
-      genesis = null; // an older node, or one that does not serve it
-    }
-    let chainId = s && s.chainId !== undefined ? s.chainId : null;
-    try { chainId = await client.chainId({ signal }); } catch (err) {
-      if (err && err.name === 'AbortError') throw err;
-    }
-    return { chainId: chainId ?? null, genesis };
+  async function chainIdentity(client, signal) {
+    // "The node said no" and "there was no node" are different facts, and the caller needs both:
+    // a node that answers `unknown method` has identified itself as anonymous, while one that
+    // cannot be reached has identified itself as nothing at all. `makeRpc` gives transport
+    // failures the code -1 and passes a node's own JSON-RPC error code through.
+    let reachable = false;
+    const attempt = async (run) => {
+      try {
+        const value = await run();
+        reachable = true;
+        return value;
+      } catch (err) {
+        if (err && err.name === 'AbortError') throw err;
+        if (!err || err.code !== -1) reachable = true; // the node answered, even if with a refusal
+        return null;
+      }
+    };
+    const genesis = await attempt(async () => checkGenesisHash(await client.rpc('rand_getGenesisHash', [], { signal })));
+    const raw = await attempt(async () => client.chainId({ signal }));
+    const chainId = raw === undefined || raw === null || raw === '' ? null : raw;
+    return { chainId, genesis, reachable };
   }
 
-  /** The store's chain and the node's, compared on whichever identifiers both of them have. */
-  function sameChain(st, identity) {
-    if (st.genesis && identity.genesis) return st.genesis === identity.genesis;
-    if (st.chain_id !== null && identity.chainId !== null) return String(st.chain_id) === String(identity.chainId);
-    return true; // nothing to compare on: not evidence of a mismatch
+  /**
+   * Which chain is at the other end, and what to do about it.
+   *
+   * **The node's identity is the node's own word, and nothing else.** The previous version fell
+   * back to `settings.chainId` when `rand_chainId` failed — and the real backend always supplies
+   * one, so a node that simply did not implement `rand_chainId` and `rand_getGenesisHash` came
+   * back looking like a perfect match and bypassed the whole wrong-chain refusal. Omitting two
+   * methods is not a proof of anything.
+   *
+   *   store knows   node supplies              verdict
+   *   ───────────   ───────────────────────    ──────────────────────────────────────────────────
+   *   nothing       both id and genesis        adopt them — unless the id differs from the one
+   *                                            this wallet was configured for, which is
+   *                                            `wrongChain` (a new wallet built for chain 13 must
+   *                                            not be pinned to an attacker's chain 14)
+   *   nothing       one, or neither            `identityUnknown` — do not scan. A wallet must not
+   *                                            pin itself to a chain nobody named.
+   *   an identity   not every field it knows   `wrongChain`, `got` marked `unknown`
+   *   an identity   every field it knows       must match all of them, else `wrongChain`
+   */
+  function chainVerdict(st, identity, configuredChainId) {
+    const knows = { chainId: st.chain_id !== null, genesis: st.genesis !== null };
+    const has = { chainId: identity.chainId !== null, genesis: identity.genesis !== null };
+    const wrong = (got) => ({ kind: 'wrongChain', expected: { chainId: st.chain_id, genesis: st.genesis }, got });
+
+    if (!knows.chainId && !knows.genesis) {
+      if (!has.chainId || !has.genesis) return { kind: 'identityUnknown' };
+      const configured = configuredChainId === undefined || configuredChainId === null || configuredChainId === ''
+        ? null
+        : configuredChainId;
+      if (configured !== null && String(configured) !== String(identity.chainId)) {
+        return {
+          kind: 'wrongChain',
+          expected: { chainId: configured, genesis: null },
+          got: { chainId: identity.chainId, genesis: identity.genesis },
+        };
+      }
+      return { kind: 'adopt' };
+    }
+
+    const missing = (knows.chainId && !has.chainId) || (knows.genesis && !has.genesis);
+    if (missing) return wrong({ chainId: identity.chainId, genesis: identity.genesis, unknown: true });
+    if (knows.chainId && String(st.chain_id) !== String(identity.chainId)) return wrong(identity);
+    if (knows.genesis && st.genesis !== identity.genesis) return wrong(identity);
+    return { kind: 'ok' };
   }
 
   /**
@@ -542,23 +592,15 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     // — leaf indexes mean something else, heights mean something else, and nothing says so. The
     // identity is read on the first scan and checked on every one after; a mismatch scans nothing,
     // persists nothing, and hands the caller something the UI can act on.
-    const identity = await chainIdentity(client, s, signal);
-    const known = st.chain_id !== null || st.genesis !== null;
-    const anonymous = identity.chainId === null && identity.genesis === null;
-    // A node that will say neither which chain it is nor what its genesis was, to a wallet that
-    // already knows both, is a downgrade: "I cannot prove I am the right chain" must not read as
-    // "carry on". Only a store with no identity yet may proceed on nothing.
-    if (known && anonymous) {
-      return withMarker(st, 'wrongChain', {
-        expected: { chainId: st.chain_id, genesis: st.genesis },
-        got: { chainId: null, genesis: null, unknown: true },
-      });
+    const identity = await chainIdentity(client, signal);
+    const verdict = chainVerdict(st, identity, s && s.chainId);
+    if (verdict.kind === 'wrongChain') {
+      return withMarker(st, 'wrongChain', { expected: verdict.expected, got: verdict.got });
     }
-    if (known && !sameChain(st, identity)) {
-      return withMarker(st, 'wrongChain', {
-        expected: { chainId: st.chain_id, genesis: st.genesis },
-        got: { chainId: identity.chainId, genesis: identity.genesis },
-      });
+    if (verdict.kind === 'identityUnknown') {
+      // Blocking, not informational: a wallet that adopts an unnamed chain can never afterwards
+      // tell that it has been moved to a different one.
+      return withMarker(st, 'identityUnknown', true);
     }
 
     // ---- is this node behind this wallet? ----
@@ -568,10 +610,9 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       return withMarker(st, 'behind', { tip: head0, wallet: st.scanned_height - 1 });
     }
 
-    // A first scan records whatever the node supplies — and says so when that is nothing, so the
-    // UI can tell the user this wallet has no chain identity to check against later.
-    if (!known) { st.chain_id = identity.chainId; st.genesis = identity.genesis; }
-    const identityUnknown = st.chain_id === null && st.genesis === null;
+    // A first scan adopts the identity the node gave in full; `chainVerdict` has already refused
+    // anything less than that.
+    if (verdict.kind === 'adopt') { st.chain_id = identity.chainId; st.genesis = identity.genesis; }
 
     const { deposits, through: attestThrough, unknown: bridgeUnknown } = await rebuildableDeposits(client, spendKey, st, head0, signal, onProgress);
     // The tree's leaf count, when the node serves it: a page may never claim a leaf beyond it.
@@ -591,7 +632,12 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       }
       mergeNotes(st, res.received);
       mergeSent(st, res.sent);
-      return intField('scan_page', 'next_index', res.next_index);
+      const next = intField('scan_page', 'next_index', res.next_index);
+      // Our own trust boundary, so it costs nothing to close: the core cannot have seen a leaf
+      // past the page it was handed, and one before `from` would move the cursor backwards.
+      const from = rows[0].index;
+      if (next < from) throw new Error(`the core reported next_index ${next} for a page starting at ${from}`);
+      return Math.min(next, from + rows.length);
     };
 
     for (;;) {
@@ -662,7 +708,12 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       // cursor over every height in between.
       const last = rows[rows.length - 1].height;
       if (last === from) {
-        throw new Error(`block ${from} published more than ${PAGE} nullifiers; this wallet cannot page inside one block`);
+        // The condition fires at exactly PAGE too: a full page that never left `from` means the
+        // block holds at least that many, and this wallet cannot page inside one height.
+        const err = new Error(`block ${from} has ${PAGE} or more nullifiers; this wallet cannot page inside one block`);
+        err.name = 'NodeLimitError';
+        err.code = 'too_many_nullifiers_in_block';
+        throw err;
       }
       cursor = Math.min(last, from + HEIGHT_SPAN);
       onProgress?.({ phase: 'spends', scanned: cursor, total: headBefore });
@@ -687,7 +738,6 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     await persist(st, before);
     // Transient, never persisted: things the caller should know about THIS scan.
     if (bridgeUnknown) st.bridgeUnknown = true;
-    if (identityUnknown) st.identityUnknown = true;
     return st;
   }
 
@@ -783,7 +833,12 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     return hash;
   }
 
-  return { scan, rescan, send, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable };
+  return {
+    scan, rescan, send, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable,
+    // Exposed so a backend can prove the chain WITHOUT scanning — the gate in front of send and
+    // faucet is two RPC calls, not a page of leaves.
+    chainIdentity, chainVerdict,
+  };
 }
 
 export async function waitForTransaction(client, hash, timeoutMs) {

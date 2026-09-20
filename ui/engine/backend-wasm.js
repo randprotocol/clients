@@ -40,7 +40,7 @@
 // the faucet — is real.
 import { encryptSecret, decryptSecret, checkVault, isVaultRecordError } from './crypto.js';
 import { makeRpc, isAllowedRpcMethod } from './rpc.js';
-import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, BUNDLE_INPUTS, MAX_HEIGHTS_PER_SCAN } from './wallet.js';
+import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, BUNDLE_INPUTS, HEIGHT_SPAN } from './wallet.js';
 import { checkFee, checkAssets, checkSubmitted } from './validate.js';
 
 // Storage keys. `unlocked` is the only session one.
@@ -265,29 +265,81 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     const previous = await getSettings();
     const next = { ...previous, ...(patch || {}) };
     await storage.set(K.settings, next);
-    // A new node is a new question: whatever the last one was, it is re-evaluated on the next scan.
-    if (next.rpcUrl !== previous.rpcUrl) { wrongChain = null; behindUrls.clear(); }
+    // A new node is a new question — but only about *that* node: `chainState` is keyed by URL and
+    // each entry stands on its own. `behindUrls` is deliberately NOT cleared here: "two different
+    // nodes both say your wallet is ahead of them" is only ever learned by changing nodes, and
+    // clearing the tally on that very action made the hint unreachable.
+    void next;
     if (patch && Object.prototype.hasOwnProperty.call(patch, 'autoLockMin')) await rearmAutoLock();
     return next;
   }
 
-  // --------------------------------------------------------------- what the last scan learned ---
-  // Session-scoped, never persisted. While the node this wallet is pointed at is on a different
-  // chain, *nothing may act on the notes* — they describe another chain, and a fee fetched from
-  // this node mixed with those notes is a transfer built out of two unrelated ledgers. This shell
-  // cannot send, but the desktop backend reuses this engine and can.
-  let wrongChain = null;
-  /** RPC URLs that have reported this wallet as ahead of them, for the "you may be the odd one" hint. */
+  // --------------------------------------------------------------- the verified-chain gate ------
+  // Three states, not two: **unknown**, ok, wrong — per RPC URL, for this session only.
+  //
+  // Two states was a hole. Right after a URL change, and in a fresh session before its first scan,
+  // `wrongChain` was simply `null`, which read as "fine" — so `maxSendable` answered and
+  // `faucet.request()` really minted against a node whose chain nobody had checked. Anything that
+  // would act on the notes now proves the chain first (the cheap two-call identity check, not a
+  // scan) and proceeds only on `ok`.
+  //
+  // This shell cannot send, but the desktop backend reuses this engine and can, so the gate lives
+  // here rather than in the send screen.
+  const chainState = new Map(); // rpcUrl -> {state: 'ok' | 'wrong', wrongChain?}
+  /** RPC URLs that have reported this wallet as ahead of them, for the emphasis flag. */
   const behindUrls = new Set();
 
   const WRONG_CHAIN_REFUSAL = 'This node is on a different chain — switch node or rescan.';
+  const UNVERIFIED_REFUSAL = 'Could not verify this node\'s chain — check your connection and try again.';
 
-  function refuseOnWrongChain() {
-    if (!wrongChain) return;
-    const err = new Error(WRONG_CHAIN_REFUSAL);
-    err.definite = true;      // nothing was attempted, so the UI may offer a retry
-    err.wrongChain = wrongChain;
-    throw err;
+  function refusal(message, extra = {}) {
+    const err = new Error(message);
+    Object.assign(err, extra);
+    return err;
+  }
+
+  /** The verdict for a URL, or `undefined` while it has never been established this session. */
+  function verdictFor(url) {
+    return chainState.get(url);
+  }
+
+  function recordVerdict(url, state, detail) {
+    chainState.set(url, detail ? { state, wrongChain: detail } : { state });
+  }
+
+  /**
+   * Proves the chain before acting on the notes. Cheap: two RPC calls, cached per URL for the
+   * session — never a scan. Throws the definite refusal for a known-wrong chain, and a retryable
+   * one when the node could not be reached to answer at all.
+   */
+  async function requireVerifiedChain() {
+    const client = await rpcClient();
+    const known = verdictFor(client.url);
+    if (known && known.state === 'wrong') {
+      throw refusal(WRONG_CHAIN_REFUSAL, { definite: true, wrongChain: known.wrongChain });
+    }
+    if (known && known.state === 'ok') return;
+
+    let identity;
+    try {
+      identity = await engine.chainIdentity(client);
+    } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
+      throw refusal(UNVERIFIED_REFUSAL, { retryable: true });
+    }
+    if (!identity.reachable) throw refusal(UNVERIFIED_REFUSAL, { retryable: true });
+    const st = await loadNotes();
+    const settings = await getSettings();
+    const verdict = engine.chainVerdict(st, identity, settings.chainId);
+    if (verdict.kind === 'ok' || verdict.kind === 'adopt') { recordVerdict(client.url, 'ok'); return; }
+    if (verdict.kind === 'identityUnknown') {
+      // Not "wrong", but certainly not proven: a node that will not name its chain cannot be the
+      // one this wallet acts on.
+      throw refusal(UNVERIFIED_REFUSAL, { retryable: true, identityUnknown: true });
+    }
+    const detail = { expected: verdict.expected, got: verdict.got };
+    recordVerdict(client.url, 'wrong', detail);
+    throw refusal(WRONG_CHAIN_REFUSAL, { definite: true, wrongChain: detail });
   }
 
   // ------------------------------------------------------------------------------- the node ----
@@ -398,6 +450,8 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   async function forgetSession() {
     clearAutoLock();
     lockDeferred = false;
+    chainState.clear();
+    behindUrls.clear();
     try { await storage.session.remove(K.unlocked); } catch { /* nothing to remove */ }
   }
 
@@ -507,7 +561,7 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     // A wallet wiped and created again in the same page had no multi-tab coordination at all
     // until a reload, because `wipe()` closed the channel for good.
     ensureChannel();
-    wrongChain = null;
+    chainState.clear();
     behindUrls.clear();
     await rearmAutoLock();
   }
@@ -693,7 +747,10 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       const out = shape(st);
       // The marker belongs to the wallet's state, not to whoever happened to call `scan`. Every
       // screen reads `cached()`, so every screen can show the blocking banner.
-      if (wrongChain) out.wrongChain = wrongChain;
+      try {
+        const known = verdictFor((await rpcClient()).url);
+        if (known && known.state === 'wrong') out.wrongChain = known.wrongChain;
+      } catch { /* no usable RPC URL yet: nothing to say */ }
       return out;
     },
 
@@ -714,18 +771,21 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       const runScan = async () => {
         const st = await engine.scan(key, { signal, onProgress: (p) => report(p, onProgress) });
         const out = shape(st);
-        // Remembered for the rest of this session: every method that would act on the notes
-        // refuses while it is set (see refuseOnWrongChain), and `sync.cached()` carries it so
-        // every screen can say so, not only the one that happened to scan.
-        wrongChain = out.wrongChain || null;
+        // Remembered for the rest of this session, per URL: everything that would act on the
+        // notes proves the chain first (requireVerifiedChain), and `sync.cached()` carries the
+        // marker so every screen can say so, not only the one that happened to scan.
+        const client = await rpcClient();
+        if (out.wrongChain) recordVerdict(client.url, 'wrong', out.wrongChain);
+        else if (!out.identityUnknown) recordVerdict(client.url, 'ok');
         if (out.behind) {
-          const client = await rpcClient();
+          // The tally survives a URL change — that is the whole point of it. It is cleared by a
+          // clean scan, by a rescan and when the wallet session ends.
           behindUrls.add(client.url);
           out.behind = withBehindHints(out.behind);
-        } else {
+        } else if (!out.wrongChain && !out.identityUnknown) {
           behindUrls.clear();
         }
-        if (!out.wrongChain && !out.behind) announce('scan-done');
+        if (!out.wrongChain && !out.behind && !out.identityUnknown) announce('scan-done');
         return out;
       };
 
@@ -763,8 +823,11 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
           onProgress: (p) => report(p, options.onProgress),
         });
         const out = shape(st);
-        wrongChain = out.wrongChain || null;
+        chainState.clear();
         behindUrls.clear();
+        const client = await rpcClient();
+        if (out.wrongChain) recordVerdict(client.url, 'wrong', out.wrongChain);
+        else if (!out.identityUnknown) recordVerdict(client.url, 'ok');
         announce('scan-done');
         return out;
       };
@@ -802,15 +865,17 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   }
 
   /**
-   * `behind` says the node's tip is below what this wallet has read — but which side is wrong?
-   * Usually the node. If the gap is bigger than one scan could ever have produced honestly, or if
-   * *different* nodes keep saying the same thing, the wallet is the odd one out (a node once
-   * misreported its tip, or the user moved between networks) and the cure is a rescan, not
-   * another node.
+   * `behind` says the node's tip is below what this wallet has read. Which side is wrong is not
+   * knowable from here, so the UI never guesses: it offers both ways out every time (try another
+   * node, or rescan). `walletAhead` is **emphasis only** — it decides which button is primary.
+   *
+   * The previous rule was unreachable on the only journey a user takes: it needed a gap larger
+   * than one whole scan's reach (a single poisoned scan cannot produce one) or two URLs in a
+   * tally that was cleared on every URL change, i.e. on exactly the action that would fill it.
    */
   function withBehindHints(behind) {
     const gap = Math.max(0, (Number(behind.wallet) || 0) - (Number(behind.tip) || 0));
-    const ahead = gap > MAX_HEIGHTS_PER_SCAN || behindUrls.size >= 2;
+    const ahead = behindUrls.size >= 2 || gap >= 10 * HEIGHT_SPAN;
     return ahead ? { ...behind, walletAhead: true } : behind;
   }
 
@@ -837,7 +902,7 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
     if (st.behind) out.behind = st.behind;
     // The bridge could not be asked, so the attest cursor stood still this scan.
     if (st.bridgeUnknown) out.bridgeUnknown = true;
-    // This wallet has no chain identity recorded, because no node has supplied one.
+    // Blocking: this node would not name its chain, so nothing was read and nothing merged.
     if (st.identityUnknown) out.identityUnknown = true;
     return out;
   }
@@ -930,7 +995,7 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      * which is written for the user (it is what tells them to consolidate).
      */
     async estimate(req = {}) {
-      refuseOnWrongChain();
+      await requireVerifiedChain();
       const asset = Number(req.asset) || 0;
       if (asset !== 0) throw new Error(RPL_SEND_DISABLED_TEXT);
       const fee = await bundleFee();
@@ -953,7 +1018,7 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      * `select_inputs` rather than taking on trust.
      */
     async maxSendable({ asset = 0 } = {}) {
-      refuseOnWrongChain();
+      await requireVerifiedChain();
       const fee = await bundleFee();
       const index = Number(asset) || 0;
       if (index !== 0) return { amount: '0', fee: fee.toString() };
@@ -982,10 +1047,19 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
       // and the desktop backend's minutes-long proof reuses this exact wrapper.
       const release = holdUnlock();
       try {
-        // Before anything else: these notes are not this node's chain's notes.
-        refuseOnWrongChain();
-        const { reason } = await send.canProve();
-        const err = new Error(reason);
+        // Order matters, and it is this way round on purpose. A shell that *structurally* cannot
+        // prove (wasm: ~5.6 GB against a 4 GiB address space) should say so without asking the
+        // network first — that answer can never be wrong, and it is what the user needs. Only a
+        // shell that could really send goes on to prove the chain, which is the gate the desktop
+        // backend inherits by reusing this file.
+        const { ok, reason } = await send.canProve();
+        if (!ok) {
+          const err = new Error(reason);
+          err.definite = true;
+          throw err;
+        }
+        await requireVerifiedChain();
+        const err = new Error(reason || CANNOT_PROVE_REASON);
         err.definite = true;
         throw err;
       } finally {
@@ -1003,7 +1077,7 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
      */
     async request() {
       await requireUnlocked();
-      refuseOnWrongChain();
+      await requireVerifiedChain();
       const w = await storage.get(K.wallet);
       if (!w || !w.address) throw new Error('no wallet on this device');
       const client = await rpcClient();
@@ -1047,9 +1121,4 @@ export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, loc
   }
 
   return { wallet, sync, assets, send, faucet, rpc, settings, platform, dispose };
-}
-
-/** The message a wallet gives when its node is on a different chain from its notes. */
-export function wrongChainRefusal() {
-  return 'This node is on a different chain — switch node or rescan.';
 }

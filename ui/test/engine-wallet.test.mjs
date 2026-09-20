@@ -343,23 +343,11 @@ test('a node on another chain yields `wrongChain` and touches nothing', async ()
 
   const other = stubClient({ genesis: () => GENESIS_B, chainId: () => 14 });
   const answer = await makeWallet({ core: stubCore(), store, rpc: () => other, settings }).scan(SPEND_KEY, {});
-  assert.deepEqual(answer.wrongChain, {
-    expected: { chainId: 13, genesis: GENESIS_A },
-    got: { chainId: 14, genesis: GENESIS_B },
-  });
+  assert.deepEqual(answer.wrongChain.expected, { chainId: 13, genesis: GENESIS_A });
+  assert.equal(answer.wrongChain.got.chainId, 14);
+  assert.equal(answer.wrongChain.got.genesis, GENESIS_B);
   assert.deepEqual(store.current, before, 'a wrong-chain node changed the store');
   assert.equal(other.calls.some(([name]) => name === 'commitments'), false, 'it scanned the wrong chain anyway');
-});
-
-test('a chain id that differs is caught even when the node serves no genesis hash', async () => {
-  const store = memoryStore();
-  const older = (id) => stubClient({ chainId: () => id, genesis: () => { throw new Error('no such method'); } });
-  await makeWallet({ core: stubCore(), store, rpc: () => older(13), settings: async () => ({}) }).scan(SPEND_KEY, {});
-  assert.equal(store.current.genesis, null);
-  assert.equal(store.current.chain_id, 13);
-
-  const answer = await makeWallet({ core: stubCore(), store, rpc: () => older(14), settings: async () => ({}) }).scan(SPEND_KEY, {});
-  assert.equal(answer.wrongChain.got.chainId, 14);
 });
 
 test('rescan re-reads from the start, and for a chain change drops the old chain history', async () => {
