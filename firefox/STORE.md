@@ -13,8 +13,10 @@
 **Review notes**: plain ES modules, no bundler or minifier — the zip is the source. The wasm
 file is built with wasm-pack from `core/crates/wallet-wasm` in the public repository; the
 Rust source is included in the repository at the tagged version. No remote code; the only
-network requests are JSON-RPC POSTs to the node URL in Settings (default
-https://rpc.randprotocol.org). `'wasm-unsafe-eval'` is required to instantiate the bundled
+network requests are JSON-RPC POSTs to the node URL in Settings, or, when that is empty, to
+one of the three defaults (https://rpc1.randprotocol.org, https://rpc2.randprotocol.org,
+https://rpc3.randprotocol.org — whichever answers, one at a time). `'wasm-unsafe-eval'` is
+required to instantiate the bundled
 module.
 
 **Data collection** (privacy questionnaire): none — also declared in the manifest as `data_collection_permissions.required: ["none"]`.

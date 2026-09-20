@@ -68,6 +68,38 @@ test('the RPC URL must be https, or plain http only on this machine', async (t) 
   assert.equal((await b.settings.get()).rpcUrl, 'https://rpc.example');
 });
 
+test('clearing the RPC URL goes back to the default nodes, and asks for no new host', async (t) => {
+  // Task 5.0: this one field OVERRIDES a default set of three endpoints. Without a way to empty
+  // it, the first URL anyone ever saved would be the only node their wallet could ever use, and
+  // the failover the defaults exist for would be permanently out of reach.
+  const b = unlockedBackend({ platform: { ensureHostPermission: async () => true } });
+  const { app, root } = await settings(t, b);
+  const input = root.querySelector('input[name=rpcUrl]');
+  const field = input.closest('.field');
+
+  input.value = '   ';
+  submitNetwork(root);
+  await app.idle();
+  assert.equal(field.classList.contains('invalid'), false, 'an empty field was treated as a mistake');
+  assert.equal(b.calls.filter((c) => c[0] === 'platform.ensureHostPermission').length, 0,
+    'it asked for permission to reach a host it is not going to reach');
+  assert.deepEqual(b.calls.filter((c) => c[0] === 'settings.set').map((c) => c[1]), [{ rpcUrl: '' }]);
+  assert.equal((await b.settings.get()).rpcUrl, '');
+  const status = root.querySelector('[data-role="network-status"]').textContent;
+  assert.match(status, /default nodes/i);
+  assert.match(status, /rpc1\.randprotocol\.org/, 'it did not say which nodes those are');
+});
+
+test('with no override saved, the hint names the default nodes rather than inventing one', async (t) => {
+  const b = unlockedBackend();
+  await b.settings.set({ rpcUrl: '' });
+  const { root } = await settings(t, b);
+  const hint = root.querySelector('#settings-rpc-hint').textContent;
+  assert.match(hint, /default nodes/i);
+  assert.match(hint, /rpc2\.randprotocol\.org/);
+  assert.equal(root.querySelector('input[name=rpcUrl]').getAttribute('placeholder'), 'https://rpc1.randprotocol.org');
+});
+
 test('a refused host permission abandons the save', async (t) => {
   const b = unlockedBackend({ platform: { ensureHostPermission: async () => false } });
   const { app, root } = await settings(t, b);

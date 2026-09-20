@@ -34,12 +34,17 @@ Swift, Java and JavaScript.
 ## Prerequisite: an RPC endpoint
 
 Every node today binds JSON-RPC to `127.0.0.1:8545`; there is no public RPC. The clients default
-to `https://rpc.randprotocol.org` and let the user change it in Settings. To make that default
-real, put a reverse proxy with CORS in front of one synced node's RPC, for example with Caddy on
-the node:
+to a **set of three** — `https://rpc1.randprotocol.org`, `https://rpc2.randprotocol.org`,
+`https://rpc3.randprotocol.org` — and use whichever answers, so one endpoint going down is not
+the wallet going down. Settings keeps one editable "RPC URL" that replaces the whole set while it
+is filled in; clearing it goes back to the defaults. **None of the three answers yet.**
+
+To make a default real, put a reverse proxy with CORS in front of one synced node's RPC.
+[`docs/rpc-endpoints.md`](docs/rpc-endpoints.md) is the whole recipe — Caddy, CORS, POST-only,
+request-size and rate limits, and what to front. The short version:
 
 ```
-rpc.randprotocol.org {
+rpc1.randprotocol.org {
     @rpc method POST
     header Access-Control-Allow-Origin *
     header Access-Control-Allow-Headers content-type

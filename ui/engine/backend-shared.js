@@ -74,7 +74,7 @@
 // *is* the `canProve` parameter) and the inside of `send.send` past the chain gate (which calls
 // `executeSend`) — those two are the only places a caller's choices show through.
 import { encryptSecret, decryptSecret, checkVault, isVaultRecordError } from './crypto.js';
-import { makeRpc, isAllowedRpcMethod } from './rpc.js';
+import { makeRpc, isAllowedRpcMethod, rpcUrlList } from './rpc.js';
 import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, BUNDLE_INPUTS, HEIGHT_SPAN } from './wallet.js';
 import { checkFee, checkAssets, checkSubmitted, checkBridgeState } from './validate.js';
 
@@ -107,12 +107,23 @@ const MIN_PASSWORD_LEN = 10;
  * Used **only** where the core's `version` reply is unavailable (it failed, or a stub core in a
  * test does not implement it). Every one of these is normally read from the core, which is built
  * against exactly one chain and says which — in particular `chainId` is never a number this file
- * decides. `rpcUrl` and `explorerUrl` are the ones the pre-redesign extension shipped (its
+ * decides. `explorerUrl` is the one the pre-redesign extension shipped (its
  * `extension/shared/lib/store.js`, deleted in task 2.1); its `chainId` said 8, which is the stale
  * chain-8 default the rename left behind and is deliberately NOT copied here.
+ *
+ * `rpcUrls` is the **default endpoint set** (owner's decision, 2026-09-19): three hosts, so one
+ * of them being down is not the wallet being down. The core's own `default_rpc_url` — one URL,
+ * the retired single `rpc.` host — is deliberately not the source of this list: a future core
+ * that reports `default_rpc_urls` overrides it, exactly as `default_chain_id` overrides
+ * `chainId`. None of the three answers yet; that is infrastructure, not client logic, and the
+ * failover in engine/rpc.js is what makes standing them up one at a time uneventful.
  */
 const FALLBACK = Object.freeze({
-  rpcUrl: 'https://rpc.randprotocol.org',
+  rpcUrls: Object.freeze([
+    'https://rpc1.randprotocol.org',
+    'https://rpc2.randprotocol.org',
+    'https://rpc3.randprotocol.org',
+  ]),
   explorerUrl: 'https://randscan.org',
   chainId: 13,
   decimals: 9,
@@ -336,19 +347,50 @@ export function makeSharedBackend({
   // ------------------------------------------------------------------------------- settings ----
   async function defaults() {
     const k = await constants();
+    const supplied = rpcUrlList(k.default_rpc_urls || []);
     return {
       // Never a hard-coded chain number: the core is built against one chain and says which.
       chainId: k.default_chain_id ?? FALLBACK.chainId,
-      rpcUrl: k.default_rpc_url || FALLBACK.rpcUrl,
+      // The user's OVERRIDE, and empty until they set one — not "the node", which is `rpcUrls`.
+      // A wallet that shipped one of the defaults in here could never be told to go back to the
+      // set, because there would be no way to tell "the user chose this" from "this is the
+      // default".
+      rpcUrl: '',
+      rpcUrls: supplied.length > 0 ? supplied : [...FALLBACK.rpcUrls],
       explorerUrl: k.explorer_url || FALLBACK.explorerUrl,
       theme: FALLBACK.theme,
       autoLockMin: FALLBACK.autoLockMin,
     };
   }
 
+  /**
+   * The endpoints in force: the user's one override if they set one, otherwise the default set.
+   *
+   * One user-editable field over a list is the owner's decision (2026-09-19) and it is also the
+   * only shape the Settings screen has ever had. An override is exactly one node, on purpose:
+   * someone who typed a URL meant *that* node, and silently topping their choice up with three
+   * of ours would be a wallet talking to hosts the user never agreed to.
+   */
+  function endpointsFor(s) {
+    const override = rpcUrlList(typeof s.rpcUrl === 'string' ? s.rpcUrl : '');
+    if (override.length > 0) return override;
+    const list = rpcUrlList(s.rpcUrls || []);
+    return list.length > 0 ? list : [...FALLBACK.rpcUrls];
+  }
+
   async function getSettings() {
     const stored = (await storage.get(K.settings)) || {};
-    return { ...(await defaults()), ...stored };
+    const merged = { ...(await defaults()), ...stored };
+    // Migration (task 5.0). `setSettings` writes the WHOLE settings object back, defaults
+    // included, so anyone who ever changed their theme has the RETIRED single default URL sitting
+    // in storage. Read as an override it would pin that wallet to a host that is being replaced,
+    // for ever, and the endpoint set it should be moving to would be unreachable. It was never a
+    // choice the user made, so it is not treated as one — and `settings.set({rpcUrl: …})` still
+    // stores it if they really do type that host in.
+    const k = await constants();
+    const retired = rpcUrlList(k.default_rpc_url || 'https://rpc.randprotocol.org')[0];
+    if (retired && rpcUrlList(merged.rpcUrl || '')[0] === retired) merged.rpcUrl = '';
+    return merged;
   }
 
   async function setSettings(patch) {
@@ -414,6 +456,14 @@ export function makeSharedBackend({
    *
    * Cheap: two RPC calls, cached per URL for the session — never a scan. Throws the definite
    * refusal for a known-wrong chain, and a retryable one when the node could not be reached.
+   *
+   * **Several endpoints (task 5.0) change nothing here, by construction.** `rpcClient()` returns
+   * a client pinned to one URL with no failover path in it (see engine/rpc.js), so the `url` this
+   * function reads, records a verdict against, and hands back is the URL every later step of the
+   * operation talks to — a dead endpoint mid-operation surfaces as an error the caller retries
+   * from the top, and it is that *next* call which may land on a different host and verify it
+   * from scratch. `chainState` stays keyed by URL and keeps meaning exactly what it meant: this
+   * session's verdict on that one node.
    */
   async function requireVerifiedChain() {
     const client = await rpcClient();
@@ -451,11 +501,56 @@ export function makeSharedBackend({
   }
 
   // ------------------------------------------------------------------------------- the node ----
-  let rpcCache = null;
-  async function rpcClient(settingsOverride) {
+  // **`rpcClient()` hands out a PINNED client — one object, one URL, for one operation.**
+  //
+  // Task 5.0 gave `makeRpc` a list of endpoints and per-request failover, and that is exactly the
+  // shape of change that could have punched a hole in task 1.6's invariant: a client that
+  // rerouted from a dead `rpc1` to `rpc2` halfway through a scan or a send would let the wallet
+  // act on a node `requireVerifiedChain()` never asked anything. It cannot, because the two
+  // responsibilities live in two different objects (see engine/rpc.js's header):
+  //
+  //   * the POOL (`rpcPool`) knows the whole list and does the failover. It is never handed to
+  //     anything that scans, sends or mints.
+  //   * `pool.acquire()` returns a PINNED client — one URL, frozen, with no failover code path in
+  //     it at all — and that is what every caller of `rpcClient()` gets. `client.url` therefore
+  //     still means what it has always meant, for the whole life of that object, and
+  //     `requireVerifiedChain()`'s `chainState` lookup keys on a URL that cannot change
+  //     underneath it.
+  //
+  // So failover happens BETWEEN operations: an operation whose endpoint dies fails, and the next
+  // `rpcClient()` acquires a different one — which has to answer `rand_chainId` for the expected
+  // chain before it is handed out at all, and is then put through the full
+  // `chainIdentity`/`chainVerdict` gate like any other node.
+  let rpcPool = null;
+  let rpcPoolKey = '';
+
+  /** The pool for the settings in force, rebuilt when the endpoint set or the chain changes. */
+  async function rpcEndpointPool(settingsOverride) {
     const s = settingsOverride || (await getSettings());
-    if (!rpcCache || rpcCache.url !== s.rpcUrl) rpcCache = makeRpc(s.rpcUrl, { fetch: fetchImpl });
-    return rpcCache;
+    const urls = endpointsFor(s);
+    const key = JSON.stringify([urls, s.chainId ?? null]);
+    if (!rpcPool || rpcPoolKey !== key) {
+      // `chainId` is what the pool's own cheap pre-use check holds an endpoint to. It is the
+      // configured chain, never anything the node said — the same rule `chainVerdict` follows.
+      rpcPool = makeRpc(urls, { fetch: fetchImpl, chainId: s.chainId });
+      rpcPoolKey = key;
+    }
+    return rpcPool;
+  }
+
+  async function rpcClient(settingsOverride) {
+    return (await rpcEndpointPool(settingsOverride)).acquire();
+  }
+
+  /**
+   * The URL the next operation would start on, **without acquiring anything**.
+   *
+   * Used by the two places that want to compare URLs rather than talk to a node — `sync.cached()`
+   * and the staleness check at the end of a scan. `rpcClient()` may probe an endpoint before
+   * handing it out, and neither of those has any business putting a request on the wire.
+   */
+  async function currentRpcUrl(settingsOverride) {
+    return (await rpcEndpointPool(settingsOverride)).url;
   }
 
   // -------------------------------------------------------------------------- the note store ---
@@ -763,7 +858,8 @@ export function makeSharedBackend({
       // be forgotten too, or releasing that hold after the wipe fires `onLocked({reason:'idle'})`
       // at a shell that has already moved on to the welcome screen.
       await forgetSession();
-      rpcCache = null;
+      rpcPool = null;
+      rpcPoolKey = '';
       constantsPromise = null;
       closeChannel();
       await storage.clear();
@@ -856,7 +952,7 @@ export function makeSharedBackend({
       // The marker belongs to the wallet's state, not to whoever happened to call `scan`. Every
       // screen reads `cached()`, so every screen can show the blocking banner.
       try {
-        const known = verdictFor((await rpcClient()).url);
+        const known = verdictFor(await currentRpcUrl());
         if (known && known.state === 'wrong') out.wrongChain = known.wrongChain;
         // Declared blocking in ui/backend.js, so it has to reach every screen, not only the one
         // that happened to scan.
@@ -908,9 +1004,9 @@ export function makeSharedBackend({
         }
         // The result is a consistent scan of `url`, and still worth keeping — but if the wallet is
         // pointed somewhere else now, it is not that node's view, and the UI must not present A's
-        // tip as B's. It re-scans instead.
-        const current = await rpcClient();
-        if (current.url !== url) out.staleNode = true;
+        // tip as B's. It re-scans instead. (`currentRpcUrl`, not `rpcClient()`: this compares two
+        // strings and must not put a probe on the wire to do it.)
+        if ((await currentRpcUrl()) !== url) out.staleNode = true;
         if (!out.wrongChain && !out.behind && !out.identityUnknown && !out.staleNode) announce('scan-done');
         return out;
       };
@@ -960,8 +1056,7 @@ export function makeSharedBackend({
         if (out.wrongChain) recordVerdict(url, 'wrong', out.wrongChain);
         else if (out.identityUnknown) recordVerdict(url, 'anonymous');
         else recordVerdict(url, 'ok', undefined, { chainId: st.chain_id, genesis: st.genesis });
-        const current = await rpcClient();
-        if (current.url !== url) out.staleNode = true;
+        if ((await currentRpcUrl()) !== url) out.staleNode = true;
         // Same rule as `scan`'s broadcast: a result from a node the wallet has since left is not
         // worth telling other tabs to reload — they would read the SAME reset-but-stale state this
         // tab just painted around, not a fresh view of whatever node is current now.

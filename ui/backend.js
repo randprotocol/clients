@@ -72,9 +72,15 @@
  *                 (`'pending' | 'proving' | 'submitting' | 'confirming'`).
  * A **note** is `{index, asset, amount, blockHeight, spent, commitment, time}`.
  *
- * `settings.get()` → `{rpcUrl, theme, autoLockMin, explorerUrl, chainId}`. `explorerUrl` may be
- * empty, in which case no explorer link is offered at all; `chainId` is the network's own id and
- * is the only source of any network label (no screen writes a chain number).
+ * `settings.get()` → `{rpcUrl, rpcUrls, theme, autoLockMin, explorerUrl, chainId}`. `explorerUrl`
+ * may be empty, in which case no explorer link is offered at all; `chainId` is the network's own
+ * id and is the only source of any network label (no screen writes a chain number).
+ *
+ * The node is two fields, not one (task 5.0). `rpcUrls` is the **default endpoint set** the
+ * wallet moves between on its own when one of them is unreachable; `rpcUrl` is the user's single
+ * **override**, empty unless they saved one, and it replaces the whole set while it is there.
+ * `settings.set({rpcUrl: ''})` is therefore how a shell goes back to the defaults. Only `rpcUrl`
+ * is editable — a screen shows `rpcUrls`, it never writes them.
  *
  * ---- sending (task 1.5) ----
  *

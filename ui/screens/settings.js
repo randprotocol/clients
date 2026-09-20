@@ -44,10 +44,15 @@ const SPEND_KEY_WARNING = 'Anyone with this key can spend everything this wallet
  * Is `url` somewhere this wallet may talk to? https anywhere; plain http only to this machine,
  * because an RPC call carries the addresses the wallet cares about and a plaintext answer is
  * something a network can rewrite. Returns `{url}` (normalised, no trailing slash) or `{error}`.
+ *
+ * **Empty is a valid answer** (task 5.0): this one field is an *override* of the default endpoint
+ * set, so clearing it is how a user goes back to the defaults. Without that, the first URL anyone
+ * ever saved would be the only node their wallet could use for the rest of its life — a one-way
+ * door, and the failover the defaults exist for would be unreachable.
  */
 export function checkRpcUrl(text) {
   const value = String(text || '').trim().replace(/\/+$/, '');
-  if (!value) return { error: 'Enter the address of a Rand node.' };
+  if (!value) return { url: '', cleared: true };
   let parsed;
   try { parsed = new URL(value); } catch { return { error: 'That is not a URL. It should look like https://rpc.example.' }; }
   const local = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]';
@@ -74,12 +79,21 @@ function sectionMarkup(title, body) {
 }
 
 function networkMarkup(settings) {
+  // The defaults are a SET (task 5.0) and the wallet moves between them on its own when one is
+  // unreachable, so the hint names them rather than pretending there is one node. Every one of
+  // these strings comes from the backend's settings, so it is interpolated, never `raw()`ed.
+  const defaults = Array.isArray(settings.rpcUrls) ? settings.rpcUrls.filter((u) => typeof u === 'string' && u) : [];
+  const hint = settings.rpcUrl
+    ? 'The Rand node this wallet reads from and submits to. Clear this field to go back to the default nodes.'
+    : defaults.length > 0
+      ? `Using the default nodes (${defaults.join(', ')}), whichever answers. Enter one to use it instead.`
+      : 'The Rand node this wallet reads from and submits to.';
   return sectionMarkup('Network', h`
     <form data-role="network-form" class="stack" novalidate>
       <div class="field">
         <label class="label" for="settings-rpc">RPC URL</label>
-        <input id="settings-rpc" name="rpcUrl" type="text" spellcheck="false" autocomplete="off" value="${settings.rpcUrl || ''}" aria-describedby="settings-rpc-hint">
-        <span class="hint" id="settings-rpc-hint">The Rand node this wallet reads from and submits to.</span>
+        <input id="settings-rpc" name="rpcUrl" type="text" spellcheck="false" autocomplete="off" value="${settings.rpcUrl || ''}" placeholder="${defaults[0] || ''}" aria-describedby="settings-rpc-hint">
+        <span class="hint" id="settings-rpc-hint">${hint}</span>
         <span class="error" id="settings-rpc-error"></span>
       </div>
       <div class="cluster">
@@ -251,8 +265,9 @@ registerScreen('settings', {
       setRpcError(null);
       // Browser-extension shells have to ask for permission to reach a new host, and Firefox only
       // grants it while it is still handling the user's own click — so this is asked here, inside
-      // the submit handler, before anything is written.
-      if (typeof platform.ensureHostPermission === 'function') {
+      // the submit handler, before anything is written. Clearing the field asks for no new host
+      // at all: it goes back to the default endpoints, which the manifests already declare.
+      if (!checked.cleared && typeof platform.ensureHostPermission === 'function') {
         let granted = false;
         try { granted = await platform.ensureHostPermission(checked.url); } catch { granted = false; }
         if (!live()) return;
@@ -270,7 +285,16 @@ registerScreen('settings', {
       }
       if (!live()) return;
       settings = { ...settings, rpcUrl: checked.url };
-      showStatus('positive', 'Saved', 'New transfers and scans use this node.');
+      const back = Array.isArray(settings.rpcUrls) ? settings.rpcUrls.filter((u) => typeof u === 'string' && u) : [];
+      showStatus(
+        'positive',
+        'Saved',
+        checked.cleared
+          ? back.length > 0
+            ? `New transfers and scans use the default nodes (${back.join(', ')}).`
+            : 'New transfers and scans use the default nodes.'
+          : 'New transfers and scans use this node.',
+      );
     });
 
     const offTest = on(body, '[data-role="test-connection"]', 'click', async (evt, btn) => {

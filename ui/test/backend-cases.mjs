@@ -19,9 +19,9 @@ import { NodeReplyError } from '../engine/validate.js';
 // cases assert is the shared one, whichever factory is being driven.
 import { unlockDelayMs } from '../engine/backend-shared.js';
 import {
-  SPEND_KEY, VIEWING_KEY, PASSWORD, PK, ADDRESS, GENESIS, URL_A, URL_B,
+  SPEND_KEY, VIEWING_KEY, PASSWORD, PK, ADDRESS, GENESIS, URL_A, URL_B, URL_C,
   mapStorage, casStorage, drain, stubCore, stubFetch, stubPlatform, chainFetch, nodeWithout,
-  nodeFarm, node, withKdfSpy, assertKeyNeverLeaked, capturingMapWrites,
+  nodeFarm, node, unreachable, withKdfSpy, assertKeyNeverLeaked, capturingMapWrites,
 } from './backend-fixtures.mjs';
 
 /**
@@ -454,7 +454,14 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.equal(s.chainId, 13); // from the core's `version`, never hard-coded here
     assert.equal(s.theme, 'system');
     assert.equal(s.autoLockMin, 15);
-    assert.ok(s.rpcUrl);
+    // Task 5.0: the node is a LIST with a default set, and `rpcUrl` is the user's override —
+    // empty until they save one, so "the user chose this" is never confused with "this is ours".
+    assert.equal(s.rpcUrl, '');
+    assert.deepEqual(s.rpcUrls, [
+      'https://rpc1.randprotocol.org',
+      'https://rpc2.randprotocol.org',
+      'https://rpc3.randprotocol.org',
+    ]);
     const next = await backend.settings.set({ theme: 'light' });
     assert.equal(next.theme, 'light');
     assert.equal((await backend.settings.get()).theme, 'light');
@@ -1686,5 +1693,144 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     const { backend } = build();
     await backend.wallet.create(PASSWORD);
     assert.equal(backend.send.send.length, 2, '(req, onPhase, options = {}) — options has a default');
+  });
+
+  // =============================================================== task 5.0 =======================
+  // Several default endpoints, with failover — held against task 1.6's invariant.
+  //
+  // The danger in "try the next node when this one fails" is not that it might not work; it is
+  // that it might work *too well* and carry an operation onto a host `requireVerifiedChain()`
+  // never asked anything. These three cases are the proof that it cannot, driven through the real
+  // Backend rather than through `makeRpc` alone: the first shows the failure surfacing instead of
+  // rerouting, the second shows the replacement endpoint proving its chain before one leaf of its
+  // data is read, and the third shows a wrong-chain replacement refused exactly as cleanly as a
+  // single misconfigured node.
+
+  scoped('FAILOVER: an endpoint that dies mid-scan is never silently replaced inside that scan', async () => {
+    const farm = nodeFarm({
+      [URL_A]: node({ chainId: 13, genesis: GENESIS, height: 100 }),
+      [URL_B]: node({ chainId: 13, genesis: GENESIS, height: 200 }),
+    });
+    // A answers the whole opening of a scan — head, genesis, chain id, bridge state, tree info —
+    // and then stops existing, exactly where the scan starts reading the tree.
+    const fetch = unreachable(farm, (url, method) => url === URL_A && method === 'rand_getCommitments');
+    const storage = mapStorage();
+    const { backend } = build({ storage, fetch });
+    await backend.settings.set({ rpcUrls: [URL_A, URL_B] });
+    await backend.wallet.create(PASSWORD);
+
+    // The scan fails. It does NOT quietly finish on B.
+    await assert.rejects(() => backend.sync.scan(() => {}), /cannot reach/);
+    assert.deepEqual(farm.callsTo('7401'), [], 'the scan carried on against an endpoint nothing had checked');
+    assert.ok(farm.callsTo('7400').includes('7400:rand_getCommitments!'), 'A was never asked for the tree');
+    assert.equal(storage.local.get('notes').head, 0, 'a half-finished scan was written to the store');
+
+    // Retried from the top — which is the only way failover happens — the next operation moves to
+    // B, and B has to name its chain before it is used for anything at all.
+    const again = await backend.sync.scan(() => {});
+    assert.equal(again.head, 200, 'the retry did not move to the healthy endpoint');
+
+    const b = farm.callsTo('7401');
+    const named = b.indexOf('7401:rand_chainId');
+    const genesis = b.indexOf('7401:rand_getGenesisHash');
+    const firstData = b.findIndex((line) => /rand_(getCommitments|getNullifiers|getTreeInfo|getBridgeState)$/.test(line));
+    assert.equal(named, 0, 'the first thing asked of the new endpoint was not who it is');
+    assert.ok(firstData > 0, 'the new endpoint served no data at all');
+    assert.ok(genesis >= 0 && genesis < firstData, 'its genesis was never checked before its data was read');
+    assert.ok(named < firstData, 'its data was read before it named its chain');
+    // And the store adopted B's identity only after that check passed.
+    assert.equal(storage.local.get('notes').chain_id, 13);
+    assert.equal(storage.local.get('notes').genesis, GENESIS);
+  });
+
+  scoped('FAILOVER: a replacement endpoint on the wrong chain is refused, never trusted', async () => {
+    // A is gone; B answers and is on chain 14. There is nothing usable, and the wallet says the
+    // one thing it actually knows — in the same words, and with the same `definite` flag, as if a
+    // single misconfigured node had been the only one configured.
+    const farm = nodeFarm({
+      [URL_A]: node({ chainId: 13, genesis: GENESIS }),
+      [URL_B]: node({ chainId: 14, genesis: 'cc'.repeat(32) }),
+    });
+    const fetch = unreachable(farm, (url) => url === URL_A);
+    const { backend } = build({ storage: mapStorage(), fetch });
+    await backend.settings.set({ rpcUrls: [URL_A, URL_B] });
+    await backend.wallet.create(PASSWORD);
+
+    await assert.rejects(() => backend.faucet.request(), (err) => {
+      assert.match(err.message, /different chain/);
+      assert.equal(err.definite, true, 'a wrong chain was reported as something worth retrying');
+      assert.equal(err.wrongChain.got.chainId, 14);
+      return true;
+    });
+    assert.equal(farm.log.includes('7401:rand_mint'), false, 'it minted on the chain-14 endpoint');
+
+    // A scan says the same thing in the shape a screen reads, rather than hanging or half-reading.
+    const answer = await backend.sync.scan(() => {});
+    assert.ok(answer.wrongChain, 'the scan did not say which chain it found');
+    assert.equal(answer.wrongChain.got.chainId, 14);
+    assert.equal(farm.log.includes('7401:rand_getCommitments'), false, 'it read the chain-14 tree');
+  });
+
+  scoped('FAILOVER: a wrong-chain endpoint is stepped over entirely when a healthy one exists', async () => {
+    // The cheap pre-use check earning its keep: the user is never shown a refusal at all, because
+    // the misconfigured endpoint never becomes the one an operation is pinned to.
+    const farm = nodeFarm({
+      [URL_A]: node({ chainId: 14, genesis: 'cc'.repeat(32) }),
+      [URL_B]: node({ chainId: 13, genesis: GENESIS, height: 150 }),
+    });
+    const { backend } = build({ storage: mapStorage(), fetch: farm });
+    await backend.settings.set({ rpcUrls: [URL_A, URL_B] });
+    await backend.wallet.create(PASSWORD);
+
+    const answer = await backend.sync.scan(() => {});
+    assert.equal(answer.wrongChain, undefined);
+    assert.equal(answer.head, 150);
+    assert.deepEqual(farm.callsTo('7400'), ['7400:rand_chainId'], 'the chain-14 endpoint was asked more than who it is');
+
+    const { hash } = await backend.faucet.request();
+    assert.ok(hash);
+    assert.equal(farm.log.includes('7400:rand_mint'), false);
+  });
+
+  scoped('FAILOVER: the retired single default in old storage is not read as the user-s choice', async () => {
+    // `settings.set` writes the whole object back, defaults included, so every wallet that ever
+    // changed its theme has the old single URL persisted. Left as an override it would pin that
+    // wallet to a host that is being replaced, and the endpoint set would never be reached.
+    const storage = mapStorage();
+    const { backend } = build({ storage });
+    storage.local.set('settings', { theme: 'dark', rpcUrl: 'https://rpc.randprotocol.org' });
+    const s = await backend.settings.get();
+    assert.equal(s.theme, 'dark', 'the rest of the stored settings were thrown away with it');
+    assert.equal(s.rpcUrl, '');
+    assert.deepEqual(s.rpcUrls, [
+      'https://rpc1.randprotocol.org',
+      'https://rpc2.randprotocol.org',
+      'https://rpc3.randprotocol.org',
+    ]);
+
+    // A URL the user really did type is still theirs.
+    await backend.settings.set({ rpcUrl: URL_A });
+    assert.equal((await backend.settings.get()).rpcUrl, URL_A);
+  });
+
+  scoped('FAILOVER: the user-s own RPC URL replaces the whole set, and clearing it restores it', async () => {
+    const farm = nodeFarm({
+      [URL_A]: node({ chainId: 13, genesis: GENESIS, height: 100 }),
+      [URL_C]: node({ chainId: 13, genesis: GENESIS, height: 300 }),
+    });
+    const { backend } = build({ storage: mapStorage(), fetch: farm });
+    await backend.settings.set({ rpcUrls: [URL_A] });
+    await backend.wallet.create(PASSWORD);
+    await backend.settings.set({ rpcUrl: URL_C });
+
+    assert.equal((await backend.sync.scan(() => {})).head, 300);
+    assert.deepEqual(farm.callsTo('7400'), [], 'the default set was still being talked to');
+
+    // An override is exactly one node: no probe, and no quiet topping-up with hosts of ours.
+    assert.equal(farm.callsTo('7402').includes('7402:rand_chainId'), true);
+
+    await backend.settings.set({ rpcUrl: '' });
+    await backend.sync.rescan();
+    assert.ok(farm.callsTo('7400').length > 0, 'clearing the override did not go back to the defaults');
   });
 }

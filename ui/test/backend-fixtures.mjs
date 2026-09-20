@@ -238,6 +238,7 @@ export function assertKeyNeverLeaked(env, key = SPEND_KEY) {
 // --------------------------------------------------------------------- several nodes at once ---
 export const URL_A = 'http://127.0.0.1:7400';
 export const URL_B = 'http://127.0.0.1:7401';
+export const URL_C = 'http://127.0.0.1:7402';
 
 /**
  * A fetch that serves several nodes, one per URL, and records every call as `port:method` in one
@@ -265,6 +266,30 @@ export function nodeFarm(nodes) {
   fn.log = log;
   fn.held = held;
   fn.callsTo = (port) => log.filter((line) => line.startsWith(`${port}:`));
+  return fn;
+}
+
+/**
+ * A `nodeFarm` with holes in the WIRE rather than in the node: `isDead(url, method)` decides which
+ * requests never reach an endpoint at all.
+ *
+ * The difference matters and is the whole reason this exists (task 5.0). A `nodeFarm` handler that
+ * throws produces a JSON-RPC *error reply* — the node answered, and a wallet must never repeat
+ * that question elsewhere. What a proxy going away produces is a `fetch` that rejects before a
+ * reply exists, which is the only failure a wallet may carry to another endpoint. Dead requests
+ * are still logged (with a trailing `!`) so a test can assert they were attempted.
+ */
+export function unreachable(farm, isDead) {
+  const fn = async (url, init) => {
+    const body = JSON.parse(init.body);
+    if (isDead(url, body.method)) {
+      farm.log.push(`${String(url).split(':').pop()}:${body.method}!`);
+      throw new TypeError('fetch failed');
+    }
+    return farm(url, init);
+  };
+  fn.log = farm.log;
+  fn.callsTo = farm.callsTo;
   return fn;
 }
 

@@ -28,7 +28,10 @@ Testnet software: not audited, not for real value.
 **Permission justifications**
 - `storage`: the encrypted spend key, settings and the local note cache.
 - `alarms`: the auto-lock timer.
-- Host permission `https://rpc.randprotocol.org/*`: the default JSON-RPC node the wallet talks to.
+- Host permissions `https://rpc1.randprotocol.org/*`, `https://rpc2.randprotocol.org/*` and
+  `https://rpc3.randprotocol.org/*`: the three default JSON-RPC nodes the wallet talks to. It
+  uses whichever answers, so one of them being down is not the wallet being down; it never
+  contacts more than one at a time.
 - Optional host permissions (`https://*/*`, `http://localhost/*`, `http://127.0.0.1/*`): only
   requested when the user enters a different RPC URL in Settings (their own node).
 - No content scripts, no tabs permission, no remote code. WebAssembly is bundled

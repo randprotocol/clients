@@ -13,7 +13,11 @@ function fixedPk() {
 }
 
 function defaultSettings() {
-  return { rpcUrl: 'http://127.0.0.1:8899', theme: 'system', autoLockMin: 15, explorerUrl: 'https://randscan.org', chainId: 13 };
+  return {
+    rpcUrl: 'http://127.0.0.1:8899',
+    rpcUrls: ['https://rpc1.randprotocol.org', 'https://rpc2.randprotocol.org', 'https://rpc3.randprotocol.org'],
+    theme: 'system', autoLockMin: 15, explorerUrl: 'https://randscan.org', chainId: 13,
+  };
 }
 
 function defaultAssets() {

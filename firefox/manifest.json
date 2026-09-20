@@ -47,7 +47,9 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://rpc.randprotocol.org/*"
+    "https://rpc1.randprotocol.org/*",
+    "https://rpc2.randprotocol.org/*",
+    "https://rpc3.randprotocol.org/*"
   ],
   "optional_permissions": [
     "https://*/*",
