@@ -1,8 +1,8 @@
 // The withdraw flow (`#withdraw/<index>`, `#withdrawn/<hash>`) and the Withdraw action on the
 // asset screen — task 4.5.
 //
-// A withdrawal is a `BridgeBurn`: an RPL note leaves the shielded pool for its origin chain, at a
-// cost of two bundle proofs and about three and a half minutes. So most of what is asserted here
+// A withdrawal is a `BridgeBurn`: an RPL note leaves the shielded pool for one of the coins that
+// back it, at a cost of ONE bundle proof and about a minute and a half. So most of what is asserted here
 // is about **not starting one**: no Withdraw action where the shell or the chain cannot carry one
 // out, and every refusal that can be made locally made before `bridge.estimate` is even called.
 //
@@ -17,6 +17,7 @@ import { mountApp } from './helpers.mjs';
 import { burnIsPossible } from '../engine/backend-shared.js';
 import { coreApi } from '../engine/wallet.js';
 import { checkRecipient, EVM_CHAINS } from '../screens/withdraw.js';
+import { UNLISTED_TEXT } from '../lib/assets.js';
 
 const COIN = 'ee'.repeat(32);
 
@@ -164,12 +165,12 @@ test('the asset screen offers Withdraw for an RPL asset when the bridge says it 
 });
 
 test('no Withdraw action, and the reason instead, when canWithdraw says no', async (t) => {
-  const REASON = 'Proving needs about 5.5 GB of free memory; this computer reports 8 GB.';
+  const REASON = 'Proving needs about 5.7 GB of free memory; this computer reports 8 GB.';
   const b = unlockedBackend({ bridge: { canWithdraw: () => ({ ok: false, reason: REASON }) } });
   const { app, root } = await mountApp(t, b, { hash: '#asset/1' });
   await app.idle();
   assertGone(root.querySelector('[data-go="withdraw/1"]'), 'the Withdraw action');
-  assert.match(text(root), /5\.5 GB/, 'the reason is shown in its place');
+  assert.match(text(root), /5\.7 GB/, 'the reason is shown in its place');
 });
 
 test('a shell with no bridge group at all offers no Withdraw and asks it nothing', async (t) => {
@@ -401,10 +402,139 @@ test('a withdrawal that fails before the wire says so and offers the review agai
 });
 
 test('the receipt names the destination chain and the burn', async (t) => {
+  // Reached through the flow, not by mounting `#withdrawn/<hash>` cold: arriving cold leaves
+  // `ctx.state.withdrawReceipt` null, and the chain row, the To row and the amount line all
+  // render as empty strings — which is exactly what this test used to assert nothing about
+  // (task 4.5, M1).
   const b = unlockedBackend();
   const hash = `0x${'be'.repeat(32)}`;
-  const { app, root } = await mountApp(t, b, { hash: `#withdrawn/${hash}` });
+  const { app, root } = await review(t, b, { amount: '0.05' });
+  const confirm = root.querySelector('input[name=confirm]');
+  confirm.value = EVM.slice(-4);
+  confirm.dispatchEvent(new Event('input', { bubbles: true }));
   await app.idle();
-  assert.match(text(root), /Withdrawal submitted/i);
-  assert.match(text(root), /be be|bebe/i);
+  root.querySelector('[data-action="prove"]').click();
+  await app.idle();
+
+  assert.equal(location.hash, `#withdrawn/${hash}`);
+  const shown = text(root);
+  assert.match(shown, /Withdrawal submitted/i);
+  assert.match(shown, /Chain 2 \(EVM\)/, 'the destination chain is named');
+  assert.match(shown, new RegExp(EVM.slice(-4)), 'and so is the address it was sent to');
+  // 0.05 of an eight-decimal token. A receipt that printed it at RAND's nine would say 0.005.
+  assert.match(shown, /0\.05/);
+  assert.match(shown, /wETH/);
+  assert.match(shown, /bebebebe/i, 'with the transaction hash');
+});
+
+test('the review’s network fee is RAND at the RAND row’s own decimals, not a written 9', async (t) => {
+  // Task 4.5's M8: `formatUnits(estimate.fee, 9, 9)` was the one number about money this screen
+  // wrote rather than read. On a chain whose native token has six decimals it is out by 1000.
+  const b = unlockedBackend({
+    assets: {
+      list: async () => [
+        { index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 6, balance: '3500000', pending: '0' },
+        {
+          index: 1, id: 'wrapped-eth', name: 'Wrapped Ether', symbol: 'wETH', decimals: 8,
+          balance: '120000000', pending: '0',
+          backings: [{ chain: 2, token: COIN, locked: '900000000', decimals: 6 }],
+        },
+      ],
+    },
+  });
+  const { root } = await review(t, b);
+  // The fake's burn fee is 10000000 units: 10 RAND at six decimals, 0.01 at nine.
+  assert.match(text(root), /10 RAND/);
+  assert.doesNotMatch(text(root), /0\.01 RAND/);
+});
+
+test('an asset the node’s registry does not list is refused at the very first step', async (t) => {
+  // 4.5's M6: the old flow walked the whole address/amount/review sequence and only found out at
+  // `estimate`. An unlisted asset's decimals are the wallet's own guess, so nothing the user
+  // types about it means anything — the flow says so before the first field.
+  const b = unlockedBackend({
+    assets: {
+      list: async () => [
+        { index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0' },
+        { index: 3, id: 'rpl-3', symbol: 'RPL#3', decimals: 9, balance: '7', pending: '0', unlisted: true },
+      ],
+    },
+  });
+  const { app, root } = await mountApp(t, b, { hash: '#withdraw/3' });
+  await app.idle();
+  assert.ok(text(root).includes(UNLISTED_TEXT));
+  assertGone(root.querySelector('[data-token]'), 'a backing to pick');
+  assertGone(root.querySelector('textarea[name=to]'), 'an address field');
+  assert.equal(calls(b, 'bridge.estimate').length, 0, 'and the backend was never asked to plan it');
+});
+
+test('a native token has no coin to release, and the flow says so instead of offering one', async (t) => {
+  const b = unlockedBackend({
+    assets: {
+      list: async () => [
+        { index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0' },
+        { index: 2, id: 'n'.repeat(64), name: 'Points', symbol: 'PTS', decimals: 4, balance: '5000', pending: '0' },
+      ],
+    },
+  });
+  const { app, root } = await mountApp(t, b, { hash: '#withdraw/2' });
+  await app.idle();
+  assert.match(text(root), /nothing.*(withdraw|release)|no coin/i);
+  assertGone(root.querySelector('[data-token]'), 'a backing to pick');
+  assert.equal(calls(b, 'bridge.estimate').length, 0);
+});
+
+test('a second backing, chosen, is the pair that reaches BOTH estimate and withdraw', async (t) => {
+  const backings = [
+    { chain: 2, token: 'ee'.repeat(32), locked: '900000000', decimals: 6 },
+    { chain: 3, token: 'cc'.repeat(32), locked: '5000000', decimals: 18 },
+  ];
+  const { b, ctl } = controlledWithdraw();
+  b.assets.list = async () => {
+    b.calls.push(['assets.list']);
+    return [
+      { index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0' },
+      { index: 1, id: 'z', name: 'Shielded USD', symbol: 'zUSD', decimals: 8, balance: '120000000', pending: '0', backings },
+    ];
+  };
+  const { app, root } = await mountApp(t, b, { hash: '#withdraw/1' });
+  await app.idle();
+  // The backing's own locked holding is on the row, so "which coin?" is an informed choice.
+  assert.match(text(root), /900/);
+  root.querySelector('[data-backing="1"]').click();
+  await app.idle();
+  root.querySelector('textarea[name=to]').value = 'ab'.repeat(32); // chain 3 is EVM: 20 bytes
+  root.querySelector('textarea[name=to]').value = `0x${EVM}`;
+  root.querySelector('[data-role="address-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+  root.querySelector('input[name=amount]').value = '0.05';
+  root.querySelector('[data-role="amount-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+
+  const [, est] = calls(b, 'bridge.estimate')[0];
+  assert.equal(est.toChain, 3);
+  assert.equal(est.token, 'cc'.repeat(32), 'the coin the user picked, not the first one listed');
+
+  const confirm = root.querySelector('input[name=confirm]');
+  confirm.value = EVM.slice(-4);
+  confirm.dispatchEvent(new Event('input', { bubbles: true }));
+  await app.idle();
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  assert.equal(ctl.req.toChain, 3);
+  assert.equal(ctl.req.token, 'cc'.repeat(32));
+});
+
+test('an empty estimate fee is never passed on as one', async (t) => {
+  // 4.5's T4. `String(fee || '')` is neither undefined nor null, so it would slip past
+  // `bridge.withdraw`'s own default and reach `plan_burn` as `fee: ''`.
+  const { b, ctl } = controlledWithdraw({ bridge: { estimate: async () => ({ fee: '', relayerFee: '0', receive: '5000000', change: '0', proofs: 1 }) } });
+  const { app, root } = await review(t, b);
+  const confirm = root.querySelector('input[name=confirm]');
+  confirm.value = EVM.slice(-4);
+  confirm.dispatchEvent(new Event('input', { bubbles: true }));
+  await app.idle();
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  assert.equal(ctl.req.fee, undefined, 'an absent fee lets the backend supply the chain’s own');
 });

@@ -1,16 +1,17 @@
 // Asset detail (#asset/<index>): balance, Receive/Send actions and this asset's recent activity.
 //
-// RPL assets (index >= 1) cannot be sent on this network — the ledger only admits asset-0
-// transfers (amendment 3) — so Send renders disabled with a fixed helper string a later task
-// reuses verbatim; RAND's Send links to #send/0. Receive is available for every asset.
+// Chain 14 transfers any asset in one bundle, so Send is offered for every asset the chain's
+// registry lists — RAND and RPL tokens alike. The one exception is an asset this wallet holds but
+// the node's registry does not list (`unlisted`): its decimals are this wallet's guess, so nothing
+// the user typed about it would mean what they meant, and Send renders disabled with the shared
+// explanation. Receive is available for every asset.
 import { h, raw } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits } from '../lib/format.js';
 import { avatarMarkup, activityRowMarkup, listMarkup } from '../lib/rows.js';
 import { detailTopbar, wireSelection } from '../lib/panes.js';
-
-export const RPL_SEND_DISABLED_TEXT = 'RPL transfers are not available on this network.';
+import { UNLISTED_TEXT, canSendAsset, canWithdrawAsset } from '../lib/assets.js';
 
 function skeletonMarkup(ctx) {
   return h`
@@ -22,11 +23,11 @@ const HINT_ID = 'asset-send-hint';
 const WITHDRAW_HINT_ID = 'asset-withdraw-hint';
 
 /**
- * A registry asset cannot be *transferred*, but it can be **withdrawn**: burned back to its origin
- * chain across the bridge. That is `#withdraw/<index>`, and it is offered only where the backend
- * says it can actually be carried out — the `bridge` group is optional in the contract, and its
- * `canWithdraw()` is false on every shell that cannot produce two bundle proofs. Where it says no,
- * the reason goes in the action's place, exactly as Send's does.
+ * A registry asset with a backing can be **withdrawn**: burned back to one of the coins holding
+ * its value across the bridge. That is `#withdraw/<index>`, and it is offered only where the
+ * backend says it can actually be carried out — the `bridge` group is optional in the contract,
+ * and its `canWithdraw()` is false on every shell that cannot produce a bundle proof. Where it
+ * says no, the reason goes in the action's place, exactly as Send's does.
  */
 function withdrawMarkup(withdraw, index) {
   if (!withdraw) return { button: '', hint: '' };
@@ -43,14 +44,14 @@ function withdrawMarkup(withdraw, index) {
 }
 
 function actionsMarkup(asset, withdraw = null) {
-  const canSend = asset.index === 0;
+  const canSend = canSendAsset(asset);
   // `aria-disabled`, not `disabled`: a `disabled` button is skipped by the keyboard entirely, so
   // the reason it is off (the hint below, tied on with aria-describedby) would never be announced
   // to the one user who most needs it. It carries no `data-go`, so a click does nothing.
   const sendBtn = raw(canSend
-    ? h`<button class="btn-round" type="button" data-go="send/0"><span class="ic">${raw(icons.arrowUpRight())}</span><span class="cap">Send</span></button>`
+    ? h`<button class="btn-round" type="button" data-go="send/${asset.index}"><span class="ic">${raw(icons.arrowUpRight())}</span><span class="cap">Send</span></button>`
     : h`<button class="btn-round" type="button" aria-disabled="true" aria-describedby="${HINT_ID}"><span class="ic">${raw(icons.arrowUpRight())}</span><span class="cap">Send</span></button>`);
-  const hint = raw(canSend ? '' : h`<p class="caption" id="${HINT_ID}" data-role="rpl-hint">${RPL_SEND_DISABLED_TEXT}</p>`);
+  const hint = raw(canSend ? '' : h`<p class="caption" id="${HINT_ID}" data-role="send-hint">${UNLISTED_TEXT}</p>`);
   const w = withdrawMarkup(withdraw, asset.index);
   return raw(h`
     <div class="actions">
@@ -111,11 +112,13 @@ registerScreen('asset', {
     const assetsByIndex = new Map(assets.map((a) => [a.index, a]));
     const activity = (sync.activity || []).filter((a) => a.asset === index).sort((a, b) => b.time - a.time);
 
-    // Only a registry asset has anywhere to be withdrawn *to*, and only a shell with the optional
-    // `bridge` group can take it there — so RAND and a bridge-less shell ask nothing at all. A
-    // failure to answer is "no", never "yes": it must never show an action that cannot work.
+    // Only an asset that has somewhere to be withdrawn *to* — a registry token with at least one
+    // backing coin — is ever a Withdraw candidate, and only a shell with the optional `bridge`
+    // group can take it there — so RAND, a native token, an unlisted asset and a bridge-less
+    // shell ask nothing at all. A failure to answer is "no", never "yes": it must never show an
+    // action that cannot work.
     let withdraw = null;
-    if (index >= 1 && ctx.backend.bridge && typeof ctx.backend.bridge.canWithdraw === 'function') {
+    if (canWithdrawAsset(asset) && ctx.backend.bridge && typeof ctx.backend.bridge.canWithdraw === 'function') {
       try { withdraw = (await ctx.backend.bridge.canWithdraw()) || null; } catch (err) {
         withdraw = { ok: false, reason: (err && err.message) || 'The bridge could not be asked.' };
       }

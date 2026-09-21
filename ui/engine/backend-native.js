@@ -51,9 +51,9 @@ function saidGiB(gib) {
 
 export function cannotProveReason(gib) {
   if (!Number.isFinite(gib) || gib <= 0) {
-    return 'Proving needs about 5.5 GB of free memory, and this computer did not report how much it has.';
+    return 'Proving needs about 5.7 GB of free memory, and this computer did not report how much it has.';
   }
-  return `Proving needs about 5.5 GB of free memory; this computer reports ${saidGiB(gib)} GB.`;
+  return `Proving needs about 5.7 GB of free memory; this computer reports ${saidGiB(gib)} GB.`;
 }
 
 /**

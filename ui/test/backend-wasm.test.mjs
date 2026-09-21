@@ -5,7 +5,7 @@
 // Almost everything this backend does is `backend-shared.js`'s and is asserted in
 // `./backend-cases.mjs`, against this factory and the native one alike. What is left here is the
 // two things that are actually about wasm: `canProve()` is unconditionally `{ok: false}` because a
-// bundle proof peaks at ~5.6 GB and wasm32 stops at 4 GiB, and `send.send()` therefore refuses
+// bundle proof peaks at ~5.7 GB and wasm32 stops at 4 GiB, and `send.send()` therefore refuses
 // before anything is selected, proved or sent.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -49,11 +49,11 @@ test('the unlock delay schedule is 0, 0, 0.5s, 1s, 2s … capped at 30s', () => 
   assert.equal(unlockDelayMs(1000), 30000);
 });
 
-test('canProve explains the 5.5 GB wall', async () => {
+test('canProve explains the 5.7 GB wall', async () => {
   const { backend } = build();
   const answer = await backend.send.canProve();
   assert.equal(answer.ok, false);
-  assert.match(answer.reason, /5\.5 GB/);
+  assert.match(answer.reason, /5\.7 GB/);
   assert.match(answer.reason, /desktop app/);
 });
 
@@ -65,7 +65,7 @@ test('send rejects definitely, without ever reaching prove_transfer', async () =
     () => backend.send.send({ asset: 0, to: ADDRESS, amount: '1' }, (p) => phases.push(p)),
     (err) => {
       assert.equal(err.definite, true);
-      assert.match(err.message, /5\.5 GB/);
+      assert.match(err.message, /5.7 GB/);
       return true;
     },
   );

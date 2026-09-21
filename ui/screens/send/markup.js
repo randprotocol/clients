@@ -12,7 +12,7 @@ import { h, raw } from '../../lib/dom.js';
 import { icons } from '../../lib/icons.js';
 import { formatUnits, shortAddress, elapsed } from '../../lib/format.js';
 import { avatarMarkup, listMarkup } from '../../lib/rows.js';
-import { RPL_SEND_DISABLED_TEXT } from '../asset.js';
+import { UNLISTED_TEXT, canSendAsset, feeDecimals, feeSymbol } from '../../lib/assets.js';
 import { PHASE_LABELS, CANCELLABLE, UNKNOWN_NOTICE, UNKNOWN_CONFIRM, proveCost } from './state.js';
 
 export function shellMarkup() {
@@ -40,11 +40,14 @@ function unknownNoticeMarkup(record) {
 }
 
 function assetRowMarkup(asset) {
-  const sendable = asset.index === 0;
-  const hintId = `send-rpl-hint-${asset.index}`;
+  // Chain 14 transfers any asset the registry lists, so the only row that is off is an asset this
+  // wallet holds but the node does not list: its decimals are a guess, and the row says so rather
+  // than letting an amount be typed against them.
+  const sendable = canSendAsset(asset);
+  const hintId = `send-unlisted-hint-${asset.index}`;
   const off = sendable ? '' : raw(h` aria-disabled="true" aria-describedby="${hintId}"`);
-  const rplChip = sendable ? '' : raw(h`<span class="chip xs">RPL</span>`);
-  const hint = sendable ? '' : raw(h`<p class="caption" id="${hintId}">${RPL_SEND_DISABLED_TEXT}</p>`);
+  const rplChip = asset.index >= 1 ? raw(h`<span class="chip xs">RPL</span>`) : '';
+  const hint = sendable ? '' : raw(h`<p class="caption" id="${hintId}">${UNLISTED_TEXT}</p>`);
   return h`
     <li>
       <button class="row" type="button" data-asset="${asset.index}"${off}>
@@ -66,7 +69,10 @@ export function assetStepMarkup(assets, unknown = null) {
     <div class="card flush">${listMarkup(assets.map((a) => assetRowMarkup(a)))}</div>`;
 }
 
-export function rplOnlyMarkup(asset, { hasRand = true } = {}) {
+/** The end of the road for an asset that cannot be sent at all — one the node's registry does
+ *  not list (see UNLISTED_TEXT), or one this wallet simply does not hold. Never a form: a form
+ *  would let an amount be typed against decimals nobody vouched for. */
+export function unsendableMarkup(asset, { hasRand = true } = {}) {
   const alternative = hasRand
     ? raw(h`<button class="btn btn-primary block" type="button" data-go="send/0">Send RAND instead</button>`)
     : raw(h`<button class="btn btn-primary block" type="button" data-go="receive">Receive RAND</button>`);
@@ -74,7 +80,7 @@ export function rplOnlyMarkup(asset, { hasRand = true } = {}) {
     <h2 class="title" data-role="step-title" tabindex="-1">${asset ? asset.symbol : 'This asset'} cannot be sent</h2>
     <div class="banner warn">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">Not on this network</span>${RPL_SEND_DISABLED_TEXT}</span>
+      <span><span class="banner-title">Not in the token registry</span>${asset ? UNLISTED_TEXT : 'This wallet holds no such asset.'}</span>
     </div>
     ${alternative}
     <button class="btn btn-ghost block" type="button" data-go="home">Back to home</button>`;
@@ -127,11 +133,20 @@ export function detailsStepMarkup(asset, draft, { canPaste = false, unknown = nu
     </form>`;
 }
 
-export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown = null }) {
+export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown = null, assets = [] }) {
   const fee = BigInt(estimate.fee || '0');
   const amountOf = (u) => `${formatUnits(u, 9, asset.decimals)} ${asset.symbol}`;
+  // The fee is RAND, whatever is being sent — chain 14's bundle pays it out of slots 2–3 — so it
+  // is denominated in the native token and read at the native token's own decimals, never the
+  // sent asset's and never a written 9.
+  const feeOf = (u) => `${formatUnits(u, 9, feeDecimals(assets))} ${feeSymbol(assets)}`;
   const changeRow = estimate.change !== undefined && estimate.change !== null
     ? raw(h`<div class="kv"><span class="k">Change back to you</span><span class="v amount">${amountOf(estimate.change)}</span></div>`)
+    : '';
+  // Amount + fee is only a number when both are the same asset. For a token transfer the fee is
+  // RAND out of the other half of the bundle, and "0.5 zUSD + 0.00001 RAND" is not a Total.
+  const totalRow = Number(asset.index) === 0
+    ? raw(h`<div class="kv"><span class="k">Total</span><span class="v amount">${amountOf(units + fee)}</span></div>`)
     : '';
   // A standing unknown outcome makes proving again a deliberate act: the box has to be ticked
   // before the button is live. `unknown` is already null once a later scan has settled the
@@ -166,8 +181,8 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
         </span>
       </div>
       <div class="kv"><span class="k">Amount</span><span class="v amount">${amountOf(units)}</span></div>
-      <div class="kv"><span class="k">Network fee</span><span class="v amount">${amountOf(fee)}</span></div>
-      <div class="kv"><span class="k">Total</span><span class="v amount">${amountOf(units + fee)}</span></div>
+      <div class="kv"><span class="k">Network fee</span><span class="v amount">${feeOf(fee)}</span></div>
+      ${totalRow}
       ${changeRow}
     </div>
     <div class="address-box" data-role="to-full" hidden><span class="mono">${to}</span></div>

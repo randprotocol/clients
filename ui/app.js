@@ -65,7 +65,7 @@ const SYNC_PASSTHROUGH = { wallet: ['onLocked', 'noteActivity'], sync: ['onChang
 
 /**
  * The network chip's text, derived from `settings.get().chainId` — never a chain number written
- * into a screen. A numeric id reads as "Chain 13"; anything else (a named network some other
+ * into a screen. A numeric id reads as "Chain 14"; anything else (a named network some other
  * shell reports) is shown as given, escaped by `h` at the call site.
  */
 function networkLabel(chainId) {

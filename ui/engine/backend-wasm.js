@@ -40,7 +40,7 @@ import { makeSharedBackend, UNLOCKED_SESSION_KEY, unlockDelayMs } from './backen
 export { UNLOCKED_SESSION_KEY, unlockDelayMs };
 
 /** Shown to the user verbatim, so it is written for them (ui/backend.js on `send.canProve`). */
-export const CANNOT_PROVE_REASON = 'A transfer proof needs about 5.5 GB of memory and browsers '
+export const CANNOT_PROVE_REASON = 'A transfer proof needs about 5.7 GB of memory and browsers '
   + 'give WebAssembly 4 GB. Send from the Rand Wallet desktop app — your keys import there.';
 
 async function canProve() {

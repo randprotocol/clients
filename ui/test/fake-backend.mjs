@@ -4,6 +4,15 @@
 
 const MIN_PASSWORD_LEN = 10;
 
+/**
+ * `wallet-core`'s `NO_SPENDABLE_RAND`, as the real engine surfaces it. A token transfer pays its
+ * fee in RAND out of the other half of the same bundle, so a wallet holding only the token cannot
+ * send it at all — and the screens show the backend's sentence verbatim, which is what the flow
+ * tests pin.
+ */
+export const NO_SPENDABLE_RAND_TEXT = 'a transfer pays its fee in RAND, and this wallet holds no '
+  + 'spendable RAND: receive some RAND (on a testnet, `rand faucet`) and retry';
+
 function fixedAddress() {
   return 'rand1' + 'q'.repeat(40);
 }
@@ -16,7 +25,7 @@ function defaultSettings() {
   return {
     rpcUrl: 'http://127.0.0.1:8899',
     rpcUrls: ['https://rpc1.randprotocol.org', 'https://rpc2.randprotocol.org', 'https://rpc3.randprotocol.org'],
-    theme: 'system', autoLockMin: 15, explorerUrl: 'https://randscan.org', chainId: 13,
+    theme: 'system', autoLockMin: 15, explorerUrl: 'https://randscan.org', chainId: 14,
   };
 }
 
@@ -186,17 +195,36 @@ function createBackend(initial = {}, overrides = {}) {
   };
 
   const FEE = 10000n;
+  // The send logic reads the SAME list the screens are served — through the wrapped,
+  // override-aware method, not `state.assets` — so a test whose wallet holds no RAND gets the
+  // refusal that wallet would really get. Wired up after construction (below).
+  const self = { api: null };
+  const servedAssets = async () => (self.api ? self.api.assets.list() : state.assets.map((a) => ({ ...a })));
+  /** How much spendable RAND this wallet has to pay a fee out of. */
+  const randBalance = async () => BigInt(((await servedAssets()).find((a) => a.index === 0) || {}).balance || '0');
 
   const sendDefs = {
     canProve: () => ({ ok: false, reason: 'test' }),
-    estimate: (_req) => ({ fee: FEE.toString(), inputs: 1, change: '0', proofs: 1 }),
+    // Chain 14 transfers any asset, and the fee is RAND out of slots 2–3 of the same bundle — so
+    // a wallet holding a token and no RAND cannot send that token, and the refusal is the core's
+    // own sentence, made before anything is selected (ui/backend.js on `send.estimate`).
+    estimate: async (req = {}) => {
+      if (await randBalance() < FEE) throw new Error(NO_SPENDABLE_RAND_TEXT);
+      return { fee: FEE.toString(), inputs: 1, feeInputs: Number(req.asset) === 0 ? 0 : 1, change: '0', feeChange: '0', proofs: 1 };
+    },
     // Optional in the contract (see ui/backend.js). Exact here because this fake knows its own
-    // arithmetic: the whole balance less the fee, floored at zero.
-    maxSendable: ({ asset = 0 } = {}) => {
-      const entry = state.assets.find((a) => a.index === asset);
+    // arithmetic — and asset-aware, because the two answers differ: a RAND transfer pays its fee
+    // out of the very notes it is sending, and a TOKEN transfer pays it out of the RAND half of
+    // the bundle, so the whole token balance is sendable (or none of it is, if there is no RAND).
+    maxSendable: async ({ asset = 0 } = {}) => {
+      const entry = (await servedAssets()).find((a) => a.index === asset);
       const balance = BigInt((entry && entry.balance) || '0');
-      const amount = balance > FEE ? balance - FEE : 0n;
-      return { amount: amount.toString(), fee: FEE.toString() };
+      if (Number(asset) === 0) {
+        const amount = balance > FEE ? balance - FEE : 0n;
+        return { amount: amount.toString(), fee: FEE.toString() };
+      }
+      if (await randBalance() < FEE) return { amount: '0', fee: FEE.toString(), reason: NO_SPENDABLE_RAND_TEXT };
+      return { amount: balance.toString(), fee: FEE.toString() };
     },
     // `options.signal` is the session-linked AbortSignal (see ui/backend.js). This fake answers
     // immediately, so the only abort it can observe is one that happened before the call; it
@@ -298,6 +326,7 @@ function createBackend(initial = {}, overrides = {}) {
     platform: buildGroup('platform', platformDefs, overrides.platform, calls),
     calls,
   };
+  self.api = backend;
 
   return backend;
 }

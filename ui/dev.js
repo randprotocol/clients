@@ -44,7 +44,7 @@ const assetsMode = params.get('assets');
 const chain = params.get('chain');
 const rpcMode = params.get('rpc');
 
-const WASM_CANNOT_PROVE = 'A transfer proof needs about 5.6 GB of memory and a browser gives '
+const WASM_CANNOT_PROVE = 'A transfer proof needs about 5.7 GB of memory and a browser gives '
   + 'WebAssembly at most 4 GB, so this wallet cannot finish one here.';
 
 /** A shielded address at its real length (~1.6 kB), so the Receive screen can be judged honestly. */

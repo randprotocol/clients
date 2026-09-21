@@ -199,7 +199,7 @@ test('an empty wallet has one asset, no notes and cannot prove', { skip }, async
 
   const prove = await backend.send.canProve();
   assert.equal(prove.ok, false);
-  assert.match(prove.reason, /5\.5 GB/);
+  assert.match(prove.reason, /5.7 GB/);
   await assert.rejects(() => backend.send.send({ asset: 0, to: 'rand1x', amount: '1' }, () => {}), (err) => err.definite === true);
 });
 

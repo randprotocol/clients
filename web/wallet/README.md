@@ -35,8 +35,8 @@ git-ignored, and nothing in it is ever edited by hand.
 ## What it cannot do: send
 
 A transfer on this chain is a STARK proof of a 2-in-2-out bundle. The prover peaks at about
-**5.6 GB** of memory (`wallet-core`'s `PROVER_PEAK_MEMORY_BYTES`, re-measured on constraint set 6)
-and a browser gives WebAssembly a **4 GiB** address space. There is no way to fit one in the
+**5.7 GB** of memory (`wallet-core`'s `PROVER_PEAK_MEMORY_BYTES`, re-measured on chain 14's
+constraint set) and a browser gives WebAssembly a **4 GiB** address space. There is no way to fit one in the
 other, so this shell does not try: `send.canProve()` answers `false`, and the Send flow walks you
 through recipient, amount and review and then explains the wall instead of offering a Prove
 button. Nothing is half-started and no proof is attempted — in wasm it would grind for minutes and

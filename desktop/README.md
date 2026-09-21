@@ -4,7 +4,7 @@ A [Tauri](https://tauri.app) app: the **shared wallet UI** (`../ui`) in a system
 **shared Rust core** (`../core/crates/wallet-core`) linked directly as a crate, no FFI.
 
 **This is the one shell in which a transfer can actually complete.** A bundle proof peaks at about
-5.6 GB and wasm32 stops at 4 GiB, so the web wallet and the browser extension do everything except
+5.7 GB and wasm32 stops at 4 GiB, so the web wallet and the browser extension do everything except
 the proof itself and say so (`send.canProve()`). Here the chain crypto is native, and the only
 limit is the machine's real RAM.
 

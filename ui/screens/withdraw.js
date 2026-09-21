@@ -23,13 +23,14 @@
 //
 // Steps: backing → address → amount → review → proving → `#withdrawn/<hash>`. Like the send flow,
 // the proof lives on `ctx.state` (session-scoped) with a pinned chip, so leaving the screen does
-// not cancel three and a half minutes of work.
+// not cancel a minute and a half of work.
 import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { parseUnits, formatUnits, shortHex, elapsed } from '../lib/format.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink, TX_HASH_RE } from '../lib/explorer.js';
+import { UNLISTED_TEXT, isUnlisted, feeDecimals, feeSymbol } from '../lib/assets.js';
 import { plainUnits } from './send/state.js';
 
 // ============================================================================ the vocabulary ===
@@ -75,7 +76,7 @@ function plainHex(text) {
  * What goes in `to`: **32 plain bytes as 64 hex characters**, per chain family.
  *
  * Returns `{to, display}` or `{error}`. The three refusals mirror `check_burn`'s own, so the user
- * learns about them now rather than after two proofs — but this is a courtesy, not a second copy
+ * learns about them now rather than after a proof — but this is a courtesy, not a second copy
  * of the rule: the bridge still owns it, and this wallet screens only the shape.
  */
 export function checkRecipient(toChain, text) {
@@ -272,7 +273,7 @@ function backingStepMarkup(asset, { chains, backings }) {
           <span class="row-title">${chainName(b.chain)}</span>
           <span class="row-sub mono truncate">${shortHex(b.token, 8)}</span>
         </span>
-        <span class="row-end">${raw(icons.chevron())}</span>
+        <span class="row-end"><span class="amount">${formatUnits(b.locked ?? '0', Number(b.decimals) || 0, Number(b.decimals) || 0)}</span><span class="row-meta">held</span></span>
       </button>
     </li>`).join('');
   const empty = backings.length === 0
@@ -331,12 +332,15 @@ function amountStepMarkup(asset, draft) {
     </form>`;
 }
 
-function reviewStepMarkup({ asset, display, toChain, units, estimate }) {
+function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [] }) {
   const amountOf = (u) => `${formatUnits(u, 9, asset.decimals)} ${asset.symbol}`;
   const relayer = BigInt(estimate.relayerFee || '0');
   const relayerRow = relayer > 0n
     ? raw(h`<div class="kv"><span class="k">Relayer fee</span><span class="v amount">${amountOf(relayer)}</span></div>`)
     : '';
+  // The burn's fee is RAND, read at the RAND row's own decimals — writing `9` here was the one
+  // number about money this screen produced without the chain (task 4.5's M8).
+  const feeLine = `${formatUnits(estimate.fee || '0', 9, feeDecimals(assets))} ${feeSymbol(assets)}`;
   return h`
     <h2 class="title" data-role="step-title" tabindex="-1">Review</h2>
     <div class="banner warn">
@@ -349,7 +353,7 @@ function reviewStepMarkup({ asset, display, toChain, units, estimate }) {
       <div class="kv"><span class="k">Burned</span><span class="v amount">${amountOf(units)}</span></div>
       ${relayerRow}
       <div class="kv"><span class="k">Arrives</span><span class="v amount">${amountOf(BigInt(estimate.receive || '0'))}</span></div>
-      <div class="kv"><span class="k">Network fee</span><span class="v amount">${formatUnits(estimate.fee || '0', 9, 9)} RAND</span></div>
+      <div class="kv"><span class="k">Network fee</span><span class="v amount">${feeLine}</span></div>
     </div>
     <div class="address-box"><span class="mono">${display}</span></div>
     <form class="stack" data-role="confirm-form" novalidate>
@@ -485,6 +489,14 @@ registerScreen('withdraw', {
       return;
     }
 
+    // An asset the node's registry does not list is refused at the very first step, not after the
+    // whole address/amount/review walk: its decimals are this wallet's guess, so nothing the user
+    // could type about it means what they meant (task 4.5's M6).
+    if (isUnlisted(asset)) {
+      endOfTheRoad(cannotMarkup(`${asset.symbol} cannot be withdrawn`, UNLISTED_TEXT));
+      return;
+    }
+
     // Every coin that backs this token, straight from `assets.list()`. A burn names one of them
     // (`to_chain` + `token`), so this is the choice the flow opens on.
     const backings = (Array.isArray(asset.backings) ? asset.backings : [])
@@ -559,7 +571,7 @@ registerScreen('withdraw', {
       else if (next === 'amount') stepEl.innerHTML = amountStepMarkup(asset, draft);
       else if (next === 'review') {
         stepEl.innerHTML = reviewStepMarkup({
-          asset, display: draft.display, toChain: draft.toChain, units: reviewUnits, estimate: draft.estimate,
+          asset, display: draft.display, toChain: draft.toChain, units: reviewUnits, estimate: draft.estimate, assets,
         });
       } else if (next === 'proving') paintProving();
       else if (next === 'failed') stepEl.innerHTML = failedStepMarkup((attached && attached.error && attached.error.message) || 'The withdrawal could not be proved.');
@@ -680,7 +692,7 @@ registerScreen('withdraw', {
       showFormBanner('');
 
       // Everything decidable here is decided here — the backend is not a validator, and asking it
-      // costs an RPC round trip on the way to costing two proofs.
+      // costs an RPC round trip on the way to costing a proof.
       const amount = readUnits(amountInput.value, 'amount');
       if (amount.error) { setFieldError(amountInput, amount.error); return; }
       if (amount.units <= 0n) { setFieldError(amountInput, 'Enter an amount greater than zero.'); return; }
@@ -753,7 +765,9 @@ registerScreen('withdraw', {
         toChain: draft.toChain,
         token: draft.token,
         to: draft.padded,
-        fee: String(draft.estimate.fee || ''),
+        // An absent fee is left ABSENT — `String(fee || '')` would slip `''` past the backend's
+        // own default and reach `plan_burn` as a fee the chain never named (task 4.5's T4).
+        fee: draft.estimate.fee ? String(draft.estimate.fee) : undefined,
       }, asset, draft.display);
       attach(store);
     });

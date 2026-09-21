@@ -55,7 +55,7 @@ which `idle-lock.js` implements (a lock the page asked for itself is not reporte
 ## Why Send does not escape to a tab
 
 It used to, because a bundle proof is minutes of wasm and the popup dies when it loses focus. It
-no longer needs to: a bundle proof peaks at about 5.5 GB and wasm32 stops at 4 GiB, so
+no longer needs to: a bundle proof peaks at about 5.7 GB and wasm32 stops at 4 GiB, so
 `send.canProve()` is `{ok: false}` in every wasm shell and the proving, submitting and confirming
 steps — the only ones that would outlive a closed popup — are never reached. Send renders in the
 popup and ends in an explanation that points at the desktop app.

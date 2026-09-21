@@ -291,8 +291,15 @@ export function checkAssets(reply, { max = 4096 } = {}) {
  * mints, and its `key`/`program` are bytes no screen has any use for.
  *
  * `enabled: false` (a chain with no `tokens` section) is an answer, not an error.
+ *
+ * A page must be an answer to the REQUEST, exactly as `checkCommitments` requires of leaves: the
+ * caller walks the registry by moving a cursor to the last row's index + 1, so a page that is not
+ * strictly ascending walks that cursor backwards, and one starting below the `from` it was asked
+ * with rewinds the walk over rows already read (or, served craftily, jumps it past rows that are
+ * then never read — and a token missing from the registry is one whose balance this wallet prints
+ * at its own guessed decimals instead of the chain's).
  */
-export function checkTokens(reply, { max = MAX_TOKEN_PAGE } = {}) {
+export function checkTokens(reply, { max = MAX_TOKEN_PAGE, from } = {}) {
   const m = 'rand_getTokens';
   const r = objectReply(m, reply);
   const rows = arrayReply(m, r.tokens === undefined || r.tokens === null ? [] : r.tokens, max);
@@ -302,6 +309,12 @@ export function checkTokens(reply, { max = MAX_TOKEN_PAGE } = {}) {
     // node lying about the native token, and it would collide with `assets.list()`'s own entry.
     const index = intField(m, `row ${i} index`, row.index);
     if (index < 1) fail(m, `row ${i} index is 0, which is RAND and is never in the registry`);
+    if (Number.isSafeInteger(from) && index < from) {
+      fail(m, `row ${i} is token ${index}, below the ${from} it was asked from`);
+    }
+    if (i > 0 && index <= rows[i - 1].index) {
+      fail(m, `row ${i} is token ${index}, not above row ${i - 1}'s ${rows[i - 1].index} — the page is not ascending`);
+    }
     hexField(m, `row ${i} id`, row.id, 64);
     // A token's own decimals on Rand: the chain stores 0..=9 (`ledger::tokens`), and a bridged
     // one is always 8. Anything else would misprint every balance of it.

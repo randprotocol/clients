@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import './dom-env.mjs';
 import { fakeBackend, unlockedBackend } from './fake-backend.mjs';
 import { mountApp } from './helpers.mjs';
-import { groupByDay, avatarFor, totalInRand } from '../lib/assets.js';
+import { groupByDay, avatarFor, totalInRand, UNLISTED_TEXT } from '../lib/assets.js';
 import { icons } from '../lib/icons.js';
 import { explorerLink } from '../screens/detail.js';
 
@@ -218,6 +218,35 @@ test('home: the sync bar is indeterminate while scanning with no progress yet', 
   assert.equal(bar.getAttribute('data-indeterminate'), 'true');
 });
 
+test('home: the sync bar’s slot stays in the hero when the scan ends, so nothing lifts', async (t) => {
+  // Task 5.3 measured a small but real layout shift on every load (CLS 0.0138 at 360 px): the bar
+  // was `hidden` the moment the scan finished, taking its 3 px and its margin out of the flow and
+  // lifting the balance line and everything under it by ~15 px. The bar still comes and goes; the
+  // space it occupies does not.
+  const src = unlockedBackend();
+  let resolveScan;
+  const b = unlockedBackend({ sync: { scan: () => new Promise((r) => { resolveScan = r; }) } });
+  const { app, root } = await mountApp(t, b, { hash: '#home' });
+  await tick();
+
+  const slot = root.querySelector('[data-role="progress-slot"]');
+  assert.ok(slot, 'the bar lives in a slot of its own');
+  assert.ok(slot.querySelector('[data-role="progress"]'), 'with the bar inside it while scanning');
+  const heroChildren = [...root.querySelector('.hero').children].map((el) => el.getAttribute('data-role') || el.className);
+
+  resolveScan(await src.sync.cached());
+  await app.idle();
+
+  assert.equal(root.querySelector('[data-role="progress-slot"]'), slot, 'the very same slot element');
+  assert.equal(slot.isConnected, true, 'still in the hero');
+  assert.deepEqual(
+    [...root.querySelector('.hero').children].map((el) => el.getAttribute('data-role') || el.className),
+    heroChildren,
+    'the hero’s children are unchanged across the end of a sync',
+  );
+  assert.equal(root.querySelector('[data-role="progress"]').hasAttribute('hidden'), true, 'the bar itself is gone');
+});
+
 test('home: the address pill copies the address', async (t) => {
   const b = unlockedBackend();
   const { root } = await at(t, '#home', b);
@@ -243,19 +272,55 @@ test('home: the sync control uses the refresh icon, not the activity clock', asy
 });
 
 // ------------------------------------------------------------------------------------ asset ---
-test('asset detail: RPL asset shows a keyboard-reachable disabled Send with the exact helper text', async (t) => {
+test('asset detail: a listed RPL token shows an enabled Send linking to #send/<index>', async (t) => {
+  // Chain 14 transfers a registry token in one bundle, exactly as it transfers RAND, so the
+  // blanket "RPL transfers are not available on this network" is gone from every screen.
   const { root } = await at(t, '#asset/1');
-  const sendBtn = [...root.querySelectorAll('.btn-round')].find((b) => b.textContent.includes('Send'));
+  const sendBtn = root.querySelector('[data-go="send/1"]');
+  assert.ok(sendBtn, 'Send is offered for the token');
+  assert.equal(sendBtn.hasAttribute('aria-disabled'), false);
+  assert.doesNotMatch(root.textContent, /transfers are not available/i);
+});
+
+test('asset detail: an unlisted asset shows a keyboard-reachable disabled Send with the reason', async (t) => {
+  const b = unlockedBackend({
+    assets: {
+      list: async () => [
+        { index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0' },
+        { index: 3, id: 'rpl-3', symbol: 'RPL#3', decimals: 9, balance: '7', pending: '0', unlisted: true },
+      ],
+    },
+  });
+  const { root } = await at(t, '#asset/3', b);
+  const sendBtn = [...root.querySelectorAll('.btn-round')].find((x) => x.textContent.includes('Send'));
   assert.ok(sendBtn);
   // aria-disabled, not `disabled`: a `disabled` button is skipped by the keyboard, so its helper
   // text would never be announced (see the aria-describedby tie below).
   assert.equal(sendBtn.hasAttribute('disabled'), false);
   assert.equal(sendBtn.getAttribute('aria-disabled'), 'true');
-  const hint = root.querySelector('[data-role="rpl-hint"]');
+  const hint = root.querySelector('[data-role="send-hint"]');
   assert.ok(hint);
   assert.ok(hint.id);
   assert.equal(sendBtn.getAttribute('aria-describedby'), hint.id);
-  assert.match(root.textContent, /RPL transfers are not available on this network\./);
+  assert.ok(root.textContent.includes(UNLISTED_TEXT));
+  assert.equal(b.calls.filter((c) => c[0].startsWith('bridge.')).length, 0, 'and the bridge is not asked about it');
+});
+
+test('asset detail: a NATIVE registry token offers Send and never Withdraw', async (t) => {
+  // No `backings`: nothing off-chain holds this token's value, so there is nowhere to withdraw it
+  // to and the bridge has nothing to be asked.
+  const b = unlockedBackend({
+    assets: {
+      list: async () => [
+        { index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0' },
+        { index: 2, id: 'n'.repeat(64), name: 'Points', symbol: 'PTS', decimals: 4, balance: '5000', pending: '0' },
+      ],
+    },
+  });
+  const { root } = await at(t, '#asset/2', b);
+  assert.ok(root.querySelector('[data-go="send/2"]'), 'Send');
+  assert.equal(root.querySelector('[data-go="withdraw/2"]'), null, 'no Withdraw');
+  assert.equal(b.calls.filter((c) => c[0] === 'bridge.canWithdraw').length, 0);
 });
 
 test('asset detail: RAND shows an enabled Send linking to #send/0', async (t) => {
@@ -263,7 +328,7 @@ test('asset detail: RAND shows an enabled Send linking to #send/0', async (t) =>
   const sendBtn = root.querySelector('[data-go="send/0"]');
   assert.ok(sendBtn);
   assert.equal(sendBtn.disabled, false);
-  assert.doesNotMatch(root.textContent, /RPL transfers are not available/);
+  assert.equal(root.querySelector('[data-role="send-hint"]'), null);
 });
 
 // ---------------------------------------------------------------------------------- activity ---
@@ -593,7 +658,7 @@ test('the network label is derived from settings.chainId, never hard-coded', asy
   const { root } = await at(t, '#home');
   const chip = root.querySelector('.sidebar-foot .chip, .sidebar .chip');
   assert.ok(chip);
-  assert.equal(chip.textContent.trim(), 'Chain 13');
+  assert.equal(chip.textContent.trim(), 'Chain 14');
 
   const other = unlockedBackend({ settings: { get: () => ({ rpcUrl: 'http://127.0.0.1:8899', theme: 'system', autoLockMin: 15, explorerUrl: 'https://randscan.org', chainId: 99 }) } });
   const second = await at(t, '#home', other);
@@ -602,7 +667,7 @@ test('the network label is derived from settings.chainId, never hard-coded', asy
 
 test('the fake backend reports the live chain id', async () => {
   const b = unlockedBackend();
-  assert.equal((await b.settings.get()).chainId, 13);
+  assert.equal((await b.settings.get()).chainId, 14);
 });
 
 // ------------------------------------------------------------------------------------- guard ---

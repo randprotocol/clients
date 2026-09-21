@@ -143,7 +143,7 @@ test('canProve says no below the threshold, and reports the real number', async 
   const { backend } = build({ systemMemoryGiB: () => 4 });
   const answer = await backend.send.canProve();
   assert.equal(answer.ok, false);
-  assert.match(answer.reason, /5\.5 GB/);
+  assert.match(answer.reason, /5.7 GB/);
   assert.match(answer.reason, /this computer reports 4 GB\./, `the real number is missing: ${answer.reason}`);
   // Not the browser shells' answer: there is no "use the desktop app" to offer here.
   assert.equal(/desktop app/.test(answer.reason), false);

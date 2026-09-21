@@ -61,7 +61,7 @@
     <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
     <a class="nav-item" href="#settings"><svg class="g-i"><use href="#i-settings"/></svg>Settings</a>
     <div class="sidebar-foot">
-      <button class="chip" type="button"><span class="dot"></span>Chain 13 · synced</button>
+      <button class="chip" type="button"><span class="dot"></span>Chain 14 · synced</button>
     </div>
   </div>
 </aside>
@@ -231,7 +231,7 @@
       <button class="btn-round" type="button"><span class="ic"><svg><use href="#i-receive"/></svg></span><span class="cap">Receive</span></button>
       <button class="btn-round" type="button" aria-disabled="true" aria-describedby="g-send-off"><span class="ic"><svg><use href="#i-send"/></svg></span><span class="cap">Send</span></button>
     </div>
-    <p class="caption" id="g-send-off">RPL transfers are not available on this network.</p>
+    <p class="caption" id="g-send-off">This node’s token registry does not list this asset, so its name and decimal places are this wallet’s guess rather than the chain’s. It cannot be sent or withdrawn until a node lists it.</p>
     <p class="g-note">Four actions fill the row; two or three cluster in the middle instead of being stranded at the corners of a 720 px desktop column. The off action carries <code>aria-disabled</code>, not <code>disabled</code>, so it keeps its place in the tab order and the reason it is off (tied on with <code>aria-describedby</code>) can actually be announced — it is dimmed, has no hover lift, and has no destination, so a click does nothing.</p>
   </section>
 
@@ -390,7 +390,7 @@
       </div>
       <div class="banner warn">
         <span class="ic"><svg><use href="#i-alert"/></svg></span>
-        <span><span class="banner-title">Proving needs memory</span>A bundle proof needs about 5.5 GB of RAM. Close heavy tabs first.</span>
+        <span><span class="banner-title">Proving needs memory</span>A bundle proof needs about 5.7 GB of RAM. Close heavy tabs first.</span>
       </div>
       <div class="banner negative">
         <span class="ic"><svg><use href="#i-alert"/></svg></span>
@@ -435,11 +435,11 @@
         </li>
         <li>
           <button class="row" type="button" aria-disabled="true" aria-describedby="g-rpl-hint">
-            <span class="avatar rpl" data-hue="204">W</span>
-            <span class="row-main"><span class="row-title"><span class="truncate">Wrapped Ether</span><span class="chip xs">RPL</span></span><span class="row-sub">wETH</span></span>
+            <span class="avatar rpl" data-hue="204">#</span>
+            <span class="row-main"><span class="row-title"><span class="truncate">RPL#3</span><span class="chip xs">RPL</span></span><span class="row-sub">RPL#3</span></span>
             <span class="row-end"><span class="amount">0.5000</span></span>
           </button>
-          <p class="caption" id="g-rpl-hint">RPL transfers are not available on this network.</p>
+          <p class="caption" id="g-rpl-hint">This node’s token registry does not list this asset, so its name and decimal places are this wallet’s guess rather than the chain’s. It cannot be sent or withdrawn until a node lists it.</p>
         </li>
       </ul>
     </div>
@@ -513,7 +513,7 @@
         </div>
       </div>
       <div class="kv"><span class="k">Elapsed</span><span class="v amount mono">00:41</span></div>
-      <div class="kv"><span class="k">Circuit</span><span class="v">bundle · 5.5 GB</span></div>
+      <div class="kv"><span class="k">Circuit</span><span class="v">bundle · 5.7 GB</span></div>
     </div>
   </section>
 

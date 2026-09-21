@@ -143,7 +143,7 @@ if (declared[1] !== UNLOCKED_SESSION_KEY) {
 console.log(`auto-lock: background.js and the backend agree on storage.session['${UNLOCKED_SESSION_KEY}']`);
 
 // ------------------------------------------------------------------------- the real prover ----
-// Proving is opt-in: a bundle proof peaks at ~5.5 GB and wasm32 stops at 4 GB, so this aborts
+// Proving is opt-in: a bundle proof peaks at ~5.7 GB and wasm32 stops at 4 GB, so this aborts
 // with `RuntimeError: unreachable` (an allocation failure) until the prover's footprint drops.
 const profile = process.argv[2];
 if (!profile) { console.log('keys + packaging smoke test passed (pass "test" or "production" to attempt a proof)'); process.exit(0); }

@@ -7,10 +7,14 @@
 //
 // Three rules the flow exists to keep:
 //
-//   * **Only RAND (asset 0) can be transferred on this network.** The picker still lists every
-//     asset the backend reports — hiding them would just make the wallet look broken — but a
-//     registry (RPL) asset is `aria-disabled` and carries the one shared sentence explaining why
-//     (owned by screens/asset.js), and `#send/<n>=1` never renders the form.
+//   * **Chain 14 transfers any asset the registry lists — the fee is always RAND.** The picker
+//     lists every asset the backend reports; the only ones not offered are assets the node's
+//     registry does not list (`unlisted`), whose decimals are this wallet's guess, and those are
+//     `aria-disabled` with the one shared explanation (owned by lib/assets.js). The fee is paid in
+//     RAND out of the other half of the bundle, so it is denominated in RAND at the RAND row's own
+//     decimals everywhere it is shown, a token's review has no Total (amount and fee are different
+//     assets), and a wallet with no spendable RAND is refused — in the backend's own words —
+//     before the review step is ever reached.
 //
 //   * **Leaving the screen must not cancel a proof.** A transfer proof takes ~100 s natively and a
 //     desktop user will switch tabs, so the in-flight send lives on `ctx.state` — session-scoped,
@@ -28,13 +32,14 @@ import { wrongChainBannerMarkup, identityUnknownBannerMarkup, canRescan, confirm
 import { parseUnits, formatUnits, elapsed } from '../lib/format.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink } from '../lib/explorer.js';
+import { nativeAsset, isUnlisted, feeDecimals, feeSymbol } from '../lib/assets.js';
 import {
   PHASE_LABELS, CANCELLABLE, ADDRESS_DEBOUNCE_MS, SELF_SEND_QUESTION,
   explainProvingError, outcomeOf, safeHash, draftFor, currentSend, startSend,
   unknownOutcome, plainUnits, checkAmount,
 } from './send/state.js';
 import {
-  shellMarkup, assetStepMarkup, rplOnlyMarkup, noRandMarkup, detailsStepMarkup,
+  shellMarkup, assetStepMarkup, unsendableMarkup, noRandMarkup, detailsStepMarkup,
   reviewStepMarkup, provingStepMarkup, failedStepMarkup, unknownOutcomeStepMarkup,
 } from './send/markup.js';
 import './send/sent.js'; // registers `#sent`
@@ -97,7 +102,7 @@ registerScreen('send', {
     // An explicit `#send/<index>` names the asset and so skips the picker; so does a wallet with
     // only one asset to choose between. Otherwise the picker is a step of its own.
     const explicit = arg !== undefined && arg !== '' && /^\d+$/.test(String(arg));
-    const rand = assets.find((a) => a.index === 0) || null;
+    const rand = nativeAsset(assets);
     const requested = explicit ? Number(arg) : (assets.length === 1 ? assets[0].index : null);
     const steps = requested === null ? ['asset', 'details', 'review'] : ['details', 'review'];
 
@@ -106,21 +111,35 @@ registerScreen('send', {
       stepEl.innerHTML = markup;
     }
 
-    // Registry assets cannot be transferred at all: this is the end of the road, not a step.
-    if (requested !== null && requested !== 0) {
-      endOfTheRoad(rplOnlyMarkup(assets.find((a) => a.index === requested), { hasRand: !!rand }));
+    // An asset the node's registry does not list cannot be sent at all: its decimals are this
+    // wallet's guess, and nothing typed against them means what the user meant. This is the end
+    // of the road, not a step.
+    const requestedAsset = requested === null ? null : assets.find((a) => a.index === requested) || null;
+    if (requestedAsset && isUnlisted(requestedAsset)) {
+      endOfTheRoad(unsendableMarkup(requestedAsset, { hasRand: !!rand }));
       return;
     }
-    // …and neither is a wallet that simply has no RAND. An asset is never invented to have
-    // something to render a form against: a fabricated zero balance lets someone fill in an
+    // …and neither is a wallet that simply has no RAND: whatever asset moves, the fee is paid in
+    // RAND, so with no RAND at all there is no transfer to build. An asset is never invented to
+    // have something to render a form against: a fabricated zero balance lets someone fill in an
     // amount and only discover at the last step that there was nothing to send.
     if (!rand) {
       endOfTheRoad(noRandMarkup());
       return;
     }
+    // A `#send/<index>` naming an asset this wallet does not hold.
+    if (requested !== null && requested !== 0 && !requestedAsset) {
+      endOfTheRoad(unsendableMarkup(null, { hasRand: true }));
+      return;
+    }
 
-    const asset = rand;
-    const draft = draftFor(ctx, asset.index);
+    // The asset this flow is moving: the explicit route's, the one a half-finished draft was
+    // typed against, or RAND until the picker says otherwise.
+    const leftDraft = ctx.state.sendDraft;
+    let asset = requestedAsset
+      || (leftDraft && assets.find((a) => a.index === leftDraft.assetIndex && !isUnlisted(a)))
+      || rand;
+    let draft = draftFor(ctx, asset.index);
 
     // Coming back to a flow already under way resumes it rather than asking which asset again.
     let step = requested === null && !draft.to && !draft.amount ? 'asset' : 'details';
@@ -190,7 +209,7 @@ registerScreen('send', {
           unknown,
         });
       } else if (next === 'review') {
-        stepEl.innerHTML = reviewStepMarkup({ asset, to: draft.to, units: reviewUnits, estimate: draft.estimate, canProve, unknown });
+        stepEl.innerHTML = reviewStepMarkup({ asset, to: draft.to, units: reviewUnits, estimate: draft.estimate, canProve, unknown, assets });
       } else if (next === 'proving') paintProving();
       else if (next === 'failed') stepEl.innerHTML = failedStepMarkup(explainProvingError(attached && attached.error));
       else if (next === 'unknown') paintUnknown();
@@ -294,7 +313,13 @@ registerScreen('send', {
     const offAsset = on(root, '[data-asset]', 'click', (evt, btn) => {
       evt.preventDefault();
       if (btn.getAttribute('aria-disabled') === 'true') return; // listed, explained, not offered
-      if (Number(btn.dataset.asset) !== 0) return;
+      const picked = assets.find((a) => a.index === Number(btn.dataset.asset));
+      if (!picked || isUnlisted(picked)) return;
+      if (picked !== asset) {
+        asset = picked;
+        draft = draftFor(ctx, asset.index);
+        try { reviewUnits = draft.amount ? parseUnits(draft.amount, asset.decimals) : 0n; } catch { reviewUnits = 0n; }
+      }
       goStep('details');
     });
 
@@ -362,8 +387,17 @@ registerScreen('send', {
       let estimate = null;
       try {
         if (typeof ctx.backend.send.maxSendable === 'function') {
-          // A backend that knows how it selects notes can answer this exactly.
+          // A backend that knows how it selects notes can answer this exactly — per asset: a
+          // RAND transfer pays the fee out of the notes it sends, a token transfer pays it in
+          // RAND out of the other half of the bundle, so the whole token balance is sendable.
           const answer = await ctx.backend.send.maxSendable({ asset: asset.index, to });
+          if (!live()) return;
+          if (answer && answer.reason && BigInt(answer.amount || '0') <= 0n) {
+            // The backend knows why nothing is sendable (a token and no RAND for the fee, say):
+            // its sentence, not a bare zero in the field.
+            showFormBanner(answer.reason);
+            return;
+          }
           max = BigInt((answer && answer.amount) || '0');
           fee = BigInt((answer && answer.fee) || '0');
         } else {
@@ -371,7 +405,8 @@ registerScreen('send', {
           // asking for a transfer that cannot be built, which a strict backend rightly refuses.
           estimate = await ctx.backend.send.estimate({ asset: asset.index, to, amount: '1' });
           fee = BigInt((estimate && estimate.fee) || '0');
-          max = balance > fee ? balance - fee : 0n;
+          // The fee is RAND: it comes off a RAND balance, never off the token's.
+          max = asset.index === 0 ? (balance > fee ? balance - fee : 0n) : balance;
         }
       } catch (err) {
         if (!live()) return;
@@ -382,8 +417,9 @@ registerScreen('send', {
 
       if (max <= 0n) {
         // Writing "0" into the field and saying nothing is how a user concludes the wallet is
-        // broken. Say what is actually wrong, and leave what they typed alone.
-        setFieldError(amountInput, `Your balance doesn’t cover the network fee (${formatUnits(fee, 9, asset.decimals)} ${asset.symbol}).`);
+        // broken. Say what is actually wrong, and leave what they typed alone. The fee is RAND
+        // whatever is being sent, so it is denominated in RAND at the RAND row's own decimals.
+        setFieldError(amountInput, `Your balance doesn’t cover the network fee (${formatUnits(fee, 9, feeDecimals(assets))} ${feeSymbol(assets)}).`);
         return;
       }
       amountInput.value = plainUnits(max, asset.decimals);
@@ -440,8 +476,12 @@ registerScreen('send', {
       const amountInput = stepEl.querySelector('input[name=amount]');
       showFormBanner('');
 
-      // Everything that can be decided here is decided here: the backend is not a validator.
-      const feeSoFar = (draft.estimate && draft.estimate.fee) || draft.knownFee || null;
+      // Everything that can be decided here is decided here: the backend is not a validator. The
+      // fee only counts against THIS asset's balance for RAND itself — a token transfer's fee is
+      // RAND out of the other half of the bundle, and has no place in the token's arithmetic.
+      const feeSoFar = asset.index === 0
+        ? ((draft.estimate && draft.estimate.fee) || draft.knownFee || null)
+        : null;
       const checked = checkAmount(amountInput.value, asset, feeSoFar === null ? null : BigInt(feeSoFar));
       const to = await validateAddress(toInput);
       if (!live()) return;
@@ -467,7 +507,9 @@ registerScreen('send', {
       if (!live()) return;
 
       // The one amount check that needs an answer from the backend: amount + fee against balance.
-      const withFee = checkAmount(amountInput.value, asset, BigInt(estimate.fee || '0'));
+      // For a token there is nothing to add — the fee is RAND, and the estimate itself already
+      // refused a wallet with no RAND to pay it (its sentence is in the banner, above the form).
+      const withFee = checkAmount(amountInput.value, asset, asset.index === 0 ? BigInt(estimate.fee || '0') : null);
       if (withFee.error) { setFieldError(amountInput, withFee.error); return; }
 
       draft.estimate = estimate;

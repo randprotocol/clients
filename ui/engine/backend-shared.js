@@ -76,7 +76,7 @@
 import { encryptSecret, decryptSecret, checkVault, isVaultRecordError } from './crypto.js';
 import { makeRpc, isAllowedRpcMethod, rpcUrlList } from './rpc.js';
 import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, HEIGHT_SPAN } from './wallet.js';
-import { checkFee, checkTokens, checkSubmitted, checkBridgeState, MAX_TOKEN_PAGE } from './validate.js';
+import { checkFee, checkTokens, checkSubmitted, checkBridgeState, MAX_TOKEN_PAGE, NodeReplyError } from './validate.js';
 
 /**
  * The one key under `storage.session` — the unlocked wallet session, and the only place the
@@ -1203,7 +1203,19 @@ export function makeSharedBackend({
     const seen = new Set();
     let from = 0;
     for (let page = 0; page < MAX_TOKEN_PAGES; page += 1) {
-      const reply = checkTokens(await client.getTokens(from, MAX_TOKEN_PAGE));
+      let reply;
+      try {
+        reply = checkTokens(await client.getTokens(from, MAX_TOKEN_PAGE), { from });
+      } catch (err) {
+        // A page that is not an answer to the request — unordered, below the start it was asked
+        // from, malformed — ends the walk exactly as a short page does: what was already
+        // collected was fully validated and is kept, and the cursor never moves past data that
+        // was not read. With NOTHING collected there is no prefix to keep, so the failure
+        // propagates: caching an empty registry then would turn "the node's answer was garbage"
+        // into "this chain has no tokens".
+        if (err instanceof NodeReplyError && tokens.length > 0) break;
+        throw err;
+      }
       for (const t of reply.tokens) {
         if (seen.has(t.index)) continue;
         seen.add(t.index);
@@ -1399,7 +1411,7 @@ export function makeSharedBackend({
     /**
      * `(req, onPhase, options?)` — the contract's signature. `canProve()` answers first, and
      * always without touching the network: a shell that *structurally* cannot prove (wasm:
-     * ~5.6 GB against a 4 GiB address space) should say so before asking anything of a node — that
+     * ~5.7 GB against a 4 GiB address space) should say so before asking anything of a node — that
      * answer can never be wrong, and it is what the user needs. Only once `canProve()` says
      * `ok: true` does this go on to prove the chain (`requireVerifiedChain()`), and only then does
      * `executeSend` run — with the client that call verified, never a fresh one.

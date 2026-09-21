@@ -240,6 +240,25 @@ test('tokens: the RPL registry, paged, with every amount a decimal string', () =
   );
 });
 
+test('tokens: a page must answer the request — ascending indices, none below the start asked for', () => {
+  // `checkCommitments` constrains its page both ways (it must start where it was asked and have no
+  // gaps) precisely because the caller moves a cursor off the last row. `fetchTokenRegistry` moves
+  // exactly such a cursor (`last.index + 1`), so an unordered page walks it backwards or jumps it
+  // over rows that are then never read — and a token missing from the registry is one whose
+  // balance the wallet prints at its OWN guessed decimals instead of the chain's.
+  const row = (index) => ({
+    index, id: HEX64, symbol: `T${index}`, decimals: 8, total_supply: '1',
+    authority: { kind: 'key', key: 'aa' },
+  });
+  assert.equal(checkTokens({ enabled: true, tokens: [row(1), row(2), row(9)] }).tokens.length, 3);
+  assert.equal(checkTokens({ enabled: true, tokens: [row(7), row(8)] }, { from: 7 }).tokens.length, 2);
+  // Not ascending: the same index twice, and then a lower one.
+  rejects(() => checkTokens({ enabled: true, tokens: [row(2), row(2)] }), /row 1 is token 2/);
+  rejects(() => checkTokens({ enabled: true, tokens: [row(5), row(3)] }), /row 1 is token 3/);
+  // Below the start: a page answering a request from 1000 with row 1 would rewind the walk.
+  rejects(() => checkTokens({ enabled: true, tokens: [row(1)] }, { from: 1000 }), /row 0 is token 1, below the 1000 it was asked from/);
+});
+
 test('block header: best-effort, never an error, never a bad timestamp', () => {
   assert.equal(checkBlockHeader(null), null);
   assert.equal(checkBlockHeader('not a block'), null);

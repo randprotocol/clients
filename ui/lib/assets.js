@@ -1,11 +1,85 @@
-// Pure data helpers for the home, asset, activity and detail screens. Importable under plain
-// Node (no `document`/`window` access at module scope, same rule as every other ui/lib file).
+// Pure data helpers for the home, asset, activity, send and withdraw screens. Importable under
+// plain Node (no `document`/`window` access at module scope, same rule as every other ui/lib file).
 
 /** The RAND (index 0) balance, as a decimal units string. RPL assets (index >= 1) have no price
  *  feed and are never summed into this — it is the RAND figure alone, never a portfolio total. */
 export function totalInRand(assets) {
   const rand = (assets || []).find((a) => a.index === 0);
   return rand ? String(rand.balance ?? '0') : '0';
+}
+
+// ------------------------------------------------------------ what a screen may offer ---------
+
+/**
+ * The one sentence for an asset this wallet holds notes of that the node's registry does not list
+ * (`unlisted: true`, ui/backend.js). Its `symbol` is the wallet's own `RPL#<index>` and — the part
+ * that matters — its **`decimals` is a guess**, so every amount the user typed about it would be
+ * scaled by a number the chain never said. Sending it and withdrawing it are therefore both off;
+ * the balance is still real and still shown.
+ *
+ * Owned here rather than by a screen because four places say it: the asset detail, the send
+ * picker, the send flow's end of the road and the withdraw flow's first step.
+ */
+export const UNLISTED_TEXT = 'This node’s token registry does not list this asset, so its name '
+  + 'and decimal places are this wallet’s guess rather than the chain’s. It cannot be sent or '
+  + 'withdrawn until a node lists it.';
+
+/** The RAND row of an `assets.list()` answer — always index 0, and always first (ui/backend.js). */
+export function nativeAsset(assets) {
+  return (assets || []).find((a) => a && a.index === 0) || null;
+}
+
+/**
+ * The decimals the **network fee** is shown in.
+ *
+ * A fee is always RAND, whatever is being transferred or burned — chain 14's bundle pays it out of
+ * slots 2–3 while the private asset moves in slots 0–1 — so it is always asset 0's own `decimals`,
+ * read from the row the backend returned. Writing `9` here (which the review steps used to do)
+ * is the one place in either flow where a number about money came from this file rather than from
+ * the chain, and a chain whose native token had any other precision would print every fee wrong.
+ *
+ * The fallback is reached only by a backend that broke its own contract by omitting RAND, and 9 is
+ * then this chain's own figure rather than a guess about somebody else's.
+ */
+export function feeDecimals(assets) {
+  const rand = nativeAsset(assets);
+  const d = Number(rand && rand.decimals);
+  return Number.isInteger(d) && d >= 0 && d <= 9 ? d : 9;
+}
+
+/** The fee's symbol, from the same row and for the same reason. */
+export function feeSymbol(assets) {
+  const rand = nativeAsset(assets);
+  return (rand && rand.symbol) || 'RAND';
+}
+
+/** True for a held asset the node's registry does not list — see `UNLISTED_TEXT`. */
+export function isUnlisted(asset) {
+  return !!(asset && asset.unlisted);
+}
+
+/**
+ * The coins on other chains that hold this token's value, filtered to the ones a burn could
+ * actually name (`Action::BridgeBurn` carries a `(to_chain, token)` pair). A **native** RPL token
+ * has none at all: nothing off-chain is backing it, so there is nowhere to withdraw it to.
+ */
+export function backingsOf(asset) {
+  const rows = Array.isArray(asset && asset.backings) ? asset.backings : [];
+  return rows.filter((b) => b && Number.isInteger(Number(b.chain)) && typeof b.token === 'string' && b.token);
+}
+
+/** Every asset can be transferred on chain 14 — except one whose decimals are a guess. */
+export function canSendAsset(asset) {
+  return !!asset && !isUnlisted(asset);
+}
+
+/**
+ * Whether **this asset** has anywhere to be withdrawn to: an RPL token the registry lists, with at
+ * least one backing coin. Whether **this device** can carry one out is a different question and is
+ * `bridge.canWithdraw()`'s alone; a screen needs both.
+ */
+export function canWithdrawAsset(asset) {
+  return !!asset && Number(asset.index) >= 1 && !isUnlisted(asset) && backingsOf(asset).length > 0;
 }
 
 const DAY_MS = 86400000;

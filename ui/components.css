@@ -1014,11 +1014,19 @@ body.wide .toast-area { bottom: var(--s-6); }
    once the scan reports a `head` height — `--pct` (0..1) is written through the CSSOM exactly
    like `.ring`'s own --pct, never an inline style attribute; indeterminate (a short bar sliding
    end to end) before that. Only ever appears on the hero's gradient background, so the track/bar
-   are fixed white alphas rather than surface tokens, the same reasoning as .qr's fixed white. */
+   are fixed white alphas rather than surface tokens, the same reasoning as .qr's fixed white.
+
+   The bar lives in a slot of its own that reserves its height whether or not a scan is running:
+   the bar comes and goes, the space it occupies does not — hiding it used to take 3px and a
+   margin out of the flow and lift the balance line on every scan end (CLS 0.0138 at 360 px,
+   measured in task 5.3). */
+[data-role="progress-slot"] {
+  height: 3px;
+  margin-top: var(--s-3);
+}
 .progress {
   position: relative;
   height: 3px;
-  margin-top: var(--s-3);
   border-radius: var(--r-pill);
   background: rgba(255, 255, 255, .22);
   overflow: hidden;

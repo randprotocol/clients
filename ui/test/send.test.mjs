@@ -15,15 +15,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import './dom-env.mjs';
 import { registerScreen } from '../app.js';
-import { unlockedBackend } from './fake-backend.mjs';
+import { unlockedBackend, NO_SPENDABLE_RAND_TEXT } from './fake-backend.mjs';
 import { mountApp } from './helpers.mjs';
 import { explainProvingError } from '../screens/send.js';
 import { markUnknownOutcome, unknownOutcome } from '../screens/send/state.js';
-import { RPL_SEND_DISABLED_TEXT } from '../screens/asset.js';
+import { UNLISTED_TEXT } from '../lib/assets.js';
 
 const TO = `rand1${'p'.repeat(40)}`;
 const OWN = `rand1${'q'.repeat(40)}`; // unlockedBackend()'s own address
 const turns = async (n = 3) => { for (let i = 0; i < n; i += 1) await new Promise((r) => setTimeout(r, 0)); };
+
+/** The RAND row, at whatever decimals a test wants to give this chain's native token. */
+const randRow = (over = {}) => ({ index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '3500000000', pending: '0', ...over });
+/** A listed registry token: eight decimals on Rand, exactly as a bridged one is. */
+const tokenRow = (over = {}) => ({ index: 1, id: 'z'.repeat(64), idText: `rpl1${'q'.repeat(58)}`, name: 'Shielded USD', symbol: 'zUSD', decimals: 8, balance: '120000000', pending: '0', backings: [{ chain: 2, token: 'ee'.repeat(32), locked: '900000000', decimals: 6 }], ...over });
+/** Held, but absent from the node's registry: the decimals are the wallet's guess. */
+const unlistedRow = (over = {}) => ({ index: 3, id: 'rpl-3', symbol: 'RPL#3', decimals: 9, balance: '7', pending: '0', unlisted: true, ...over });
+const listing = (rows) => ({ assets: { list: async () => rows.map((r) => ({ ...r })) } });
 
 /**
  * `assert.equal(node, null)` is a landmine here: when it *fails*, node's assert builds a diff by
@@ -89,10 +97,10 @@ function controlledSend(overrides = {}) {
 // ------------------------------------------------------------- the brief's Step 1 tests --------
 
 test('a shell that cannot prove shows the reason and no prove button', async (t) => {
-  const b = unlockedBackend({ send: { canProve: async () => ({ ok: false, reason: 'Proving needs about 5.5 GB; browsers allow 4 GB.' }) } });
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: false, reason: 'Proving needs about 5.7 GB; browsers allow 4 GB.' }) } });
   const { root } = await review(t, b);
   assertGone(root.querySelector('[data-action="prove"]'), 'root.querySelector([data-action="prove"])');
-  assert.match(root.textContent, /5\.5 GB/);
+  assert.match(root.textContent, /5\.7 GB/);
   assert.match(root.textContent, /desktop app/i);
 });
 
@@ -136,30 +144,130 @@ test('explainProvingError maps wasm OOM', () => {
   assert.equal(explainProvingError('rejected by the mempool'), 'rejected by the mempool');
 });
 
-// --------------------------------------------------------------- amendment 2: RAND only -------
+// ------------------------------------------------- chain 14: every listed asset is sendable ---
 
-test('the asset picker lists RPL assets, disabled, with the shared explanation', async (t) => {
-  const { app, root } = await mountApp(t, unlockedBackend(), { hash: '#send' });
+test('a token send goes through end to end: picker, the token’s own decimals, a RAND fee, phases', async (t) => {
+  const phases = [];
+  const b = unlockedBackend({
+    ...listing([randRow(), tokenRow()]),
+    send: {
+      canProve: async () => ({ ok: true }),
+      send: async (_req, onPhase) => {
+        for (const p of ['selecting', 'witness', 'proving', 'submitting', 'confirming']) { onPhase(p); phases.push(p); }
+        return { hash: `0x${'ab'.repeat(32)}`, txKey: `tk-${'cd'.repeat(16)}` };
+      },
+    },
+  });
+  const { app, root } = await mountApp(t, b, { hash: '#send' });
   await app.idle();
-  const rand = root.querySelector('[data-asset="0"]');
-  const rpl = root.querySelector('[data-asset="1"]');
-  assert.ok(rand, 'RAND is offered');
-  assert.equal(rand.hasAttribute('aria-disabled'), false);
-  assert.ok(rpl, 'the RPL asset is listed, not hidden');
-  assert.equal(rpl.getAttribute('aria-disabled'), 'true');
-  assert.ok(root.textContent.includes(RPL_SEND_DISABLED_TEXT));
-  const describedBy = rpl.getAttribute('aria-describedby');
-  assert.ok(describedBy, 'the reason is tied to the control');
-  assert.equal(root.querySelector(`#${describedBy}`).textContent, RPL_SEND_DISABLED_TEXT);
+
+  const token = root.querySelector('[data-asset="1"]');
+  assert.ok(token, 'the token is listed');
+  assert.equal(token.hasAttribute('aria-disabled'), false, 'chain 14 transfers a token like any other asset');
+  token.click();
+  await app.idle();
+
+  // 120000000 units of an EIGHT-decimal token is 1.2 — at RAND's nine it would read 0.12.
+  assert.match(root.textContent, /Available 1\.2 zUSD/);
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('input[name=amount]').value = '0.5';
+  submit(root);
+  await app.idle();
+
+  const [, est] = b.calls.find((c) => c[0] === 'send.estimate');
+  assert.equal(est.asset, 1);
+  assert.equal(est.amount, '50000000', 'the amount is parsed with the ASSET’s decimals, not RAND’s');
+
+  // The fee is RAND, said in RAND: 10000 units of a nine-decimal RAND is 0.00001.
+  assert.match(root.textContent, /Network fee/);
+  assert.match(root.textContent, /0\.00001 RAND/);
+  assert.doesNotMatch(root.textContent, /0\.00001 zUSD/, 'the fee is never denominated in the token');
+
+  root.querySelector('[data-action="prove"]').click();
+  await app.idle();
+  assert.equal(phases.length, 5);
+  const [, sent] = b.calls.find((c) => c[0] === 'send.send');
+  assert.equal(sent.asset, 1);
+  assert.equal(sent.amount, '50000000');
+  assert.match(location.hash, /^#sent\//);
 });
 
-test('#send/1 explains instead of ever rendering the form', async (t) => {
-  const { app, root } = await mountApp(t, unlockedBackend(), { hash: '#send/1' });
+test('a token’s review has no Total: the amount and the fee are different assets', async (t) => {
+  const b = unlockedBackend({ ...listing([randRow(), tokenRow()]), send: { canProve: async () => ({ ok: true }) } });
+  const { app, root } = await mountApp(t, b, { hash: '#send/1' });
   await app.idle();
-  assertGone(root.querySelector('form'), 'no send form for an RPL asset');
-  assertGone(root.querySelector('textarea[name=to]'), 'root.querySelector(textarea[name=to])');
-  assert.ok(root.textContent.includes(RPL_SEND_DISABLED_TEXT));
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('input[name=amount]').value = '0.5';
+  submit(root);
+  await app.idle();
+  assert.ok(root.querySelector('[data-action="prove"]'), 'the review');
+  assert.doesNotMatch(root.textContent, /Total/, '0.5 zUSD + 0.00001 RAND is not a number');
+});
+
+test('the network fee’s decimals are READ from the RAND row, never written as 9', async (t) => {
+  // A chain whose native token has six decimals. A hard-coded 9 prints this fee a thousand times
+  // too small — the whole of 4.5's M8.
+  const b = unlockedBackend({
+    ...listing([randRow({ decimals: 6, balance: '3500000' }), tokenRow()]),
+    send: { canProve: async () => ({ ok: true }) },
+  });
+  const { app, root } = await mountApp(t, b, { hash: '#send/1' });
+  await app.idle();
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('input[name=amount]').value = '0.5';
+  submit(root);
+  await app.idle();
+  assert.match(root.textContent, /0\.01 RAND/, '10000 units at the RAND row’s own six decimals');
+  assert.doesNotMatch(root.textContent, /0\.00001 RAND/);
+});
+
+test('a wallet with no RAND to pay the fee is refused BEFORE review, in the backend’s own words', async (t) => {
+  const b = unlockedBackend({ ...listing([randRow({ balance: '0' }), tokenRow()]), send: { canProve: async () => ({ ok: true }) } });
+  const { app, root } = await mountApp(t, b, { hash: '#send/1' });
+  await app.idle();
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('input[name=amount]').value = '0.5';
+  submit(root);
+  await app.idle();
+
+  assert.ok(root.textContent.includes(NO_SPENDABLE_RAND_TEXT), 'the core’s sentence, unedited');
+  assertGone(root.querySelector('[data-action="prove"]'), 'root.querySelector([data-action="prove"])');
+  assert.equal(b.calls.filter((c) => c[0] === 'send.send').length, 0, 'and nothing was proved');
+  assert.ok(root.querySelector('input[name=amount]'), 'the flow stayed on the form');
+});
+
+test('an asset the registry does not list is shown, explained, and not sendable', async (t) => {
+  const b = unlockedBackend(listing([randRow(), unlistedRow()]));
+  const { app, root } = await mountApp(t, b, { hash: '#send' });
+  await app.idle();
+  const row = root.querySelector('[data-asset="3"]');
+  assert.ok(row, 'it is listed — hiding a balance the wallet really holds would look broken');
+  assert.equal(row.getAttribute('aria-disabled'), 'true');
+  const describedBy = row.getAttribute('aria-describedby');
+  assert.ok(describedBy, 'the reason is tied to the control');
+  assert.equal(root.querySelector(`#${describedBy}`).textContent, UNLISTED_TEXT);
+
+  row.click();
+  await app.idle();
+  assert.ok(root.querySelector('[data-asset="3"]'), 'clicking it does not advance to a form');
+  assertGone(root.querySelector('input[name=amount]'), 'root.querySelector(input[name=amount])');
+});
+
+test('#send/<n> for an unlisted asset explains instead of ever rendering the form', async (t) => {
+  const b = unlockedBackend(listing([randRow(), unlistedRow()]));
+  const { app, root } = await mountApp(t, b, { hash: '#send/3' });
+  await app.idle();
+  assertGone(root.querySelector('form'), 'no send form for an asset whose decimals are a guess');
+  assert.ok(root.textContent.includes(UNLISTED_TEXT));
   assert.ok(root.querySelector('[data-go="send/0"]'), 'a way back to sending RAND');
+});
+
+test('#send/1 renders the form for a listed token', async (t) => {
+  const b = unlockedBackend(listing([randRow(), tokenRow()]));
+  const { app, root } = await mountApp(t, b, { hash: '#send/1' });
+  await app.idle();
+  assert.ok(root.querySelector('textarea[name=to]'), 'straight to the recipient');
+  assert.match(root.textContent, /zUSD/);
 });
 
 test('#send skips the picker when there is only one asset to list', async (t) => {
@@ -725,6 +833,40 @@ test('Max falls back to a one-unit estimate where the backend has no maxSendable
   assert.equal(estimates[0][1].amount, '1', 'a one-unit probe, not the whole balance');
 });
 
+test('Max on a token fills the WHOLE balance — the fee is RAND out of the other half of the bundle', async (t) => {
+  const b = unlockedBackend(listing([randRow(), tokenRow()]));
+  const { app, root } = await mountApp(t, b, { hash: '#send/1' });
+  await app.idle();
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('[data-role="max"]').click();
+  await app.idle();
+  assert.equal(root.querySelector('input[name=amount]').value, '1.2', 'no fee is subtracted from a token');
+  const [, asked] = b.calls.find((c) => c[0] === 'send.maxSendable');
+  assert.equal(asked.asset, 1, 'the backend is asked about THIS asset; spendability is never computed here');
+});
+
+test('Max on a token with no RAND for the fee shows the backend’s reason, not a bare zero', async (t) => {
+  const b = unlockedBackend(listing([randRow({ balance: '0' }), tokenRow()]));
+  const { app, root } = await mountApp(t, b, { hash: '#send/1' });
+  await app.idle();
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('[data-role="max"]').click();
+  await app.idle();
+  assert.ok(root.textContent.includes(NO_SPENDABLE_RAND_TEXT));
+  assert.notEqual(root.querySelector('input[name=amount]').value, '0');
+});
+
+test('Max on a token without maxSendable still does not subtract the RAND fee', async (t) => {
+  const b = unlockedBackend(listing([randRow(), tokenRow()]));
+  delete b.send.maxSendable;
+  const { app, root } = await mountApp(t, b, { hash: '#send/1' });
+  await app.idle();
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('[data-role="max"]').click();
+  await app.idle();
+  assert.equal(root.querySelector('input[name=amount]').value, '1.2');
+});
+
 test('Max explains itself when the balance does not cover the fee', async (t) => {
   const b = unlockedBackend({
     assets: { list: async () => [{ index: 0, id: 'rand', name: 'Rand', symbol: 'RAND', decimals: 9, balance: '5000', pending: '0' }] },
@@ -762,14 +904,12 @@ test('a wallet with no RAND gets an empty state, not a fabricated zero balance',
   assert.ok(root.querySelector('[data-go="faucet"]'));
 });
 
-test('a wallet holding only an RPL asset gets the explanation, not a form', async (t) => {
-  const b = unlockedBackend({
-    assets: { list: async () => [{ index: 1, id: 'wrapped-eth', name: 'Wrapped Ether', symbol: 'wETH', decimals: 9, balance: '120000000', pending: '0' }] },
-  });
+test('a wallet holding only an unlisted asset gets the explanation, not a form', async (t) => {
+  const b = unlockedBackend(listing([unlistedRow()]));
   const { app, root } = await mountApp(t, b, { hash: '#send' });
   await app.idle();
   assertGone(root.querySelector('form'), 'root.querySelector(form)');
-  assert.ok(root.textContent.includes(RPL_SEND_DISABLED_TEXT));
+  assert.ok(root.textContent.includes(UNLISTED_TEXT));
 });
 
 // ---- 8. the proof cost is the estimate's, not a constant ---------------------------------------

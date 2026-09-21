@@ -77,7 +77,7 @@ function shellMarkup() {
       <span class="label">Balance</span>
       <span class="amount" data-role="hero-amount"><span class="skeleton line lg"></span></span>
       <span class="sub" data-role="hero-sub" hidden></span>
-      <div class="progress" data-role="progress" role="progressbar" aria-label="Syncing" data-indeterminate="true" hidden><span class="progress-bar"></span></div>
+      <div data-role="progress-slot"><div class="progress" data-role="progress" role="progressbar" aria-label="Syncing" data-indeterminate="true" hidden><span class="progress-bar"></span></div></div>
       <div class="hero-foot">
         <span class="dot" data-role="sync-dot"></span>
         <span data-role="sync-text"></span>

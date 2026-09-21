@@ -117,7 +117,7 @@ test('Test connection reports the height and the chain id', async (t) => {
     rpc: {
       call: async (method) => {
         if (method === 'rand_status') return { height: 1402918, peers: 8, syncing: false };
-        if (method === 'rand_chainId') return 13;
+        if (method === 'rand_chainId') return 14;
         throw new Error(`unexpected ${method}`);
       },
     },
@@ -130,7 +130,7 @@ test('Test connection reports the height and the chain id', async (t) => {
   assert.ok(methods.includes('rand_chainId'));
   const status = root.querySelector('[data-role="network-status"]');
   assert.match(status.textContent, /1,?402,?918/);
-  assert.match(status.textContent, /13/);
+  assert.match(status.textContent, /14/);
   assertGone(root.querySelector('[data-role="network-status"] .banner.warn, [data-role="network-status"].warn'), 'root.querySelector([data-role="network-status"] .banner.warn');
 });
 
@@ -145,7 +145,7 @@ test('Test connection warns when the node is on another chain', async (t) => {
   await app.idle();
   const status = root.querySelector('[data-role="network-status"]');
   assert.match(status.textContent, /99/);
-  assert.match(status.textContent, /13/, 'and says which chain the wallet expects');
+  assert.match(status.textContent, /14/, 'and says which chain the wallet expects');
   assert.ok(status.querySelector('.banner.warn') || status.classList.contains('warn'), 'and warns about it');
 });
 
@@ -358,7 +358,7 @@ test('the re-auth sheet cannot be submitted twice while a check is in flight', a
 test('a block height past 2^53 is grouped without losing a digit', async (t) => {
   const huge = '9007199254740993123'; // Number() would round this
   const b = unlockedBackend({
-    rpc: { call: async (method) => (method === 'rand_chainId' ? 13 : { height: huge, peers: 1, syncing: false }) },
+    rpc: { call: async (method) => (method === 'rand_chainId' ? 14 : { height: huge, peers: 1, syncing: false }) },
   });
   const { app, root } = await settings(t, b);
   root.querySelector('[data-role="test-connection"]').click();
@@ -370,7 +370,7 @@ test('a block height past 2^53 is grouped without losing a digit', async (t) => 
 test('Connecting… is not painted as a success', async (t) => {
   let release;
   const gate = new Promise((r) => { release = r; });
-  const b = unlockedBackend({ rpc: { call: async (m) => { await gate; return m === 'rand_chainId' ? 13 : { height: 5 }; } } });
+  const b = unlockedBackend({ rpc: { call: async (m) => { await gate; return m === 'rand_chainId' ? 14 : { height: 5 }; } } });
   const { app, root } = await settings(t, b);
   root.querySelector('[data-role="test-connection"]').click();
   await new Promise((r) => setTimeout(r, 0));
