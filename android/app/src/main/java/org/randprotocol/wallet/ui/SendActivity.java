@@ -113,8 +113,8 @@ public class SendActivity extends BaseActivity {
         b.flipper.setDisplayedChild(REVIEW);
     }
 
-    /** Peak memory of a bundle proof: mirrors {@code wallet_core::PROVER_PEAK_MEMORY_BYTES} (measured 2026-09-13). */
-    static final long PROVER_PEAK_MEMORY_BYTES = 5_600_000_000L;
+    /** Peak memory of a bundle proof: mirrors {@code wallet_core::PROVER_PEAK_MEMORY_BYTES} (measured 2026-09-20, chain 14). */
+    static final long PROVER_PEAK_MEMORY_BYTES = 5_700_000_000L;
 
     /** Android lets a foreground app use well under the whole of RAM; two thirds is generous. */
     private void showMemoryWarning() {

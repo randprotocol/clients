@@ -8,7 +8,7 @@ public final class Prefs {
     private static final String FILE = "rand_wallet_prefs";
 
     public static final String DEFAULT_RPC_URL = "https://rpc.randprotocol.org";
-    public static final long DEFAULT_CHAIN_ID = 8;
+    public static final long DEFAULT_CHAIN_ID = 14;
     public static final int DEFAULT_AUTO_LOCK_MINUTES = 15;
 
     public static final String THEME_DARK = "dark";

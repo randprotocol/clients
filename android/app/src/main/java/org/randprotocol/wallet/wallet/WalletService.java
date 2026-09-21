@@ -437,7 +437,9 @@ public final class WalletService {
             SendMonitor.post(st.with(SendState.Phase.SUBMITTING, "Submitting"));
             String hash = rpc.sendTransaction(proved.getString("tx_hex"));
             long time = proved.getLong("time");
-            String txKey = proved.getJSONArray("tx_keys").getString(0);
+            // The receipt's key is the PAYMENT output's own, named by the core — never a slot
+            // index: chain 14's four slots put dummies ahead of the payment for a RAND transfer.
+            String txKey = proved.getString("payment_tx_key");
 
             Submission sub = new Submission();
             sub.hash = hash;

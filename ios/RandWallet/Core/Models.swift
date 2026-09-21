@@ -132,12 +132,16 @@ struct ProveResult: Decodable {
     let nullifiers: [String]
     let commitments: [String]
     let txKeys: [String]
+    /// The PAYMENT output's transaction key (null on a burn, which pays nobody). Chain 14's
+    /// bundle has four slots in slot order, two of them dummies — the payment is the one the
+    /// core names, never a fixed index.
+    let paymentTxKey: String?
     let spentIndices: [UInt64]
 
     enum CodingKeys: String, CodingKey {
         case txHex = "tx_hex", hash, time, amount, change, fee, tier
         case proofBytes = "proof_bytes", txBytes = "tx_bytes", nullifiers, commitments
-        case txKeys = "tx_keys", spentIndices = "spent_indices"
+        case txKeys = "tx_keys", paymentTxKey = "payment_tx_key", spentIndices = "spent_indices"
     }
 }
 

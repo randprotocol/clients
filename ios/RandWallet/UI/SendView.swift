@@ -193,9 +193,9 @@ struct SendView: View {
 }
 
 /// What a bundle proof costs, so the review step can say whether this device can run it.
-/// `peakMemoryBytes` mirrors `wallet_core::PROVER_PEAK_MEMORY_BYTES` (measured 2026-09-13).
+/// `peakMemoryBytes` mirrors `wallet_core::PROVER_PEAK_MEMORY_BYTES` (measured 2026-09-20, chain 14).
 enum ProverRequirements {
-    static let peakMemoryBytes: UInt64 = 5_600_000_000
+    static let peakMemoryBytes: UInt64 = 5_700_000_000
     static var deviceMemoryBytes: UInt64 { ProcessInfo.processInfo.physicalMemory }
     /// iOS lets a foreground app use roughly half to two thirds of physical memory.
     static var deviceHasEnoughMemory: Bool { deviceMemoryBytes / 3 * 2 >= peakMemoryBytes }

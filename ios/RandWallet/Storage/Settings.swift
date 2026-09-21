@@ -26,7 +26,7 @@ final class Settings: ObservableObject {
     init() {
         let core = try? RandCore.constants()
         rpcUrl = defaults.string(forKey: "rpcUrl") ?? core?.defaultRpcUrl ?? "https://rpc.randprotocol.org"
-        chainId = defaults.object(forKey: "chainId") as? Int ?? Int(core?.defaultChainId ?? 8)
+        chainId = defaults.object(forKey: "chainId") as? Int ?? Int(core?.defaultChainId ?? 14)
         autoLockMinutes = defaults.object(forKey: "autoLockMinutes") as? Int ?? 15
         theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hasBackedUpKey = defaults.bool(forKey: "hasBackedUpKey")

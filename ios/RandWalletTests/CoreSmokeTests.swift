@@ -5,7 +5,7 @@ import XCTest
 final class CoreSmokeTests: XCTestCase {
     func testVersionReportsChainDefaults() throws {
         let c = try RandCore.constants()
-        XCTAssertEqual(c.defaultChainId, 13)
+        XCTAssertEqual(c.defaultChainId, 14)
         XCTAssertEqual(c.tokenSymbol, "RAND")
         XCTAssertEqual(c.bundleBaseFee, "1000000")
         XCTAssertEqual(c.timeWindow, NoteStore.timeWindow)

@@ -368,7 +368,7 @@ dependencies = [
 
 [[package]]
 name = "bridge-codec"
-version = "0.1.0"
+version = "0.5.1"
 
 [[package]]
 name = "brotli"
@@ -3639,7 +3639,7 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "randprotocol-core"
-version = "0.1.0"
+version = "0.5.1"
 dependencies = [
  "bincode",
  "blake3",
@@ -3659,7 +3659,7 @@ dependencies = [
 
 [[package]]
 name = "randprotocol-zkvm"
-version = "0.1.0"
+version = "0.5.1"
 dependencies = [
  "chacha20poly1305",
  "evm-core",

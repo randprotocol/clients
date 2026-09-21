@@ -231,13 +231,18 @@ final class WalletService: ObservableObject {
         phase = .proving(started: started)
         let proof = try await Self.prove(request)
         let provingSeconds = Date().timeIntervalSince(started)
+        // The receipt's key is the PAYMENT output's own, named by the core — never a slot index:
+        // chain 14's four slots put dummies ahead of the payment for a RAND transfer.
+        guard let paymentTxKey = proof.paymentTxKey else {
+            throw RpcClient.RpcError(code: 0, message: "the core did not name the payment's transaction key")
+        }
 
         phase = .submitting
         let hash = try await rpc.sendTransaction(hex: proof.txHex)
         var s = store
         s.holdPending(indices: proof.spentIndices, time: proof.time)
         s.submissions.insert(Submission(hash: hash, time: proof.time, amount: proof.amount, to: to, fee: proof.fee,
-                                        txKey: proof.txKeys[0], status: .pending, height: nil, submittedAt: Date()), at: 0)
+                                        txKey: paymentTxKey, status: .pending, height: nil, submittedAt: Date()), at: 0)
         store = s
         try? s.save()
 
@@ -250,7 +255,7 @@ final class WalletService: ObservableObject {
         }
         try? await scan()
         phase = .done
-        return SendOutcome(hash: hash, amount: proof.amount, fee: proof.fee, change: proof.change, txKey: proof.txKeys[0],
+        return SendOutcome(hash: hash, amount: proof.amount, fee: proof.fee, change: proof.change, txKey: paymentTxKey,
                            proofBytes: proof.proofBytes, tier: proof.tier, provingSeconds: provingSeconds, committedHeight: committed)
     }
 
