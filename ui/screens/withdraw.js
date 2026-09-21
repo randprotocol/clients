@@ -10,7 +10,7 @@
 //     shell, so both are feature-detected before a single control is drawn.
 //
 //   * **Every check that can be made locally is made before `bridge.estimate`, and every check the
-//     chain can make is made before the proof.** A bundle proof is about a minute and a half of
+//     chain can make is made before the proof.** A bundle proof is about two minutes of
 //     this computer and ~5.7 GB; a recipient of the wrong shape, a relayer fee bigger than the
 //     amount, a disabled bridge, an unregistered index, a coin that does not back this token or
 //     one that is not holding enough would each spend all of it on a transaction the chain was
@@ -23,7 +23,7 @@
 //
 // Steps: backing → address → amount → review → proving → `#withdrawn/<hash>`. Like the send flow,
 // the proof lives on `ctx.state` (session-scoped) with a pinned chip, so leaving the screen does
-// not cancel a minute and a half of work.
+// not cancel two minutes of work.
 import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
@@ -408,7 +408,7 @@ function provingStepMarkup(store) {
     </div>
     <div class="banner">
       <span class="ic">${raw(icons.shield())}</span>
-      <span><span class="banner-title">Keep this window open</span>One proof runs on this device — about a minute and a half. You can look at other screens; closing the wallet stops it.</span>
+      <span><span class="banner-title">Keep this window open</span>One proof runs on this device — about two minutes. You can look at other screens; closing the wallet stops it.</span>
     </div>
     <div data-role="prove-actions">${cancel}</div>`;
 }

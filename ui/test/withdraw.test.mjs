@@ -2,7 +2,7 @@
 // asset screen — task 4.5.
 //
 // A withdrawal is a `BridgeBurn`: an RPL note leaves the shielded pool for one of the coins that
-// back it, at a cost of ONE bundle proof and about a minute and a half. So most of what is asserted here
+// back it, at a cost of ONE bundle proof and about two minutes. So most of what is asserted here
 // is about **not starting one**: no Withdraw action where the shell or the chain cannot carry one
 // out, and every refusal that can be made locally made before `bridge.estimate` is even called.
 //

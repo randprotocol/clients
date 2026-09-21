@@ -177,7 +177,7 @@ async function executeSend({ req, onPhase, options, client, identity, sendTransf
 
 /**
  * The real withdrawal: a `BridgeBurn`, which since chain 14 is **one bundle and one proof** — the
- * token burned from slots 0–1, the RAND fee paid from slots 2–3, about a minute and a half on this
+ * token burned from slots 0–1, the RAND fee paid from slots 2–3, about two minutes on this
  * machine rather than three and a half. Reached only after `bridge.withdraw`'s gates
  * (backend-shared.js) — this device can prove, this node is on this wallet's chain, and the core's
  * own `burn_is_possible` said the chain would accept it — so everything left here is the chain's

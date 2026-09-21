@@ -234,7 +234,7 @@ export function coreApi(core) {
     proveTransfer: (req) => call('prove_transfer', req),
     // A bridge burn. `plan_burn` selects both groups' notes (the token to burn and the RAND to pay
     // with) and costs nothing; `prove_burn` proves the ONE bundle they share, which since chain 14
-    // is a single proof of about a minute and a half rather than two of about three and a half.
+    // is a single proof of about two minutes rather than two of about three and a half.
     // `fee` is optional on the plan (it defaults to the chain's `BRIDGE_BURN_FEE`) and **required**
     // on the proof — see core/crates/wallet-core.
     planBurn: (req) => call('plan_burn', req),

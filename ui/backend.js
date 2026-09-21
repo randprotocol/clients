@@ -275,7 +275,7 @@
  *       unaffected, which is why it is reported rather than folded into `enabled`.
  *     · `bridge.canWithdraw()` → `{ok, reason?}`, in the same shape and with the same rules as
  *       `send.canProve()`. It asks two questions in a fixed order: can this device prove at all (a
- *       burn is ONE bundle proof, the same one a transfer is — ~5.7 GB, about a minute and a half;
+ *       burn is ONE bundle proof, the same one a transfer is — ~5.7 GB, about two minutes;
  *       the answer is `send.canProve()`'s own sentence, verbatim), and is the bridge enabled. Both
  *       must pass. On every wasm shell the first is unconditionally false, so this is too, and no
  *       node is asked.

@@ -1544,7 +1544,7 @@ export function makeSharedBackend({
    * is for a transfer.
    *
    * The whole reason this group exists rather than the screen calling `rpc.call` itself: a burn
-   * costs a bundle proof, about a minute and a half and ~5.7 GB, and there are four ways to spend
+   * costs a bundle proof, about two minutes and ~5.7 GB, and there are four ways to spend
    * that on a transaction the chain will refuse outright — a disabled bridge, an unregistered
    * index, a coin that does not back the asset, and a coin that is not holding enough of it.
    * `wallet-core` cannot check any of them on its own (it does no I/O), so `screenBurn` puts the
