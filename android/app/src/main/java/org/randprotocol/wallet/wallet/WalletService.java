@@ -434,17 +434,19 @@ public final class WalletService {
             JSONObject proved = Core.proveTransfer(req);
             req = null; // the spend key was in it
 
-            SendMonitor.post(st.with(SendState.Phase.SUBMITTING, "Submitting"));
-            String hash = rpc.sendTransaction(proved.getString("tx_hex"));
-            long time = proved.getLong("time");
             // The receipt's key is the PAYMENT output's own, named by the core — never a slot
             // index: chain 14's four slots put dummies ahead of the payment for a RAND transfer.
             // It is null on a burn; getString would coerce that to the text "null", which looks
-            // like a key and opens nothing, so refuse it as loudly as a missing field.
+            // like a key and opens nothing, so refuse it as loudly as a missing field — BEFORE
+            // anything is broadcast, exactly as iOS does.
             if (proved.isNull("payment_tx_key")) {
                 throw new CoreException("the core did not name the payment's transaction key");
             }
             String txKey = proved.getString("payment_tx_key");
+
+            SendMonitor.post(st.with(SendState.Phase.SUBMITTING, "Submitting"));
+            String hash = rpc.sendTransaction(proved.getString("tx_hex"));
+            long time = proved.getLong("time");
 
             Submission sub = new Submission();
             sub.hash = hash;
