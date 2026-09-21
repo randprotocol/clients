@@ -182,8 +182,10 @@ async function init() {
   // ---- the node, for settings ----
   if (chain === 'wrong') {
     backend.rpc.call = async (method) => (method === 'rand_chainId' ? 42 : { height: 1402918, peers: 6, syncing: false });
+    backend.rpc.probe = async (url) => ({ url, chainId: 42, height: 1402918 });
   } else if (rpcMode === 'down') {
     backend.rpc.call = async () => { throw new Error('Cannot reach the node at 127.0.0.1:8899 — timed out after 8s.'); };
+    backend.rpc.probe = async () => { throw new Error('Cannot reach the node at 127.0.0.1:8899 — timed out after 8s.'); };
   }
 
   window.__app = await mount(document.body, backend, { mode });

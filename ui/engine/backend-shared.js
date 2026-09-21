@@ -424,7 +424,7 @@ export function makeSharedBackend({
     // treated as one — and a host the user typed deliberately is still stored and honoured.
     const k = await constants();
     const retired = rpcUrlList(k.default_rpc_url || 'https://rpc.randprotocol.org')[0];
-    if (retired && rpcUrlList(merged.rpcUrl || '')[0] === retired && !FALLBACK.rpcUrls.includes(retired)) merged.rpcUrl = '';
+    if (retired && rpcUrlList(merged.rpcUrl || '')[0] === retired && !merged.rpcUrls.includes(retired)) merged.rpcUrl = '';
     return merged;
   }
 
@@ -1672,10 +1672,20 @@ export function makeSharedBackend({
      */
     async probe(url) {
       const [u] = rpcUrlList(url);
-      if (!u) throw new Error('That is not an http(s) URL.');
+      if (!u || !/^https?:\/\//i.test(u)) throw new Error('That is not an http(s) URL.');
       const client = makeRpc([u], { fetch: fetchImpl });
       const [chainId, status] = await Promise.all([client.chainId(), client.status()]);
-      return { url: u, chainId: Number(chainId), height: Number(status && status.height) || 0 };
+      // Numbers about the chain are carried as TEXT wherever the node sent them that way, for the
+      // same reason the rest of this file never lets one through Number(): past 2^53 the round
+      // trip invents digits, and the settings screen prints exactly what this returns.
+      const height = status && status.height;
+      return {
+        url: u,
+        chainId: typeof chainId === 'string' && /^\d+$/.test(chainId) ? chainId : Number(chainId),
+        height: typeof height === 'string'
+          ? height
+          : (Number.isSafeInteger(Number(height)) ? String(Number(height)) : 'unknown'),
+      };
     },
   };
 

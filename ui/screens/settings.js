@@ -328,10 +328,26 @@ registerScreen('settings', {
       // result. The real answer replaces it.
       showStatus('info', 'Connecting…', 'Asking the node for its height and chain id.');
 
+      // An extension reaches nothing it has no permission for, and a typed URL is not yet
+      // granted: without asking first, Test would report "No answer" for a node that is up,
+      // behind a browser error rather than a node one. The click is the user gesture Firefox
+      // grants on, exactly as at Save.
+      if (!checked.cleared && typeof platform.ensureHostPermission === 'function') {
+        let granted = false;
+        try { granted = await platform.ensureHostPermission(checked.url); } catch { granted = false; }
+        if (!live()) return;
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+        if (!granted) {
+          showStatus('negative', 'Not tested', 'Permission to reach that host was not granted.');
+          return;
+        }
+      }
+
       // What is tested is what would be USED: the URL in the field, or — with the field empty —
       // the endpoint(s) already in force (a saved override, else the default set, whose first
-      // answer is the one the pool would pick). Testing anything else would tell the user
-      // nothing about the change they are looking at.
+      // answer is the one the result names). Testing anything else would tell the user nothing
+      // about the change they are looking at.
       const candidates = checked.cleared
         ? (settings.rpcUrl ? [settings.rpcUrl] : (Array.isArray(settings.rpcUrls) ? settings.rpcUrls : []))
         : [checked.url];

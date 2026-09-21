@@ -113,6 +113,22 @@ test('a refused host permission abandons the save', async (t) => {
   assert.notEqual((await b.settings.get()).rpcUrl, 'https://rpc.example');
 });
 
+test('Test connection asks the browser for permission to reach a typed host first', async (t) => {
+  // An extension reaches nothing it has no permission for: without asking, Test would report
+  // "No answer" for a node that is up, behind a browser error rather than a node one.
+  const b = unlockedBackend({
+    platform: { ensureHostPermission: async () => false },
+    rpc: { probe: async (url) => ({ url, chainId: 14, height: 7 }) },
+  });
+  const { app, root } = await settings(t, b);
+  root.querySelector('input[name=rpcUrl]').value = 'https://rpc.example';
+  root.querySelector('[data-role="test-connection"]').click();
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'platform.ensureHostPermission').length, 1, 'the host was never asked about');
+  assert.equal(b.calls.filter((c) => c[0] === 'rpc.probe').length, 0, 'it probed without permission');
+  assert.match(root.querySelector('[data-role="network-status"]').textContent, /permission/i);
+});
+
 test('Test connection reports the height and the chain id', async (t) => {
   const b = unlockedBackend({
     rpc: {

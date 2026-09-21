@@ -14,8 +14,9 @@
 file is built with wasm-pack from `core/crates/wallet-wasm` in the public repository; the
 Rust source is included in the repository at the tagged version. No remote code; the only
 network requests are JSON-RPC POSTs to the node URL in Settings, or, when that is empty, to
-one of the three defaults (https://rpc1.randprotocol.org, https://rpc2.randprotocol.org,
-https://rpc3.randprotocol.org — whichever answers, one at a time). `'wasm-unsafe-eval'` is
+the default endpoint (https://rpc.randprotocol.org; https://rpc1.randprotocol.org,
+https://rpc2.randprotocol.org and https://rpc3.randprotocol.org are the planned failover set —
+whichever answers, one at a time). `'wasm-unsafe-eval'` is
 required to instantiate the bundled
 module.
 

@@ -710,6 +710,27 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.equal(fetch.requests.some((r) => r.body.method === 'eth_getBalance'), false);
   });
 
+  scoped('rpc.probe answers what one URL claims, and never rounds the chain’s own numbers', async () => {
+    const huge = '9007199254740993123'; // past 2^53: a Number() round trip would invent digits
+    const fetch = stubFetch({
+      rand_status: () => ({ height: huge, peer_count: 1, syncing: false }),
+    });
+    const { backend } = build({ fetch });
+    await backend.wallet.create(PASSWORD);
+    const answer = await backend.rpc.probe('https://node.example');
+    assert.equal(answer.url, 'https://node.example');
+    assert.equal(answer.height, huge, 'the height came back as the string the node sent, digit for digit');
+    assert.equal(String(answer.chainId), '13');
+
+    // A numeric height within the safe range is stringified, and a garbage one is "unknown" —
+    // never "0" and never NaN on a banner.
+    const numeric = build({ fetch: stubFetch() });
+    await numeric.backend.wallet.create(PASSWORD);
+    assert.equal((await numeric.backend.rpc.probe('https://node.example')).height, '100');
+
+    await assert.rejects(() => backend.rpc.probe('ftp://node.example'), /http/);
+  });
+
   scoped('settings default to the core-s own constants and round-trip', async () => {
     const { backend } = build();
     const s = await backend.settings.get();

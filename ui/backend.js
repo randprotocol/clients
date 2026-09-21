@@ -183,8 +183,9 @@
  * wallet's at-rest security. Backends apply the same attempt throttling and backoff they apply to
  * `unlock`; the UI deliberately implements no lockout of its own.
  *
- * `rpc.call(method, params?)` is the raw JSON-RPC escape hatch. The settings screen uses exactly
- * two methods, and treats every field of either answer as untrusted text:
+ * `rpc.call(method, params?)` is the raw JSON-RPC escape hatch (the explore screen's lookups).
+ * The settings screen uses exactly two methods, and treats every field of either answer as
+ * untrusted text:
  *  - `rand_status`   → `{height, …}` — `height` the node's current block height.
  *  - `rand_chainId`  → the chain's own id (a number or a string).
  *

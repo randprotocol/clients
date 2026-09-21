@@ -414,6 +414,7 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
     // the wire is a caller's mistake, and it must not cost a round trip to say so.
     if (!isAllowedRpcMethod(method)) throw new RpcError(`${method} is not allowed from this wallet`, -32601);
     let last = null;
+    let lastUrl = null;
     for (const url of order()) {
       if (state.get(url) === 'wrong') continue;
       // eslint-disable-next-line no-await-in-loop -- endpoints are tried in order, by design
@@ -428,12 +429,14 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
         if (!mayRetryElsewhere(err, method)) throw err;
         note(url, 'down', err.message);
         last = err;
+        lastUrl = url;
       }
     }
     // Nothing answered, or nothing that answered is on this chain. The endpoints that were
     // refused are named, because "it did not work" without saying which node said what is not
-    // something an operator can act on.
-    const named = skippedNotes(null).map((s) => `${s.url} (${s.reason})`).join(', ');
+    // something an operator can act on — except the one whose failure this is, which would be
+    // named twice ("X answered HTTP 502; also tried X (X answered HTTP 502)").
+    const named = skippedNotes(null).filter((s) => s.url !== lastUrl).map((s) => `${s.url} (${s.reason})`).join(', ');
     forgetTransientFailures();
     if (last) {
       if (named) { last.message = `${last.message}; also tried ${named}`; }
