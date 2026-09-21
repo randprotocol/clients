@@ -856,6 +856,20 @@ test('Max on a token with no RAND for the fee shows the backend’s reason, not 
   assert.notEqual(root.querySelector('input[name=amount]').value, '0');
 });
 
+test('Max on a token with SOME RAND, but not the fee, gets the fee’s own sentence', async (t) => {
+  // The window between "no RAND at all" and "enough": `select_rand_fee` refuses differently
+  // there ("the RAND fee: insufficient balance: have … RAND, need … RAND"), and the screen shows
+  // whichever sentence the backend wrote — so the fake must say the one the core would.
+  const b = unlockedBackend(listing([randRow({ balance: '5000' }), tokenRow()]));
+  const { app, root } = await mountApp(t, b, { hash: '#send/1' });
+  await app.idle();
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('[data-role="max"]').click();
+  await app.idle();
+  assert.match(root.textContent, /the RAND fee: insufficient balance: have 0\.000005 RAND, need 0\.00001 RAND/);
+  assert.notEqual(root.querySelector('input[name=amount]').value, '0');
+});
+
 test('Max on a token without maxSendable still does not subtract the RAND fee', async (t) => {
   const b = unlockedBackend(listing([randRow(), tokenRow()]));
   delete b.send.maxSendable;

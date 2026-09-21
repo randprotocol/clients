@@ -295,11 +295,12 @@ export function checkAssets(reply, { max = 4096 } = {}) {
  * A page must answer the REQUEST it was asked with, in the two ways the walk depends on: indices
  * strictly ascending, and none below the `from` the page was asked for — the caller moves a
  * cursor to the last row's index + 1, so an unordered page walks that cursor backwards and one
- * starting below `from` rewinds the walk over rows already read. Unlike `checkCommitments` this
- * does NOT require contiguity or a start exactly at `from`: the registry is sparse by design
- * (registration hands out the indices; a page can legitimately skip retired ones), and a jump
- * forward grants a hostile node nothing the short-page rule does not already grant it — the
- * walk only ever advances over rows it actually read.
+ * starting below `from` rewinds the walk over rows already read. This chain's registry is DENSE
+ * (indices come off a counter and nothing deregisters — `ledger::tokens`), so a page that skips
+ * an index is a node lying. It is tolerated anyway, and for one reason only: a node that wants
+ * rows skipped can serve a short page and claim the registry ends — the protocol's own rule —
+ * so refusing the jump here would buy nothing, and the walk still only advances over rows it
+ * actually read.
  */
 export function checkTokens(reply, { max = MAX_TOKEN_PAGE, from } = {}) {
   const m = 'rand_getTokens';

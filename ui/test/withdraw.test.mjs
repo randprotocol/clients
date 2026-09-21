@@ -466,6 +466,7 @@ test('an asset the node’s registry does not list is refused at the very first 
   assertGone(root.querySelector('[data-token]'), 'a backing to pick');
   assertGone(root.querySelector('textarea[name=to]'), 'an address field');
   assert.equal(calls(b, 'bridge.estimate').length, 0, 'and the backend was never asked to plan it');
+  assert.equal(calls(b, 'bridge.state').length, 0, 'the node was never even asked for the bridge');
 });
 
 test('a native token has no coin to release, and the flow says so instead of offering one', async (t) => {
