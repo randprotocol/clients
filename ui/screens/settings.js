@@ -336,9 +336,9 @@ registerScreen('settings', {
         let granted = false;
         try { granted = await platform.ensureHostPermission(checked.url); } catch { granted = false; }
         if (!live()) return;
-        btn.disabled = false;
-        btn.removeAttribute('aria-busy');
         if (!granted) {
+          btn.disabled = false;
+          btn.removeAttribute('aria-busy');
           showStatus('negative', 'Not tested', 'Permission to reach that host was not granted.');
           return;
         }
