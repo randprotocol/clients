@@ -20,14 +20,21 @@ fn main() {
         let parsed: serde_json::Value = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(e) => {
-                writeln!(out, "{}", serde_json::json!({"ok": false, "error": format!("bad request line: {e}")})).unwrap();
-                out.flush().unwrap();
+                if writeln!(out, "{}", serde_json::json!({"ok": false, "error": format!("bad request line: {e}")}))
+                    .and_then(|()| out.flush())
+                    .is_err()
+                {
+                    break;
+                }
                 continue;
             }
         };
         let method = parsed["method"].as_str().unwrap_or("").to_string();
         let params = parsed["params"].to_string();
-        writeln!(out, "{}", wallet_core::call(&method, &params)).unwrap();
-        out.flush().unwrap();
+        // A parent that went away closes the pipe: stop quietly rather than panic on EPIPE —
+        // this is a test harness, and its own output going unread is the normal way it ends.
+        if writeln!(out, "{}", wallet_core::call(&method, &params)).and_then(|()| out.flush()).is_err() {
+            break;
+        }
     }
 }

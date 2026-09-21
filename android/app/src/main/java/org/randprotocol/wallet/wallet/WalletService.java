@@ -439,6 +439,11 @@ public final class WalletService {
             long time = proved.getLong("time");
             // The receipt's key is the PAYMENT output's own, named by the core — never a slot
             // index: chain 14's four slots put dummies ahead of the payment for a RAND transfer.
+            // It is null on a burn; getString would coerce that to the text "null", which looks
+            // like a key and opens nothing, so refuse it as loudly as a missing field.
+            if (proved.isNull("payment_tx_key")) {
+                throw new CoreException("the core did not name the payment's transaction key");
+            }
             String txKey = proved.getString("payment_tx_key");
 
             Submission sub = new Submission();
