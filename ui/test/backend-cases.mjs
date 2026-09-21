@@ -718,11 +718,10 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.equal(s.autoLockMin, 15);
     // Task 5.0: the node is a LIST with a default set, and `rpcUrl` is the user's override —
     // empty until they save one, so "the user chose this" is never confused with "this is ours".
+    // The set is the one live public endpoint today; it grows when more than one exists.
     assert.equal(s.rpcUrl, '');
     assert.deepEqual(s.rpcUrls, [
-      'https://rpc1.randprotocol.org',
-      'https://rpc2.randprotocol.org',
-      'https://rpc3.randprotocol.org',
+      'https://rpc.randprotocol.org',
     ]);
     const next = await backend.settings.set({ theme: 'light' });
     assert.equal(next.theme, 'light');
@@ -2105,20 +2104,20 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.equal(Object.prototype.hasOwnProperty.call(storage.local.get('settings'), 'rpcUrls'), false);
   });
 
-  scoped('FAILOVER: the retired single default in old storage is not read as the user-s choice', async () => {
+  scoped('FAILOVER: a stored rpc.randprotocol.org is honoured — it IS the default endpoint', async () => {
     // `settings.set` writes the whole object back, defaults included, so every wallet that ever
-    // changed its theme has the old single URL persisted. Left as an override it would pin that
-    // wallet to a host that is being replaced, and the endpoint set would never be reached.
+    // changed its theme has the old single URL persisted. It IS the live default endpoint again
+    // today, so the migration drops it only once the default set has moved off it — until then
+    // the stored copy and the default are the same host, and the wallet must land on exactly it
+    // (never on the dead three-host set that stood in between).
     const storage = mapStorage();
     const { backend } = build({ storage });
     storage.local.set('settings', { theme: 'dark', rpcUrl: 'https://rpc.randprotocol.org' });
     const s = await backend.settings.get();
     assert.equal(s.theme, 'dark', 'the rest of the stored settings were thrown away with it');
-    assert.equal(s.rpcUrl, '');
+    assert.equal(s.rpcUrl, 'https://rpc.randprotocol.org');
     assert.deepEqual(s.rpcUrls, [
-      'https://rpc1.randprotocol.org',
-      'https://rpc2.randprotocol.org',
-      'https://rpc3.randprotocol.org',
+      'https://rpc.randprotocol.org',
     ]);
 
     // A URL the user really did type is still theirs.

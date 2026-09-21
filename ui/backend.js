@@ -188,6 +188,11 @@
  *  - `rand_status`   → `{height, …}` — `height` the node's current block height.
  *  - `rand_chainId`  → the chain's own id (a number or a string).
  *
+ * `rpc.probe(url)` → `{url, chainId, height}` — a reachability check against ONE URL, for the
+ * settings screen's Test and Save. It answers what the node CLAIMS (its chain id and height) or
+ * rejects with the same error taxonomy as a scan; it is not the chain gate and changes nothing
+ * the gate decides, so the caller compares the claim against the configured chain id itself.
+ *
  * ---- send and faucet are gated on a verified chain ----
  *
  * A backend must not act on the notes until it has established, **against the node it is pointed
@@ -317,7 +322,7 @@ export const BACKEND_SHAPE = {
   assets: ['list'],
   send: ['canProve', 'estimate', 'send'],
   faucet: ['request'],
-  rpc: ['call'],
+  rpc: ['call', 'probe'],
   settings: ['get', 'set'],
   platform: ['openExternal', 'copy'], // plus string field platform.name
 };

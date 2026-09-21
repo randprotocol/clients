@@ -42,13 +42,15 @@ Swift, Java and JavaScript.
 
 ## Prerequisite: an RPC endpoint
 
-Every node today binds JSON-RPC to `127.0.0.1:8545`; there is no public RPC. The clients default
-to a **set of three** — `https://rpc1.randprotocol.org`, `https://rpc2.randprotocol.org`,
-`https://rpc3.randprotocol.org` — and use whichever answers, so one endpoint going down is not
-the wallet going down. Settings keeps one editable "RPC URL" that replaces the whole set while it
-is filled in; clearing it goes back to the defaults. **None of the three answers yet.**
+The public endpoint is **`https://rpc.randprotocol.org`** — a synced chain-14 node behind a
+CORS-open reverse proxy, and the default in every client. Settings keeps one editable "RPC URL"
+that replaces it while filled in (a saved URL is probed before it is kept: an unreachable or
+wrong-chain node is refused rather than saved); clearing the field goes back to the default.
 
-To make a default real, put a reverse proxy with CORS in front of one synced node's RPC.
+More public endpoints are planned (`rpc1`/`rpc2`/`rpc3.randprotocol.org`), and the clients
+already fail over between whatever set they ship with — standing them up one at a time needs no
+client change. To run one, put a reverse proxy with CORS in front of one synced node's RPC
+(every node binds JSON-RPC to `127.0.0.1:8545`).
 [`docs/rpc-endpoints.md`](docs/rpc-endpoints.md) is the whole recipe — Caddy, CORS, POST-only,
 request-size and rate limits, and what to front. The short version:
 
@@ -63,9 +65,9 @@ rpc1.randprotocol.org {
 }
 ```
 
-Until then, point a client at a node you can reach (an SSH tunnel to a droplet works: `ssh -N -L
-8545:127.0.0.1:8545 root@<node>` and RPC URL `http://127.0.0.1:8545`; on Android use `10.0.2.2`
-from the emulator).
+To use your own node instead, point a client at one you can reach (an SSH tunnel to a droplet
+works: `ssh -N -L 8545:127.0.0.1:8545 root@<node>` and RPC URL `http://127.0.0.1:8545`; on
+Android use `10.0.2.2` from the emulator).
 
 ## Known limitation: the proof does not fit on small devices yet
 

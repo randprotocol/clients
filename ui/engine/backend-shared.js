@@ -115,18 +115,18 @@ const MIN_PASSWORD_LEN = 10;
  * `extension/shared/lib/store.js`, deleted in task 2.1); its `chainId` said 8, which is the stale
  * chain-8 default the rename left behind and is deliberately NOT copied here.
  *
- * `rpcUrls` is the **default endpoint set** (owner's decision, 2026-09-19): three hosts, so one
- * of them being down is not the wallet being down. The core's own `default_rpc_url` — one URL,
- * the retired single `rpc.` host — is deliberately not the source of this list: a future core
- * that reports `default_rpc_urls` overrides it, exactly as `default_chain_id` overrides
- * `chainId`. None of the three answers yet; that is infrastructure, not client logic, and the
- * failover in engine/rpc.js is what makes standing them up one at a time uneventful.
+ * `rpcUrls` is the **default endpoint set**: today exactly one, `https://rpc.randprotocol.org` —
+ * the core's own `default_rpc_url`, the mobile apps' default, and the one public endpoint that
+ * exists (live since 2026-09-21, CORS-open, chain 14). The three-host set this used to ship
+ * (rpc1/rpc2/rpc3) never resolved — NXDOMAIN — so a fresh wallet's first scan probed three dead
+ * hosts and reported "No answer". When more than one public endpoint exists the list grows again
+ * in a release, and the failover in engine/rpc.js makes standing them up one at a time
+ * uneventful. A future core that reports `default_rpc_urls` overrides it, exactly as
+ * `default_chain_id` overrides `chainId`.
  */
 const FALLBACK = Object.freeze({
   rpcUrls: Object.freeze([
-    'https://rpc1.randprotocol.org',
-    'https://rpc2.randprotocol.org',
-    'https://rpc3.randprotocol.org',
+    'https://rpc.randprotocol.org',
   ]),
   explorerUrl: 'https://randscan.org',
   chainId: 14,
@@ -415,14 +415,16 @@ export function makeSharedBackend({
     // half, for storage that already has one.
     const merged = { ...base, ...stored, rpcUrls: base.rpcUrls };
     // Migration (task 5.0). `setSettings` writes the WHOLE settings object back, defaults
-    // included, so anyone who ever changed their theme has the RETIRED single default URL sitting
-    // in storage. Read as an override it would pin that wallet to a host that is being replaced,
-    // for ever, and the endpoint set it should be moving to would be unreachable. It was never a
-    // choice the user made, so it is not treated as one — and `settings.set({rpcUrl: …})` still
-    // stores it if they really do type that host in.
+    // included, so anyone who ever changed their theme while `rpc.randprotocol.org` was the
+    // single default has it sitting in storage as `rpcUrl`. Read as an override it would pin
+    // that wallet to the host it was stored against — fine today, when the default endpoint set
+    // is that very host again (the filter is inert by design: dropping it lands on the same
+    // URL), but the day the default moves on, these wallets must move with it rather than stay
+    // pinned to a host they never chose. It was never a choice the user made, so it is not
+    // treated as one — and a host the user typed deliberately is still stored and honoured.
     const k = await constants();
     const retired = rpcUrlList(k.default_rpc_url || 'https://rpc.randprotocol.org')[0];
-    if (retired && rpcUrlList(merged.rpcUrl || '')[0] === retired) merged.rpcUrl = '';
+    if (retired && rpcUrlList(merged.rpcUrl || '')[0] === retired && !FALLBACK.rpcUrls.includes(retired)) merged.rpcUrl = '';
     return merged;
   }
 
@@ -1658,6 +1660,22 @@ export function makeSharedBackend({
       if (!isAllowedRpcMethod(method)) throw new Error(`${method} is not allowed from this wallet`);
       const client = await rpcClient();
       return client.rpc(method, Array.isArray(params) ? params : [params]);
+    },
+    /**
+     * A single-URL reachability check, for the settings screen's Test and Save: answers the two
+     * facts those need — the chain the node CLAIMS to be on and its height — or throws (the same
+     * error taxonomy as a scan: timeout, connect, http, body). This is not the chain gate and
+     * changes nothing it decides: nothing the node says here is trusted, every operation still
+     * goes through `requireVerifiedChain()` against the URL actually in force. The chain-id
+     * comparison is the caller's to make, against the configured chain, never against anything
+     * the node said.
+     */
+    async probe(url) {
+      const [u] = rpcUrlList(url);
+      if (!u) throw new Error('That is not an http(s) URL.');
+      const client = makeRpc([u], { fetch: fetchImpl });
+      const [chainId, status] = await Promise.all([client.chainId(), client.status()]);
+      return { url: u, chainId: Number(chainId), height: Number(status && status.height) || 0 };
     },
   };
 

@@ -16,7 +16,7 @@
   "background": { "service_worker": "background.js" },
   "options_ui": { "page": "app.html#settings", "open_in_tab": true },
   "permissions": ["storage", "alarms"],
-  "host_permissions": ["https://rpc1.randprotocol.org/*", "https://rpc2.randprotocol.org/*", "https://rpc3.randprotocol.org/*"],
+  "host_permissions": ["https://rpc.randprotocol.org/*", "https://rpc1.randprotocol.org/*", "https://rpc2.randprotocol.org/*", "https://rpc3.randprotocol.org/*"],
   "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"

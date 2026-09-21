@@ -1,14 +1,15 @@
 # Standing up an RPC endpoint
 
 What a node operator has to run for `https://rpc1.randprotocol.org` (or `rpc2`, or `rpc3`) to be
-something the wallets can use. The clients ship those three as their default set and use whichever
-answers — see "Why three" below — so this page is written to be followed three times, once per
-host, with nothing shared between them but the DNS zone.
+something the wallets can use. This page is written to be followed once per host, with nothing
+shared between them but the DNS zone.
 
 The DNS records and the machines themselves are infrastructure and live outside this repository:
-the fleet is on DigitalOcean, and `randprotocol.org`'s DNS is on Cloudflare. **None of the three
-hosts answers yet.** Nothing in the clients waits for them: an endpoint that does not resolve is
-simply the one the wallet skips.
+the fleet is on DigitalOcean, and `randprotocol.org`'s DNS is on Cloudflare. **One public
+endpoint exists today: `https://rpc.randprotocol.org`** (live since 2026-09-21 — CORS-open,
+chain 14), and it is the clients' default. `rpc1`/`rpc2`/`rpc3` do not resolve yet; the wallet
+skips whatever does not answer, and its default set grows to include them in a release once they
+are up — see "Why three" below.
 
 ## What is behind the proxy
 

@@ -24,7 +24,7 @@ function fixedPk() {
 function defaultSettings() {
   return {
     rpcUrl: 'http://127.0.0.1:8899',
-    rpcUrls: ['https://rpc1.randprotocol.org', 'https://rpc2.randprotocol.org', 'https://rpc3.randprotocol.org'],
+    rpcUrls: ['https://rpc.randprotocol.org'],
     theme: 'system', autoLockMin: 15, explorerUrl: 'https://randscan.org', chainId: 14,
   };
 }
@@ -316,6 +316,9 @@ function createBackend(initial = {}, overrides = {}) {
       if (method === 'rand_chainId') return state.settings.chainId;
       return { method, params: params ?? null };
     },
+    // The reachability check Test and Save run (ui/backend.js on `rpc.probe`). This fake answers
+    // for every URL — a test that needs a dead or wrong-chain node overrides it.
+    probe: (url) => ({ url: String(url), chainId: state.settings.chainId, height: state.head }),
   };
 
   const settingsDefs = {

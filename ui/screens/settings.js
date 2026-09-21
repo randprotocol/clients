@@ -276,6 +276,26 @@ registerScreen('settings', {
           return;
         }
       }
+      // A node is verified before it is saved: a green "Saved" under an endpoint that does not
+      // answer — or that answers for another chain — is how a wallet gets bricked with the
+      // user's own blessing. Clearing the field needs no check: it goes back to the defaults.
+      if (!checked.cleared) {
+        let answer = null;
+        try {
+          answer = await ctx.backend.rpc.probe(checked.url);
+        } catch (err) {
+          if (!live()) return;
+          showStatus('negative', 'Not saved', (err && err.message) || 'That node could not be reached.');
+          return;
+        }
+        if (!live()) return;
+        const theirs = String(answer.chainId ?? '');
+        const ours = String(settings.chainId ?? '');
+        if (ours && theirs && theirs !== ours) {
+          showStatus('negative', 'Not saved', `That node is on chain ${theirs}; this wallet is set up for chain ${ours}. The node was left as it was.`);
+          return;
+        }
+      }
       try {
         await ctx.backend.settings.set({ rpcUrl: checked.url });
       } catch (err) {
@@ -307,35 +327,41 @@ registerScreen('settings', {
       // Neutral: nothing is known yet, and a green banner that says "Connecting" reads as a
       // result. The real answer replaces it.
       showStatus('info', 'Connecting…', 'Asking the node for its height and chain id.');
-      let status;
-      let chainId;
-      try {
-        [status, chainId] = await Promise.all([
-          ctx.backend.rpc.call('rand_status'),
-          ctx.backend.rpc.call('rand_chainId'),
-        ]);
-      } catch (err) {
-        if (!live()) return;
-        btn.disabled = false;
-        btn.removeAttribute('aria-busy');
-        showStatus('negative', 'No answer', (err && err.message) || 'The node could not be reached.');
-        return;
+
+      // What is tested is what would be USED: the URL in the field, or — with the field empty —
+      // the endpoint(s) already in force (a saved override, else the default set, whose first
+      // answer is the one the pool would pick). Testing anything else would tell the user
+      // nothing about the change they are looking at.
+      const candidates = checked.cleared
+        ? (settings.rpcUrl ? [settings.rpcUrl] : (Array.isArray(settings.rpcUrls) ? settings.rpcUrls : []))
+        : [checked.url];
+      let answer = null;
+      let lastErr = null;
+      for (const url of candidates) {
+        try {
+          answer = await ctx.backend.rpc.probe(url);
+          break;
+        } catch (err) { lastErr = err; }
       }
       if (!live()) return;
       btn.disabled = false;
       btn.removeAttribute('aria-busy');
-      const height = status && status.height !== undefined && status.height !== null ? String(status.height) : 'unknown';
-      // Grouped as a string, never through Number(): a chain's height is not bounded by 2^53, and
-      // `Number('9007199254740993123').toLocaleString()` quietly invents digits.
-      const heightText = groupDigits(height);
-      const theirs = String(chainId ?? '');
-      const ours = String(settings.chainId ?? '');
-      if (ours && theirs && theirs !== ours) {
-        showStatus('warn', 'A different chain',
-          `That node reports chain ${theirs}; this wallet is set up for chain ${ours}. Its notes and addresses will not match. Height ${heightText}.`);
+      if (!answer) {
+        showStatus('negative', 'No answer', (lastErr && lastErr.message) || 'The node could not be reached.');
         return;
       }
-      showStatus('positive', 'Connected', `Chain ${theirs || 'unknown'} · height ${heightText}.`);
+      // Grouped as a string, never through Number(): a chain's height is not bounded by 2^53, and
+      // `Number('9007199254740993123').toLocaleString()` quietly invents digits.
+      const heightText = groupDigits(String(answer.height ?? 'unknown'));
+      const theirs = String(answer.chainId ?? '');
+      const ours = String(settings.chainId ?? '');
+      const where = candidates.length > 1 ? `${answer.url} answered first — ` : '';
+      if (ours && theirs && theirs !== ours) {
+        showStatus('warn', 'A different chain',
+          `${where}it reports chain ${theirs}; this wallet is set up for chain ${ours}. Its notes and addresses will not match. Height ${heightText}.`);
+        return;
+      }
+      showStatus('positive', 'Connected', `${where}chain ${theirs || 'unknown'} · height ${heightText}.`);
     });
 
     const offRescan = on(body, '[data-role="rescan"]', 'click', (evt) => {

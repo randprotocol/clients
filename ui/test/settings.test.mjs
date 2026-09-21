@@ -69,9 +69,9 @@ test('the RPC URL must be https, or plain http only on this machine', async (t) 
 });
 
 test('clearing the RPC URL goes back to the default nodes, and asks for no new host', async (t) => {
-  // Task 5.0: this one field OVERRIDES a default set of three endpoints. Without a way to empty
-  // it, the first URL anyone ever saved would be the only node their wallet could ever use, and
-  // the failover the defaults exist for would be permanently out of reach.
+  // Task 5.0: this one field OVERRIDES the default endpoint set. Without a way to empty it, the
+  // first URL anyone ever saved would be the only node their wallet could ever use, and the
+  // failover the defaults exist for would be permanently out of reach.
   const b = unlockedBackend({ platform: { ensureHostPermission: async () => true } });
   const { app, root } = await settings(t, b);
   const input = root.querySelector('input[name=rpcUrl]');
@@ -83,11 +83,12 @@ test('clearing the RPC URL goes back to the default nodes, and asks for no new h
   assert.equal(field.classList.contains('invalid'), false, 'an empty field was treated as a mistake');
   assert.equal(b.calls.filter((c) => c[0] === 'platform.ensureHostPermission').length, 0,
     'it asked for permission to reach a host it is not going to reach');
+  assert.equal(b.calls.filter((c) => c[0] === 'rpc.probe').length, 0, 'going back to the defaults probed nothing');
   assert.deepEqual(b.calls.filter((c) => c[0] === 'settings.set').map((c) => c[1]), [{ rpcUrl: '' }]);
   assert.equal((await b.settings.get()).rpcUrl, '');
   const status = root.querySelector('[data-role="network-status"]').textContent;
   assert.match(status, /default nodes/i);
-  assert.match(status, /rpc1\.randprotocol\.org/, 'it did not say which nodes those are');
+  assert.match(status, /rpc\.randprotocol\.org/, 'it did not say which nodes those are');
 });
 
 test('with no override saved, the hint names the default nodes rather than inventing one', async (t) => {
@@ -96,8 +97,8 @@ test('with no override saved, the hint names the default nodes rather than inven
   const { root } = await settings(t, b);
   const hint = root.querySelector('#settings-rpc-hint').textContent;
   assert.match(hint, /default nodes/i);
-  assert.match(hint, /rpc2\.randprotocol\.org/);
-  assert.equal(root.querySelector('input[name=rpcUrl]').getAttribute('placeholder'), 'https://rpc1.randprotocol.org');
+  assert.match(hint, /rpc\.randprotocol\.org/);
+  assert.equal(root.querySelector('input[name=rpcUrl]').getAttribute('placeholder'), 'https://rpc.randprotocol.org');
 });
 
 test('a refused host permission abandons the save', async (t) => {
@@ -115,29 +116,41 @@ test('a refused host permission abandons the save', async (t) => {
 test('Test connection reports the height and the chain id', async (t) => {
   const b = unlockedBackend({
     rpc: {
-      call: async (method) => {
-        if (method === 'rand_status') return { height: 1402918, peers: 8, syncing: false };
-        if (method === 'rand_chainId') return 14;
-        throw new Error(`unexpected ${method}`);
+      probe: async (url) => {
+        assert.equal(url, 'http://127.0.0.1:8899', 'with the field empty, the SAVED endpoint is the one tested');
+        return { url, chainId: 14, height: 1402918 };
       },
     },
   });
   const { app, root } = await settings(t, b);
   root.querySelector('[data-role="test-connection"]').click();
   await app.idle();
-  const methods = b.calls.filter((c) => c[0] === 'rpc.call').map((c) => c[1]);
-  assert.ok(methods.includes('rand_status'));
-  assert.ok(methods.includes('rand_chainId'));
+  const probed = b.calls.filter((c) => c[0] === 'rpc.probe');
+  assert.equal(probed.length, 1);
   const status = root.querySelector('[data-role="network-status"]');
   assert.match(status.textContent, /1,?402,?918/);
   assert.match(status.textContent, /14/);
   assertGone(root.querySelector('[data-role="network-status"] .banner.warn, [data-role="network-status"].warn'), 'root.querySelector([data-role="network-status"] .banner.warn');
 });
 
+test('Test connection checks the URL in the FIELD, not the saved one', async (t) => {
+  // The whole of the settings UX bug: a typed URL was being judged by what the saved pool said.
+  const b = unlockedBackend({
+    rpc: { probe: async (url) => ({ url, chainId: 14, height: 7 }) },
+  });
+  const { app, root } = await settings(t, b);
+  root.querySelector('input[name=rpcUrl]').value = 'https://rpc.example';
+  root.querySelector('[data-role="test-connection"]').click();
+  await app.idle();
+  const [, probed] = b.calls.find((c) => c[0] === 'rpc.probe') || [];
+  assert.equal(probed, 'https://rpc.example', 'the field’s URL was never asked');
+  assert.match(root.querySelector('[data-role="network-status"]').textContent, /Connected/);
+});
+
 test('Test connection warns when the node is on another chain', async (t) => {
   const b = unlockedBackend({
     rpc: {
-      call: async (method) => (method === 'rand_chainId' ? 99 : { height: 7, peers: 1, syncing: true }),
+      probe: async (url) => ({ url, chainId: 99, height: 7 }),
     },
   });
   const { app, root } = await settings(t, b);
@@ -151,7 +164,7 @@ test('Test connection warns when the node is on another chain', async (t) => {
 
 test('a node’s own words reach the page as text, never as markup', async (t) => {
   const b = unlockedBackend({
-    rpc: { call: async () => { throw new Error('<img src=x onerror="alert(1)"> unreachable'); } },
+    rpc: { probe: async () => { throw new Error('<img src=x onerror="alert(1)"> unreachable'); } },
   });
   const { app, root } = await settings(t, b);
   root.querySelector('[data-role="test-connection"]').click();
@@ -160,6 +173,51 @@ test('a node’s own words reach the page as text, never as markup', async (t) =
   assert.match(status.textContent, /unreachable/);
   assertGone(status.querySelector('img'), 'status.querySelector(img)');
   assert.ok(root.innerHTML.includes('&lt;img'), 'escaped, not parsed');
+});
+
+test('Save refuses a node that does not answer — nothing is persisted', async (t) => {
+  // The green "Saved" under a dead URL was the other half of the settings UX bug.
+  const b = unlockedBackend({
+    rpc: { probe: async (url) => { throw new Error(`cannot reach ${url}: timed out`); } },
+  });
+  const { app, root } = await settings(t, b);
+  root.querySelector('input[name=rpcUrl]').value = 'https://rpc.example';
+  submitNetwork(root);
+  await app.idle();
+  const status = root.querySelector('[data-role="network-status"]');
+  assert.match(status.textContent, /Not saved/);
+  assert.match(status.textContent, /timed out/);
+  assert.equal(b.calls.filter((c) => c[0] === 'settings.set').length, 0, 'the dead URL was saved anyway');
+  assert.notEqual((await b.settings.get()).rpcUrl, 'https://rpc.example');
+});
+
+test('Save refuses a node on another chain — nothing is persisted', async (t) => {
+  const b = unlockedBackend({
+    rpc: { probe: async (url) => ({ url, chainId: 99, height: 7 }) },
+  });
+  const { app, root } = await settings(t, b);
+  root.querySelector('input[name=rpcUrl]').value = 'https://rpc.example';
+  submitNetwork(root);
+  await app.idle();
+  const status = root.querySelector('[data-role="network-status"]');
+  assert.match(status.textContent, /Not saved/);
+  assert.match(status.textContent, /chain 99/);
+  assert.match(status.textContent, /chain 14/);
+  assert.equal(b.calls.filter((c) => c[0] === 'settings.set').length, 0, 'a wrong-chain node was saved anyway');
+});
+
+test('Save accepts a node that answers on the right chain', async (t) => {
+  const b = unlockedBackend({
+    rpc: { probe: async (url) => ({ url, chainId: 14, height: 119894 }) },
+  });
+  const { app, root } = await settings(t, b);
+  root.querySelector('input[name=rpcUrl]').value = 'https://rpc.example';
+  submitNetwork(root);
+  await app.idle();
+  const [, probed] = b.calls.find((c) => c[0] === 'rpc.probe') || [];
+  assert.equal(probed, 'https://rpc.example', 'the candidate was never checked');
+  assert.equal((await b.settings.get()).rpcUrl, 'https://rpc.example');
+  assert.match(root.querySelector('[data-role="network-status"]').textContent, /Saved/);
 });
 
 // -------------------------------------------------------------------------- appearance --------
@@ -358,7 +416,7 @@ test('the re-auth sheet cannot be submitted twice while a check is in flight', a
 test('a block height past 2^53 is grouped without losing a digit', async (t) => {
   const huge = '9007199254740993123'; // Number() would round this
   const b = unlockedBackend({
-    rpc: { call: async (method) => (method === 'rand_chainId' ? 14 : { height: huge, peers: 1, syncing: false }) },
+    rpc: { probe: async (url) => ({ url, chainId: 14, height: huge }) },
   });
   const { app, root } = await settings(t, b);
   root.querySelector('[data-role="test-connection"]').click();
@@ -370,7 +428,7 @@ test('a block height past 2^53 is grouped without losing a digit', async (t) => 
 test('Connecting… is not painted as a success', async (t) => {
   let release;
   const gate = new Promise((r) => { release = r; });
-  const b = unlockedBackend({ rpc: { call: async (m) => { await gate; return m === 'rand_chainId' ? 14 : { height: 5 }; } } });
+  const b = unlockedBackend({ rpc: { probe: async (url) => { await gate; return { url, chainId: 14, height: 5 }; } } });
   const { app, root } = await settings(t, b);
   root.querySelector('[data-role="test-connection"]').click();
   await new Promise((r) => setTimeout(r, 0));
