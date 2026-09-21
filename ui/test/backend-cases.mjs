@@ -396,6 +396,44 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.equal(list.length, 1001, 'a repeated page was counted twice');
   });
 
+  scoped('a bad page mid-walk shows its validated prefix but never shrinks the cache', async () => {
+    // Only a walk that ends by the node's own end rule (a short page) is written to the cache.
+    // One corrupted reply ends a re-walk early, and the validated prefix is what the session
+    // sees — but persisting it would shrink a good registry the wallet already had down to what
+    // that one bad page let through. (The failure direction is safe either way: a token missing
+    // from the registry renders `unlisted`, which can be neither sent nor withdrawn.)
+    const storage = mapStorage();
+    const full = Array.from({ length: 1500 }, (_, i) => ({ ...zusd(), index: i + 1, symbol: `T${i + 1}` }));
+    const pageOf = (from) => full.filter((t) => t.index >= from).slice(0, 1000);
+    const honest = build({
+      storage,
+      fetch: stubFetch({
+        rand_getTokens: (params) => {
+          const from = Number((params && params[0]) || 0);
+          return { enabled: true, registration_fee: '0', next_index: 1501, tokens: pageOf(from) };
+        },
+      }),
+    });
+    await honest.backend.wallet.create(PASSWORD);
+    assert.equal((await honest.backend.assets.list()).length, 1501);
+    assert.equal(storage.local.get('tokens').length, 1500, 'a completed walk was cached');
+
+    // Page 1 fine, page 2 garbage: the walk ends with a validated prefix of 1 000.
+    const corrupt = build({
+      storage,
+      fetch: stubFetch({
+        rand_getTokens: (params) => {
+          const from = Number((params && params[0]) || 0);
+          if (from === 0) return { enabled: true, registration_fee: '0', next_index: 1501, tokens: pageOf(0) };
+          return { enabled: true, tokens: [{ index: 'one' }] };
+        },
+      }),
+    });
+    const list = await corrupt.backend.assets.list();
+    assert.equal(list.length, 1001, 'the validated prefix is what this session sees');
+    assert.equal(storage.local.get('tokens').length, 1500, 'but the cache was never shrunk to it');
+  });
+
   scoped('bridge.state and bridge.canWithdraw both refuse a chain with no bridge', async () => {
     const { backend } = build();
     await backend.wallet.create(PASSWORD);

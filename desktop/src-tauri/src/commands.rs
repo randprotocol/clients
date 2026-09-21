@@ -30,7 +30,7 @@ pub fn core_call_sync(method: &str, params: &str) -> String {
 ///
 /// **`spawn_blocking`, and that is the whole point of this function.** A Tauri command written as
 /// a plain synchronous `fn` runs on the **main thread**, and `prove_transfer` is a CPU-bound
-/// STARK that takes minutes and peaks around 5.6 GB. On the main thread it would freeze the entire
+/// STARK that takes minutes and peaks around 5.7 GB. On the main thread it would freeze the entire
 /// window — no progress, no repaint, no cancel — for the length of the proof, and the operating
 /// system would offer to kill the app. An `async fn` alone would be no better for a blocking call:
 /// it would occupy an async-runtime worker instead. `spawn_blocking` puts it on the blocking pool,

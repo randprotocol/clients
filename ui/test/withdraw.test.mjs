@@ -503,8 +503,7 @@ test('a second backing, chosen, is the pair that reaches BOTH estimate and withd
   assert.match(text(root), /900/);
   root.querySelector('[data-backing="1"]').click();
   await app.idle();
-  root.querySelector('textarea[name=to]').value = 'ab'.repeat(32); // chain 3 is EVM: 20 bytes
-  root.querySelector('textarea[name=to]').value = `0x${EVM}`;
+  root.querySelector('textarea[name=to]').value = `0x${EVM}`; // chain 3 is EVM: 20 bytes
   root.querySelector('[data-role="address-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
   await app.idle();
   root.querySelector('input[name=amount]').value = '0.05';

@@ -1201,6 +1201,10 @@ export function makeSharedBackend({
   async function fetchTokenRegistry(client) {
     const tokens = [];
     const seen = new Set();
+    // Set only when the walk ends by the node's own end rule (a short page): the one ending that
+    // means "this is the whole registry". A validation break, a non-advancing page or the page
+    // cap all mean "this is as far as we got".
+    let complete = false;
     let from = 0;
     for (let page = 0; page < MAX_TOKEN_PAGES; page += 1) {
       let reply;
@@ -1208,11 +1212,12 @@ export function makeSharedBackend({
         reply = checkTokens(await client.getTokens(from, MAX_TOKEN_PAGE), { from });
       } catch (err) {
         // A page that is not an answer to the request — unordered, below the start it was asked
-        // from, malformed — ends the walk exactly as a short page does: what was already
-        // collected was fully validated and is kept, and the cursor never moves past data that
-        // was not read. With NOTHING collected there is no prefix to keep, so the failure
-        // propagates: caching an empty registry then would turn "the node's answer was garbage"
-        // into "this chain has no tokens".
+        // from, malformed — ends the walk: what was already collected was fully validated and is
+        // kept FOR DISPLAY, and the cursor never moves past data that was not read. With NOTHING
+        // collected there is no prefix to keep, so the failure propagates: caching an empty
+        // registry then would turn "the node's answer was garbage" into "this chain has no
+        // tokens". The prefix is deliberately not written over the cache either (see `complete`):
+        // a transient bad page must not shrink a good registry the wallet already had.
         if (err instanceof NodeReplyError && tokens.length > 0) break;
         throw err;
       }
@@ -1222,12 +1227,12 @@ export function makeSharedBackend({
         tokens.push(t);
       }
       // The node's own rule for where the registry ends. `next_index` is deliberately not read.
-      if (reply.tokens.length < MAX_TOKEN_PAGE) break;
+      if (reply.tokens.length < MAX_TOKEN_PAGE) { complete = true; break; }
       const next = reply.tokens[reply.tokens.length - 1].index + 1;
       if (next <= from) break; // a page that did not advance is not a page to follow
       from = next;
     }
-    return tokens;
+    return { tokens, complete };
   }
 
   const assets = {
@@ -1276,8 +1281,11 @@ export function makeSharedBackend({
       try {
         const { client } = await requireVerifiedChain();
         const fresh = await fetchTokenRegistry(client);
-        registry = fresh;
-        await storage.set(K.tokens, fresh);
+        registry = fresh.tokens;
+        // Only a COMPLETED walk is cached. A prefix (a bad page ended the walk early) is shown
+        // for the session but never written: persisting it would shrink a good registry the
+        // wallet already had down to what one corrupted reply let through.
+        if (fresh.complete) await storage.set(K.tokens, fresh.tokens);
       } catch { /* unverifiable, offline, or a chain with no tokens: the cache still answers */ }
 
       const balances = new Map();

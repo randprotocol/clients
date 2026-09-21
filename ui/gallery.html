@@ -564,20 +564,20 @@
       <div class="hero">
         <span class="label">Balance</span>
         <span class="amount">3.5<span class="unit">RAND</span></span>
-        <div class="progress" data-pct="0.62"><span class="progress-bar"></span></div>
+        <div data-role="progress-slot"><div class="progress" data-pct="0.62"><span class="progress-bar"></span></div></div>
       </div>
       <div class="hero">
         <span class="label">Balance</span>
         <span class="amount">3.5<span class="unit">RAND</span></span>
-        <div class="progress" data-indeterminate="true"><span class="progress-bar"></span></div>
+        <div data-role="progress-slot"><div class="progress" data-indeterminate="true"><span class="progress-bar"></span></div></div>
       </div>
       <div class="hero">
         <span class="label">Balance</span>
         <span class="amount"><span class="skeleton line lg"></span></span>
-        <div class="progress" data-indeterminate="true"><span class="progress-bar"></span></div>
+        <div data-role="progress-slot"><div class="progress" data-indeterminate="true"><span class="progress-bar"></span></div></div>
       </div>
     </div>
-    <p class="g-note">A thin bar under the hero balance while sync.scan() is running: determinate once the scan reports a head height (--pct written through the CSSOM, same as the .ring above), indeterminate before that, and an indeterminate bar is what shows when the node never reports progress at all. The third hero is the state before any figure is known — the same .skeleton component, re-tinted to a white alpha because the surface tokens read as a hole on the gradient.</p>
+    <p class="g-note">A thin bar under the hero balance while sync.scan() is running, in a [data-role="progress-slot"] that reserves its height so the balance line never lifts when it leaves: determinate once the scan reports a head height (--pct written through the CSSOM, same as the .ring above), indeterminate before that, and an indeterminate bar is what shows when the node never reports progress at all. The third hero is the state before any figure is known — the same .skeleton component, re-tinted to a white alpha because the surface tokens read as a hole on the gradient.</p>
   </section>
 
   <!-- ============================ sheet / modal ============================ -->

@@ -1,6 +1,6 @@
 //! Rand Wallet for Windows, Linux and macOS.
 //!
-//! The one shell in which a transfer can actually complete. A bundle proof peaks at about 5.6 GB
+//! The one shell in which a transfer can actually complete. A bundle proof peaks at about 5.7 GB
 //! and wasm32 stops at 4 GiB, so the web wallet and the browser extension can do everything except
 //! the proof itself; here the chain crypto is `wallet-core` compiled for this machine, with no
 //! limit but its real RAM.

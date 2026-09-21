@@ -80,7 +80,7 @@ export function unsendableMarkup(asset, { hasRand = true } = {}) {
     <h2 class="title" data-role="step-title" tabindex="-1">${asset ? asset.symbol : 'This asset'} cannot be sent</h2>
     <div class="banner warn">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">Not in the token registry</span>${asset ? UNLISTED_TEXT : 'This wallet holds no such asset.'}</span>
+      <span><span class="banner-title">${asset ? 'Not in the token registry' : 'Not in this wallet'}</span>${asset ? UNLISTED_TEXT : 'This wallet holds no such asset.'}</span>
     </div>
     ${alternative}
     <button class="btn btn-ghost block" type="button" data-go="home">Back to home</button>`;

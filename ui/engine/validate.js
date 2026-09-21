@@ -292,12 +292,14 @@ export function checkAssets(reply, { max = 4096 } = {}) {
  *
  * `enabled: false` (a chain with no `tokens` section) is an answer, not an error.
  *
- * A page must be an answer to the REQUEST, exactly as `checkCommitments` requires of leaves: the
- * caller walks the registry by moving a cursor to the last row's index + 1, so a page that is not
- * strictly ascending walks that cursor backwards, and one starting below the `from` it was asked
- * with rewinds the walk over rows already read (or, served craftily, jumps it past rows that are
- * then never read — and a token missing from the registry is one whose balance this wallet prints
- * at its own guessed decimals instead of the chain's).
+ * A page must answer the REQUEST it was asked with, in the two ways the walk depends on: indices
+ * strictly ascending, and none below the `from` the page was asked for — the caller moves a
+ * cursor to the last row's index + 1, so an unordered page walks that cursor backwards and one
+ * starting below `from` rewinds the walk over rows already read. Unlike `checkCommitments` this
+ * does NOT require contiguity or a start exactly at `from`: the registry is sparse by design
+ * (registration hands out the indices; a page can legitimately skip retired ones), and a jump
+ * forward grants a hostile node nothing the short-page rule does not already grant it — the
+ * walk only ever advances over rows it actually read.
  */
 export function checkTokens(reply, { max = MAX_TOKEN_PAGE, from } = {}) {
   const m = 'rand_getTokens';

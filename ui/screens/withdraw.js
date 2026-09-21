@@ -30,7 +30,7 @@ import { registerScreen } from '../app.js';
 import { parseUnits, formatUnits, shortHex, elapsed } from '../lib/format.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink, TX_HASH_RE } from '../lib/explorer.js';
-import { UNLISTED_TEXT, isUnlisted, feeDecimals, feeSymbol } from '../lib/assets.js';
+import { UNLISTED_TEXT, isUnlisted, backingsOf, feeDecimals, feeSymbol } from '../lib/assets.js';
 import { plainUnits } from './send/state.js';
 
 // ============================================================================ the vocabulary ===
@@ -466,8 +466,6 @@ registerScreen('withdraw', {
       const [list, answer] = await Promise.all([ctx.backend.assets.list(), bridge.canWithdraw()]);
       assets = list || [];
       if (answer) can = answer;
-      // Only once the device and the chain have both said yes is the node asked anything else.
-      if (can.ok) state = (await bridge.state()) || state;
     } catch (err) {
       if (!live()) return;
       endOfTheRoad(cannotMarkup('Could not start a withdrawal', (err && err.message) || 'Something went wrong.'));
@@ -497,10 +495,20 @@ registerScreen('withdraw', {
       return;
     }
 
+    // Only now — a shell that can carry a burn out, and an asset that was not already refused —
+    // is the node asked for the bridge's state.
+    try {
+      state = (await bridge.state()) || state;
+    } catch (err) {
+      if (!live()) return;
+      endOfTheRoad(cannotMarkup('Could not start a withdrawal', (err && err.message) || 'Something went wrong.'));
+      return;
+    }
+    if (!live()) return;
+
     // Every coin that backs this token, straight from `assets.list()`. A burn names one of them
     // (`to_chain` + `token`), so this is the choice the flow opens on.
-    const backings = (Array.isArray(asset.backings) ? asset.backings : [])
-      .filter((b) => b && Number.isInteger(Number(b.chain)) && typeof b.token === 'string' && b.token);
+    const backings = backingsOf(asset);
     const chains = Array.isArray(state.chains) ? state.chains : [];
     const first = backings[0] || null;
 
@@ -663,8 +671,8 @@ registerScreen('withdraw', {
     const offMax = on(root, '[data-role="max"]', 'click', (evt) => {
       evt.preventDefault();
       const amountInput = stepEl.querySelector('input[name=amount]');
-      // A burn's own fee is RAND, from a second bundle, so the whole asset balance is withdrawable
-      // — unlike a transfer, where the fee comes out of what is being sent.
+      // A burn's fee is RAND out of slots 2–3 of the same bundle, so the whole asset balance is
+      // withdrawable — it is never the fee's source, whatever is being burned.
       const balance = BigInt(asset.balance || '0');
       if (balance <= 0n) { setFieldError(amountInput, `You hold no ${asset.symbol}.`); return; }
       amountInput.value = plainUnits(balance, asset.decimals);

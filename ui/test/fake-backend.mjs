@@ -203,13 +203,34 @@ function createBackend(initial = {}, overrides = {}) {
   /** How much spendable RAND this wallet has to pay a fee out of. */
   const randBalance = async () => BigInt(((await servedAssets()).find((a) => a.index === 0) || {}).balance || '0');
 
+  /** The core's `format_amount` for its refusal sentences: nine decimals, no grouping. */
+  const fmtRand = (units) => {
+    const base = 1000000000n;
+    const frac = (units % base).toString().padStart(9, '0').replace(/0+$/, '');
+    return frac ? `${units / base}.${frac}` : `${units / base}`;
+  };
+  /**
+   * The two refusals a token transfer gets out of `wallet-core`'s `select_rand_fee`, mirrored
+   * exactly: NO RAND at all is `NO_SPENDABLE_RAND_TEXT`; some, but not enough for the fee, is the
+   * fee's own "insufficient balance" — the screens show either sentence verbatim.
+   */
+  const feeRefusal = async () => {
+    const rand = await randBalance();
+    if (rand === 0n) return NO_SPENDABLE_RAND_TEXT;
+    if (rand < FEE) return `the RAND fee: insufficient balance: have ${fmtRand(rand)} RAND, need ${fmtRand(FEE)} RAND`;
+    return null;
+  };
+
   const sendDefs = {
     canProve: () => ({ ok: false, reason: 'test' }),
     // Chain 14 transfers any asset, and the fee is RAND out of slots 2–3 of the same bundle — so
     // a wallet holding a token and no RAND cannot send that token, and the refusal is the core's
     // own sentence, made before anything is selected (ui/backend.js on `send.estimate`).
     estimate: async (req = {}) => {
-      if (await randBalance() < FEE) throw new Error(NO_SPENDABLE_RAND_TEXT);
+      if (Number(req.asset) !== 0) {
+        const refusal = await feeRefusal();
+        if (refusal) throw new Error(refusal);
+      }
       return { fee: FEE.toString(), inputs: 1, feeInputs: Number(req.asset) === 0 ? 0 : 1, change: '0', feeChange: '0', proofs: 1 };
     },
     // Optional in the contract (see ui/backend.js). Exact here because this fake knows its own
@@ -223,7 +244,10 @@ function createBackend(initial = {}, overrides = {}) {
         const amount = balance > FEE ? balance - FEE : 0n;
         return { amount: amount.toString(), fee: FEE.toString() };
       }
-      if (await randBalance() < FEE) return { amount: '0', fee: FEE.toString(), reason: NO_SPENDABLE_RAND_TEXT };
+      // The same question the core's max_sendable asks `select_rand_fee`, so "Max" and the plan
+      // behind Review can never disagree about whether the fee is payable.
+      const refusal = await feeRefusal();
+      if (refusal) return { amount: '0', fee: FEE.toString(), reason: refusal };
       return { amount: balance.toString(), fee: FEE.toString() };
     },
     // `options.signal` is the session-linked AbortSignal (see ui/backend.js). This fake answers

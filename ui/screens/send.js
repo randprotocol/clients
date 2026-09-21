@@ -417,8 +417,14 @@ registerScreen('send', {
 
       if (max <= 0n) {
         // Writing "0" into the field and saying nothing is how a user concludes the wallet is
-        // broken. Say what is actually wrong, and leave what they typed alone. The fee is RAND
-        // whatever is being sent, so it is denominated in RAND at the RAND row's own decimals.
+        // broken. Say what is actually wrong, and leave what they typed alone: nothing of the
+        // asset at all is one thing to say; a balance the fee would not fit is another, and the
+        // fee is RAND whatever is being sent, so it is denominated in RAND at the RAND row's own
+        // decimals.
+        if (balance <= 0n) {
+          setFieldError(amountInput, `You hold no ${asset.symbol}.`);
+          return;
+        }
         setFieldError(amountInput, `Your balance doesn’t cover the network fee (${formatUnits(fee, 9, feeDecimals(assets))} ${feeSymbol(assets)}).`);
         return;
       }

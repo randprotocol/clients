@@ -10,7 +10,7 @@
 //
 // ---- what this shell cannot do ----
 //
-// Produce a transfer proof: it needs about 5.5 GB and wasm32 stops at 4 GiB, so `send.canProve()`
+// Produce a transfer proof: it needs about 5.7 GB and wasm32 stops at 4 GiB, so `send.canProve()`
 // is `{ok: false, reason}` and Send ends in that explanation rather than a Prove button. Which is
 // also why the popup needs no escape into a tab (`platform.openFlowInTab`): the long-running steps
 // that would outlive a closed 360×600 window are never reached. Everything else — keys, the
