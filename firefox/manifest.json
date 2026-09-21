@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Rand Wallet",
   "short_name": "Rand Wallet",
-  "version": "0.1.0",
+  "version": "0.5.1",
   "description": "A shielded wallet for RAND on the Rand Protocol chain: private balances, private transfers, and viewing keys for randscan.org.",
   "author": "RandProtocol Contributors",
   "homepage_url": "https://randprotocol.org/clients",
