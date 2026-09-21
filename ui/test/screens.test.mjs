@@ -1366,3 +1366,36 @@ test('home: a scan whose node changed underneath it triggers a fresh scan, not a
   assert.equal(root.querySelector('[data-role="banner-slot"]').innerHTML, '', 'a stale scan raised a banner');
   await app.idle();
 });
+
+test('home: a RESCAN whose node changed underneath it also triggers a fresh scan', async (t) => {
+  // The rescan path shares the rule (applyRescan → attachScan): its result describes the node it
+  // started against, which is no longer the one we are pointed at — so it is read again, and
+  // nothing about the old node is shown or said.
+  let scans = 0;
+  const b = unlockedBackend({
+    sync: {
+      cached: async () => ({
+        notes: [], activity: [], scannedHeight: 100, head: 40, lastSyncMs: Date.now(),
+        behind: { tip: 40, wallet: 100 },
+      }),
+      scan: async () => {
+        scans += 1;
+        return {
+          notes: [], activity: [], scannedHeight: 40, head: 40, lastSyncMs: Date.now(),
+          behind: { tip: 40, wallet: 100 },
+        };
+      },
+      rescan: async () => ({ notes: [], activity: [], scannedHeight: 0, head: 40, lastSyncMs: Date.now(), staleNode: true }),
+    },
+  });
+  const { app, root } = await at(t, '#home', b);
+  root.querySelector('[data-action="rescan-plain"]').click();
+  await app.idle();
+  root.querySelector('[role="dialog"] [data-role="confirm"]').click();
+  await app.idle();
+  assert.equal(b.calls.filter(([name]) => name === 'sync.rescan').length, 1, 'the rescan itself never ran');
+  assert.ok(scans >= 2, 'no fresh scan followed the stale rescan');
+  // The banner that stands is the FRESH scan's own verdict (this wallet is still ahead of this
+  // node), never a note about the stale one.
+  assert.ok(root.querySelector('[data-role="behind"]'), 'the fresh scan’s own answer is what shows');
+});

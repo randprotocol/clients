@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 import { makeNativeBackend, MIN_PROVE_GIB } from '../engine/backend-native.js';
 import { sharedBackendCases } from './backend-cases.mjs';
 import {
-  SPEND_KEY, PASSWORD, ADDRESS, GENESIS,
+  PASSWORD, ADDRESS, GENESIS,
   mapStorage, stubCore, stubFetch, stubPlatform, chainFetch, assertKeyNeverLeaked,
   tokenRegistry, zusd, backing, assetRows, USDT_ETH, USDC_ETH, USDT_BSC,
 } from './backend-fixtures.mjs';
@@ -431,7 +431,6 @@ test('a real send leaks neither the spend key nor the transaction key', async ()
   const result = await env.backend.send.send({ asset: 0, to: ADDRESS, amount: '1000000000' }, () => {});
   assert.equal(result.txKey, TX_KEY);
   assertKeyNeverLeaked(env);
-  assertKeyNeverLeaked(env, SPEND_KEY);
   // The per-transaction key is a secret exactly like the spend key: it may reach the caller and
   // the note store, and nothing else — never the network, never the clipboard.
   const onTheWire = JSON.stringify([env.fetch.requests, env.platform.copied || []]);
@@ -680,7 +679,6 @@ test('BRIDGE: a real withdrawal proves against the VERIFIED chain, names its coi
   assert.equal(sub.tx_key, undefined, 'a burn discloses nothing, so it stores no key');
 
   assertKeyNeverLeaked(env);
-  assertKeyNeverLeaked(env, SPEND_KEY);
 });
 
 /** Both groups' witnesses come from ONE anchor, fetched once. Two anchors is two trees. */

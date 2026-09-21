@@ -157,9 +157,12 @@ function jsonLeafMarkup(value) {
 
 /** One entry: `key: value` for a leaf, or a `<details>` disclosure for an object/array. Open by
  *  default at every depth — "collapsible" is the capability, not a starting state — so the whole
- *  answer reads at a glance and any part of it can still be folded away. */
+ *  answer reads at a glance and any part of it can still be folded away. The native disclosure
+ *  semantics carry the accessibility here: no ARIA tree roles, because this is not an ARIA tree
+ *  widget (no treeitem, no arrow-key behaviour) and declaring one would announce behaviour that
+ *  is not there. */
 function jsonEntryMarkup(key, value) {
-  const label = key === null ? '' : h`<span class="tree-key">${key}</span>: `;
+  const label = h`<span class="tree-key">${key}</span>: `;
   if (value !== null && typeof value === 'object') {
     const isArray = Array.isArray(value);
     const entries = isArray ? value.map((v, i) => [i, v]) : Object.entries(value);
@@ -168,7 +171,7 @@ function jsonEntryMarkup(key, value) {
       <li>
         <details open>
           <summary>${raw(label)}<span class="tree-summary">${summary}</span></summary>
-          <ul class="tree-children" role="group">${raw(entries.map(([k, v]) => jsonEntryMarkup(String(k), v)).join(''))}</ul>
+          <ul class="tree-children">${raw(entries.map(([k, v]) => jsonEntryMarkup(String(k), v)).join(''))}</ul>
         </details>
       </li>`;
   }
@@ -179,9 +182,9 @@ function jsonTreeMarkup(value) {
   if (value !== null && typeof value === 'object') {
     const isArray = Array.isArray(value);
     const entries = isArray ? value.map((v, i) => [i, v]) : Object.entries(value);
-    return h`<ul class="tree" role="tree">${raw(entries.map(([k, v]) => jsonEntryMarkup(String(k), v)).join(''))}</ul>`;
+    return h`<ul class="tree">${raw(entries.map(([k, v]) => jsonEntryMarkup(String(k), v)).join(''))}</ul>`;
   }
-  return h`<ul class="tree" role="tree"><li>${raw(jsonLeafMarkup(value))}</li></ul>`;
+  return h`<ul class="tree"><li>${raw(jsonLeafMarkup(value))}</li></ul>`;
 }
 
 function lookupResultMarkup(title, value) {

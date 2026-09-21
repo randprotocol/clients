@@ -24,6 +24,7 @@ const C = 'https://c.example';
  */
 const REFUSED = Symbol('refused');
 const HANG = Symbol('hang');
+const HANG_BODY = Symbol('hang-body');
 const GARBAGE = Symbol('garbage');
 const HTTP = (status) => ({ __http: status });
 const ERROR = (message, code = -32000) => ({ __error: { message, code } });
@@ -49,6 +50,20 @@ function transports(nodes) {
     }
     if (answer === GARBAGE) {
       return { ok: true, status: 200, json: async () => { throw new SyntaxError('Unexpected token <'); } };
+    }
+    if (answer === HANG_BODY) {
+      // Headers, then nothing: the response's own body read stalls until the request's abort.
+      return {
+        ok: true,
+        status: 200,
+        json: () => new Promise((resolve, reject) => {
+          init.signal.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          }, { once: true });
+        }),
+      };
     }
     if (answer && answer.__http) return { ok: false, status: answer.__http, json: async () => ({}) };
     if (answer && answer.__error) {
@@ -155,6 +170,18 @@ test('an HTTP 5xx and a non-JSON body are transport failures; a 4xx is the endpo
   const refused = transports({ [A]: chain(13, { rand_status: HTTP(403) }), [B]: chain(13) });
   await assert.rejects(() => makeRpc([A, B], { fetch: refused, chainId: 13 }).status(), /HTTP 403/);
   assert.deepEqual(refused.to(B), [], 'a 403 was shopped around for a friendlier answer');
+});
+
+test('a stalled BODY is inside the request timeout, not beyond it', async () => {
+  // The fetch resolved (headers came) and then the body read stalls: before the whole-exchange
+  // fix, the 20 s timer and the caller's Cancel were both torn down at that point, and this
+  // request hung for ever.
+  const stalled = transports({ [A]: chain(13, { rand_getHead: HANG_BODY }) });
+  const pool = makeRpc([A], { fetch: stalled, timeoutMs: 5, chainId: 13 });
+  await assert.rejects(
+    () => pool.rpc('rand_getHead'),
+    (err) => err.code === -1 && err.failure === 'timeout',
+  );
 });
 
 test('a JSON-RPC error reply is an ANSWER and is never asked of a second endpoint', async () => {

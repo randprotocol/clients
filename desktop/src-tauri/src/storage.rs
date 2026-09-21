@@ -49,12 +49,17 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> Result<(), String> {
     {
         use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
+        use std::os::unix::fs::PermissionsExt;
         let mut f = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .mode(0o600)
             .open(&tmp)
+            .map_err(|e| e.to_string())?;
+        // `mode` applies only at creation: a tmp left by a crashed earlier write keeps whatever
+        // permissions it had, and the rename below would carry them onto the store. Set them.
+        f.set_permissions(std::fs::Permissions::from_mode(0o600))
             .map_err(|e| e.to_string())?;
         f.write_all(bytes).map_err(|e| e.to_string())?;
         f.sync_all().map_err(|e| e.to_string())?;
@@ -134,13 +139,20 @@ impl Storage {
     /// secure erase — no userspace write is, on a copy-on-write or flash-backed filesystem — and
     /// this is the same guarantee every other shell gives (`storage.clear()` over IndexedDB or
     /// `chrome.storage`): the wallet forgets, and the disk is the operating system's business.
+    ///
+    /// The `tmp` twin goes with it: a write that died mid-way leaves that file behind, and a
+    /// wipe that removed only the store would leave a full stale copy of it (vault included)
+    /// on disk.
     pub fn clear(&self) -> Result<(), String> {
         let _g = self.guard()?;
-        match std::fs::remove_file(&self.path) {
-            Ok(()) => Ok(()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(e.to_string()),
+        for path in [self.path.clone(), self.path.with_extension("tmp")] {
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.to_string()),
+            }
         }
+        Ok(())
     }
 }
 
@@ -242,6 +254,32 @@ mod tests {
         assert_eq!(store.get("vault").unwrap(), None, "a wipe left the vault readable");
         assert!(!path.exists(), "a wipe left the store file on disk");
         store.clear().unwrap(); // …and clearing an already-cleared store is not an error either
+    }
+
+    #[test]
+    fn a_wipe_takes_a_crashed_writes_tmp_with_it() {
+        let (store, path) = temp_store();
+        store.set("vault", r#"{"ct":"AA"}"#).unwrap();
+        // A write that died before its rename: a full stale copy of the store, vault included.
+        std::fs::write(path.with_extension("tmp"), br#"{"ct":"stale"}"#).unwrap();
+
+        store.clear().unwrap();
+        assert!(!path.exists(), "a wipe left the store file on disk");
+        assert!(!path.with_extension("tmp").exists(), "a wipe left a crashed write's tmp on disk");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_pre_existing_tmp_cannot_smuggle_wider_permissions_onto_the_store() {
+        use std::os::unix::fs::PermissionsExt;
+        let (store, path) = temp_store();
+        // Simulate a tmp left behind by something less careful: the rename would carry its mode.
+        std::fs::write(path.with_extension("tmp"), b"placeholder").unwrap();
+        std::fs::set_permissions(&path.with_extension("tmp"), std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        store.set("vault", r#"{"ct":"AA"}"#).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "a stale tmp's permissions reached the store: {mode:o}");
     }
 
     #[test]

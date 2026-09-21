@@ -16,9 +16,10 @@
 // that would outlive a closed 360×600 window are never reached. Everything else — keys, the
 // address, scanning a real node, the note store, the faucet, viewing keys — is real.
 import { makeWasmBackend, UNLOCKED_SESSION_KEY } from './ui/engine/backend-wasm.js';
-import { ext, IS_FIREFOX } from './lib/browser.js';
+import { ext } from './lib/browser.js';
 import { call } from './lib/core.js';
 import { wireIdleLock } from './lib/idle-lock.js';
+import { makePlatform } from './lib/platform.js';
 
 /**
  * The `storage` half of `makeWasmBackend`, over the two `chrome.storage` areas.
@@ -76,41 +77,6 @@ function extensionStorage() {
       async remove(key) { await session.remove(key); },
     },
   };
-}
-
-/**
- * The `platform` group: everything the UI is allowed to ask the browser for, and nothing else.
- * Each member is here because a screen uses it; every optional one is genuinely optional and a
- * screen that does not find it renders no control for it rather than a control that does nothing.
- */
-function makePlatform() {
-  const platform = {
-    name: IS_FIREFOX ? 'firefox' : 'chrome',
-    // A new tab, never this popup's window: an explorer must get no handle on the wallet.
-    openExternal: (url) => { ext.tabs.create({ url: String(url) }); },
-    copy: (text) => navigator.clipboard.writeText(String(text ?? '')),
-
-    /**
-     * OPTIONAL in the contract, and the reason it exists: an extension may only reach a host it
-     * has permission for, and Firefox grants one only while it is still handling the user's own
-     * click. The settings screen calls this inside its submit handler, before saving a new RPC
-     * URL, and abandons the save when it answers false.
-     *
-     * A pattern that is not in `optional_host_permissions` (the default node, say) makes the call
-     * throw rather than answer — nothing to grant, because it is already granted.
-     */
-    ensureHostPermission: async (url) => {
-      let origin;
-      try { origin = `${new URL(String(url)).origin}/*`; } catch { return false; }
-      try { return await ext.permissions.request({ origins: [origin] }); } catch { return true; }
-    },
-  };
-  // Reading the clipboard needs a permission some contexts will not have: where it is missing the
-  // send screen offers no Paste button at all.
-  if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
-    platform.paste = () => navigator.clipboard.readText();
-  }
-  return platform;
 }
 
 /**

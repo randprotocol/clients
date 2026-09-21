@@ -277,7 +277,8 @@ function uiActivity(row, st) {
     if (row.height) item.block = Number(row.height);
     return item;
   }
-  // A submission this wallet made: the faucet, or (on a shell that can prove) a transfer.
+  // A submission this wallet made: the faucet, a burn withdrawal, or (on a shell that can prove)
+  // a transfer.
   const sub = row.sub || {};
   const time = Math.floor((Number(sub.created_ms) || Date.now()) / 1000);
   const settled = sub.status === 'committed';

@@ -15,7 +15,7 @@ src-tauri/src/storage.rs     the JSON file and the in-process session map
 src-tauri/tauri.conf.json    window, CSP, bundle targets
 src-tauri/capabilities/      what the webview may ask the app for
 ui-shell/                    index.html, main.js, backend-tauri.js — this shell's ~200 lines
-scripts/stage-ui.sh          assembles dist-ui/ (ui/ + ui-shell/) for the webview
+scripts/stage-ui.mjs         assembles dist-ui/ (ui/ + ui-shell/) for the webview (plain Node)
 ```
 
 Everything else the user sees — every screen, the scanning, the note store, the JSON-RPC client,

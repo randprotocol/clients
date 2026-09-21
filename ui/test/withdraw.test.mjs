@@ -259,7 +259,7 @@ test('an EVM address must be 20 bytes, and is left-padded to 32 before it is sen
   input.value = `0x${'00'.repeat(20)}`;
   submit();
   await app.idle();
-  assert.match(text(root), /cannot be the zero address|zero address/i);
+  assert.match(text(root), /zero address/i);
   assert.ok(root.querySelector('textarea[name=to]'), 'a zero recipient does not advance either');
 
   input.value = `0x${EVM}`;

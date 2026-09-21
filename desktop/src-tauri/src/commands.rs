@@ -65,29 +65,38 @@ pub fn app_version() -> &'static str {
 // ------------------------------------------------------------------- the persistent half ------
 // `value` is whatever the engine passed to `storage.set`, already `JSON.stringify`d; `get` hands
 // back the same form. Nothing here knows what a vault or a note store looks like.
+//
+// The persistent commands are `async fn` so Tauri runs them off the main thread: a scan persists
+// after every page, and a whole-file rewrite with an fsync has no business freezing the window.
+// (The session commands stay sync: a HashMap read has no business on a thread pool either.)
 
 #[tauri::command]
-pub fn storage_get(store: State<'_, Storage>, key: String) -> Result<Option<String>, String> {
+pub async fn storage_get(store: State<'_, Storage>, key: String) -> Result<Option<String>, String> {
     store.get(&key)
 }
 
 #[tauri::command]
-pub fn storage_set(store: State<'_, Storage>, key: String, value: String) -> Result<(), String> {
+pub async fn storage_set(store: State<'_, Storage>, key: String, value: String) -> Result<(), String> {
     store.set(&key, &value)
 }
 
 #[tauri::command]
-pub fn storage_remove(store: State<'_, Storage>, key: String) -> Result<(), String> {
+pub async fn storage_remove(store: State<'_, Storage>, key: String) -> Result<(), String> {
     store.remove(&key)
 }
 
 /// `wallet.wipe()`. The session goes with the file: a wipe that left the unlocked spend key in
-/// memory would be a wipe in name only.
-#[tauri::command]
-pub fn storage_clear(store: State<'_, Storage>, session: State<'_, Session>) -> Result<(), String> {
+/// memory would be a wipe in name only — and so would one that left a crashed write's `tmp` twin
+/// on disk (see `Storage::clear`).
+pub fn wipe(store: &Storage, session: &Session) -> Result<(), String> {
     let cleared = store.clear();
     session.clear()?;
     cleared
+}
+
+#[tauri::command]
+pub async fn storage_clear(store: State<'_, Storage>, session: State<'_, Session>) -> Result<(), String> {
+    wipe(&store, &session)
 }
 
 // ---------------------------------------------------------------------- the session half ------
@@ -171,5 +180,25 @@ mod tests {
     fn the_app_version_is_this_crates_version() {
         assert_eq!(app_version(), env!("CARGO_PKG_VERSION"));
         assert!(app_version().split('.').count() >= 2, "{}", app_version());
+    }
+
+    #[test]
+    fn a_wipe_forgets_the_file_its_tmp_twin_and_the_unlocked_key_together() {
+        let dir = std::env::temp_dir().join(format!("rand-wallet-wipe-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("wallet.json");
+        let store = Storage::new(path.clone());
+        store.set("vault", r#"{"ct":"AA"}"#).unwrap();
+        // A write that died before its rename, and an unlocked wallet: all three must go as one.
+        std::fs::write(path.with_extension("tmp"), br#"{"ct":"stale"}"#).unwrap();
+        let session = Session::default();
+        session.set("unlocked", r#"{"spend_key":"aa"}"#.into()).unwrap();
+
+        wipe(&store, &session).unwrap();
+
+        assert!(!path.exists(), "the store file survived a wipe");
+        assert!(!path.with_extension("tmp").exists(), "a crashed write's tmp survived a wipe");
+        assert_eq!(session.get("unlocked").unwrap(), None, "the unlocked key survived a wipe");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

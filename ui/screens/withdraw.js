@@ -31,7 +31,7 @@ import { parseUnits, formatUnits, shortHex, elapsed } from '../lib/format.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink, TX_HASH_RE } from '../lib/explorer.js';
 import { UNLISTED_TEXT, isUnlisted, backingsOf, feeDecimals, feeSymbol } from '../lib/assets.js';
-import { plainUnits } from './send/state.js';
+import { plainUnits, proveCost } from './send/state.js';
 
 // ============================================================================ the vocabulary ===
 
@@ -364,7 +364,7 @@ function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [
       </div>
     </form>
     <button class="btn btn-primary block" type="button" data-action="prove" disabled>${raw(icons.bridge())}Withdraw</button>
-    <p class="caption">${Number(estimate.proofs) || 1} ${Number(estimate.proofs) === 1 ? 'proof' : 'proofs'} · about ${Math.max(2, (Number(estimate.proofs) || 1) * 2)} minutes on this computer</p>
+    <p class="caption">${proveCost(estimate.proofs)}</p>
     <button class="btn btn-ghost block" type="button" data-role="edit">Edit</button>`;
 }
 

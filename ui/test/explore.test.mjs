@@ -120,6 +120,26 @@ test('a rejected call renders inside its own card without breaking the others', 
   assert.match(body, /RPL#1/);
 });
 
+test('every Network field failing collapses to one card banner, and the other cards still render', async (t) => {
+  const hooks = {};
+  for (const m of ['rand_status', 'rand_getHead', 'rand_getEpoch', 'rand_getValidators', 'rand_getPeers', 'rand_getSupply']) {
+    hooks[m] = () => { throw new Error('node down'); };
+  }
+  const b = explorerBackend(hooks);
+  const { root } = await at(t, '#explore', b);
+  const body = text(root);
+
+  // Six independent failures are ONE problem ("the node is down"), so the card says that once
+  // rather than six times.
+  const networkCard = root.querySelector('[data-role="network"]');
+  assert.match(networkCard.textContent, /Could not reach the node/);
+  assert.doesNotMatch(networkCard.textContent, /12,345/, 'no field renders from a failed call');
+
+  // Assets and Bridge, whose own calls succeeded, still render their data.
+  assert.match(body, /RPL#1/);
+  assert.match(body, /Guardian set/);
+});
+
 // ---------------------------------------------------------------------------------- lookup -----
 
 async function submitLookup(root, value) {

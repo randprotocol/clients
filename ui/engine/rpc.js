@@ -193,15 +193,32 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
     if (signal) signal.addEventListener('abort', onAbort, { once: true });
     let timedOut = false;
     const t = setTimeout(() => { timedOut = true; ctl.abort(); }, timeoutMs);
-    let res;
+    let body;
     try {
-      res = await doFetch(url, {
+      // The timer and the caller's cancel cover the WHOLE exchange, body read included: a node
+      // that delivers headers and then stalls must hit the same 20 s budget (and the same
+      // Cancel) as one that never answers at all — not hang a scan or a send for ever.
+      const res = await doFetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
         signal: ctl.signal,
       });
+      if (!res.ok) {
+        const err = new RpcError(`${url} answered HTTP ${res.status}`, -1, 'http');
+        err.status = res.status;
+        throw err;
+      }
+      try {
+        body = await res.json();
+      } catch (e) {
+        if (timedOut || e?.name === 'AbortError') throw e; // the outer catch classifies these
+        // A proxy's HTML error page, or a truncated reply. The node has not identified itself
+        // and has not answered, so this is a transport failure (-1), not a refusal.
+        throw new RpcError(`${url} did not answer with JSON-RPC`, -1, 'body');
+      }
     } catch (e) {
+      if (e instanceof RpcError) throw e;
       if (signal && signal.aborted) throw abortError();
       // `timedOut` is the ONLY reliable way to tell "we waited and heard nothing" from "the
       // connection was refused before a byte left" — both surface as an AbortError from `fetch`.
@@ -211,19 +228,6 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
     } finally {
       clearTimeout(t);
       if (signal) signal.removeEventListener('abort', onAbort);
-    }
-    if (!res.ok) {
-      const err = new RpcError(`${url} answered HTTP ${res.status}`, -1, 'http');
-      err.status = res.status;
-      throw err;
-    }
-    let body;
-    try {
-      body = await res.json();
-    } catch {
-      // A proxy's HTML error page, or a truncated reply. The node has not identified itself and
-      // has not answered, so this is a transport failure (-1), not a refusal from the node.
-      throw new RpcError(`${url} did not answer with JSON-RPC`, -1, 'body');
     }
     if (!body || typeof body !== 'object') throw new RpcError(`${url} did not answer with JSON-RPC`, -1, 'body');
     if (body.error) throw new RpcError(body.error.message || 'rpc error', body.error.code);

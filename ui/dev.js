@@ -29,6 +29,9 @@
 // (viewing key, spend-key export) wants it.
 import { mount } from './app.js';
 import { fakeBackend, unlockedBackend } from './test/fake-backend.mjs';
+// The real wasm shells' own sentence, so `?canProve=0` previews exactly what they ship — never a
+// harness-local paraphrase that can drift from it.
+import { CANNOT_PROVE_REASON } from './engine/backend-wasm.js';
 
 const params = new URLSearchParams(location.search);
 const mode = params.get('mode') === 'popup' ? 'popup' : 'app';
@@ -43,9 +46,6 @@ const prove = params.get('prove');
 const assetsMode = params.get('assets');
 const chain = params.get('chain');
 const rpcMode = params.get('rpc');
-
-const WASM_CANNOT_PROVE = 'A transfer proof needs about 5.7 GB of memory and a browser gives '
-  + 'WebAssembly at most 4 GB, so this wallet cannot finish one here.';
 
 /** A shielded address at its real length (~1.6 kB), so the Receive screen can be judged honestly. */
 function longAddress() {
@@ -127,7 +127,7 @@ async function init() {
   if (canProve !== null) {
     backend.send.canProve = canProve === '1'
       ? async () => ({ ok: true })
-      : async () => ({ ok: false, reason: WASM_CANNOT_PROVE });
+      : async () => ({ ok: false, reason: CANNOT_PROVE_REASON });
   }
   if (assetsMode === 'one') {
     const [rand] = await backend.assets.list();

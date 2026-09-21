@@ -67,6 +67,7 @@ const GONE = [
 const NEEDED = [
   'manifest.json', 'popup.html', 'popup.js', 'app.html', 'app.js', 'background.js', 'worker.js',
   'backend-extension.js', 'lib/browser.js', 'lib/core.js', 'lib/idle-lock.js', 'lib/boot.js',
+  'lib/platform.js',
   'ui/app.js', 'ui/backend.js', 'ui/tokens.css', 'ui/base.css', 'ui/components.css',
   'ui/engine/backend-wasm.js', 'ui/engine/wallet.js', 'ui/screens/home.js', 'ui/lib/qr.js',
   'ui/fonts/Inter-Variable.woff2',

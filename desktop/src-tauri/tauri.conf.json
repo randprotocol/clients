@@ -1,12 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Rand Wallet",
-  "version": "0.1.0",
   "identifier": "org.randprotocol.wallet.desktop",
   "build": {
     "frontendDist": "../dist-ui",
-    "beforeDevCommand": { "script": "desktop/scripts/stage-ui.sh", "cwd": "../.." },
-    "beforeBuildCommand": { "script": "desktop/scripts/stage-ui.sh", "cwd": "../.." }
+    "beforeDevCommand": { "script": "node desktop/scripts/stage-ui.mjs", "cwd": "../.." },
+    "beforeBuildCommand": { "script": "node desktop/scripts/stage-ui.mjs", "cwd": "../.." }
   },
   "app": {
     "withGlobalTauri": true,

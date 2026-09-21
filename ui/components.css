@@ -997,8 +997,8 @@ body.wide .toast-area { bottom: var(--s-6); }
 .ring.spin .ring-bar { stroke-dasharray: 82 245; animation: ring-spin 1.2s linear infinite; }
 @keyframes ring-spin { to { stroke-dashoffset: -326.73px; } }
 
-/* A burn is TWO proofs, proved one after the other, so the withdraw flow shows two rings side by
-   side (ui/screens/withdraw.js). One ring that does not move for three and a half minutes is
+/* Chain 14's burn is ONE bundle and ONE proof, so the withdraw flow shows ONE ring
+   (ui/screens/withdraw.js). One ring that does not move for a minute and a half is
    indistinguishable from a wallet that has hung, so `data-state` is load-bearing rather than
    decorative: 'pending' is dimmed and still, 'active' spins, 'done' is a complete ring with a
    tick in it. */
