@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0B0D14</color>
-    <color name="bg_soft">#10131E</color>
-    <color name="surface">#151A2B</color>
-    <color name="surface_2">#1D2338</color>
-    <color name="border">#262D48</color>
-    <color name="border_soft">#1E2439</color>
-    <color name="text">#EEF0F7</color>
-    <color name="text_soft">#A6ADC8</color>
-    <color name="text_mute">#848BA6</color>
-    <color name="text_strong">#FFFFFF</color>
-    <color name="accent">#6F7EFF</color>
-    <color name="accent_2">#9B6BFF</color>
-    <color name="on_accent">#FFFFFF</color>
-    <color name="positive">#33D69F</color>
-    <color name="negative">#FF6B6B</color>
-    <color name="warning">#FFB84D</color>
-    <color name="ripple">#336F7EFF</color>
+    <color name="bg">#0E1220</color>
+    <color name="bg_soft">#121726</color>
+    <color name="surface">#161C2C</color>
+    <color name="surface_2">#1E2538</color>
+    <color name="border">#2B3350</color>
+    <color name="border_soft">#20283D</color>
+    <color name="text">#ECE9E2</color>
+    <color name="text_soft">#ABAFBF</color>
+    <color name="text_mute">#8C91A5</color>
+    <color name="text_strong">#FFFDF8</color>
+    <color name="accent">#FF5C9D</color>
+    <color name="accent_2">#FF8FBD</color>
+    <color name="on_accent">#0E1220</color>
+    <color name="positive">#3DDC97</color>
+    <color name="negative">#FF7A59</color>
+    <color name="warning">#F5C451</color>
+    <color name="ripple">#33FF5C9D</color>
 </resources>

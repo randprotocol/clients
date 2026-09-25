@@ -38,7 +38,7 @@ struct ReceiveView: View {
                         ShareLink(item: wallet.address) {
                             Text("Share").font(.system(size: 16, weight: .semibold))
                                 .frame(maxWidth: .infinity).frame(height: 52)
-                                .foregroundColor(.white).background(Theme.aurora)
+                                .foregroundColor(Theme.onAccent).background(Theme.accent)
                                 .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLg, style: .continuous))
                         }
                     }

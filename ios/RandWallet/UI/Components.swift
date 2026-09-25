@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// The primary action: aurora gradient, full width, 52pt tall.
+/// The primary action: solid signal, full width, 52pt tall.
 struct PrimaryButton: View {
     let title: String
     var enabled = true
@@ -11,13 +11,13 @@ struct PrimaryButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                if busy { ProgressView().tint(.white) }
+                if busy { ProgressView().tint(Theme.onAccent) }
                 Text(title).font(.system(size: 16, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .foregroundColor(.white)
-            .background(Theme.aurora)
+            .foregroundColor(Theme.onAccent)
+            .background(Theme.accent)
             .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLg, style: .continuous))
             .opacity(enabled ? 1 : 0.45)
         }

@@ -22,6 +22,21 @@ import { totalInRand } from '../lib/assets.js';
 import { assetRowMarkup, activityRowMarkup, listMarkup } from '../lib/rows.js';
 import { wrongChainBannerMarkup, behindBannerMarkup, identityUnknownBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
 import { wireSelection } from '../lib/panes.js';
+import { brandMarkup, paintField } from '../lib/entropy.js';
+
+// Veiling the balance is a per-device convenience for a screen someone else can see, not a wallet
+// setting: it lives in localStorage and changes nothing the backend knows. A class on <html> so
+// every amount on screen (the hero, the asset rows) veils together; see components.css.
+const VEIL_KEY = 'rand-wallet:veil';
+function readVeil() {
+  try { return localStorage.getItem(VEIL_KEY) === '1'; } catch { return false; }
+}
+function writeVeil(on) {
+  try { localStorage.setItem(VEIL_KEY, on ? '1' : '0'); } catch { /* private mode: this session only */ }
+}
+function applyVeil(on) {
+  document.documentElement.classList.toggle('veiled', on);
+}
 
 const ACTIONS = [
   { go: 'receive', icon: 'arrowDownLeft', label: 'Receive' },
@@ -32,7 +47,7 @@ const ACTIONS = [
 
 function actionsMarkup() {
   return raw(h`<div class="actions">${raw(ACTIONS.map((a) => h`
-    <button class="btn-round" type="button" data-go="${a.go}">
+    <button class="btn-round${a.go === 'send' ? ' primary' : ''}" type="button" data-go="${a.go}">
       <span class="ic">${raw(icons[a.icon]())}</span>
       <span class="cap">${a.label}</span>
     </button>`).join(''))}</div>`);
@@ -69,12 +84,12 @@ function shellMarkup() {
   return h`
     <h1 class="sr-only">Home</h1>
     <div class="topbar">
-      <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
+      ${raw(brandMarkup())}
       <span class="grow"></span>
       <span data-role="address-slot"></span>
     </div>
     <section class="hero" aria-label="Balance">
-      <span class="label">Balance</span>
+      <canvas class="field" aria-hidden="true"></canvas>
       <span class="amount" data-role="hero-amount"><span class="skeleton line lg"></span></span>
       <span class="sub" data-role="hero-sub" hidden></span>
       <div data-role="progress-slot"><div class="progress" data-role="progress" role="progressbar" aria-label="Syncing" data-indeterminate="true" hidden><span class="progress-bar"></span></div></div>
@@ -82,6 +97,7 @@ function shellMarkup() {
         <span class="dot" data-role="sync-dot"></span>
         <span data-role="sync-text"></span>
         <span class="grow"></span>
+        <button class="btn-icon" type="button" data-action="veil" aria-pressed="false" aria-label="Hide balances">${raw(icons.eye())}</button>
         <button class="btn-icon" type="button" data-action="sync" aria-label="Sync now">${raw(icons.refresh())}</button>
       </div>
     </section>
@@ -151,6 +167,8 @@ registerScreen('home', {
       dot: root.querySelector('[data-role="sync-dot"]'),
       syncText: root.querySelector('[data-role="sync-text"]'),
       syncBtn: root.querySelector('.hero [data-action="sync"]'),
+      veilBtn: root.querySelector('.hero [data-action="veil"]'),
+      field: root.querySelector('.hero canvas.field'),
       banner: root.querySelector('[data-role="banner-slot"]'),
       assets: root.querySelector('[data-role="assets"]'),
       activity: root.querySelector('[data-role="activity"]'),
@@ -166,6 +184,17 @@ registerScreen('home', {
     // opening another row costs one attribute — never a repaint of these lists.
     const selection = wireSelection(ctx, root);
 
+    // The field is seeded from the address, which arrives after the first paint: it waits on ink
+    // until then (no placeholder pattern that would then jump to the real one).
+    const field = el.field ? paintField(el.field) : null;
+
+    function paintVeil(on) {
+      applyVeil(on);
+      el.veilBtn.setAttribute('aria-pressed', String(on));
+      el.veilBtn.innerHTML = on ? icons.eyeOff() : icons.eye();
+    }
+    paintVeil(readVeil());
+
     // ---- painters: each one owns exactly one container ----
     function paintAddress() {
       el.addressSlot.innerHTML = address
@@ -178,7 +207,7 @@ registerScreen('home', {
     function paintHero() {
       const rand = assets.find((a) => a.index === 0);
       const decimals = rand ? rand.decimals : 9;
-      el.amount.innerHTML = h`${formatUnits(totalInRand(assets), 6, decimals)}<span class="unit">RAND</span>`;
+      el.amount.innerHTML = h`<span class="fig">${formatUnits(totalInRand(assets), 6, decimals)}</span><span class="unit">RAND</span>`;
       const pending = rand && rand.pending && rand.pending !== '0';
       if (pending) {
         el.sub.textContent = `+${formatUnits(rand.pending, 6, decimals)} RAND pending`;
@@ -358,6 +387,7 @@ registerScreen('home', {
         if (!live()) return;
         address = info.address || '';
         paintAddress();
+        if (address) field?.reseed(address);
       } catch { /* no address to show; the rest of the screen still works */ }
 
       let cachedAssets, cachedSync;
@@ -412,6 +442,12 @@ registerScreen('home', {
       el.banner.innerHTML = '';
       attachScan();
     });
+    const offVeil = on(root, '[data-action="veil"]', 'click', (evt) => {
+      evt.preventDefault();
+      const next = !document.documentElement.classList.contains('veiled');
+      writeVeil(next);
+      paintVeil(next);
+    });
     const offCopy = on(root, '[data-role="copy-address"]', 'click', async (evt) => {
       evt.preventDefault();
       if (!address) return;
@@ -450,7 +486,9 @@ registerScreen('home', {
     return () => {
       store.listeners.delete(onProgress);
       offSync();
+      offVeil();
       offCopy();
+      field?.destroy();
       offRescanChain();
       offRescanPlain();
       offChanged();

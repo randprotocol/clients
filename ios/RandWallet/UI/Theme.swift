@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// design/tokens.json as SwiftUI colours. Dark is the default look; light is a full theme.
+/// design/tokens.json as SwiftUI colours. Dark (ink) is the default look; light (paper) is a full
+/// theme. `accent` is the signal colour: the primary action, and nothing decorative.
 extension Color {
     init(hex: UInt32) {
         self.init(.sRGB,
@@ -19,25 +20,29 @@ extension Color {
 }
 
 enum Theme {
-    static let bg = Color.adaptive(light: 0xF5F6FB, dark: 0x0B0D14)
-    static let bgSoft = Color.adaptive(light: 0xEDEFF7, dark: 0x10131E)
-    static let surface = Color.adaptive(light: 0xFFFFFF, dark: 0x151A2B)
-    static let surface2 = Color.adaptive(light: 0xF2F3F9, dark: 0x1D2338)
-    static let border = Color.adaptive(light: 0xDCDFEC, dark: 0x262D48)
-    static let borderSoft = Color.adaptive(light: 0xE8EAF3, dark: 0x1E2439)
-    static let text = Color.adaptive(light: 0x141A2E, dark: 0xEEF0F7)
-    static let textSoft = Color.adaptive(light: 0x4A5270, dark: 0xA6ADC8)
-    static let textMute = Color.adaptive(light: 0x646B82, dark: 0x848BA6)
-    static let textStrong = Color.adaptive(light: 0x0A0F1F, dark: 0xFFFFFF)
-    static let accent = Color.adaptive(light: 0x4F5FE8, dark: 0x6F7EFF)
-    static let accent2 = Color.adaptive(light: 0x8457E6, dark: 0x9B6BFF)
-    static let positive = Color.adaptive(light: 0x1BA97A, dark: 0x33D69F)
-    static let negative = Color.adaptive(light: 0xD94F4F, dark: 0xFF6B6B)
-    static let warning = Color.adaptive(light: 0xD98A1E, dark: 0xFFB84D)
+    static let bg = Color.adaptive(light: 0xF2F3F7, dark: 0x0E1220)
+    static let bgSoft = Color.adaptive(light: 0xE9EBF1, dark: 0x121726)
+    static let surface = Color.adaptive(light: 0xFFFFFF, dark: 0x161C2C)
+    static let surface2 = Color.adaptive(light: 0xF1F2F6, dark: 0x1E2538)
+    static let border = Color.adaptive(light: 0xD9DCE6, dark: 0x2B3350)
+    static let borderSoft = Color.adaptive(light: 0xE6E8EF, dark: 0x20283D)
+    static let text = Color.adaptive(light: 0x121521, dark: 0xECE9E2)
+    static let textSoft = Color.adaptive(light: 0x474C5E, dark: 0xABAFBF)
+    static let textMute = Color.adaptive(light: 0x62677A, dark: 0x8C91A5)
+    static let textStrong = Color.adaptive(light: 0x07090F, dark: 0xFFFDF8)
+    static let accent = Color.adaptive(light: 0xC8185F, dark: 0xFF5C9D)
+    static let accent2 = Color.adaptive(light: 0xA3124C, dark: 0xFF8FBD)
+    /// Text and icons on `accent`: ink on the dark theme's bright signal, white on the light one's.
+    static let onAccent = Color.adaptive(light: 0xFFFFFF, dark: 0x0E1220)
+    static let positive = Color.adaptive(light: 0x0B7A51, dark: 0x3DDC97)
+    static let negative = Color.adaptive(light: 0xC2410C, dark: 0xFF7A59)
+    static let warning = Color.adaptive(light: 0x8F6200, dark: 0xF5C451)
 
-    /// The "aurora" gradient: reserved for the balance card and the primary button.
-    static let aurora = LinearGradient(colors: [Color(hex: 0x5B7CFF), Color(hex: 0x9B6BFF)],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing)
+    /// The entropy field's ink: the balance card, the same in both themes (design/tokens.json
+    /// `field`). The shared ui/ draws dither grain on it; mobile keeps it plain for now.
+    static let field = Color(hex: 0x0E1220)
+    /// Text on the field: bone, not white.
+    static let fieldGrain = Color(hex: 0xECE9E2)
 
     static let radiusMd: CGFloat = 12
     static let radiusLg: CGFloat = 16

@@ -61,7 +61,7 @@ struct HomeView: View {
                 syncLine
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(Amount.format(wallet.balance)).font(.balance).foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.5)
+                Text(Amount.format(wallet.balance)).font(.balance).foregroundColor(Theme.fieldGrain).lineLimit(1).minimumScaleFactor(0.5)
                 Text("RAND").font(.system(size: 15, weight: .semibold)).foregroundColor(.white.opacity(0.85))
             }
             if wallet.store.pendingOut > 0 {
@@ -85,8 +85,9 @@ struct HomeView: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.aurora)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusXl, style: .continuous))
+        .background(Theme.field)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLg, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radiusLg, style: .continuous).stroke(Theme.fieldGrain.opacity(0.08)))
     }
 
     private var syncLine: some View {

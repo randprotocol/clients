@@ -4,7 +4,7 @@
 #
 #   dist/index.html  main.js  idb.js  worker.js     this shell
 #   dist/ui/                                        the shared UI and engine (ui/, minus its tooling)
-#   dist/ui/fonts/                                  Inter + JetBrains Mono, as tokens.css expects
+#   dist/ui/fonts/                                  Inter, JetBrains Mono, Departure Mono, as tokens.css expects
 #   dist/core/                                      rand_wallet.js + rand_wallet_bg.wasm
 #
 # dist/ is build output and is git-ignored.
@@ -42,6 +42,7 @@ for unwanted in ui/test ui/scripts ui/node_modules ui/gallery.html ui/dev.html u
 done
 for needed in index.html main.js idb.js worker.js ui/app.js ui/backend.js ui/tokens.css ui/base.css \
               ui/components.css ui/engine/backend-wasm.js ui/fonts/Inter-Variable.woff2 \
+              ui/fonts/DepartureMono-Regular.woff2 ui/lib/entropy.js \
               core/rand_wallet.js core/rand_wallet_bg.wasm; do
   if [ ! -e "$OUT/$needed" ]; then echo "build.sh: $needed is missing from dist/" >&2; exit 1; fi
 done

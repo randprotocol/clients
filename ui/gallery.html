@@ -52,10 +52,7 @@
 <!-- Wide layout column 1. Hidden under body.compact. -->
 <aside class="sidebar">
   <div class="sidebar-inner">
-    <div class="brand">
-      <span class="mark"></span>
-      <span class="name">Rand Wallet</span>
-    </div>
+    <div class="brand"><svg class="mark" viewBox="0 0 23 23" aria-hidden="true" focusable="false"><rect x="0" y="0" width="5" height="5"/><rect x="12" y="0" width="5" height="5"/><rect x="6" y="6" width="5" height="5"/><rect x="18" y="6" width="5" height="5"/><rect x="0" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="6" y="18" width="5" height="5"/><rect x="18" y="18" width="5" height="5"/><rect x="6" y="0" width="5" height="5"/><rect class="hot" x="18" y="12" width="5" height="5"/></svg><span class="name" aria-hidden="true">rand</span><span class="sr-only">Rand Wallet</span></div>
     <a class="nav-item on" href="#home"><svg class="g-i"><use href="#i-home"/></svg>Home</a>
     <a class="nav-item" href="#activity"><svg class="g-i"><use href="#i-clock"/></svg>Activity</a>
     <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
@@ -72,7 +69,7 @@
   <!-- ============================ mock home screen ============================ -->
   <header class="topbar">
     <div class="brand">
-      <span class="mark"></span>
+      <svg class="mark" viewBox="0 0 23 23" aria-hidden="true" focusable="false"><rect x="0" y="0" width="5" height="5"/><rect x="12" y="0" width="5" height="5"/><rect x="6" y="6" width="5" height="5"/><rect x="18" y="6" width="5" height="5"/><rect x="0" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="6" y="18" width="5" height="5"/><rect x="18" y="18" width="5" height="5"/><rect x="6" y="0" width="5" height="5"/><rect class="hot" x="18" y="12" width="5" height="5"/></svg>
       <span class="name">Account 1</span>
     </div>
     <span class="grow"></span>
@@ -80,7 +77,6 @@
   </header>
 
   <section class="hero" id="home">
-    <span class="label">Balance</span>
     <span class="amount">1,284.5392<span class="unit">RAND</span></span>
     <span class="sub">+12.05 RAND pending</span>
     <div class="hero-foot">
@@ -562,22 +558,19 @@
     <h2 class="g-h">Sync progress</h2>
     <div class="stack">
       <div class="hero">
-        <span class="label">Balance</span>
         <span class="amount">3.5<span class="unit">RAND</span></span>
         <div data-role="progress-slot"><div class="progress" data-pct="0.62"><span class="progress-bar"></span></div></div>
       </div>
       <div class="hero">
-        <span class="label">Balance</span>
         <span class="amount">3.5<span class="unit">RAND</span></span>
         <div data-role="progress-slot"><div class="progress" data-indeterminate="true"><span class="progress-bar"></span></div></div>
       </div>
       <div class="hero">
-        <span class="label">Balance</span>
         <span class="amount"><span class="skeleton line lg"></span></span>
         <div data-role="progress-slot"><div class="progress" data-indeterminate="true"><span class="progress-bar"></span></div></div>
       </div>
     </div>
-    <p class="g-note">A thin bar under the hero balance while sync.scan() is running, in a [data-role="progress-slot"] that reserves its height so the balance line never lifts when it leaves: determinate once the scan reports a head height (--pct written through the CSSOM, same as the .ring above), indeterminate before that, and an indeterminate bar is what shows when the node never reports progress at all. The third hero is the state before any figure is known — the same .skeleton component, re-tinted to a white alpha because the surface tokens read as a hole on the gradient.</p>
+    <p class="g-note">A thin bar under the hero balance while sync.scan() is running, in a [data-role="progress-slot"] that reserves its height so the balance line never lifts when it leaves: determinate once the scan reports a head height (--pct written through the CSSOM, same as the .ring above), indeterminate before that, and an indeterminate bar is what shows when the node never reports progress at all. The third hero is the state before any figure is known — the same .skeleton component, re-tinted to a white alpha because the surface tokens read as a hole on the ink field.</p>
   </section>
 
   <!-- ============================ sheet / modal ============================ -->
@@ -646,7 +639,7 @@
     <div class="g-stage">
       <aside class="sidebar">
         <div class="sidebar-inner">
-          <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
+          <div class="brand"><svg class="mark" viewBox="0 0 23 23" aria-hidden="true" focusable="false"><rect x="0" y="0" width="5" height="5"/><rect x="12" y="0" width="5" height="5"/><rect x="6" y="6" width="5" height="5"/><rect x="18" y="6" width="5" height="5"/><rect x="0" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/><rect x="6" y="18" width="5" height="5"/><rect x="18" y="18" width="5" height="5"/><rect x="6" y="0" width="5" height="5"/><rect class="hot" x="18" y="12" width="5" height="5"/></svg><span class="name" aria-hidden="true">rand</span><span class="sr-only">Rand Wallet</span></div>
           <a class="nav-item on" href="#home"><svg class="g-i"><use href="#i-home"/></svg>Home</a>
           <a class="nav-item" href="#activity"><svg class="g-i"><use href="#i-clock"/></svg>Activity</a>
           <a class="nav-item" href="#explore"><svg class="g-i"><use href="#i-compass"/></svg>Explore</a>
@@ -730,7 +723,7 @@
           <div class="g-sw"><span class="g-chipcolor g-c-border"></span><span class="g-name">--border</span></div>
           <div class="g-sw"><span class="g-chipcolor g-c-accent"></span><span class="g-name">--accent</span></div>
           <div class="g-sw"><span class="g-chipcolor g-c-accent-2"></span><span class="g-name">--accent-2</span></div>
-          <div class="g-sw"><span class="g-chipcolor g-c-gradient"></span><span class="g-name">--gradient</span></div>
+          <div class="g-sw"><span class="g-chipcolor g-c-gradient"></span><span class="g-name">--field-ink</span></div>
         </div>
         <div>
           <div class="g-sw"><span class="g-chipcolor g-c-positive"></span><span class="g-name">--positive</span></div>

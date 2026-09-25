@@ -136,8 +136,8 @@ function hashString(s) {
 
 /**
  * Deterministic `{text, hue}` for an asset's avatar, derived from `asset.id`. RAND gets the
- * aurora marker (`hue: null` — screens render it with `.avatar.accent`, the same flat accent
- * treatment as the hero, instead of a hue-derived identicon); every RPL asset gets a one-letter
+ * brand marker (`hue: null` — screens render the brand tile in `.avatar.rand` instead of a
+ * hue-derived identicon); every RPL asset gets a one-letter
  * initial on a hue derived from its id (`.avatar.rpl`, hue set through the CSSOM).
  */
 export function avatarFor(asset) {

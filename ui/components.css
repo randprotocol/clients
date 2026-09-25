@@ -2,8 +2,9 @@
    ui/gallery.html shows every class below in realistic wallet context; copy markup from there.
 
    House rules, kept deliberately narrow so the screens stay coherent:
-     * the aurora gradient appears on .hero and .btn-primary and nowhere else;
-     * everything else is surface / border / text tokens, with accent used as a flat colour;
+     * the entropy field (ui/lib/entropy.js) appears on .hero and the welcome .plate only;
+     * the signal accent fills one thing per screen — the primary action — and otherwise only
+       marks state (selection, focus, a hot pixel); everything else is surface / border / text;
      * transitions are 150–250 ms ease-out, presses scale to .98, and all of it is switched off
        under prefers-reduced-motion (see base.css);
      * anything you can tap is at least 44 px high, on its own or via an expanded hit area. */
@@ -63,24 +64,18 @@
 .btn.danger { color: var(--negative); border-color: color-mix(in srgb, var(--negative) 45%, var(--border)); }
 .btn.danger:hover { background: color-mix(in srgb, var(--negative) 12%, transparent); }
 
-/* The one gradient action on a screen. The glow is the accent itself, so it re-tunes per theme. */
+/* The one filled action on a screen: solid signal, no glow. Flat on purpose — the field is the
+   only thing on screen with texture. */
 .btn-primary {
-  background: var(--gradient);
+  background: var(--accent);
   border-color: transparent;
   color: var(--on-accent);
-  box-shadow:
-    0 6px 18px -8px color-mix(in srgb, var(--accent) 85%, transparent),
-    0 1px 0 rgba(255, 255, 255, .12) inset;
 }
 .btn-primary:hover {
-  background: var(--gradient);
+  background: color-mix(in srgb, var(--accent) 88%, var(--text-strong));
   border-color: transparent;
-  filter: brightness(1.06);
-  box-shadow:
-    0 10px 26px -8px color-mix(in srgb, var(--accent) 90%, transparent),
-    0 1px 0 rgba(255, 255, 255, .12) inset;
 }
-.btn-primary:active { transform: scale(.98); filter: brightness(.98); }
+.btn-primary:active { transform: scale(.98); }
 
 .btn-ghost {
   background: transparent;
@@ -130,16 +125,16 @@
   color: var(--text-soft);
   transition: color var(--mid) var(--ease), transform var(--fast) var(--ease);
 }
+
 .btn-round .ic {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--r-pill);
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r-lg);
   display: grid;
   place-items: center;
   background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--accent);
-  box-shadow: var(--shadow-1);
+  border: 1px solid var(--border-soft);
+  color: var(--text-strong);
   transition:
     background var(--mid) var(--ease),
     border-color var(--mid) var(--ease),
@@ -155,10 +150,12 @@
 .btn-round:hover { color: var(--text-strong); }
 .btn-round:hover .ic {
   background: var(--surface-2);
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  box-shadow: var(--shadow-2);
-  transform: translateY(-1px);
+  border-color: var(--border);
 }
+/* Send: the home screen's one filled action. */
+.btn-round.primary { color: var(--text-strong); }
+.btn-round.primary .ic { background: var(--accent); border-color: transparent; color: var(--on-accent); }
+.btn-round.primary:hover .ic { background: color-mix(in srgb, var(--accent) 88%, var(--text-strong)); border-color: transparent; }
 .btn-round:active .ic { transform: scale(.98); }
 .btn-round:disabled { opacity: .4; pointer-events: none; }
 /* An action that is off for a reason the user needs to hear keeps `aria-disabled` instead of
@@ -167,7 +164,9 @@
 .btn-round[aria-disabled="true"] { opacity: .4; cursor: default; }
 .btn-round[aria-disabled="true"]:hover { color: var(--text-soft); }
 .btn-round[aria-disabled="true"]:hover .ic,
-.btn-round[aria-disabled="true"]:active .ic { background: var(--surface); border-color: var(--border); box-shadow: var(--shadow-1); transform: none; }
+.btn-round[aria-disabled="true"]:active .ic { background: var(--surface); border-color: var(--border-soft); transform: none; }
+.btn-round.primary[aria-disabled="true"]:hover .ic,
+.btn-round.primary[aria-disabled="true"]:active .ic { background: var(--accent); border-color: transparent; }
 
 .actions {
   display: grid;
@@ -191,62 +190,117 @@
 .actions + .caption + .caption { text-align: center; margin-top: var(--s-1); }
 
 /* ============================================================================= hero ========= */
-/* The balance card: the only large gradient surface in the app. A radial highlight from the top
-   left gives it depth without turning it into glass; the shadow is tinted with the accent so the
-   card still sits on the page in the light theme. */
+/* The balance on the entropy field. The field is a <canvas> behind everything (ui/lib/entropy.js)
+   seeded from the wallet's address; it is ink with bone grain in both themes, so the hero reads
+   as the same sealed object on paper and on ink. The grain drifts to the trailing edge, which is
+   why the figure sits on the leading edge: it always lands on clean ink. */
 .hero {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border-radius: var(--r-xl);
-  padding: var(--s-5) var(--s-5) var(--s-4);
-  background: var(--gradient);
-  color: var(--on-accent);
-  box-shadow: 0 16px 36px -26px color-mix(in srgb, var(--accent) 85%, transparent);
+  display: flex;
+  flex-direction: column;
+  min-height: 188px;
+  border-radius: var(--r-lg);
+  padding: var(--s-6) var(--s-5) var(--s-3);
+  background: var(--field-ink);
+  color: var(--field-grain);
+  border: 1px solid color-mix(in srgb, var(--field-grain) 8%, transparent);
 }
-.hero::before {
-  content: "";
+.hero > .field {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background:
-    radial-gradient(120% 100% at 12% -20%, rgba(255, 255, 255, .30), rgba(255, 255, 255, 0) 58%),
-    radial-gradient(90% 90% at 108% 120%, rgba(0, 0, 0, .22), rgba(0, 0, 0, 0) 60%);
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  image-rendering: pixelated;
 }
-.hero .label {
-  display: block;
-  font-size: var(--fs-caption);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  opacity: .82;
-}
+/* The figure: the pixel face at 44 px (4 × its 11 px grid), so every stroke lands on a pixel.
+   Tight padding behind it keeps it legible where the grain reaches under a long number. */
 .hero .amount {
-  display: block;
-  margin: var(--s-2) 0 var(--s-1);
-  font-size: clamp(30px, 10vw, var(--fs-balance));
-  font-weight: var(--fw-balance);
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-  color: var(--on-accent);
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: .35em;
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--fs-balance);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--field-grain);
 }
-/* The ticker is a suffix, not a second number: smaller and quieter than the figure. */
-.hero .amount .unit { font-size: .44em; font-weight: 600; opacity: .72; margin-left: .3em; }
+.hero .amount .fig { background: var(--field-ink); box-shadow: 0 0 0 6px var(--field-ink); }
+.hero .amount .unit {
+  font-size: 22px;
+  font-weight: 400;
+  opacity: 1;
+  margin: 0;
+  color: color-mix(in srgb, var(--field-grain) 70%, var(--field-ink));
+  background: var(--field-ink);
+}
+@media (max-width: 380px) {
+  /* A popup holds eleven pixel-face digits at 33 px (3 × 11), not at 44. */
+  body.compact .hero .amount { font-size: 33px; }
+}
 /* Second line under the balance: the pending amount when there is one, otherwise omitted.
    There is no price feed, so nothing here is ever a currency conversion. */
-.hero .sub { display: block; font-size: 14px; font-weight: 600; opacity: .85; font-variant-numeric: tabular-nums; }
+.hero .sub {
+  display: block;
+  align-self: flex-start;
+  margin-top: var(--s-3);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--field-grain);
+  background: var(--field-ink);
+}
 .hero .hero-foot {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  margin-top: var(--s-4);
+  margin-top: auto;
+  padding-top: var(--s-4);
   font-size: var(--fs-caption);
   font-weight: 500;
-  opacity: .88;
+  color: color-mix(in srgb, var(--field-grain) 82%, var(--field-ink));
 }
-.hero .hero-foot .mono { opacity: .95; }
-body.wide .hero { padding: var(--s-6); }
-body.wide .hero .amount { font-size: var(--fs-balance); }
+.hero .hero-foot > span:not(.grow):not(.dot) { background: var(--field-ink); }
+.hero .hero-foot .btn-icon { color: var(--field-grain); background: var(--field-ink); }
+.hero .hero-foot .btn-icon:hover { background: var(--field-ink-2); color: var(--field-grain); }
+.hero :focus-visible { outline-color: var(--field-grain); }
+body.wide .hero { min-height: 212px; padding: var(--s-7) var(--s-6) var(--s-4); }
+
+/* The veil: every balance on screen becomes a fixed-width block of dither, so neither the figure
+   nor its length (a magnitude) shows. Toggled from the hero (screens/home.js), per device. Screen
+   readers still read the amounts — the veil is against the person behind you, not against the
+   person using the wallet. */
+html.veiled .hero .amount .fig,
+html.veiled .hero .sub,
+html.veiled [data-role="assets"] .row-end .amount {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  color: transparent;
+  user-select: none;
+  background-size: 6px 6px;
+}
+html.veiled .hero .amount .fig {
+  width: 4.5ch;
+  background-color: var(--field-ink);
+  background-image: repeating-conic-gradient(color-mix(in srgb, var(--field-grain) 55%, var(--field-ink)) 0 25%, transparent 0 50%);
+  background-size: 8px 8px;
+}
+html.veiled .hero .sub {
+  width: 12ch;
+  background-color: var(--field-ink);
+  background-image: repeating-conic-gradient(color-mix(in srgb, var(--field-grain) 40%, var(--field-ink)) 0 25%, transparent 0 50%);
+}
+html.veiled [data-role="assets"] .row-end .amount {
+  width: 5ch;
+  background-image: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%);
+}
 
 /* Sync / status dot. */
 .dot {
@@ -259,7 +313,8 @@ body.wide .hero .amount { font-size: var(--fs-balance); }
 }
 .dot.busy { background: var(--warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 25%, transparent); animation: pulse 1.6s var(--ease) infinite; }
 .dot.off { background: var(--negative); box-shadow: 0 0 0 3px color-mix(in srgb, var(--negative) 25%, transparent); }
-.hero .dot { background: var(--on-accent); box-shadow: 0 0 0 3px rgba(255, 255, 255, .22); }
+.hero .dot { background: var(--positive); box-shadow: 0 0 0 3px color-mix(in srgb, var(--positive) 28%, transparent); }
+.hero .dot.busy { background: var(--warning); }
 @keyframes pulse { 50% { opacity: .35; } }
 
 /* ============================================================================= card ========= */
@@ -270,7 +325,9 @@ body.wide .hero .amount { font-size: var(--fs-balance); }
   padding: var(--s-4);
   box-shadow: var(--shadow-1);
 }
-.card.flush { padding: var(--s-1); }
+/* A list is not a card: rows sit on the page between hairlines, and the group needs no box. */
+.card.flush { padding: 0; background: transparent; border: 0; box-shadow: none; border-radius: 0; }
+.card.flush > .list { border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); }
 .card.quiet { background: var(--bg-soft); box-shadow: none; }
 .card-head {
   display: flex;
@@ -444,6 +501,9 @@ div.row:active { transform: none; }
 }
 .avatar svg { width: 18px; height: 18px; }
 .avatar.accent { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: color-mix(in srgb, var(--accent) 28%, transparent); color: var(--accent); }
+.avatar.rand { background: var(--field-ink); border-color: color-mix(in srgb, var(--field-grain) 10%, transparent); }
+.avatar.rand .mark { width: 18px; height: 18px; fill: var(--field-grain); }
+.avatar.rand .mark .hot { fill: var(--accent); }
 .avatar.in { background: color-mix(in srgb, var(--positive) 16%, transparent); border-color: color-mix(in srgb, var(--positive) 28%, transparent); color: var(--positive); }
 .avatar.out { background: var(--surface-2); color: var(--text-soft); }
 /* A faucet claim is money arriving, so it reads like one — the positive tint, with the droplet. */
@@ -512,16 +572,17 @@ div.row:active { transform: none; }
   position: absolute;
   top: 0;
   left: 50%;
-  width: 28px;
-  height: 3px;
-  border-radius: var(--r-pill);
+  width: 6px;
+  height: 6px;
+  border-radius: 0;
   background: var(--accent);
   transform: translateX(-50%) scaleX(0);
   opacity: 0;
   transition: transform var(--slow) var(--ease), opacity var(--slow) var(--ease);
 }
 .tabbar .tab:hover { color: var(--text); }
-.tabbar .tab.on { color: var(--accent); }
+.tabbar .tab.on { color: var(--text-strong); }
+.tabbar .tab.on svg { color: var(--accent); }
 .tabbar .tab.on::before { transform: translateX(-50%) scaleX(1); opacity: 1; }
 body.wide .tabbar { display: none; }
 
@@ -563,7 +624,8 @@ body.wide .tabbar { display: none; }
 }
 .sidebar .nav-item svg { width: 18px; height: 18px; flex: none; }
 .sidebar .nav-item:hover { background: var(--press); color: var(--text-strong); text-decoration: none; }
-.sidebar .nav-item.on { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.sidebar .nav-item.on { background: var(--surface); color: var(--text-strong); }
+.sidebar .nav-item.on svg { color: var(--accent); }
 .sidebar .sidebar-foot { margin-top: auto; padding: var(--s-3) var(--s-2) 0; }
 body.compact .sidebar { display: none; }
 
@@ -669,11 +731,10 @@ body.compact .sidebar { display: none; }
 /* ============================================================================= field ========= */
 .field { display: flex; flex-direction: column; gap: var(--s-2); }
 .field .label {
-  font-size: var(--fs-caption);
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-soft);
-  letter-spacing: .03em;
-  text-transform: uppercase;
+  letter-spacing: -0.005em;
 }
 .field input,
 .field textarea,
@@ -877,7 +938,7 @@ a.chip:active { transform: scale(.98); }
 .skeleton.circle { width: 40px; height: 40px; border-radius: var(--r-pill); flex: none; }
 .skeleton.block { height: 72px; border-radius: var(--r-md); }
 .skeleton.hero { height: 148px; border-radius: var(--r-xl); }
-/* On the gradient hero (the balance figure before the first scan answers) the surface tokens would
+/* On the ink hero (the balance figure before the first scan answers) the surface tokens would
    read as a dark hole, so the placeholder is a white alpha there — the same reasoning as
    .progress's fixed white track. */
 .hero .skeleton { background: rgba(255, 255, 255, .22); }
@@ -1013,7 +1074,7 @@ body.wide .toast-area { bottom: var(--s-6); }
 /* A thin sync progress bar, shown under the hero balance while a scan is running. Determinate
    once the scan reports a `head` height — `--pct` (0..1) is written through the CSSOM exactly
    like `.ring`'s own --pct, never an inline style attribute; indeterminate (a short bar sliding
-   end to end) before that. Only ever appears on the hero's gradient background, so the track/bar
+   end to end) before that. Only ever appears on the hero's ink field, so the track/bar
    are fixed white alphas rather than surface tokens, the same reasoning as .qr's fixed white.
 
    The bar lives in a slot of its own that reserves its height whether or not a scan is running:
@@ -1133,12 +1194,41 @@ body.wide .toast-area { bottom: var(--s-6); }
   height: 64px;
   display: grid;
   place-items: center;
-  border-radius: var(--r-xl);
-  background: var(--accent);
-  color: var(--on-accent);
-  box-shadow: var(--shadow-2);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  color: var(--accent);
 }
-.onboard .mark-lg svg { width: 30px; height: 30px; }
+.onboard .mark-lg svg { width: 28px; height: 28px; }
+/* The lock screen's mark is the brand tile itself, bigger: no box around it. */
+.onboard .mark-lg.bare { background: none; border: 0; }
+.onboard .mark-lg.bare svg { width: 44px; height: 44px; fill: var(--text-strong); }
+.onboard .mark-lg.bare svg .hot { fill: var(--accent); }
+/* The welcome plate: the network's own field with the wordmark on clean ink. */
+.onboard .plate {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 100%;
+  max-width: 420px;
+  height: 176px;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--s-5);
+  border-radius: var(--r-lg);
+  background: var(--field-ink);
+  border: 1px solid color-mix(in srgb, var(--field-grain) 8%, transparent);
+  text-align: left;
+}
+.onboard .plate > .field { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; max-width: none; image-rendering: pixelated; }
+.onboard .plate .plate-word {
+  font-family: var(--display);
+  font-size: 44px;
+  line-height: 1;
+  color: var(--field-grain);
+  background: var(--field-ink);
+  box-shadow: 0 0 0 6px var(--field-ink);
+}
 .onboard .pitch { max-width: 300px; }
 .onboard-actions {
   width: 100%;

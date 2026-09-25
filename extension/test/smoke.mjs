@@ -70,7 +70,7 @@ const NEEDED = [
   'lib/platform.js',
   'ui/app.js', 'ui/backend.js', 'ui/tokens.css', 'ui/base.css', 'ui/components.css',
   'ui/engine/backend-wasm.js', 'ui/engine/wallet.js', 'ui/screens/home.js', 'ui/lib/qr.js',
-  'ui/fonts/Inter-Variable.woff2',
+  'ui/fonts/Inter-Variable.woff2', 'ui/fonts/DepartureMono-Regular.woff2', 'ui/lib/entropy.js',
   'core/rand_wallet.js', 'core/rand_wallet_bg.wasm',
 ];
 

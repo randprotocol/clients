@@ -11,14 +11,16 @@ import { h, raw } from './dom.js';
 import { icons } from './icons.js';
 import { formatUnits, shortAddress, timeAgo } from './format.js';
 import { avatarFor } from './assets.js';
+import { markSvg } from './entropy.js';
 
-/** `<span class="avatar accent|rpl">` for an asset, per avatarFor()'s {text, hue}. The `data-hue`
+/** `<span class="avatar rand|rpl">` for an asset, per avatarFor()'s {text, hue}. The `data-hue`
  *  attribute is inert in CSS (see gallery.js) — a screen's `after()` must read it and write the
  *  real `--hue` custom property through the CSSOM (`el.style.setProperty('--hue', hue)`). */
 export function avatarMarkup(asset) {
   const av = avatarFor(asset);
   return raw(av.hue === null
-    ? h`<span class="avatar accent">${av.text}</span>`
+    // RAND's avatar is the brand tile: the native asset wears the network's mark.
+    ? h`<span class="avatar rand">${raw(markSvg())}</span>`
     : h`<span class="avatar rpl" data-hue="${av.hue}">${av.text}</span>`);
 }
 

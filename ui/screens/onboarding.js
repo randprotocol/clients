@@ -9,6 +9,7 @@ import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { markInvalid, markValid } from '../lib/forms.js';
+import { paintField } from '../lib/entropy.js';
 
 const STRENGTH_LABELS = ['Enter at least 10 characters', 'Weak', 'Fair', 'Good', 'Strong'];
 
@@ -32,7 +33,7 @@ registerScreen('welcome', {
   render() {
     return h`
       <div class="onboard">
-        <span class="mark-lg"></span>
+        <div class="plate" aria-hidden="true"><canvas class="field"></canvas><span class="plate-word">rand</span></div>
         <div class="stack tight">
           <h1 class="title">Rand Wallet</h1>
           <p class="subtitle pitch">A shielded wallet for the Rand network. Balances and history stay private — every send is proved on this device.</p>
@@ -43,6 +44,13 @@ registerScreen('welcome', {
         </div>
         <p class="caption onboard-foot">${raw(icons.shield())}Your keys never leave this device.</p>
       </div>`;
+  },
+  // There is no address yet, so the welcome plate is the network's own field: the same seed on
+  // every device, which makes it the product's face rather than any one wallet's.
+  after(ctx, root) {
+    const canvas = root.querySelector('.plate canvas.field');
+    const field = canvas ? paintField(canvas, { seed: 'rand', cell: 4 }) : null;
+    return () => field?.destroy();
   },
 });
 

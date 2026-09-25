@@ -15,4 +15,12 @@ JetBrainsMono-Variable.woff2
                   f.flavor="woff2"; f.save("JetBrainsMono-Variable.woff2")'
   Licence: JetBrainsMono-OFL.txt (SIL Open Font License 1.1), the archive's OFL.txt.
 
-Both faces are declared in ui/tokens.css (generated) and reached through --font / --mono.
+DepartureMono-Regular.woff2
+  Departure Mono v1.500 (Helena Zhang) —
+  https://github.com/rektdeckard/departure-mono/releases/download/v1.500/DepartureMono-1.500.zip
+  taken verbatim from `DepartureMono-Regular.woff2` inside that archive. A pixel face on an 11 px
+  grid: used only for the wordmark and the balance figure, at multiples of 11 px.
+  Licence: DepartureMono-OFL.txt (SIL Open Font License 1.1), the archive's LICENSE.
+
+All three faces are declared in ui/tokens.css (generated) and reached through --font / --mono /
+--display.

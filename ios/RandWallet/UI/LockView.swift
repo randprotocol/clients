@@ -9,8 +9,8 @@ struct LockView: View {
         VStack(spacing: 20) {
             Spacer()
             ZStack {
-                RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.aurora).frame(width: 96, height: 96)
-                Image(systemName: "lock.fill").font(.system(size: 40, weight: .semibold)).foregroundColor(.white)
+                RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.surface2).frame(width: 96, height: 96)
+                Image(systemName: "lock.fill").font(.system(size: 40, weight: .semibold)).foregroundColor(Theme.accent)
             }
             Text("Rand Wallet").font(.system(size: 26, weight: .bold)).foregroundColor(Theme.textStrong)
             Text("Locked").font(.body15).foregroundColor(Theme.textSoft)

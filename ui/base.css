@@ -128,14 +128,14 @@ hr { border: 0; border-top: 1px solid var(--border-soft); margin: var(--s-4) 0; 
 .subtitle { font-size: var(--fs-body); color: var(--text-soft); }
 .caption { font-size: var(--fs-caption); font-weight: var(--fw-caption); color: var(--text-soft); }
 
-/* Small all-caps label above a group of cards or rows. */
+/* The heading over a group of rows. Sentence case at body size: it names the group, it does not
+   decorate it. */
 .section-title {
-  font-size: var(--fs-caption);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .07em;
-  color: var(--text-soft);
-  margin: var(--s-5) var(--s-1) var(--s-2);
+  font-size: var(--fs-body);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+  margin: var(--s-6) var(--s-1) var(--s-2);
 }
 
 /* Addresses, hashes, keys. The variable mono face runs a touch large next to Inter. */
@@ -217,6 +217,11 @@ hr { border: 0; border-top: 1px solid var(--border-soft); margin: var(--s-4) 0; 
      and the ring the field's own rounded shape.) */
 }
 
+/* A heading or a sheet the app focuses so a screen reader announces it (`tabindex="-1"`, see
+   app.js) is not something the user can act on, so it draws no ring — the ring would outline a
+   title as if it were a control. Real controls never carry `tabindex="-1"`. */
+[tabindex="-1"]:focus-visible { outline: none; }
+
 /* --------------------------------------------------------------------------------- motion --- */
 /* House curve: 150–250 ms, ease-out, nothing springy. */
 :root {
@@ -279,18 +284,22 @@ hr { border: 0; border-top: 1px solid var(--border-soft); margin: var(--s-4) 0; 
 }
 .topbar .spacer { width: var(--tap); flex: none; }
 
-.brand { display: flex; align-items: center; gap: var(--s-3); min-height: var(--tap); }
-.brand .mark {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--accent);
-  flex: none;
-  box-shadow: var(--shadow-1);
+.brand { display: flex; align-items: center; gap: 10px; min-height: var(--tap); }
+/* The mark is one tile of the entropy field (ui/lib/entropy.js): grain pixels in the text colour,
+   one in the signal colour. Drawn at 22 px — two of the pixel face's 11 px units. */
+.brand .mark { width: 22px; height: 22px; flex: none; fill: var(--text-strong); }
+.brand .mark .hot { fill: var(--accent); }
+/* The wordmark is the pixel face at 22 px (2 × its 11 px grid), lowercase, never wrapped. */
+.brand .name {
+  font-family: var(--display);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--text-strong);
+  letter-spacing: 0;
+  white-space: nowrap;
 }
-/* Never wrapped: a topbar that also carries an address pill has no room for a second line, and a
-   two-line brand pushes everything below it down. */
-.brand .name { font-weight: 700; font-size: 16px; color: var(--text-strong); letter-spacing: -0.02em; white-space: nowrap; }
+/* One brand per layout: on a wide screen the sidebar carries it, so a screen's topbar does not. */
+body.wide .topbar .brand { display: none; }
 
 /* ------------------------------------------------------------------------- page skeletons --- */
 /* Compact: the extension popup, the phone-width web wallet and the narrow desktop window. One

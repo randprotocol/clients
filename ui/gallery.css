@@ -90,7 +90,7 @@ body.wide .g-stage .tabbar { display: block; }
 .g-c-positive { background: var(--positive); }
 .g-c-negative { background: var(--negative); }
 .g-c-warning { background: var(--warning); }
-.g-c-gradient { background: var(--gradient); }
+.g-c-gradient { background: var(--field-ink); }
 
 .g-sprite { display: none; }
 .g-i { width: 18px; height: 18px; }

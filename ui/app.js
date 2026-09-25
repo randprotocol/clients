@@ -6,6 +6,7 @@ import { h, raw, on } from './lib/dom.js';
 import { assertBackend, BACKEND_SHAPE } from './backend.js';
 import { icons } from './lib/icons.js';
 import { shortAddress } from './lib/format.js';
+import { brandMarkup } from './lib/entropy.js';
 import {
   parseHash, routeHash, routeGo, isParentRoute, planPanes,
   createPane, createRenderToken, TWO_PANE_QUERY,
@@ -632,7 +633,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   function renderSidebar(activeName) {
     sidebarEl.innerHTML = h`
       <div class="sidebar-inner">
-        <div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div>
+        ${raw(brandMarkup())}
         ${raw(TABS.map((t) => navLink(t, activeName, 'nav-item')).join(''))}
         <div class="sidebar-foot stack tight">
           <span data-role="pinned"></span>
@@ -674,7 +675,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     async render() {
       const info = await ctx.backend.wallet.info().catch(() => null);
       return h`
-        <div class="topbar"><div class="brand"><span class="mark"></span><span class="name">Rand Wallet</span></div></div>
+        <div class="topbar">${raw(brandMarkup())}</div>
         <div class="card stack">
           <span class="title">More is on the way</span>
           <span class="subtitle">This screen ships in a later task. Your wallet is unlocked and ready.</span>

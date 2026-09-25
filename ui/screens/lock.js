@@ -5,12 +5,13 @@ import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { markInvalid, markValid } from '../lib/forms.js';
+import { markSvg } from '../lib/entropy.js';
 
 registerScreen('lock', {
   render() {
     return h`
       <div class="onboard">
-        <span class="mark-lg">${raw(icons.lock())}</span>
+        <span class="mark-lg bare">${raw(markSvg())}</span>
         <div class="stack tight">
           <h1 class="title">Welcome back</h1>
           <p class="subtitle">Enter your password to unlock Rand Wallet.</p>

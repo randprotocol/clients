@@ -10,8 +10,8 @@ struct WelcomeView: View {
             VStack(spacing: 0) {
                 Spacer()
                 ZStack {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.aurora).frame(width: 96, height: 96)
-                    Image(systemName: "shield.lefthalf.filled").font(.system(size: 44, weight: .semibold)).foregroundColor(.white)
+                    RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.surface2).frame(width: 96, height: 96)
+                    Image(systemName: "shield.lefthalf.filled").font(.system(size: 44, weight: .semibold)).foregroundColor(Theme.accent)
                 }
                 Text("Rand Wallet").font(.system(size: 30, weight: .bold)).foregroundColor(Theme.textStrong).padding(.top, 24)
                 Text("A shielded wallet for RAND.\nYour balance and payments are private; the chain sees only proofs.")

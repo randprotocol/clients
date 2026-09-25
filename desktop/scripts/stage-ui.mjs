@@ -4,7 +4,7 @@
 //
 //   dist-ui/index.html  main.js  backend-tauri.js     this shell (desktop/ui-shell/)
 //   dist-ui/ui/                                       the shared UI and engine (ui/, minus tooling)
-//   dist-ui/ui/fonts/                                 Inter + JetBrains Mono, as tokens.css expects
+//   dist-ui/ui/fonts/                                 Inter, JetBrains Mono, Departure Mono, as tokens.css expects
 //
 // No core/ directory and no .wasm: this is the one shell whose chain crypto is native, reached
 // through the `core_call` command rather than loaded into the page.
@@ -50,7 +50,8 @@ for (const unwanted of ['ui/test', 'ui/scripts', 'ui/node_modules', 'ui/gallery.
 }
 for (const needed of ['index.html', 'main.js', 'backend-tauri.js', 'ui/app.js', 'ui/backend.js', 'ui/tokens.css', 'ui/base.css',
                       'ui/components.css', 'ui/engine/backend-native.js', 'ui/engine/backend-shared.js',
-                      'ui/lib/qr.js', 'ui/fonts/Inter-Variable.woff2']) {
+                      'ui/lib/qr.js', 'ui/lib/entropy.js', 'ui/fonts/Inter-Variable.woff2',
+                      'ui/fonts/DepartureMono-Regular.woff2']) {
   if (!existsSync(join(OUT, needed))) {
     console.error(`stage-ui.mjs: ${needed} is missing from dist-ui/`);
     process.exit(1);
