@@ -25,10 +25,25 @@
 mod commands;
 mod storage;
 
+use tauri::Manager;
 use tauri_plugin_deep_link::DeepLinkExt;
 
 fn main() {
     tauri::Builder::default()
+        // FIRST among the plugins, as tauri-plugin-single-instance requires. On Windows/Linux a
+        // second `randpay:` click starts a second process with the link as its argument; without
+        // this, that process would open the same store file (vault included) beside this one.
+        // With the plugin's `deep-link` feature the second launch's argv is handed to this
+        // process's deep-link plugin, which emits the same `deep-link://new-url` event the UI
+        // already listens on (`ui-shell/main.js`), and the second process exits. All this
+        // closure has to do is bring the running window forward.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.webview_windows().values().next() {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         // `randpay:` links (spec 2026-09-26 §3.3): the scheme is registered in tauri.conf.json's
         // `plugins.deep-link.desktop.schemes`. On macOS that registration is read from the built

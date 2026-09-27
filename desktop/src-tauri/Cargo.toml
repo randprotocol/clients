@@ -31,6 +31,12 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dirs = "6"
 tauri-plugin-deep-link = "2"
+# One wallet process per user: on Windows/Linux the OS answers a second `randpay:` click by
+# launching this binary again with the link as its argument, and two processes would write the
+# same store file (vault included). With `deep-link`, the plugin hands the second launch's argv to
+# the running instance's deep-link plugin, which emits the same `deep-link://new-url` the UI
+# already listens on, and the second process exits.
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
 # Gone with the egui app this replaces: `eframe`/`egui` (the screens are ui/ now), `keyring` (the
 # spend key is in the shared password-derived vault, not the OS credential store — see
