@@ -18,7 +18,9 @@ struct ContactsView: View {
                 }
                 ForEach(contacts.book.sorted) { c in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(c.name).font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                        // A saved name is hostile text exactly as a memo is (final review, finding
+                        // — this screen showed it raw): the same display rule every memo view uses.
+                        Text(Memo.display(c.name)).font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
                         Text("fingerprint \((try? RandCore.addressFingerprint(c.address)) ?? "unavailable")")
                             .font(.monoSmall).foregroundColor(Theme.textSoft)
                         Text(c.address.shortened(head: 14, tail: 8)).font(.monoSmall).foregroundColor(Theme.textMute)

@@ -245,6 +245,29 @@ final class SendLinkTests: XCTestCase {
         XCTAssertTrue(modifiers.contains(".clipped()"), modifiers)
     }
 
+    /// A saved contact name is exactly as hostile as a memo (final review, finding — the contacts
+    /// list showed it through raw `textContent`/`Text`, unsanitised): the row must show it through
+    /// `Memo.display`, the same rule the memo confirmation line uses.
+    func testContactNamesDisplaySanitisedOnTheContactsScreen() throws {
+        let view = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("RandWallet/UI/ContactsView.swift")
+        let source = try String(contentsOf: view, encoding: .utf8)
+        XCTAssertTrue(source.contains("Text(Memo.display(c.name))"), "the contact row must show the name through Memo.display: \(source)")
+        XCTAssertFalse(source.contains("Text(c.name)"), "a raw, unsanitised Text(c.name) is still present")
+    }
+
+    /// The same rule on the `ContactPicker` list Send's "To" field opens — a second, easy-to-miss
+    /// place this screen's saved names reach the page.
+    func testContactPickerNamesDisplaySanitised() throws {
+        let view = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("RandWallet/UI/SendView.swift")
+        let source = try String(contentsOf: view, encoding: .utf8)
+        XCTAssertTrue(source.contains("Text(Memo.display(c.name))"), "the contact picker row must show the name through Memo.display: \(source)")
+        XCTAssertFalse(source.contains("Text(c.name)"), "a raw, unsanitised Text(c.name) is still present")
+        // `onPick(c.name)` must keep the real name — it fills the To field, not a display.
+        XCTAssertTrue(source.contains("onPick(c.name)"), "picking a contact must still use its real name")
+    }
+
     /// Contact names are saved exactly as typed, so a name is looked up exactly as typed too.
     func testAContactNameIsNeverTrimmedBeforeTheLookup() throws {
         let w = try RandCore.keygen()

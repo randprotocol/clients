@@ -377,7 +377,8 @@ struct ContactPicker: View {
                 ForEach(contacts.book.sorted) { c in
                     Button { onPick(c.name) } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(c.name).foregroundColor(Theme.text)
+                            // Same rule as the contacts list itself: a saved name is hostile text.
+                            Text(Memo.display(c.name)).foregroundColor(Theme.text)
                             Text(c.address.shortened(head: 14, tail: 8)).font(.monoSmall).foregroundColor(Theme.textMute)
                         }
                     }
