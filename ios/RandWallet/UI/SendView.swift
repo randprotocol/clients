@@ -5,14 +5,22 @@ import UIKit
 /// interrupted by a swipe.
 struct SendView: View {
     @EnvironmentObject var wallet: WalletService
+    @EnvironmentObject var contacts: ContactsStore
+    @EnvironmentObject var router: LinkRouter
     @Environment(\.dismiss) private var dismiss
 
     enum Step { case form, review, working, done(WalletService.SendOutcome), failed(String) }
     @State private var step: Step = .form
     @State private var recipient = ""
     @State private var amountText = ""
+    @State private var memo = ""
+    @State private var resolved: ResolvedRecipient?
     @State private var addressError: String?
     @State private var showScanner = false
+    @State private var showContactPicker = false
+    /// Whether the connected chain carries a memo: only when `rand_getLimits` positively reports
+    /// an envelope size. Unknown (not yet read, or the node did not answer) hides the field.
+    @State private var memoSupported = false
 
     private let fee: UInt64 = 1_000_000
 
@@ -38,18 +46,52 @@ struct SendView: View {
             .interactiveDismissDisabled()
         }
         .sheet(isPresented: $showScanner) {
+            // A scanned code goes through the same resolution as a pasted one: a `randpay:` link
+            // is parsed by the core, a bare address still works.
             QRScannerView { code in
-                recipient = code
+                recipient = code.trimmingCharacters(in: .whitespacesAndNewlines)
                 showScanner = false
             }
         }
+        .sheet(isPresented: $showContactPicker) {
+            ContactPicker { name in
+                recipient = name
+                showContactPicker = false
+            }
+        }
+        .onAppear { takeLink() }
+        .onChange(of: router.pending) { p in if p != nil { takeLink() } }
+        .task {
+            let bytes = try? await wallet.envelopeBytes()
+            memoSupported = SendLinkRules.memoSupported(envelopeBytes: bytes)
+        }
+    }
+
+    /// A `randpay:` link from outside the app replaces whatever the recipient field held — and
+    /// fills the form, nothing more: the user still reviews and confirms.
+    private func takeLink() {
+        guard case .form = step, let link = router.take() else { return }
+        amountText = ""
+        memo = ""
+        recipient = link
     }
 
     private var amountUnits: UInt64? { Amount.parse(amountText) }
     private var maxUnits: UInt64 { wallet.balance > fee ? wallet.balance - fee : 0 }
+    private var conflicts: LinkConflicts {
+        guard let link = resolved?.link else { return LinkConflicts() }
+        return SendLinkRules.conflicts(link: link, typedAmount: amountText, typedMemo: memo)
+    }
+    private var memoBlocked: Bool { SendLinkRules.memoBlocksContinue(memoSupported: memoSupported, memo: memo) }
     private var formValid: Bool {
         guard let a = amountUnits, a > 0, a &+ fee <= wallet.balance else { return false }
-        return addressError == nil && !recipient.isEmpty
+        guard resolved != nil, addressError == nil, !conflicts.any else { return false }
+        return Memo.tooLong(memo) == nil && !memoBlocked
+    }
+    private var confirmation: String {
+        SendLinkRules.confirmationLine(name: resolved?.name, fingerprint: resolved?.fingerprint,
+                                       amount: Amount.format(amountUnits ?? 0), symbol: "RAND",
+                                       memo: memoSupported ? memo : "")
     }
 
     private var form: some View {
@@ -58,17 +100,25 @@ struct SendView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel(text: "To")
                     HStack(spacing: 8) {
-                        Field(placeholder: "rand1…", text: $recipient, mono: true)
+                        Field(placeholder: "rand1…, randpay: link or contact", text: $recipient, mono: true)
                         Button { showScanner = true } label: {
-                            Image(systemName: "qrcode.viewfinder").font(.system(size: 22)).foregroundColor(Theme.accent).frame(width: 44, height: 44)
+                            Image(systemName: "qrcode.viewfinder").font(.system(size: 22)).foregroundColor(Theme.accent).frame(width: 36, height: 44)
                         }
+                        .accessibilityLabel("Scan")
+                        Button { showContactPicker = true } label: {
+                            Image(systemName: "person.crop.circle").font(.system(size: 22)).foregroundColor(Theme.accent).frame(width: 36, height: 44)
+                        }
+                        .accessibilityLabel("Contacts")
                         Button {
                             if let s = UIPasteboard.general.string { recipient = s.trimmingCharacters(in: .whitespacesAndNewlines) }
                         } label: {
                             Text("Paste").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.accent)
                         }
                     }
-                    ErrorText(message: addressError)
+                    if let r = resolved {
+                        Text(recipientCaption(r)).font(.caption12).foregroundColor(Theme.textSoft)
+                    }
+                    ErrorText(message: addressError ?? conflicts.to)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -86,18 +136,72 @@ struct SendView: View {
                     if let a = amountUnits, a &+ fee > wallet.balance {
                         ErrorText(message: "Amount plus fee exceeds your balance.")
                     }
+                    ErrorText(message: conflicts.amount)
                 }
+                memoSection
                 Text("A transfer is proved on this phone, which takes a minute or two. Keep the app open while it runs.")
                     .font(.system(size: 13)).foregroundColor(Theme.textMute)
                 PrimaryButton(title: "Review", enabled: formValid) { step = .review }
             }
             .padding(20)
         }
-        .onChange(of: recipient) { v in
-            let s = v.trimmingCharacters(in: .whitespacesAndNewlines)
-            if s.isEmpty { addressError = nil; return }
-            let info = try? RandCore.parseAddress(s)
-            addressError = (info?.valid ?? false) ? nil : (info?.error ?? "Not a rand1 address")
+        .onChange(of: recipient) { v in resolveRecipient(v) }
+        .onChange(of: contacts.book) { _ in resolveRecipient(recipient) }
+    }
+
+    @ViewBuilder private var memoSection: some View {
+        if memoSupported {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    SectionLabel(text: "Memo")
+                    Spacer()
+                    Text(Memo.counter(memo)).font(.caption12).foregroundColor(Memo.tooLong(memo) == nil ? Theme.textMute : Theme.negative)
+                }
+                TextField("Optional", text: $memo, axis: .vertical)
+                    .lineLimit(2...5)
+                    .font(.body15)
+                    .autocorrectionDisabled()
+                    .padding(14)
+                    .background(Theme.surface2)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.radiusMd, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.radiusMd, style: .continuous).stroke(Theme.border, lineWidth: 1))
+                Text("Encrypted with the payment: only the recipient, you and anyone either of you shows it to can read it.")
+                    .font(.caption12).foregroundColor(Theme.textMute)
+                ErrorText(message: Memo.tooLong(memo) ?? conflicts.memo)
+            }
+        } else if !memo.isEmpty {
+            // A link brought a memo this chain cannot carry: say so, and block until it is cleared.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Theme.warning)
+                    Text(Memo.noMemoNotice).font(.system(size: 13)).foregroundColor(Theme.text)
+                }
+                Button("Clear memo") { memo = "" }.font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.accent)
+            }
+        }
+    }
+
+    private func recipientCaption(_ r: ResolvedRecipient) -> String {
+        let who = r.name.map { "\($0) · " } ?? ""
+        let kind = r.link != nil ? "Payment link · " : ""
+        return "\(kind)\(who)fingerprint \(r.fingerprint)"
+    }
+
+    private func resolveRecipient(_ text: String) {
+        let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.isEmpty { resolved = nil; addressError = nil; return }
+        do {
+            let r = try SendLinkRules.resolve(s, contacts: contacts.book)
+            resolved = r
+            addressError = nil
+            if let link = r.link {
+                let filled = SendLinkRules.fill(link: link, amount: amountText, memo: memo)
+                amountText = filled.amount
+                memo = filled.memo
+            }
+        } catch {
+            resolved = nil
+            addressError = RecipientKind(s) == .link ? "That payment link could not be read: \(error.localizedDescription)" : error.localizedDescription
         }
     }
 
@@ -111,11 +215,16 @@ struct SendView: View {
                     Divider().background(Theme.borderSoft)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("To").font(.caption12).foregroundColor(Theme.textMute)
-                        Text(recipient.trimmingCharacters(in: .whitespacesAndNewlines).shortened(head: 14, tail: 8)).font(.mono).foregroundColor(Theme.text)
+                        Text((resolved?.address ?? "").shortened(head: 14, tail: 8)).font(.mono).foregroundColor(Theme.text)
                     }
+                    Divider().background(Theme.borderSoft)
+                    // The one line every surface shows before a send (spec 2026-09-26 §3): read the
+                    // fingerprint back against the one the recipient sees on their Receive screen.
+                    Text(confirmation).font(.mono).foregroundColor(Theme.textStrong)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                 }
             }
-            Text("Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount or the recipient.")
+            Text("Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.")
                 .font(.system(size: 13)).foregroundColor(Theme.textMute).multilineTextAlignment(.center)
             if !ProverRequirements.deviceHasEnoughMemory {
                 Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Until the prover's memory use drops, send from the rand command-line wallet on a computer with the key file from Settings › Export.")
@@ -181,10 +290,10 @@ struct SendView: View {
     }
 
     private func run() async {
-        guard let amount = amountUnits else { return }
+        guard let amount = amountUnits, let to = resolved?.address else { return }
         step = .working
         do {
-            let o = try await wallet.send(to: recipient.trimmingCharacters(in: .whitespacesAndNewlines), amount: amount, fee: fee)
+            let o = try await wallet.send(to: to, amount: amount, fee: fee, memo: memoSupported ? memo : "")
             step = .done(o)
         } catch {
             step = .failed(error.localizedDescription)
@@ -237,6 +346,34 @@ struct SentView: View {
                 PrimaryButton(title: "Done", action: onDone)
             }
             .padding(20)
+        }
+    }
+}
+
+/// Pick a saved contact for the recipient field.
+struct ContactPicker: View {
+    let onPick: (String) -> Void
+    @EnvironmentObject var contacts: ContactsStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if contacts.book.sorted.isEmpty {
+                    Text("No contacts yet. Add one from Contacts on the home screen.").foregroundColor(Theme.textMute)
+                }
+                ForEach(contacts.book.sorted) { c in
+                    Button { onPick(c.name) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(c.name).foregroundColor(Theme.text)
+                            Text(c.address.shortened(head: 14, tail: 8)).font(.monoSmall).foregroundColor(Theme.textMute)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Contacts")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .navigationBarLeading) { Button("Cancel") { dismiss() } } }
         }
     }
 }

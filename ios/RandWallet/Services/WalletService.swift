@@ -92,6 +92,7 @@ final class WalletService: ObservableObject {
     func forgetWallet() {
         lock()
         Keychain.deleteSpendKey()
+        KeychainBlob(account: "contacts").delete()
         NoteStore.delete()
         store = NoteStore()
         settings.hasBackedUpKey = false
@@ -193,7 +194,7 @@ final class WalletService: ObservableObject {
 
     /// The whole send path. `amount` and `fee` in units. Returns after the commit or the commit
     /// timeout; throws with a message the UI shows verbatim.
-    func send(to: String, amount: UInt64, fee: UInt64) async throws -> SendOutcome {
+    func send(to: String, amount: UInt64, fee: UInt64, memo: String = "") async throws -> SendOutcome {
         guard let sk = spendKey else { throw RpcClient.RpcError(code: 0, message: "wallet is locked") }
         let rpc = try client()
         let addr = try RandCore.parseAddress(to)
@@ -225,8 +226,13 @@ final class WalletService: ObservableObject {
             if attempt >= 3 { throw RpcClient.RpcError(code: 0, message: "the tree moved while fetching witnesses; try again") }
         }
 
+        // Read from the node this send talks to, right before proving: every output is sealed at
+        // exactly this size, and a chain that declares none carries no memo.
+        let envelopeBytes = try await rpc.envelopeBytes()
+        if envelopeBytes == nil && !memo.isEmpty { throw RpcClient.RpcError(code: 0, message: Memo.noMemoNotice) }
         let request = ProveRequest(spendKey: sk, chainId: chainId, to: to, amount: String(amount), fee: String(fee),
-                                   anchorHeight: anchor.height, anchorRoot: anchor.root, inputs: inputs, profile: "production")
+                                   anchorHeight: anchor.height, anchorRoot: anchor.root, inputs: inputs, profile: "production",
+                                   memo: memo, envelopeBytes: envelopeBytes)
         let started = Date()
         phase = .proving(started: started)
         let proof = try await Self.prove(request)
@@ -272,6 +278,9 @@ final class WalletService: ObservableObject {
             try RandCore.proveTransfer(request)
         }.value
     }
+
+    /// The connected chain's `envelope_bytes` (`nil`: no memo on this chain).
+    func envelopeBytes() async throws -> Int? { try await client().envelopeBytes() }
 
     // MARK: faucet
 

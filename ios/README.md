@@ -8,9 +8,11 @@ everything else in this directory is Swift.
 RandWallet/
   Core/        RandCore (the one FFI call), Models (the core's JSON shapes), Amount
   Network/     RpcClient — JSON-RPC 2.0 over URLSession
-  Storage/     NoteStore (Application Support, complete file protection), Keychain, Settings
+  Storage/     NoteStore (Application Support, complete file protection), Keychain, Settings,
+               Contacts (Keychain-backed JSON, the CLI's rules)
   Services/    WalletService (scan / send / faucet), AuthService (lock, Face ID)
   UI/          Welcome · Lock · Home · Receive · Send → Review → Proving → Sent · Activity · Settings
+               · Contacts; `randpay:` links open Send pre-filled (never sent without Confirm)
 RandWalletTests/   NoteStore logic and an FFI smoke test
 ```
 

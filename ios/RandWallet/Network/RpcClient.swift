@@ -40,6 +40,32 @@ final class RpcClient {
 
     // MARK: typed reads
 
+    /// The chain's `envelope_bytes` from `rand_getLimits` (spec 2026-09-26 §2.4): `nil` means the
+    /// legacy envelope and no memo — a chain that reports `null`, a reply without the field, or a
+    /// node that predates the method (`-32601`). Any other failure propagates: a node that did not
+    /// answer is not a node that said "no memo".
+    func envelopeBytes() async throws -> Int? {
+        let reply: Any
+        do {
+            reply = try await call("rand_getLimits")
+        } catch let e as RpcError where e.code == -32601 {
+            return nil
+        }
+        return try Self.envelopeBytes(fromLimits: reply)
+    }
+
+    static func envelopeBytes(fromLimits reply: Any) throws -> Int? {
+        guard let obj = reply as? [String: Any] else {
+            throw RpcError(code: 0, message: "rand_getLimits: not an object")
+        }
+        guard let v = obj["envelope_bytes"], !(v is NSNull) else { return nil }
+        guard let n = v as? Int, n > 0, n <= 1 << 20 else {
+            throw RpcError(code: 0, message: "rand_getLimits: envelope_bytes is not a positive size")
+        }
+        return n
+    }
+
+
     func chainId() async throws -> UInt64 { try u64(await call("rand_chainId")) }
 
     func status() async throws -> [String: Any] { try await call("rand_status") as? [String: Any] ?? [:] }

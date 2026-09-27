@@ -20,12 +20,25 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>org.randprotocol.wallet.randpay</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>randpay</string>
+			</array>
+		</dict>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Rand Wallet uses the camera to scan a recipient's address QR code.</string>
+	<string>Rand Wallet uses the camera to scan a recipient's address or payment-link QR code.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Rand Wallet uses Face ID to unlock your wallet.</string>
 	<key>UIApplicationSceneManifest</key>

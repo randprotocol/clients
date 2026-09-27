@@ -112,10 +112,32 @@ struct ProveRequest: Encodable {
     let anchorRoot: String
     let inputs: [ProveInput]
     let profile: String
+    /// Sealed with the payment only; `""` for none.
+    let memo: String
+    /// The chain's `envelope_bytes` from `rand_getLimits`; `nil` seals the legacy envelope, and
+    /// the core refuses a non-empty memo then, before proving.
+    let envelopeBytes: Int?
 
     enum CodingKeys: String, CodingKey {
         case spendKey = "spend_key", chainId = "chain_id", to, amount, fee
         case anchorHeight = "anchor_height", anchorRoot = "anchor_root", inputs, profile
+        case memo, envelopeBytes = "envelope_bytes"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(spendKey, forKey: .spendKey)
+        try c.encode(chainId, forKey: .chainId)
+        try c.encode(to, forKey: .to)
+        try c.encode(amount, forKey: .amount)
+        try c.encode(fee, forKey: .fee)
+        try c.encode(anchorHeight, forKey: .anchorHeight)
+        try c.encode(anchorRoot, forKey: .anchorRoot)
+        try c.encode(inputs, forKey: .inputs)
+        try c.encode(profile, forKey: .profile)
+        try c.encode(memo, forKey: .memo)
+        // An explicit null, as the other clients send it.
+        try c.encode(envelopeBytes, forKey: .envelopeBytes)
     }
 }
 
