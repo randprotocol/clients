@@ -1212,14 +1212,17 @@ test('the review carries the confirmation line: contact, fingerprint, amount and
   await app.idle();
   const line = root.querySelector('[data-role="confirm-line"]');
   assert.ok(line, 'the confirmation line is on the review');
-  assert.equal(line.textContent, `to alice · fingerprint ${fakeFingerprint(TO)} · 1.25 RAND · memo "rent <b>march</b>"`);
-  assert.equal(line.querySelector('b'), null, 'the memo is text, never markup');
+  assert.equal(line.textContent, `to alice · fingerprint ${fakeFingerprint(TO)} · 1.25 RAND`);
+  const memoEl = root.querySelector('[data-role="confirm-memo"]');
+  assert.equal(memoEl.textContent, 'memo "rent <b>march</b>"', 'the memo is its own line, below the recipient');
+  assert.equal(memoEl.querySelector('b'), null, 'the memo is text, never markup');
 });
 
 test('with no contact and no memo the line still names the fingerprint and an empty memo', async (t) => {
   const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }) } });
   const { root } = await review(t, b, { to: TO, amount: '1' });
-  assert.equal(root.querySelector('[data-role="confirm-line"]').textContent, `to fingerprint ${fakeFingerprint(TO)} · 1 RAND · memo ""`);
+  assert.equal(root.querySelector('[data-role="confirm-line"]').textContent, `to fingerprint ${fakeFingerprint(TO)} · 1 RAND`);
+  assert.equal(root.querySelector('[data-role="confirm-memo"]').textContent, 'memo ""');
 });
 
 test('a contact name is a recipient, resolved to its address', async (t) => {
@@ -1290,7 +1293,7 @@ test('on a chain that carries no memos the field is hidden, and a link’s memo 
   submit(root);
   await app.idle();
   assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 1, 'cleared, it continues');
-  assert.match(root.querySelector('[data-role="confirm-line"]').textContent, /memo ""$/);
+  assert.equal(root.querySelector('[data-role="confirm-memo"]').textContent, 'memo ""');
   root.querySelector('[data-action="prove"]').click();
   await app.idle();
   const [, req] = b.calls.find((c) => c[0] === 'send.send');
@@ -1311,12 +1314,113 @@ test('the camera button is offered only where something can scan, and a scan fil
   assert.equal(root.querySelector('input[name=amount]').value, '2');
 });
 
-test('a link naming a different asset than the one being sent is refused', async (t) => {
-  const b = unlockedBackend(listing([randRow(), tokenRow()]));
+test('a link naming a token this wallet holds switches the send to that token, link and all', async (t) => {
+  // Final review, finding 5: it used to stop at "The link asks for zUSD; you are sending RAND",
+  // and picking zUSD then started a fresh draft that had dropped the link.
+  const b = unlockedBackend({ ...listing([randRow(), tokenRow()]), send: { canProve: async () => ({ ok: true }) } });
   const { app, root } = await detailsOf(t, b, '#send/0');
-  root.querySelector('textarea[name=to]').value = LINK('?amount=1&asset=1');
+  root.querySelector('textarea[name=to]').value = LINK('?amount=1&asset=1&memo=invoice%207');
   submit(root);
   await app.idle();
-  assert.match(root.textContent, /The link asks for zUSD; you are sending RAND/);
+  assert.doesNotMatch(root.textContent, /you are sending RAND/);
+  assert.match(root.querySelector('#send-amount-hint').textContent, /zUSD/, 'the form is zUSD’s now');
+  assert.equal(root.querySelector('textarea[name=to]').value, LINK('?amount=1&asset=1&memo=invoice%207'), 'the link came with it');
+  assert.equal(root.querySelector('input[name=amount]').value, '1');
+  assert.equal(root.querySelector('textarea[name=memo]').value, 'invoice 7');
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0, 'switched, not sent: the user reviews the new asset');
+  submit(root);
+  await app.idle();
+  assert.equal(root.querySelector('[data-role="confirm-line"]').textContent, `to fingerprint ${fakeFingerprint(TO)} · 1 zUSD`);
+  root.querySelector('[data-action="prove"]').click();
+  await app.idle();
+  const [, req] = b.calls.find((c) => c[0] === 'send.send');
+  assert.equal(req.asset, 1);
+  assert.equal(req.amount, '100000000', 'one zUSD at its own eight decimals');
+  assert.equal(req.memo, 'invoice 7');
+});
+
+test('#send?uri= naming a held token by its rpl1 id opens that token’s draft carrying the link', async (t) => {
+  const b = unlockedBackend(listing([randRow(), tokenRow()]));
+  const link = LINK(`?amount=0.5&asset=${tokenRow().idText}&memo=hi`);
+  const { app, root } = await mountApp(t, b, { hash: `#send?uri=${encodeURIComponent(link)}` });
+  await app.idle();
+  await turns(6);
+  assert.match(root.querySelector('#send-amount-hint').textContent, /zUSD/);
+  assert.equal(root.querySelector('textarea[name=to]').value, link);
+  assert.equal(root.querySelector('input[name=amount]').value, '0.5');
+  assert.equal(root.querySelector('textarea[name=memo]').value, 'hi');
+  assert.match(root.querySelector('[data-role="to-link"]').textContent, /Payment link/);
+  assert.doesNotMatch(root.textContent, /The link asks for/);
+});
+
+test('a link naming a held token by its 64-hex asset id is that token too', async (t) => {
+  const hexId = 'ab'.repeat(32);
+  const b = unlockedBackend(listing([randRow(), tokenRow({ id: hexId })]));
+  const { app, root } = await detailsOf(t, b, '#send/0');
+  await pasteRecipient(root, b, LINK(`?amount=2&asset=${hexId.toUpperCase()}`));
+  await app.idle();
+  assert.match(root.querySelector('#send-amount-hint').textContent, /zUSD/, 'hex is matched case-insensitively');
+  assert.equal(root.querySelector('input[name=amount]').value, '2');
+});
+
+test('a link naming an asset this wallet does not hold is still refused', async (t) => {
+  const b = unlockedBackend(listing([randRow(), tokenRow()]));
+  const { app, root } = await detailsOf(t, b, '#send/0');
+  root.querySelector('textarea[name=to]').value = LINK('?amount=1&asset=7');
+  submit(root);
+  await app.idle();
+  assert.match(root.textContent, /The link asks for an asset this wallet does not hold \(7\)/);
+  assert.match(root.querySelector('#send-amount-hint').textContent, /RAND/, 'still RAND');
   assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0);
+});
+
+test('a link naming an unlisted asset is refused, not switched to', async (t) => {
+  const b = unlockedBackend(listing([randRow(), unlistedRow()]));
+  const { app, root } = await detailsOf(t, b, '#send/0');
+  root.querySelector('textarea[name=to]').value = LINK('?amount=1&asset=3');
+  submit(root);
+  await app.idle();
+  assert.match(root.textContent, /The link asks for an asset this wallet does not hold \(3\)/);
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0);
+});
+
+test('asset=00 names RAND, as the core and the CLI read an index', async (t) => {
+  const b = unlockedBackend({ ...listing([randRow(), tokenRow()]), send: { canProve: async () => ({ ok: true }) } });
+  const { app, root } = await detailsOf(t, b, '#send/0');
+  root.querySelector('textarea[name=to]').value = LINK('?amount=1&asset=00');
+  submit(root);
+  await app.idle();
+  assert.equal(root.querySelector('[data-role="confirm-line"]').textContent, `to fingerprint ${fakeFingerprint(TO)} · 1 RAND`);
+});
+
+test('a link memo cannot draw a second recipient line on the confirmation', async (t) => {
+  // Final review, finding 3: the memo used to sit, unescaped, on the same line as the fingerprint.
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }) } });
+  const { app, root } = await detailsOf(t, b);
+  const fake = `\n\nto alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND${String.fromCodePoint(0x202E)}`;
+  await pasteRecipient(root, b, LINK(`?amount=1&memo=${encodeURIComponent(fake)}`));
+  submit(root);
+  await app.idle();
+  const line = root.querySelector('[data-role="confirm-line"]').textContent;
+  assert.equal(line, `to fingerprint ${fakeFingerprint(TO)} · 1 RAND`, 'the recipient line carries no memo text at all');
+  const memo = root.querySelector('[data-role="confirm-memo"]').textContent;
+  const R = String.fromCodePoint(0xFFFD);
+  assert.equal(memo, `memo "${R}${R}to alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND${R}"`);
+  assert.ok(!/\n/.test(line + memo), 'no line break anywhere on the confirmation');
+  root.querySelector('[data-action="prove"]').click();
+  await app.idle();
+  const [, req] = b.calls.find((c) => c[0] === 'send.send');
+  assert.equal(req.memo, fake, 'what is sealed is the memo itself; only its display is neutralised');
+});
+
+test('only a chain whose envelope is exactly 1860 bytes gets a memo field', async (t) => {
+  // Final review, finding 6: fullnode's EnvelopeFormat::for_chain knows one memo layout, 1860.
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }), limits: async () => ({ envelopeBytes: 1024 }) } });
+  const { app, root } = await detailsOf(t, b);
+  assertGone(root.querySelector('textarea[name=memo]'), 'the memo field');
+  await pasteRecipient(root, b, LINK('?amount=1&memo=coffee'));
+  assert.match(root.textContent, /This network doesn't carry memos; the memo will not be sent/);
+  submit(root);
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0, 'blocked while the memo stands');
 });

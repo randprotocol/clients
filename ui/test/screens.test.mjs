@@ -626,6 +626,41 @@ test('receive: an amount with more decimals than the asset has is refused, and t
   assert.equal(root.querySelector('[data-role="link"]').textContent, `randpay:${address}`);
 });
 
+test('receive: a link too long for any QR code takes the QR away and says so — never the old QR', async (t) => {
+  // Final review, finding 1: past level-M version 40 (2 331 bytes) the encoder throws, and the
+  // screen used to leave the previous link's QR up beside the new link text and Copy.
+  const long = `rand1${'q'.repeat(1670)}`;
+  const b = unlockedBackend({ wallet: { info: async () => ({ address: long, pk: 'pk' }) } });
+  const { root, app } = await at(t, '#receive', b);
+  const wrap = root.querySelector('.qr');
+  const note = root.querySelector('[data-role="qr-too-long"]');
+  assert.ok(note, 'there is a place for the notice');
+  assert.ok(!wrap.hasAttribute('hidden') && note.hasAttribute('hidden'), 'the bare link fits');
+  const memo = root.querySelector('textarea[name=link-memo]');
+  memo.value = String.fromCodePoint(0xE9).repeat(255); // 510 bytes, 1 530 once percent-encoded
+  memo.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+  await app.idle();
+  assert.ok(root.querySelector('[data-role="link"]').textContent.length > 2331, 'the link text is the new, long one');
+  assert.ok(wrap.hasAttribute('hidden'), 'the QR is gone');
+  assert.ok(!note.hasAttribute('hidden'));
+  assert.equal(note.textContent, 'This link is too long for a QR code; share or copy it instead.');
+  memo.value = 'short';
+  memo.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+  await app.idle();
+  assert.ok(!wrap.hasAttribute('hidden') && note.hasAttribute('hidden'), 'back to a QR once it fits');
+});
+
+test('receive: only a chain whose envelope is exactly 1860 bytes gets the memo field', async (t) => {
+  const b = unlockedBackend({ send: { limits: async () => ({ envelopeBytes: 1024 }) } });
+  const { root } = await at(t, '#receive', b);
+  assert.ok(root.querySelector('[data-role="link-memo-field"]').hidden, 'no memo field for an envelope size fullnode does not know');
+  const c = unlockedBackend();
+  const second = await at(t, '#receive', c);
+  assert.ok(!second.root.querySelector('[data-role="link-memo-field"]').hidden, '1860 carries a memo');
+});
+
 test('receive: the QR is drawn at error-correction level M', async (t) => {
   const b = unlockedBackend();
   const { root } = await at(t, '#receive', b);
@@ -672,6 +707,28 @@ test('activity rows and the tx detail show a memo as text', async (t) => {
   list.app.destroy();
   const detail = await at(t, `#tx/0x${'aa'.repeat(32)}`, b);
   assert.equal(detail.root.querySelector('[data-role="memo"]').textContent, '<b>lunch</b>');
+});
+
+test('a memo on a note, an activity row or a tx detail shows its control and bidi characters neutralised', async (t) => {
+  // Final review, finding 3: a memo is the sender's text; a newline or U+202E must not reorder
+  // or break what the page shows around it.
+  const cp = (...p) => String.fromCodePoint(...p);
+  const R = cp(0xFFFD);
+  const evil = `pay${cp(10)}me${cp(0x202E)}now${cp(0x2066)}`;
+  const shown = `pay${R}me${R}now${R}`;
+  const b = unlockedBackend();
+  const cached = await b.sync.cached();
+  const activity = cached.activity.map((a) => (a.hash === `0x${'aa'.repeat(32)}` ? { ...a, memo: evil } : a));
+  const notes = cached.notes.map((n) => (n.index === 3 ? { ...n, memo: evil } : n));
+  b.sync.cached = async () => ({ ...cached, activity, notes });
+  const list = await at(t, '#activity', b);
+  assert.deepEqual([...list.root.querySelectorAll('[data-role="row-memo"]')].map((n) => n.textContent), [shown]);
+  list.app.destroy();
+  const detail = await at(t, `#tx/0x${'aa'.repeat(32)}`, b);
+  assert.equal(detail.root.querySelector('[data-role="memo"]').textContent, shown);
+  detail.app.destroy();
+  const note = await at(t, '#note/3', b);
+  assert.equal(note.root.querySelector('[data-role="memo"]').textContent, shown);
 });
 
 // ------------------------------------------------------------------------------------- faucet ---

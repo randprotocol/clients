@@ -147,7 +147,9 @@ registerScreen('contacts', {
       evt.preventDefault();
       dropPending();
       showError('');
-      const name = nameInput.value.trim();
+      // Taken exactly as typed, never trimmed: `rand contacts` (contacts.rs) does not trim, and
+      // every surface keeps the CLI's rules (final review, finding 7).
+      const name = nameInput.value;
       const text = addressInput.value.trim();
       if (!name) { showError('Give the contact a name.'); return; }
       if (!text) { showError('Paste the address or payment link to save.'); return; }

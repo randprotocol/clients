@@ -16,6 +16,7 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits, shortAddress, shortHex } from '../lib/format.js';
 import { kindOf, hasMemo } from '../lib/rows.js';
+import { displayMemo } from '../lib/memo.js';
 // The explorer rules live in lib/ since task 1.5 (the `#sent` screen needs them too); re-exported
 // here because that is where they were, and where the tests import them from.
 import { explorerLink } from '../lib/explorer.js';
@@ -43,7 +44,7 @@ function memoSlot(record) {
 }
 function fillMemo(root, record) {
   const el = root.querySelector('[data-role="memo"]');
-  if (el && hasMemo(record)) el.textContent = record.memo;
+  if (el && hasMemo(record)) el.textContent = displayMemo(record.memo);
 }
 
 // ------------------------------------------------------------------------------------ tx ------

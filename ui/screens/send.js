@@ -37,7 +37,8 @@ import {
   PHASE_LABELS, CANCELLABLE, ADDRESS_DEBOUNCE_MS, SELF_SEND_QUESTION,
   explainProvingError, outcomeOf, safeHash, draftFor, currentSend, startSend,
   unknownOutcome, plainUnits, checkAmount,
-  MEMO_MAX_BYTES, NOT_A_RECIPIENT, utf8Length, recipientKind, confirmationLine,
+  MEMO_MAX_BYTES, NOT_A_RECIPIENT, utf8Length, recipientKind, confirmationLine, memoLine,
+  memoSupportedFor,
 } from './send/state.js';
 import {
   shellMarkup, assetStepMarkup, unsendableMarkup, noRandMarkup, detailsStepMarkup,
@@ -64,10 +65,11 @@ registerScreen('send', {
     let settings = {};
     let cached = {};
     let canProve = { ok: false, reason: 'Proving is not available here.' };
-    // Whether this chain carries a memo: only when its limits positively report an envelope size
-    // (spec 2026-09-26 §2.4). A chain that reports none, a node that cannot say, and a backend
-    // without `send.limits` all get no memo field — sealing a memo the chain cannot carry is
-    // refused by the core anyway, after the user has written it.
+    // Whether this chain carries a memo: only when its limits report the one envelope size that
+    // has a memo field, 1860 bytes (spec 2026-09-26 §2.4; fullnode's `EnvelopeFormat::for_chain`).
+    // Any other size, a chain that reports none, a node that cannot say, and a backend without
+    // `send.limits` all get no memo field — sealing a memo the chain cannot carry is refused by
+    // the core anyway, after the user has written it.
     let memoSupported = false;
     try {
       const [list, info, prove, cfg, sync, limits] = await Promise.all([
@@ -82,7 +84,7 @@ registerScreen('send', {
       if (prove) canProve = prove;
       if (cfg) settings = cfg;
       if (sync) cached = sync;
-      memoSupported = !!limits && Number.isSafeInteger(limits.envelopeBytes) && limits.envelopeBytes > 0;
+      memoSupported = !!limits && memoSupportedFor(limits.envelopeBytes);
     } catch (err) {
       if (!live()) return;
       root.querySelector('[data-role="step"]').innerHTML = h`
@@ -260,12 +262,49 @@ registerScreen('send', {
       slot.innerHTML = !memoSupported && draft.memo ? noMemoNoticeMarkup() : '';
     }
 
-    /** The asset a link names: absent is RAND (the link's own default), a number is an index, an
-     *  `rpl1…` is a token id. `null` if this wallet holds no such asset. */
+    /** The asset a link names, in the forms the core's `PaymentUri::parse` accepts: absent is
+     *  RAND (the link's own default), digits are a registry index by value (`0`, `00` are RAND,
+     *  as the CLI reads them), 64 hex digits an asset id, an `rpl1…` a token id (both
+     *  case-insensitive). `null` if this wallet holds no such asset — or holds it unlisted, whose
+     *  decimals are this wallet's guess and so cannot be sent (iOS and Android: RAND only, and
+     *  the same reading of `0`/`00`). */
     function linkAsset(param) {
-      if (param === null || param === undefined || param === '') return assets.find((a) => a.index === 0) || null;
-      if (/^\d+$/.test(String(param))) return assets.find((a) => a.index === Number(param)) || null;
-      return assets.find((a) => a.idText && a.idText === String(param)) || null;
+      const text = param === null || param === undefined ? '' : String(param).trim();
+      let found = null;
+      if (text === '') found = assets.find((a) => a.index === 0);
+      else if (/^\d+$/.test(text)) found = assets.find((a) => a.index === Number(text));
+      else if (/^[0-9a-f]{64}$/i.test(text)) found = assets.find((a) => typeof a.id === 'string' && a.id.toLowerCase() === text.toLowerCase());
+      else found = assets.find((a) => typeof a.idText === 'string' && a.idText.toLowerCase() === text.toLowerCase());
+      return found && !isUnlisted(found) ? found : null;
+    }
+
+    /** The held asset a link asks for when it is not the one this draft is moving, or `null`. */
+    function otherAssetFor(link) {
+      if (!link || link.asset === null || link.asset === undefined) return null;
+      const wanted = linkAsset(link.asset);
+      return wanted && wanted.index !== asset.index ? wanted : null;
+    }
+
+    /**
+     * A link naming another asset this wallet holds (final review, finding 5): the flow moves to
+     * that asset's draft, carrying the link — recipient, amount and memo — rather than stopping at
+     * "you are sending RAND" (and a switch by hand starting a fresh draft that had lost the link).
+     * Nothing is sent: the details step is shown again, for the user to review the new asset.
+     */
+    function switchToLinkAsset(wanted, text, link) {
+      asset = wanted;
+      draft = draftFor(ctx, wanted.index);
+      Object.assign(draft, {
+        to: text, link, linkText: text, amount: '', memo: '', recipient: null,
+        selfConfirmed: false, estimate: null, knownFee: null,
+      });
+      reviewUnits = 0n;
+      goStep('details', { focus: false });
+      // Written as a property as well as rendered: the link is user text with `&`s in it.
+      const toEl = field('to');
+      if (toEl) toEl.value = text;
+      paintLinkHint();
+      applyLink();
     }
 
     /**
@@ -336,6 +375,8 @@ registerScreen('send', {
       if (kind === 'link') {
         const parsed = await parseLinkOrExplain(input, text);
         if (!parsed || !live() || input.value.trim() !== text) return;
+        const other = otherAssetFor(parsed);
+        if (other) { switchToLinkAsset(other, text, parsed); return; }
         draft.link = parsed;
         draft.linkText = text;
         setFieldError(input, null);
@@ -431,15 +472,17 @@ registerScreen('send', {
         paintDetailsExtras();
       } else if (next === 'review') {
         stepEl.innerHTML = reviewStepMarkup({ asset, to: draft.recipient.address, units: reviewUnits, estimate: draft.estimate, canProve, unknown, assets });
-        // The one line every surface shows before a send, written as text: the contact's name,
-        // the memo and the link's fields are all somebody else's words.
+        // The confirmation every surface shows before a send, written as text: the contact's
+        // name, the memo and the link's fields are all somebody else's words. The recipient line
+        // carries no memo; the memo is its own line below it, control and bidi characters shown
+        // as U+FFFD, so nothing in it can pass for a second recipient line.
         stepEl.querySelector('[data-role="confirm-line"]').textContent = confirmationLine({
           name: draft.recipient.name,
           fingerprint: draft.recipient.fingerprint,
           amount: plainUnits(reviewUnits, asset.decimals),
           symbol: asset.symbol,
-          memo: memoSupported ? draft.memo : '',
         });
+        stepEl.querySelector('[data-role="confirm-memo"]').textContent = memoLine(memoSupported ? draft.memo : '');
       } else if (next === 'proving') paintProving();
       else if (next === 'failed') stepEl.innerHTML = failedStepMarkup(explainProvingError(attached && attached.error));
       else if (next === 'unknown') paintUnknown();
@@ -542,7 +585,10 @@ registerScreen('send', {
       // auto-fills the amount/memo the link itself carries.
       if (linkArg !== null && step === 'details') {
         const linkInput = stepEl.querySelector('textarea[name=to]');
-        if (linkInput) takeRecipient(linkInput);
+        if (linkInput) {
+          linkInput.value = draft.to; // a property write, like a paste: the link has `&`s in it
+          takeRecipient(linkInput);
+        }
       }
     }
 
@@ -811,6 +857,8 @@ registerScreen('send', {
       if (!live()) return;
       if (!recipient) return;
       if (recipient.link) {
+        const other = otherAssetFor(recipient.link);
+        if (other) { switchToLinkAsset(other, toInput.value.trim(), recipient.link); return; }
         draft.link = recipient.link;
         draft.linkText = toInput.value.trim();
         applyLink();

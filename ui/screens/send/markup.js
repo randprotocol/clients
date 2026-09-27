@@ -229,6 +229,7 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
     <h2 class="title" data-role="step-title" tabindex="-1">Review</h2>
     ${unknownNoticeMarkup(unknown)}
     <p class="confirm-line mono" data-role="confirm-line"></p>
+    <p class="confirm-line confirm-memo mono" data-role="confirm-memo"></p>
     <div class="card">
       <div class="kv">
         <span class="k">To</span>

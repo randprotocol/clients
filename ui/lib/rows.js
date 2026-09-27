@@ -12,6 +12,7 @@ import { icons } from './icons.js';
 import { formatUnits, shortAddress, timeAgo } from './format.js';
 import { avatarFor } from './assets.js';
 import { markSvg } from './entropy.js';
+import { displayMemo } from './memo.js';
 
 /** `<span class="avatar rand|rpl">` for an asset, per avatarFor()'s {text, hue}. The `data-hue`
  *  attribute is inert in CSS (see gallery.js) — a screen's `after()` must read it and write the
@@ -144,7 +145,8 @@ export function hasMemo(item) {
  * the items that have a memo, one for one, in document order.
  */
 export function fillRowMemos(container, items) {
-  const memos = items.filter(hasMemo).map((item) => item.memo);
+  // Control and bidi characters shown as U+FFFD (lib/memo.js): the memo is the sender's text.
+  const memos = items.filter(hasMemo).map((item) => displayMemo(item.memo));
   const slots = container.querySelectorAll('[data-role="row-memo"]');
   slots.forEach((slot, i) => { slot.textContent = memos[i] ?? ''; });
 }

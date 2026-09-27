@@ -90,6 +90,20 @@ test('adding a contact shows the fingerprint before it is saved', async (t) => {
   assert.deepEqual([...root.querySelectorAll('[data-role="contact-name"]')].map((n) => n.textContent), ['alice']);
 });
 
+test('a contact name is saved exactly as typed — never trimmed, as the CLI saves it', async (t) => {
+  // Final review, finding 7: every surface agrees with contacts.rs, which does not trim.
+  const b = unlockedBackend();
+  const { app, root } = await mountApp(t, b, { hash: '#contacts' });
+  await app.idle();
+  root.querySelector('input[name=contact-name]').value = ' alice ';
+  root.querySelector('textarea[name=contact-address]').value = ALICE;
+  root.querySelector('[data-role="contact-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+  root.querySelector('[data-role="save-contact"]').click();
+  await app.idle();
+  assert.deepEqual(await b.contacts.list(), [{ name: ' alice ', address: ALICE }]);
+});
+
 test('a contact can be added from a randpay: link; the link’s address is what is saved', async (t) => {
   const b = unlockedBackend();
   const { app, root } = await mountApp(t, b, { hash: '#contacts' });

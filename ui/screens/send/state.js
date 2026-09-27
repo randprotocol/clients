@@ -5,6 +5,7 @@
 // this is the behaviour; importable under plain Node, since none of it touches `document`.
 import { formatUnits, parseUnits, elapsed } from '../../lib/format.js';
 import { TX_HASH_RE } from '../../lib/explorer.js';
+import { displayMemo } from '../../lib/memo.js';
 
 export const PHASE_LABELS = {
   selecting: 'Selecting notes',
@@ -29,6 +30,7 @@ export const UNKNOWN_CONFIRM = 'I checked — it did not go through';
 // Spec 2026-09-26 §2.3, §3: a memo is at most 510 bytes of UTF-8 — bytes, not characters, so the
 // counter reads `TextEncoder`'s length — and a chain that declares no envelope size carries none.
 export const MEMO_MAX_BYTES = 510;
+export { MEMO_ENVELOPE_BYTES, memoSupportedFor } from '../../lib/memo.js';
 export const NO_MEMO_NOTICE = "This network doesn't carry memos; the memo will not be sent";
 export const NOT_A_RECIPIENT = 'That is not a shielded address, a randpay: link, or a saved contact.';
 
@@ -50,15 +52,25 @@ export function recipientKind(text) {
 }
 
 /**
- * The one confirmation line every surface shows before a send (spec 2026-09-26 §3):
- * `to <contact name, if any> · fingerprint XXXX-XXXX-XXXX-XXXX · <amount> <asset> · memo "<text>"`
- * — the CLI's exact form (`rand send`), `name · ` omitted when there is no contact. Plain text:
- * the caller writes it with `textContent`, never as markup.
+ * The confirmation every surface shows before a send (spec 2026-09-26 §3), in two lines:
+ * `to <contact name, if any> · fingerprint XXXX-XXXX-XXXX-XXXX · <amount> <asset>` — the CLI's
+ * form for the recipient, `name · ` omitted when there is no contact — and, below it and on its
+ * own, `memoLine`'s `memo "<text>"`. The recipient line never carries memo text (final review,
+ * finding 3): a memo from a link is somebody else's words, and on the same line a newline or a
+ * bidi control in it could draw a second, fake `to … · fingerprint …` under the real one. Plain
+ * text: the caller writes both with `textContent`, never as markup. (`memo` is accepted and
+ * ignored, so a caller that still passes it cannot put it back on this line.)
  */
-export function confirmationLine({ name = null, fingerprint = null, amount, symbol, memo = '' }) {
+export function confirmationLine({ name = null, fingerprint = null, amount, symbol }) {
   const who = name ? `${name} · ` : '';
   const fp = fingerprint ? `fingerprint ${fingerprint}` : 'fingerprint unavailable';
-  return `to ${who}${fp} · ${amount} ${symbol} · memo "${memo}"`;
+  return `to ${who}${fp} · ${amount} ${symbol}`;
+}
+
+/** The memo's own line on the confirmation: `memo "<text>"`, control and bidi characters shown
+ *  as U+FFFD (`displayMemo`), so it is always exactly one line that reads as a memo. */
+export function memoLine(memo = '') {
+  return `memo "${displayMemo(memo)}"`;
 }
 
 /**

@@ -23,6 +23,11 @@ import { shortAddress, parseUnits } from '../lib/format.js';
 import { encodeBytes, drawQr } from '../lib/qr.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { isUnlisted } from '../lib/assets.js';
+import { memoSupportedFor } from '../lib/memo.js';
+
+// The sentence iOS (`ReceiveView`) and Android (`receive_qr_too_long`) show in place of a QR when
+// the link is longer than a level-M QR code holds (version 40: 2 331 bytes).
+export const QR_TOO_LONG = 'This link is too long for a QR code; share or copy it instead.';
 
 export const MEMO_MAX_BYTES = 510;
 const REBUILD_DEBOUNCE_MS = 150;
@@ -65,6 +70,7 @@ registerScreen('receive', {
       <div class="card">
         <div class="stack">
           <div class="qr"><canvas data-role="qr" data-ec-level="M" aria-label="QR code of your payment link"></canvas></div>
+          <p class="caption" data-role="qr-too-long" hidden>${QR_TOO_LONG}</p>
           <div class="cluster">
             <button class="chip action" type="button" data-role="copy-chip" aria-label="Copy address"><span class="mono">${shortAddress(address)}</span>${raw(icons.copy())}</button>
           </div>
@@ -122,15 +128,38 @@ registerScreen('receive', {
     let debounce = null;
     let generation = 0;
 
+    const qrWrap = root.querySelector('.qr');
+    const qrTooLong = root.querySelector('[data-role="qr-too-long"]');
+
+    // The QR shows the link in `link` or nothing: a link longer than any QR code holds (a long
+    // memo) takes the QR off the screen and says so, rather than leaving the previous link's QR
+    // beside the new link and its Copy (final review, finding 1). Encoding is decided before any
+    // drawing, so the rule holds even where there is no canvas to draw on.
+    function canvasContext() {
+      if (!canvas || typeof canvas.getContext !== 'function') return null;
+      try { return canvas.getContext('2d') || null; } catch { return null; }
+    }
+
     function paint() {
       linkEl.textContent = link;
-      // linkedom's <canvas> has no 2D context — feature-detect and skip drawing rather than throw
-      // (amendment 8); a real browser always has getContext, so this only ever skips under tests.
-      if (canvas && typeof canvas.getContext === 'function') {
-        try {
-          drawQr(canvas, encodeBytes(new TextEncoder().encode(link), 1, 'M'), 4);
-        } catch { /* longer than any QR code holds (a very long memo): leave the last one drawn */ }
+      let qr = null;
+      try {
+        qr = encodeBytes(new TextEncoder().encode(link), 1, 'M');
+      } catch {
+        qr = null;
       }
+      if (!qr) {
+        const g = canvasContext();
+        if (g) g.clearRect(0, 0, canvas.width, canvas.height);
+        qrWrap.setAttribute('hidden', '');
+        qrTooLong.removeAttribute('hidden');
+        return;
+      }
+      qrTooLong.setAttribute('hidden', '');
+      qrWrap.removeAttribute('hidden');
+      // linkedom's <canvas> has no 2D context — feature-detect and skip drawing rather than throw
+      // (amendment 8); a real browser always has one, so this only ever skips under tests.
+      if (canvasContext()) drawQr(canvas, qr, 4);
     }
 
     function fieldError(input, message) {
@@ -238,12 +267,13 @@ registerScreen('receive', {
       if (options) assetSelect.innerHTML = options;
       if (assets.filter((a) => !isUnlisted(a)).length <= 1) assetSelect.setAttribute('hidden', '');
     }).catch(() => { assetSelect.setAttribute('hidden', ''); }));
-    // A chain that carries no memo (its limits report no envelope size) gets no memo field: a
-    // payer's wallet would only have to tell them it cannot be sent.
+    // A chain that carries no memo gets no memo field: a payer's wallet would only have to tell
+    // them it cannot be sent. Only the 1860-byte envelope carries one (`memoSupportedFor`, the
+    // send screen's and the apps' gate); any other size, or none, is a chain without memos.
     if (typeof ctx.backend.send.limits === 'function') {
       fills.push(Promise.resolve(ctx.backend.send.limits()).then((limits) => {
         if (!ctx.isCurrent()) return;
-        if (!limits || limits.envelopeBytes === null || limits.envelopeBytes === undefined) memoField.hidden = true;
+        if (!limits || !memoSupportedFor(limits.envelopeBytes)) memoField.hidden = true;
       }).catch(() => { /* unknown: leave the field; the payer's wallet has the last word */ }));
     }
     await Promise.all(fills);
