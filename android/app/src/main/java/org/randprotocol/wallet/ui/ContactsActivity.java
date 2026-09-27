@@ -101,7 +101,9 @@ public class ContactsActivity extends BaseActivity {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
             lp.topMargin = pad / 2;
             row.setLayoutParams(lp);
-            row.addView(text(c.name, R.style.Text_Body, true));
+            // A saved name is hostile text exactly as a memo is (final review, finding — this
+            // screen showed it raw): the same display rule every memo view uses.
+            row.addView(text(Memo.display(c.name), R.style.Text_Body, true));
             String fp = fingerprint(c.address);
             row.addView(text(fp == null ? getString(R.string.contacts_fingerprint_unavailable) : getString(R.string.contacts_fingerprint, fp), R.style.Text_Mono, false));
             row.addView(text(Amounts.shortAddress(c.address), R.style.Text_Caption, false));
@@ -120,7 +122,7 @@ public class ContactsActivity extends BaseActivity {
 
     private void options(Contacts.Contact c) {
         String[] items = {getString(R.string.contacts_copy_address), getString(R.string.contacts_remove)};
-        new AlertDialog.Builder(this).setTitle(c.name).setItems(items, (d, which) -> {
+        new AlertDialog.Builder(this).setTitle(Memo.display(c.name)).setItems(items, (d, which) -> {
             if (which == 0) copy("address", c.address, getString(R.string.home_copied));
             else confirmRemove(c);
         }).show();
@@ -128,7 +130,7 @@ public class ContactsActivity extends BaseActivity {
 
     private void confirmRemove(Contacts.Contact c) {
         new AlertDialog.Builder(this)
-                .setTitle(getString(R.string.contacts_remove_title, c.name))
+                .setTitle(getString(R.string.contacts_remove_title, Memo.display(c.name)))
                 .setPositiveButton(R.string.contacts_remove, (d, w) -> {
                     try {
                         wallet().contacts().remove(c.name);

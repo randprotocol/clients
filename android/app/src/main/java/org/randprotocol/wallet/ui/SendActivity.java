@@ -241,7 +241,10 @@ public class SendActivity extends BaseActivity {
         String memo = String.valueOf(b.memo.getText());
 
         if (resolved != null) {
-            String who = resolved.name != null ? resolved.name + " · " : "";
+            // A resolved contact's name is hostile text exactly as a memo is (final review,
+            // finding — this live preview showed it raw; `SendDraft.confirmationLine` already
+            // sanitises the same name on the review step below).
+            String who = resolved.name != null ? Memo.display(resolved.name + " · ") : "";
             String kind = resolved.link != null ? getString(R.string.send_payment_link) : "";
             b.recipientInfo.setText(kind + who + "fingerprint " + resolved.fingerprint);
             b.recipientInfo.setVisibility(View.VISIBLE);
@@ -322,9 +325,16 @@ public class SendActivity extends BaseActivity {
             return;
         }
         String[] names = new String[list.size()];
-        for (int i = 0; i < names.length; i++) names[i] = list.get(i).name;
+        String[] shown = new String[list.size()];
+        for (int i = 0; i < names.length; i++) {
+            names[i] = list.get(i).name;
+            // The dialog shows the sanitised form; picking one still fills the To field with the
+            // real name, unchanged, so the later lookup by name still matches (final review,
+            // finding — this list showed names raw).
+            shown[i] = Memo.display(names[i]);
+        }
         new AlertDialog.Builder(this).setTitle(R.string.contacts_title)
-                .setItems(names, (d, which) -> b.to.setText(names[which]))
+                .setItems(shown, (d, which) -> b.to.setText(names[which]))
                 .setNegativeButton(R.string.cancel, null).show();
     }
 

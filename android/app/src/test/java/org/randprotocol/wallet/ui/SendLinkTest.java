@@ -377,6 +377,42 @@ public class SendLinkTest {
         assertTrue(row, row.contains("android:ellipsize=\"end\""));
     }
 
+    /** The live "who" preview above the amount field, and the contact picker dialog `pickContact`
+     *  opens, are `SendActivity` code — not reachable from a plain JUnit test without an Android
+     *  framework — so, like {@link #theConfirmationMemoRowIsOneEllipsizedLine}, this reads the
+     *  source (final review, finding: both showed a saved contact name raw). */
+    @Test
+    public void sendActivityShowsContactNamesSanitised() throws Exception {
+        String src = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(
+                "src/main/java/org/randprotocol/wallet/ui/SendActivity.java")), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue("the live recipient preview must sanitise the name: " + src,
+                src.contains("Memo.display(resolved.name + \" · \")"));
+        assertFalse("a raw, unsanitised name in the recipient preview is still present",
+                src.contains("resolved.name + \" · \" : \"\""));
+        assertTrue("the contact picker dialog must show sanitised names: " + src,
+                src.contains(".setItems(shown,"));
+        // Picking one must still fill the To field with the real, unsanitised name — that is
+        // what a later lookup by name matches against.
+        assertTrue("picking a contact must still use its real name: " + src,
+                src.contains("b.to.setText(names[which])"));
+    }
+
+    /** {@code ContactsActivity}'s list row, its "Copy address / Remove" dialog title and the
+     *  remove-confirmation title all showed a saved name raw (final review, finding); read the
+     *  source for the same reason as {@link #sendActivityShowsContactNamesSanitised}. The
+     *  underlying {@code remove(c.name)} call must still use the real name — it is the storage
+     *  key, never shown. */
+    @Test
+    public void contactsActivityShowsNamesSanitised() throws Exception {
+        String src = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(
+                "src/main/java/org/randprotocol/wallet/ui/ContactsActivity.java")), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue("the list row must sanitise the name: " + src, src.contains("text(Memo.display(c.name), R.style.Text_Body, true)"));
+        assertTrue("the options dialog title must sanitise the name: " + src, src.contains(".setTitle(Memo.display(c.name)).setItems"));
+        assertTrue("the remove-confirmation title must sanitise the name: " + src,
+                src.contains(".setTitle(getString(R.string.contacts_remove_title, Memo.display(c.name)))"));
+        assertTrue("removal must still key on the real name", src.contains("wallet().contacts().remove(c.name)"));
+    }
+
     /** Contact names are saved exactly as typed, so a name is looked up exactly as typed too. */
     @Test
     public void aContactNameIsNeverTrimmedBeforeTheLookup() throws Exception {
