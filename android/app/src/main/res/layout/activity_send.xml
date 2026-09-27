@@ -63,8 +63,10 @@
         </LinearLayout>
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="12dp" android:padding="18dp" android:background="@drawable/bg_surface_card">
             <TextView android:id="@+id/r_confirm" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Mono" android:textSize="13sp" android:textStyle="bold" android:textIsSelectable="true" />
-            <!-- The memo, its own row below the recipient line: never on that line (final review, finding 3). -->
-            <TextView android:id="@+id/r_memo" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" style="@style/Text.Mono" android:textSize="13sp" android:textIsSelectable="true" />
+            <!-- The memo, its own row below the recipient line: never on that line (final review, finding 3),
+                 and one line that never wraps, cut with an ellipsis (final review 2). Not selectable:
+                 a selectable TextView ignores ellipsize. -->
+            <TextView android:id="@+id/r_memo" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" style="@style/Text.Mono" android:textSize="13sp" android:maxLines="1" android:ellipsize="end" android:singleLine="true" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Caption" android:text="@string/review_confirmation" />
         </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" style="@style/Text.Body" android:text="@string/review_note" />

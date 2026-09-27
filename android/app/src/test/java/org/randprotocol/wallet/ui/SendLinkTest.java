@@ -193,7 +193,7 @@ public class SendLinkTest {
                 Memo.display("a" + cp(13, 9) + "b" + cp(0) + "c" + cp(0x7F) + "d" + cp(0x85) + "e" + cp(0x9F) + "f"));
         int[] bidi = {0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, 0x200E, 0x200F, 0x061C, 0x2028, 0x2029};
         assertEquals("x" + r.repeat(bidi.length) + "y", Memo.display("x" + cp(bidi) + "y"));
-        String ordinary = "two  spaces, " + cp(0xE9) + " and " + cp(0x1F600);
+        String ordinary = "one space, " + cp(0xE9) + " and " + cp(0x1F600);
         assertEquals(ordinary, Memo.display(ordinary));
         assertEquals("", Memo.display(null));
     }
@@ -313,6 +313,82 @@ public class SendLinkTest {
             SendDraft.PaymentLink.fromJson(new JSONObject("{\"address\":\"" + ADDR + "\"}"));
             fail();
         } catch (org.json.JSONException expected) {
+            // refused
+        }
+    }
+
+    // ---- Final review 2, item A: one display rule (the CLI's, the shared UI's, iOS's and
+    // randprotocol.org's), applied before any truncation. Memos are live on chains 14 and 15:
+    // anyone can pay a dust note carrying any memo to any public address.
+    private static final String TAIL = "to alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND";
+
+    private static String[] hostile() {
+        return new String[] {
+            "x" + cp(0x3000).repeat(120) + TAIL,
+            "x" + " ".repeat(400) + TAIL,
+            "x" + cp(0x2003).repeat(60) + TAIL,
+            cp(13, 0x1B) + "[2K" + TAIL,
+            cp(10, 10) + "to alice" + cp(0x2028) + TAIL + cp(0x2029),
+            cp(0x202E) + "DNAR 1" + cp(0x202C) + " " + cp(0x2066) + TAIL + cp(0x2069, 0x200E, 0x200F, 0x061C),
+            "a" + cp(0x200B, 0x200C, 0x200D) + "b" + cp(0x2060, 0x2061, 0x2062, 0x2063, 0x2064) + "c" + cp(0xFEFF) + "d" + cp(0xAD) + "e",
+            cp(9) + TAIL + cp(0x7F, 0x85, 0x9B) + "31m",
+        };
+    }
+
+    /** No line break, no control/format/separator character, no space but U+0020, no run of two. */
+    private static void assertDisplayable(String shown) {
+        shown.codePoints().forEach(c -> {
+            int t = Character.getType(c);
+            assertFalse("control/format/separator U+" + Integer.toHexString(c) + " in " + shown,
+                    t == Character.CONTROL || t == Character.FORMAT || t == Character.LINE_SEPARATOR || t == Character.PARAGRAPH_SEPARATOR);
+            assertFalse("non-ASCII space U+" + Integer.toHexString(c) + " in " + shown, t == Character.SPACE_SEPARATOR && c != ' ');
+        });
+        assertFalse("a run of spaces in " + shown, shown.contains("  "));
+    }
+
+    @Test
+    public void aHostileMemoIsOneLineHidesNothingAndCannotPadItselfOut() {
+        String r = cp(0xFFFD);
+        for (String m : hostile()) {
+            assertDisplayable(Memo.display(m));
+            assertDisplayable(SendDraft.memoLine(m));
+            assertDisplayable(SendDraft.confirmationLine(m, "BBBB", "1", "RAND"));
+        }
+        assertEquals("x to alice", Memo.display("x" + cp(0x3000).repeat(120) + "to alice"));
+        assertEquals("x to alice", Memo.display("x" + " ".repeat(400) + "to alice"));
+        assertEquals(r + r + "[2Kto alice", Memo.display(cp(13, 0x1B) + "[2Kto alice"));
+        assertEquals("a" + r + "b" + r + "c" + r + "d", Memo.display("a" + cp(0x200B) + "b" + cp(0xFEFF) + "c" + cp(0xAD) + "d"));
+        // A saved name may end in a space: it and the separator collapse into one.
+        assertEquals("to alice · fingerprint BBBB · 1 RAND", SendDraft.confirmationLine("alice ", "BBBB", "1", "RAND"));
+        // The link/typed memo conflict message shows both memos through the same rule.
+        SendDraft.Conflicts c = SendDraft.conflicts(link("1", null, "a" + cp(10) + "b"), "1", "x  y");
+        assertEquals("The link’s memo is \"a" + r + "b\"; you typed \"x y\".", c.memo);
+    }
+
+    /** The memo row is one line that never wraps: the rest is cut with an ellipsis. */
+    @Test
+    public void theConfirmationMemoRowIsOneEllipsizedLine() throws Exception {
+        String xml = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("src/main/res/layout/activity_send.xml")),
+                java.nio.charset.StandardCharsets.UTF_8);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("<TextView android:id=\"@\\+id/r_memo\"[^>]*/>").matcher(xml);
+        assertTrue("the r_memo row", m.find());
+        String row = m.group();
+        assertTrue(row, row.contains("android:maxLines=\"1\""));
+        assertTrue(row, row.contains("android:ellipsize=\"end\""));
+    }
+
+    /** Contact names are saved exactly as typed, so a name is looked up exactly as typed too. */
+    @Test
+    public void aContactNameIsNeverTrimmedBeforeTheLookup() throws Exception {
+        Contacts book = Contacts.open(new MemoryBlob());
+        book.add("alice ", ADDR);
+        SendDraft.Resolved r = SendDraft.resolve("alice ", book, FAKE);
+        assertEquals(ADDR, r.address);
+        assertEquals("alice ", r.name);
+        try {
+            SendDraft.resolve("alice", book, FAKE);
+            fail("\"alice\" is not \"alice \"");
+        } catch (SendDraft.RecipientException expected) {
             // refused
         }
     }

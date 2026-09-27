@@ -29,18 +29,28 @@ public final class Memo {
     }
 
     /**
-     * The memo as it may be shown (final review, finding 3). A memo is somebody else's text — the
-     * sender's, or a link's — and a line break in it could draw a second "to … · fingerprint …"
-     * line, a bidi control reorder what is around it. Every code point of category Cc (C0, DEL,
-     * C1), the bidi controls U+202A–U+202E and U+2066–U+2069, the marks U+200E, U+200F, U+061C,
-     * and the separators U+2028/U+2029 is shown as U+FFFD, one for one; everything else,
-     * ordinary spaces included, is left alone. The shared UI's {@code displayMemo} and iOS's
-     * {@code Memo.display} replace exactly the same set. Display only: the sealed memo is the text.
+     * The memo — or any other stranger-chosen text, like a contact name — as it may be shown
+     * (final reviews 1 and 2). Memos are live on chains 14 and 15: anyone can pay a dust note
+     * carrying any memo to any public address, and a link carries any memo. One rule, the same as
+     * the CLI's {@code memo_display::sanitize}, the shared UI's {@code displayMemo}, iOS's
+     * {@code Memo.display} and randprotocol.org's {@code /account}, applied before any truncation:
+     * every code point of category Cc (C0 — tab and newline too — DEL, C1), Cf (the bidi
+     * embeddings, overrides and isolates, LRM/RLM/ALM, zero-width space and joiners,
+     * U+2060–U+2064, U+FEFF, the soft hyphen, …), Zl and Zp (U+2028/U+2029) is shown as U+FFFD,
+     * one for one; every run of Zs space separators (U+3000 and U+2003 included) becomes one
+     * U+0020. Display only: the sealed memo is the text.
      */
     public static String display(String text) {
         if (text == null) return "";
         StringBuilder out = new StringBuilder(text.length());
+        boolean[] inSpace = {false};
         text.codePoints().forEach(c -> {
+            if (Character.getType(c) == Character.SPACE_SEPARATOR) {
+                if (!inSpace[0]) out.append(' ');
+                inSpace[0] = true;
+                return;
+            }
+            inSpace[0] = false;
             if (neutralised(c)) out.appendCodePoint(0xFFFD);
             else out.appendCodePoint(c);
         });
@@ -48,11 +58,9 @@ public final class Memo {
     }
 
     static boolean neutralised(int c) {
-        return c <= 0x1F || (c >= 0x7F && c <= 0x9F)
-                || c == 0x061C || c == 0x200E || c == 0x200F
-                || c == 0x2028 || c == 0x2029
-                || (c >= 0x202A && c <= 0x202E)
-                || (c >= 0x2066 && c <= 0x2069);
+        int t = Character.getType(c);
+        return t == Character.CONTROL || t == Character.FORMAT
+                || t == Character.LINE_SEPARATOR || t == Character.PARAGRAPH_SEPARATOR;
     }
 
     /** The refusal for a memo over the limit, or null. */

@@ -146,7 +146,7 @@ public final class SendDraft {
         }
         String memo = typedMemo == null ? "" : typedMemo;
         if (link.memo != null && !link.memo.isEmpty() && !memo.isEmpty() && !memo.equals(link.memo)) {
-            out.memo = "The link’s memo is \"" + link.memo + "\"; you typed \"" + memo + "\".";
+            out.memo = "The link’s memo is \"" + Memo.display(link.memo) + "\"; you typed \"" + Memo.display(memo) + "\".";
         }
         return out;
     }
@@ -179,7 +179,9 @@ public final class SendDraft {
      * {@link #memoLine}, a row of its own below this one.
      */
     public static String confirmationLine(String name, String fingerprint, String amount, String symbol) {
-        String who = name != null ? name + " · " : "";
+        // A contact name is user-entered (and may end in a space): shown through the memo rule,
+        // the separator included, so the line never carries a control character or two spaces.
+        String who = name != null ? Memo.display(name + " · ") : "";
         String fp = fingerprint != null ? "fingerprint " + fingerprint : "fingerprint unavailable";
         return "to " + who + fp + " · " + amount + " " + symbol;
     }
@@ -212,9 +214,12 @@ public final class SendDraft {
                 return new Resolved(link.address, contacts.nameOf(link.address), link.fingerprint, link);
             }
             default: {
-                String addr = contacts.addressOf(s);
+                // A name is looked up exactly as typed, never trimmed: contact names are saved
+                // exactly as entered (the CLI, iOS and the shared UI alike — final review 2).
+                String typed = text == null ? "" : text;
+                String addr = contacts.addressOf(typed);
                 if (addr == null) throw new RecipientException(NOT_A_RECIPIENT);
-                return new Resolved(addr, s, fingerprint(core, addr), null);
+                return new Resolved(addr, typed, fingerprint(core, addr), null);
             }
         }
     }
