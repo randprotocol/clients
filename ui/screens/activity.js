@@ -4,7 +4,7 @@ import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { groupByDay } from '../lib/assets.js';
-import { activityRowMarkup, listMarkup } from '../lib/rows.js';
+import { activityRowMarkup, listMarkup, fillRowMemos } from '../lib/rows.js';
 import { wireSelection } from '../lib/panes.js';
 import { wrongChainBannerMarkup, identityUnknownBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
 
@@ -22,7 +22,7 @@ function filterChipsMarkup(assets, active) {
     <button class="chip action${c.index === active ? ' on' : ''}" type="button" data-filter="${c.index}" aria-pressed="${c.index === active ? 'true' : 'false'}">${c.symbol}</button>`).join(''))}</div>`;
 }
 
-function groupsMarkup(items, assetsByIndex, now) {
+function groupsMarkup(groups, items, assetsByIndex) {
   if (items.length === 0) {
     return h`
       <div class="card">
@@ -34,7 +34,6 @@ function groupsMarkup(items, assetsByIndex, now) {
         </div>
       </div>`;
   }
-  const groups = groupByDay(items, now);
   return groups.map((g) => h`
     <h2 class="section-title">${g.label}</h2>
     <div class="card flush">${listMarkup(g.items.map((item) => activityRowMarkup(item, assetsByIndex)))}</div>`).join('');
@@ -72,12 +71,15 @@ registerScreen('activity', {
       const banner = raw(wrongChain
         ? wrongChainBannerMarkup(wrongChain, { canRescan: canRescan(ctx) })
         : (identityUnknown ? identityUnknownBannerMarkup() : ''));
+      const groups = groupByDay(items, Date.now());
       root.innerHTML = h`
         <h1 class="sr-only">Activity</h1>
         <div class="topbar"><span class="topbar-title">Activity</span></div>
         ${banner}
         ${raw(filterChipsMarkup(assets, active))}
-        ${raw(groupsMarkup(items, assetsByIndex, Date.now()))}`;
+        ${raw(groupsMarkup(groups, items, assetsByIndex))}`;
+      // In the order the groups rendered them, which is what `fillRowMemos` matches slots by.
+      fillRowMemos(root, groups.flatMap((g) => g.items));
       // These rows are brand new nodes, so the marker has to be put back on whichever of them is
       // the transaction currently open in the detail pane.
       if (selection) selection.apply();

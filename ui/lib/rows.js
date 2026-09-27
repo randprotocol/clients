@@ -110,11 +110,15 @@ export function activityRowMarkup(item, assetsByIndex) {
     ? h`<span class="row-sub mono">${shortAddress(item.address)}</span>`
     : h`<span class="row-sub">${asset.symbol}</span>`);
   const meta = k.kind === 'pending' ? k.title : timeAgo(item.time * 1000);
+  // The memo's SLOT only: its text is the sender's, and goes in as a text node (`fillRowMemos`),
+  // never through this markup.
+  const memoSlot = hasMemo(item) ? raw('<span class="row-sub row-memo truncate" data-role="row-memo"></span>') : '';
   const body = h`
         <span class="avatar ${k.tint}">${raw(icons[k.icon]())}</span>
         <span class="row-main">
           <span class="row-title"><span class="truncate">${k.title}</span></span>
           ${sub}
+          ${memoSlot}
         </span>
         <span class="row-end">
           <span class="${amountCls}">${amount}</span>
@@ -127,4 +131,20 @@ export function activityRowMarkup(item, assetsByIndex) {
     <li>
       ${raw(row)}
     </li>`;
+}
+
+/** True for an activity item or a note that carries a memo (spec 2026-09-26 §2.3). */
+export function hasMemo(item) {
+  return !!item && typeof item.memo === 'string' && item.memo !== '';
+}
+
+/**
+ * Writes each memo into the slot `activityRowMarkup` left for it, as a text node. `items` is the
+ * list exactly as it was rendered into `container`, in the same order: the slots are matched to
+ * the items that have a memo, one for one, in document order.
+ */
+export function fillRowMemos(container, items) {
+  const memos = items.filter(hasMemo).map((item) => item.memo);
+  const slots = container.querySelectorAll('[data-role="row-memo"]');
+  slots.forEach((slot, i) => { slot.textContent = memos[i] ?? ''; });
 }

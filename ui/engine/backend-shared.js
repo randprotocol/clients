@@ -75,7 +75,8 @@
 // `executeSend`) — those two are the only places a caller's choices show through.
 import { encryptSecret, decryptSecret, checkVault, isVaultRecordError } from './crypto.js';
 import { makeRpc, isAllowedRpcMethod, rpcUrlList } from './rpc.js';
-import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, HEIGHT_SPAN } from './wallet.js';
+import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, HEIGHT_SPAN, envelopeBytesOf } from './wallet.js';
+import { listContacts, addContact, removeContact, nameOf as contactNameOf, addressOf as contactAddressOf, CONTACTS_KEY } from '../lib/contacts.js';
 import { checkFee, checkTokens, checkSubmitted, checkBridgeState, MAX_TOKEN_PAGE, NodeReplyError } from './validate.js';
 
 /**
@@ -102,6 +103,10 @@ const K = Object.freeze({
   // that one held `rand_getAssets` rows, which carry no symbol and no decimals at all, and
   // reading one back as a token row would print every balance wrong.
   tokens: 'tokens',
+  // Address-book entries, `{entries: {name: address}}` (ui/lib/contacts.js, spec 2026-09-26
+  // §3.3). Public facts only — an address is shared to be paid — and cleared with everything
+  // else by a wipe.
+  contacts: CONTACTS_KEY,
   failures: 'unlockFailures',
   unlocked: UNLOCKED_SESSION_KEY,
 });
@@ -247,7 +252,16 @@ function uiNote(n, blockTimes) {
     spent: !!n.spent,
     commitment: n.cm,
     time: Number.isFinite(ms) ? Math.floor(ms / 1000) : 0,
+    // The memo sealed with the note (spec 2026-09-26 §2.3), only when there is one: a note from
+    // before the memo, or one sent without, has no field at all.
+    ...memoField(n.memo),
   };
+}
+
+/** `{memo}` for a non-empty string, `{}` otherwise. The text is the sender's, and screens render
+ *  it as a text node only. */
+function memoField(memo) {
+  return typeof memo === 'string' && memo !== '' ? { memo } : {};
 }
 
 /**
@@ -267,13 +281,13 @@ function uiActivity(row, st) {
   };
   if (row.kind === 'received') {
     const hash = st.note_tx[row.note && row.note.cm];
-    const item = { kind: 'in', asset: Number(row.asset) || 0, amount: String(row.amount), time: at(row.height), index: Number(row.index) };
+    const item = { kind: 'in', asset: Number(row.asset) || 0, amount: String(row.amount), time: at(row.height), index: Number(row.index), ...memoField(row.memo) };
     if (hash) item.hash = hash;
     if (row.height) item.block = Number(row.height);
     return item;
   }
   if (row.kind === 'sent') {
-    const item = { kind: 'out', asset: Number(row.asset) || 0, amount: String(row.amount), time: at(row.height) };
+    const item = { kind: 'out', asset: Number(row.asset) || 0, amount: String(row.amount), time: at(row.height), ...memoField(row.memo) };
     if (row.height) item.block = Number(row.height);
     return item;
   }
@@ -287,6 +301,7 @@ function uiActivity(row, st) {
     asset: Number(sub.asset) || 0,
     amount: String(sub.amount ?? '0'),
     time,
+    ...memoField(sub.memo),
   };
   if (sub.hash) base.hash = sub.hash;
   if (sub.height) base.block = Number(sub.height);
@@ -1367,6 +1382,17 @@ export function makeSharedBackend({
     },
 
     /**
+     * OPTIONAL in the contract: `{envelopeBytes}` — the chain's `envelope_bytes` from
+     * `rand_getLimits` (spec 2026-09-26 §2.4), `null` where the chain carries no memo (or the
+     * node predates the method). The send screen shows the memo field only when this is a number.
+     * Asked of a verified client, like everything else that describes the chain.
+     */
+    async limits() {
+      const { client } = await requireVerifiedChain();
+      return { envelopeBytes: await envelopeBytesOf(client) };
+    },
+
+    /**
      * A real estimate: the node's own minimum bundle fee, and the core's own plan over this
      * wallet's notes. A plan that cannot be built rejects with the core's message, which is
      * written for the user (it is what tells them to consolidate, or that they hold no RAND for
@@ -1689,6 +1715,60 @@ export function makeSharedBackend({
     },
   };
 
+  /**
+   * OPTIONAL in the contract: the address-sharing formats (spec 2026-09-26 §2), every one of them
+   * the core's own code — the fingerprint and the `randpay:` link are never re-implemented in
+   * JavaScript. Pure: no node, no key, no storage.
+   */
+  const address = {
+    /** The grouped 16-digit fingerprint of `addr` (`XXXX-XXXX-XXXX-XXXX`). Rejects on a bad address. */
+    async fingerprint(addr) {
+      const res = await c.call('address_fingerprint', { address: String(addr || '') });
+      return String(res && res.fingerprint);
+    },
+    /** `{address, amount, asset, memo, fingerprint}` of a `randpay:` link (absent fields `null`),
+     *  or a rejection with the core's sentence. The fingerprint is recomputed from the address. */
+    async parseLink(uri) {
+      const res = await c.call('uri_parse', { uri: String(uri || '') });
+      return {
+        address: String(res.address),
+        amount: res.amount ?? null,
+        asset: res.asset ?? null,
+        memo: res.memo ?? null,
+        fingerprint: String(res.fingerprint),
+      };
+    },
+    /** The `randpay:` link for `{address, amount?, asset?, memo?}`. An empty field is left out —
+     *  a blank on the receive form means "the payer decides" — and the core parses the link back
+     *  before returning it, so this never hands out one another wallet would refuse. */
+    async formatLink({ address: addr, amount, asset, memo } = {}) {
+      const params = { address: String(addr || '') };
+      if (amount !== undefined && amount !== null && String(amount) !== '') params.amount = String(amount);
+      if (asset !== undefined && asset !== null && String(asset) !== '') params.asset = String(asset);
+      if (typeof memo === 'string' && memo !== '') params.memo = memo;
+      const res = await c.call('uri_format', params);
+      return String(res && res.uri);
+    },
+  };
+
+  /**
+   * OPTIONAL in the contract: the address book (ui/lib/contacts.js), in this backend's storage
+   * under `contacts`, with the CLI's rules. An address is checked by the core before it is saved,
+   * so a contact always names something a send can be addressed to.
+   */
+  const contacts = {
+    async list() { return listContacts(storage); },
+    async add(name, addr) {
+      const text = String(addr || '').trim();
+      const parsed = await c.parseAddress(text);
+      if (!parsed || !parsed.valid) throw new Error((parsed && parsed.error) || 'not a shielded address');
+      return addContact(storage, name, text);
+    },
+    async remove(name) { await removeContact(storage, name); },
+    async nameOf(addr) { return contactNameOf(storage, addr); },
+    async addressOf(name) { return contactAddressOf(storage, name); },
+  };
+
   const settings = {
     async get() { return getSettings(); },
     async set(patch) { return setSettings(patch); },
@@ -1706,7 +1786,7 @@ export function makeSharedBackend({
     closeChannel();
   }
 
-  const backend = { wallet, sync, assets, send, faucet, rpc, settings, platform, dispose };
+  const backend = { wallet, sync, assets, send, faucet, rpc, settings, platform, address, contacts, dispose };
   // `bridge` is OPTIONAL in the contract and is not in BACKEND_SHAPE: a shell that supplied no
   // `executeWithdraw` simply does not have the group, and every screen feature-detects it
   // (`ctx.backend.bridge?.canWithdraw`). Both real shells do supply one — the wasm shell's always

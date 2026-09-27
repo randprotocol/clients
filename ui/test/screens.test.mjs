@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import './dom-env.mjs';
-import { fakeBackend, unlockedBackend } from './fake-backend.mjs';
+import { fakeBackend, unlockedBackend, fakeFingerprint } from './fake-backend.mjs';
 import { mountApp } from './helpers.mjs';
 import { groupByDay, avatarFor, totalInRand, UNLISTED_TEXT } from '../lib/assets.js';
 import { icons } from '../lib/icons.js';
@@ -579,6 +579,99 @@ test('receive shows the complete address, not just a shortened one', async (t) =
   assert.ok(full, 'the full address is on screen');
   assert.equal(full.textContent, address);
   assert.ok(full.classList.contains('mono'));
+});
+
+test('receive shows the fingerprint as text, a QR canvas of the randpay: link, and Copy payment link', async (t) => {
+  const b = unlockedBackend();
+  const address = (await b.wallet.info()).address;
+  const { root } = await at(t, '#receive', b);
+  const fp = root.querySelector('[data-role="fingerprint"]');
+  assert.ok(fp, 'the fingerprint is on screen');
+  assert.equal(fp.textContent, fakeFingerprint(address));
+  assert.ok(root.querySelector('canvas[data-role="qr"]'), 'a QR canvas');
+  const copyLink = [...root.querySelectorAll('button')].find((n) => /Copy payment link/.test(n.textContent));
+  assert.ok(copyLink, 'a Copy payment link button');
+  assert.equal(root.querySelector('[data-role="link"]').textContent, `randpay:${address}`, 'a bare address is the link with no parameters');
+});
+
+test('receive: Copy payment link copies the link the form built, amount and memo included', async (t) => {
+  const b = unlockedBackend();
+  const address = (await b.wallet.info()).address;
+  const { root, app } = await at(t, '#receive', b);
+  const amount = root.querySelector('input[name=link-amount]');
+  amount.value = '2.5';
+  amount.dispatchEvent(new Event('input', { bubbles: true }));
+  const memo = root.querySelector('textarea[name=link-memo]');
+  memo.value = 'pizza & beer';
+  memo.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+  await app.idle();
+  const want = `randpay:${address}?amount=2.5&memo=pizza%20%26%20beer`;
+  assert.equal(root.querySelector('[data-role="link"]').textContent, want);
+  root.querySelector('[data-role="copy-link"]').click();
+  await app.idle();
+  assert.equal(await b.platform.paste(), want);
+});
+
+test('receive: an amount with more decimals than the asset has is refused, and the link keeps its last good form', async (t) => {
+  const b = unlockedBackend();
+  const address = (await b.wallet.info()).address;
+  const { root, app } = await at(t, '#receive', b);
+  const amount = root.querySelector('input[name=link-amount]');
+  amount.value = '0.0000000001'; // ten decimals, RAND has nine
+  amount.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+  await app.idle();
+  assert.match(root.textContent, /RAND has 9 decimal places/);
+  assert.equal(root.querySelector('[data-role="link"]').textContent, `randpay:${address}`);
+});
+
+test('receive: the QR is drawn at error-correction level M', async (t) => {
+  const b = unlockedBackend();
+  const { root } = await at(t, '#receive', b);
+  assert.equal(root.querySelector('canvas[data-role="qr"]').dataset.ecLevel, 'M');
+});
+
+test('receive: Share is offered only where the shell can share', async (t) => {
+  const { root } = await at(t, '#receive');
+  assert.equal(root.querySelector('[data-role="share-link"]'), null);
+  const shared = [];
+  const b = unlockedBackend({ platform: { share: async (x) => { shared.push(x); } } });
+  const second = await at(t, '#receive', b);
+  second.root.querySelector('[data-role="share-link"]').click();
+  await second.app.idle();
+  assert.equal(shared.length, 1);
+  assert.match(shared[0].url || shared[0].text || '', /^randpay:/);
+});
+
+test('note detail shows the memo under the amount, as text', async (t) => {
+  const b = unlockedBackend();
+  const cached = await b.sync.cached();
+  b.sync.cached = async () => ({ ...cached, notes: cached.notes.map((n) => (n.index === 3 ? { ...n, memo: '<i>for rent</i>' } : n)) });
+  const { root } = await at(t, '#note/3', b);
+  const memo = root.querySelector('[data-role="memo"]');
+  assert.ok(memo, 'the memo is on the note');
+  assert.equal(memo.textContent, '<i>for rent</i>');
+  assert.equal(root.querySelector('i'), null, 'never parsed as markup');
+});
+
+test('a note without a memo shows no memo row', async (t) => {
+  const { root } = await at(t, '#note/3');
+  assert.equal(root.querySelector('[data-role="memo"]'), null);
+});
+
+test('activity rows and the tx detail show a memo as text', async (t) => {
+  const b = unlockedBackend();
+  const cached = await b.sync.cached();
+  const activity = cached.activity.map((a) => (a.hash === `0x${'aa'.repeat(32)}` ? { ...a, memo: '<b>lunch</b>' } : a));
+  b.sync.cached = async () => ({ ...cached, activity });
+  const list = await at(t, '#activity', b);
+  const rowMemos = [...list.root.querySelectorAll('[data-role="row-memo"]')].map((n) => n.textContent);
+  assert.deepEqual(rowMemos, ['<b>lunch</b>']);
+  assert.equal(list.root.querySelector('b'), null);
+  list.app.destroy();
+  const detail = await at(t, `#tx/0x${'aa'.repeat(32)}`, b);
+  assert.equal(detail.root.querySelector('[data-role="memo"]').textContent, '<b>lunch</b>');
 });
 
 // ------------------------------------------------------------------------------------- faucet ---

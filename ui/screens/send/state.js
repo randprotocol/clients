@@ -25,6 +25,54 @@ export const SELF_SEND_QUESTION = 'Send to yourself? This consolidates your note
 export const UNKNOWN_NOTICE = 'Your last transfer’s outcome is unknown — check Activity first.';
 export const UNKNOWN_CONFIRM = 'I checked — it did not go through';
 
+// ------------------------------------------------------------------ recipients and the memo ---
+// Spec 2026-09-26 §2.3, §3: a memo is at most 510 bytes of UTF-8 — bytes, not characters, so the
+// counter reads `TextEncoder`'s length — and a chain that declares no envelope size carries none.
+export const MEMO_MAX_BYTES = 510;
+export const NO_MEMO_NOTICE = "This network doesn't carry memos; the memo will not be sent";
+export const NOT_A_RECIPIENT = 'That is not a shielded address, a randpay: link, or a saved contact.';
+
+/** The memo's length as the chain counts it: UTF-8 bytes. */
+export function utf8Length(text) {
+  return new TextEncoder().encode(String(text ?? '')).length;
+}
+
+/**
+ * What a recipient field holds, in the order the CLI's `rand send <to>` tries them: a `rand1…`
+ * address, a `randpay:` link, or (anything else) a contact name. Case-insensitive prefixes, like
+ * the CLI's and like the contact-name rule that keeps a name from ever looking like either.
+ */
+export function recipientKind(text) {
+  const s = String(text || '').trim();
+  if (/^rand1/i.test(s)) return 'address';
+  if (/^randpay:/i.test(s)) return 'link';
+  return 'name';
+}
+
+/**
+ * The one confirmation line every surface shows before a send (spec 2026-09-26 §3):
+ * `to <contact name, if any> · fingerprint XXXX-XXXX-XXXX-XXXX · <amount> <asset> · memo "<text>"`
+ * — the CLI's exact form (`rand send`), `name · ` omitted when there is no contact. Plain text:
+ * the caller writes it with `textContent`, never as markup.
+ */
+export function confirmationLine({ name = null, fingerprint = null, amount, symbol, memo = '' }) {
+  const who = name ? `${name} · ` : '';
+  const fp = fingerprint ? `fingerprint ${fingerprint}` : 'fingerprint unavailable';
+  return `to ${who}${fp} · ${amount} ${symbol} · memo "${memo}"`;
+}
+
+/**
+ * The CLI's merge rule for a value that can come from the form and from a `randpay:` link: agree
+ * if both are given, either alone if only one is. `same(a, b)` decides agreement (units for an
+ * amount, exact text for a memo). Returns `{value}` or `{conflict: true}`.
+ */
+export function mergeWithLink(typed, fromLink, same = (a, b) => a === b) {
+  const t = typed === undefined || typed === null ? '' : String(typed);
+  const l = fromLink === undefined || fromLink === null ? '' : String(fromLink);
+  if (t && l && !same(t, l)) return { conflict: true };
+  return { value: t || l };
+}
+
 /** "1 proof · about 2 minutes on this computer" — from the estimate, not from a constant. Roughly
  *  two minutes of native proving per proof; a withdrawal needs two, a transfer one. */
 export function proveCost(proofs) {
@@ -102,7 +150,13 @@ export function draftFor(ctx, assetIndex) {
   if (!draft || draft.assetIndex !== assetIndex) {
     // `knownFee` is the fee last learned from the backend by any route (an estimate, or
     // `maxSendable`), so the local amount check can subtract it before asking anything again.
-    draft = { assetIndex, to: '', amount: '', selfConfirmed: false, estimate: null, knownFee: null };
+    // `memo` is what will be sealed with the payment; `link` the parsed `randpay:` link the
+    // recipient field holds, if any; `recipient` what the last check resolved it to —
+    // `{address, name, fingerprint}` — which is what a send is addressed to.
+    draft = {
+      assetIndex, to: '', amount: '', memo: '', link: null, linkText: '', recipient: null,
+      selfConfirmed: false, estimate: null, knownFee: null,
+    };
     ctx.state.sendDraft = draft;
   }
   return draft;

@@ -493,10 +493,11 @@ function burningCore(overrides = {}) {
   });
 }
 
-async function burnableWallet(bridgeState, coreOverrides = {}) {
+async function burnableWallet(bridgeState, coreOverrides = {}, fetchExtra = {}) {
   const env = build({
     core: burningCore(coreOverrides),
     fetch: sendableFetch({
+      ...fetchExtra,
       rand_getBridgeState: () => bridgeState,
       rand_getTokens: () => tokenRegistry(),
       rand_sendTransaction: () => BURN_TX,
@@ -729,4 +730,40 @@ test('a node that refuses the submit with its OWN code -1 is still a definite fa
     },
   );
   assert.equal(answered, true, 'the test never reached the submit at all');
+});
+
+// ---------------------------------------------- the memo and the chain's envelope size ---------
+// Spec 2026-09-26 §2.3–2.4: `prove_transfer` takes the memo and the chain's `envelope_bytes`, read
+// from `rand_getLimits` on the client the gate verified — `null` when the node reports none or
+// predates the method, which seals the legacy envelope and carries no memo.
+
+test('MEMO: a send reaches the prover with its memo and the chain’s envelope_bytes, and records the memo', async () => {
+  const env = await sendableWallet({ fetch: { rand_getLimits: () => ({ envelope_bytes: 1860 }) } });
+  await env.backend.send.send({ asset: 0, to: ADDRESS, amount: '1000000000', memo: 'coffee' }, () => {});
+  const [, proved] = env.core.calls.find(([m]) => m === 'prove_transfer');
+  assert.equal(proved.memo, 'coffee');
+  assert.equal(proved.envelope_bytes, 1860);
+  const sub = env.storage.local.get('notes').submissions.find((s) => s.hash === TX_HASH);
+  assert.equal(sub.memo, 'coffee', 'the sender’s own record of what it wrote');
+});
+
+test('MEMO: a node without rand_getLimits proves the legacy envelope (envelope_bytes null, no memo)', async () => {
+  const env = await sendableWallet(); // the stub node answers -32601 for rand_getLimits
+  await env.backend.send.send({ asset: 0, to: ADDRESS, amount: '1000000000' }, () => {});
+  const [, proved] = env.core.calls.find(([m]) => m === 'prove_transfer');
+  assert.equal(proved.envelope_bytes, null);
+  assert.equal(proved.memo, '');
+});
+
+test('MEMO: a limits reply that is not an envelope size is refused before anything is proved', async () => {
+  const env = await sendableWallet({ fetch: { rand_getLimits: () => ({ envelope_bytes: 'lots' }) } });
+  await assert.rejects(env.backend.send.send({ asset: 0, to: ADDRESS, amount: '1000000000' }, () => {}));
+  assert.equal(env.core.calls.some(([m]) => m === 'prove_transfer'), false);
+});
+
+test('MEMO: a burn is sealed at the chain’s envelope size too', async () => {
+  const env = await burnableWallet(bridgeOn(), {}, { rand_getLimits: () => ({ envelope_bytes: 1860 }) });
+  await env.backend.bridge.withdraw(burnReq(), () => {});
+  const [, proved] = env.core.calls.find(([m]) => m === 'prove_burn');
+  assert.equal(proved.envelope_bytes, 1860);
 });

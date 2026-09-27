@@ -1397,3 +1397,31 @@ body.wide .narrow { max-width: 440px; margin: 0 auto; }
 .tree-summary { color: var(--text-soft); margin-left: var(--s-1); }
 .tree-null { color: var(--text-soft); font-style: italic; }
 .detail-empty .ic svg { width: 20px; height: 20px; }
+
+/* ============================================================== address sharing & memo ====== */
+/* Spec 2026-09-26 §3. The fingerprint is read aloud between two people, so it is set a little
+   larger and spaced; the confirmation line is the last thing read before a send; a memo is the
+   sender's own words, set apart from the chain's facts around it. Every one of these holds text
+   written with textContent. */
+.fingerprint { font-size: 15px; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
+.confirm-line {
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg-soft);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.memo {
+  margin: 0;
+  padding-left: var(--s-3);
+  border-left: 2px solid var(--border);
+  color: var(--text-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.row-memo { font-style: italic; }
+.scan-video { width: 100%; max-height: 50vh; border-radius: var(--r-md); background: #000; }
+[data-role="contact-error"] { margin: 0; font-size: 13px; font-weight: 500; color: var(--negative); }

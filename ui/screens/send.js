@@ -29,7 +29,7 @@ import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { wrongChainBannerMarkup, identityUnknownBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
-import { parseUnits, formatUnits, elapsed } from '../lib/format.js';
+import { parseUnits, formatUnits, elapsed, shortAddress } from '../lib/format.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink } from '../lib/explorer.js';
 import { nativeAsset, isUnlisted, feeDecimals, feeSymbol } from '../lib/assets.js';
@@ -37,11 +37,14 @@ import {
   PHASE_LABELS, CANCELLABLE, ADDRESS_DEBOUNCE_MS, SELF_SEND_QUESTION,
   explainProvingError, outcomeOf, safeHash, draftFor, currentSend, startSend,
   unknownOutcome, plainUnits, checkAmount,
+  MEMO_MAX_BYTES, NOT_A_RECIPIENT, utf8Length, recipientKind, confirmationLine,
 } from './send/state.js';
 import {
   shellMarkup, assetStepMarkup, unsendableMarkup, noRandMarkup, detailsStepMarkup,
   reviewStepMarkup, provingStepMarkup, failedStepMarkup, unknownOutcomeStepMarkup,
+  noMemoNoticeMarkup, contactPickerMarkup, scanSheetMarkup,
 } from './send/markup.js';
+import { canScanQr, scanQr, NO_CAMERA_TEXT } from '../lib/scan-qr.js';
 import './send/sent.js'; // registers `#sent`
 
 // Re-exported from here because this is where it was asked for, and where it reads: the send
@@ -61,16 +64,25 @@ registerScreen('send', {
     let settings = {};
     let cached = {};
     let canProve = { ok: false, reason: 'Proving is not available here.' };
+    // Whether this chain carries a memo: only when its limits positively report an envelope size
+    // (spec 2026-09-26 §2.4). A chain that reports none, a node that cannot say, and a backend
+    // without `send.limits` all get no memo field — sealing a memo the chain cannot carry is
+    // refused by the core anyway, after the user has written it.
+    let memoSupported = false;
     try {
-      const [list, info, prove, cfg, sync] = await Promise.all([
+      const [list, info, prove, cfg, sync, limits] = await Promise.all([
         ctx.backend.assets.list(), ctx.backend.wallet.info(), ctx.backend.send.canProve(),
         ctx.backend.settings.get(), ctx.backend.sync.cached(),
+        typeof ctx.backend.send.limits === 'function'
+          ? Promise.resolve(ctx.backend.send.limits()).catch(() => null)
+          : null,
       ]);
       assets = list;
       ownAddress = (info && info.address) || '';
       if (prove) canProve = prove;
       if (cfg) settings = cfg;
       if (sync) cached = sync;
+      memoSupported = !!limits && Number.isSafeInteger(limits.envelopeBytes) && limits.envelopeBytes > 0;
     } catch (err) {
       if (!live()) return;
       root.querySelector('[data-role="step"]').innerHTML = h`
@@ -141,6 +153,12 @@ registerScreen('send', {
       || rand;
     let draft = draftFor(ctx, asset.index);
 
+    const platform = ctx.backend.platform;
+    const formats = ctx.backend.address && typeof ctx.backend.address.parseLink === 'function' ? ctx.backend.address : null;
+    const book = ctx.backend.contacts && typeof ctx.backend.contacts.list === 'function' ? ctx.backend.contacts : null;
+    const canScan = typeof platform.scanQr === 'function' || canScanQr();
+    let scanning = null; // the browser camera's AbortController while its sheet is open
+
     // Coming back to a flow already under way resumes it rather than asking which asset again.
     let step = requested === null && !draft.to && !draft.amount ? 'asset' : 'details';
     let reviewUnits = 0n;
@@ -191,12 +209,191 @@ registerScreen('send', {
         : '';
     }
 
+    // ---- the recipient, the link and the memo (spec 2026-09-26 §3) ----
+    const field = (name) => stepEl.querySelector(`[name="${name}"]`);
+
+    /** Everything on the details step that is user text or depends on the draft: written as
+     *  properties and text nodes after the markup, never into it. */
+    function paintDetailsExtras() {
+      const memoEl = field('memo');
+      if (memoEl) memoEl.value = draft.memo || '';
+      paintMemoCount();
+      paintLinkHint();
+      paintMemoNotice();
+    }
+
+    function paintMemoCount() {
+      const counter = stepEl.querySelector('[data-role="memo-count"]');
+      if (counter) counter.textContent = `${utf8Length(draft.memo)}/${MEMO_MAX_BYTES} bytes`;
+    }
+
+    function paintLinkHint() {
+      const hint = stepEl.querySelector('[data-role="to-link"]');
+      if (!hint) return;
+      hint.textContent = draft.link ? `Payment link · fingerprint ${draft.link.fingerprint}` : '';
+    }
+
+    /** A memo this chain cannot carry (a link brought one): the notice, and the way to drop it. */
+    function paintMemoNotice() {
+      const slot = stepEl.querySelector('[data-role="memo-notice"]');
+      if (!slot) return;
+      slot.innerHTML = !memoSupported && draft.memo ? noMemoNoticeMarkup() : '';
+    }
+
+    /** The asset a link names: absent is RAND (the link's own default), a number is an index, an
+     *  `rpl1…` is a token id. `null` if this wallet holds no such asset. */
+    function linkAsset(param) {
+      if (param === null || param === undefined || param === '') return assets.find((a) => a.index === 0) || null;
+      if (/^\d+$/.test(String(param))) return assets.find((a) => a.index === Number(param)) || null;
+      return assets.find((a) => a.idText && a.idText === String(param)) || null;
+    }
+
+    /**
+     * Where the form and the link disagree — the CLI's merge rule: a value given both ways and
+     * differing is refused, never guessed. `{to?, amount?, memo?}`, each the sentence for that
+     * field, or `{}`. Only fields the link actually carries are compared.
+     */
+    function linkConflicts() {
+      const link = draft.link;
+      const out = {};
+      if (!link) return out;
+      if (link.asset !== null || link.amount !== null) {
+        const wanted = linkAsset(link.asset);
+        if (!wanted) out.to = `The link asks for an asset this wallet does not hold (${link.asset}).`;
+        else if (wanted.index !== asset.index) out.to = `The link asks for ${wanted.symbol}; you are sending ${asset.symbol}.`;
+      }
+      const typed = String((field('amount') && field('amount').value) || '').trim();
+      if (!out.to && link.amount !== null && typed) {
+        let same = false;
+        try { same = parseUnits(typed, asset.decimals) === parseUnits(link.amount, asset.decimals); } catch { same = false; }
+        if (!same) out.amount = `The link asks for ${link.amount} ${asset.symbol}; you typed ${typed} ${asset.symbol}.`;
+      }
+      if (link.memo !== null && link.memo !== '' && draft.memo && draft.memo !== link.memo) {
+        out.memo = `The link’s memo is "${link.memo}"; you typed "${draft.memo}".`;
+      }
+      return out;
+    }
+
+    /** Puts each conflict on its own field. Returns true if there were any. */
+    function showLinkConflicts() {
+      const c = linkConflicts();
+      if (c.to && field('to')) setFieldError(field('to'), c.to);
+      if (c.amount && field('amount')) setFieldError(field('amount'), c.amount);
+      if (c.memo) {
+        if (field('memo')) setFieldError(field('memo'), c.memo);
+        else showFormBanner(c.memo);
+      }
+      return !!(c.to || c.amount || c.memo);
+    }
+
+    /** A link fills what the form leaves empty — never what the user typed — then any
+     *  disagreement is shown on its field. */
+    function applyLink() {
+      const link = draft.link;
+      if (!link) return;
+      const amountEl = field('amount');
+      if (amountEl && !amountEl.value.trim() && link.amount !== null && !linkConflicts().to) {
+        amountEl.value = link.amount;
+        draft.amount = link.amount;
+      }
+      if (link.memo && !draft.memo) {
+        draft.memo = link.memo;
+        const memoEl = field('memo');
+        if (memoEl) memoEl.value = link.memo;
+      }
+      paintMemoCount();
+      paintMemoNotice();
+      showLinkConflicts();
+    }
+
+    /** The recipient field's text, read as it is typed, pasted or scanned: a link is parsed and
+     *  applied at once; an address is checked quietly; a name waits for Review. */
+    async function takeRecipient(input) {
+      const text = input.value.trim();
+      draft.link = null;
+      paintLinkHint();
+      const kind = recipientKind(text);
+      if (kind === 'link') {
+        const parsed = await parseLinkOrExplain(input, text);
+        if (!parsed || !live() || input.value.trim() !== text) return;
+        draft.link = parsed;
+        draft.linkText = text;
+        setFieldError(input, null);
+        paintLinkHint();
+        applyLink();
+      } else if (kind === 'address') {
+        validateAddress(input, { silent: true });
+      } else {
+        setFieldError(input, null);
+      }
+    }
+
+    async function parseLinkOrExplain(input, text) {
+      if (!formats) {
+        setFieldError(input, 'Payment links cannot be read in this app; paste the address instead.');
+        return null;
+      }
+      try {
+        return await formats.parseLink(text);
+      } catch (err) {
+        if (live()) setFieldError(input, (err && err.message) || 'That payment link could not be read.');
+        return null;
+      }
+    }
+
+    async function fingerprintOf(address) {
+      if (!ctx.backend.address || typeof ctx.backend.address.fingerprint !== 'function') return null;
+      try { return await ctx.backend.address.fingerprint(address); } catch { return null; }
+    }
+
+    async function contactNameOf(address) {
+      if (!book || typeof book.nameOf !== 'function') return null;
+      try { return await book.nameOf(address); } catch { return null; }
+    }
+
+    /**
+     * The recipient field resolved, in the CLI's order: a `rand1…` address, a `randpay:` link, a
+     * contact name. `{address, name, fingerprint, link}` or `null` with the reason on the field.
+     */
+    async function resolveRecipient(input) {
+      const text = input.value.trim();
+      if (!text) { setFieldError(input, 'Enter the address you are sending to.'); return null; }
+      const kind = recipientKind(text);
+      let address;
+      let name = null;
+      let link = null;
+      if (kind === 'address') {
+        address = await validateAddress(input);
+        if (!address) return null;
+        name = await contactNameOf(address);
+      } else if (kind === 'link') {
+        // The link already read for this exact text, if there is one: it may carry the user's own
+        // decision since (a memo this chain cannot carry, dropped with Clear).
+        link = draft.link && draft.linkText === text ? draft.link : await parseLinkOrExplain(input, text);
+        if (!link) return null;
+        address = link.address;
+        name = await contactNameOf(address);
+      } else {
+        address = book && typeof book.addressOf === 'function'
+          ? await Promise.resolve(book.addressOf(text)).catch(() => null)
+          : null;
+        if (!live()) return null;
+        if (!address) { setFieldError(input, NOT_A_RECIPIENT); return null; }
+        name = text;
+      }
+      if (!live()) return null;
+      const fingerprint = (link && link.fingerprint) || await fingerprintOf(address);
+      if (!live()) return null;
+      setFieldError(input, null);
+      return { address, name, fingerprint, link };
+    }
+
     // ---- steps ----
     function goStep(next, { focus = true } = {}) {
       stopScreenTicker();
       // Review is only ever reachable with an estimate behind it; anything else (a cancel that
       // landed after the draft was spent, say) falls back to the form rather than inventing a fee.
-      if (next === 'review' && (!draft.estimate || reviewUnits <= 0n)) next = 'details';
+      if (next === 'review' && (!draft.estimate || reviewUnits <= 0n || !draft.recipient)) next = 'details';
       step = next;
       const unknown = unknownOutcome(ctx);
       // The review is the only step that can start a send, so it is the only one that carries the
@@ -205,11 +402,24 @@ registerScreen('send', {
       if (next === 'asset') stepEl.innerHTML = assetStepMarkup(assets, unknown);
       else if (next === 'details') {
         stepEl.innerHTML = detailsStepMarkup(asset, draft, {
-          canPaste: typeof ctx.backend.platform.paste === 'function',
+          canPaste: typeof platform.paste === 'function',
+          canScan,
+          canPickContact: !!book,
+          memoSupported,
           unknown,
         });
+        paintDetailsExtras();
       } else if (next === 'review') {
-        stepEl.innerHTML = reviewStepMarkup({ asset, to: draft.to, units: reviewUnits, estimate: draft.estimate, canProve, unknown, assets });
+        stepEl.innerHTML = reviewStepMarkup({ asset, to: draft.recipient.address, units: reviewUnits, estimate: draft.estimate, canProve, unknown, assets });
+        // The one line every surface shows before a send, written as text: the contact's name,
+        // the memo and the link's fields are all somebody else's words.
+        stepEl.querySelector('[data-role="confirm-line"]').textContent = confirmationLine({
+          name: draft.recipient.name,
+          fingerprint: draft.recipient.fingerprint,
+          amount: plainUnits(reviewUnits, asset.decimals),
+          symbol: asset.symbol,
+          memo: memoSupported ? draft.memo : '',
+        });
       } else if (next === 'proving') paintProving();
       else if (next === 'failed') stepEl.innerHTML = failedStepMarkup(explainProvingError(attached && attached.error));
       else if (next === 'unknown') paintUnknown();
@@ -333,7 +543,89 @@ registerScreen('send', {
       input.value = String(text).trim();
       draft.to = input.value;
       draft.selfConfirmed = false;
-      validateAddress(input, { silent: true });
+      await takeRecipient(input);
+    });
+
+    /** The browser camera, in a sheet with a Cancel; resolves to the code's text. */
+    async function browserScan() {
+      const dialog = ctx.sheet(scanSheetMarkup());
+      scanning = typeof AbortController === 'function' ? new AbortController() : null;
+      const mine = scanning;
+      on(dialog, '[data-role="cancel-scan"]', 'click', () => { if (mine) mine.abort(); ctx.closeSheet(); });
+      try {
+        return await scanQr(dialog.querySelector('video'), { signal: mine ? mine.signal : undefined });
+      } finally {
+        if (scanning === mine) scanning = null;
+        ctx.closeSheet();
+      }
+    }
+
+    const offScan = on(root, '[data-role="scan"]', 'click', async (evt) => {
+      evt.preventDefault();
+      showFormBanner('');
+      let text = '';
+      try {
+        text = typeof platform.scanQr === 'function' ? await platform.scanQr() : await browserScan();
+      } catch (err) {
+        if (!live() || (err && err.name === 'AbortError')) return;
+        showFormBanner((err && err.message) || NO_CAMERA_TEXT);
+        return;
+      }
+      const input = stepEl.querySelector('textarea[name=to]');
+      if (!live() || !text || !input) return;
+      input.value = String(text).trim();
+      draft.to = input.value;
+      draft.selfConfirmed = false;
+      await takeRecipient(input);
+    });
+
+    const offPick = on(root, '[data-role="pick-contact"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (!book) return;
+      let list = [];
+      try { list = await book.list(); } catch { list = []; }
+      if (!live()) return;
+      const dialog = ctx.sheet(contactPickerMarkup(list.length));
+      // Names and addresses go in as text; the attribute carries the name back to this handler.
+      const rows = dialog.querySelectorAll('[data-pick-contact]');
+      list.forEach((c, i) => {
+        rows[i].setAttribute('data-pick-contact', c.name);
+        rows[i].querySelector('[data-role="pick-name"]').textContent = c.name;
+        rows[i].querySelector('[data-role="pick-address"]').textContent = shortAddress(c.address);
+      });
+      on(dialog, '[data-pick-contact]', 'click', (e, btn) => {
+        e.preventDefault();
+        const name = btn.getAttribute('data-pick-contact');
+        ctx.closeSheet();
+        const input = stepEl.querySelector('textarea[name=to]');
+        if (!input || !live()) return;
+        input.value = name;
+        draft.to = name;
+        draft.link = null;
+        draft.selfConfirmed = false;
+        paintLinkHint();
+        setFieldError(input, null);
+      });
+      on(dialog, '[data-role="close-picker"]', 'click', () => ctx.closeSheet());
+      on(dialog, '[data-role="manage-contacts"]', 'click', () => { ctx.closeSheet(); ctx.go('#contacts'); });
+    });
+
+    const offMemo = on(root, 'textarea[name=memo]', 'input', (evt, input) => {
+      draft.memo = input.value;
+      paintMemoCount();
+      setFieldError(input, null);
+    });
+
+    const offClearMemo = on(root, '[data-role="clear-memo"]', 'click', (evt) => {
+      evt.preventDefault();
+      draft.memo = '';
+      // The user has dropped the link's memo knowingly: it is not filled back in on Review.
+      if (draft.link) draft.link = { ...draft.link, memo: null };
+      const memoEl = field('memo');
+      if (memoEl) memoEl.value = '';
+      paintMemoCount();
+      paintMemoNotice();
+      showFormBanner('');
     });
 
     async function validateAddress(input, { silent = false } = {}) {
@@ -362,10 +654,12 @@ registerScreen('send', {
     const offInput = on(root, 'textarea[name=to]', 'input', (evt, input) => {
       draft.to = input.value;
       draft.selfConfirmed = false;
+      draft.link = null;
+      paintLinkHint();
       clearTimeout(debounceTimer);
       // Debounced: a shielded address is pasted, not typed, but a backend that does real bech32
       // work should not be asked on every keystroke either.
-      debounceTimer = setTimeout(() => { if (live()) validateAddress(input, { silent: true }); }, ADDRESS_DEBOUNCE_MS);
+      debounceTimer = setTimeout(() => { if (live()) takeRecipient(input); }, ADDRESS_DEBOUNCE_MS);
     });
 
     const offAmountInput = on(root, 'input[name=amount]', 'input', (evt, input) => {
@@ -480,7 +774,21 @@ registerScreen('send', {
       evt.preventDefault();
       const toInput = stepEl.querySelector('textarea[name=to]');
       const amountInput = stepEl.querySelector('input[name=amount]');
+      const memoInput = field('memo');
       showFormBanner('');
+      if (memoInput) draft.memo = memoInput.value;
+
+      // The recipient first: a link may carry the amount and the memo, and fills in what the form
+      // left empty before either is checked.
+      const recipient = await resolveRecipient(toInput);
+      if (!live()) return;
+      if (!recipient) return;
+      if (recipient.link) {
+        draft.link = recipient.link;
+        draft.linkText = toInput.value.trim();
+        applyLink();
+        if (showLinkConflicts()) return;
+      }
 
       // Everything that can be decided here is decided here: the backend is not a validator. The
       // fee only counts against THIS asset's balance for RAND itself — a token transfer's fee is
@@ -489,13 +797,21 @@ registerScreen('send', {
         ? ((draft.estimate && draft.estimate.fee) || draft.knownFee || null)
         : null;
       const checked = checkAmount(amountInput.value, asset, feeSoFar === null ? null : BigInt(feeSoFar));
-      const to = await validateAddress(toInput);
-      if (!live()) return;
       if (checked.error) { setFieldError(amountInput, checked.error); return; }
       setFieldError(amountInput, null);
-      if (!to) return;
 
-      draft.to = to;
+      // The memo: bytes, as the chain counts them, and only where the chain carries one.
+      const memoBytes = utf8Length(draft.memo);
+      if (memoBytes > MEMO_MAX_BYTES) {
+        const message = `The memo is ${memoBytes} bytes; the limit is ${MEMO_MAX_BYTES}.`;
+        if (memoInput) setFieldError(memoInput, message); else showFormBanner(message);
+        return;
+      }
+      if (!memoSupported && draft.memo) { paintMemoNotice(); return; }
+
+      const to = recipient.address;
+      draft.to = toInput.value.trim();
+      draft.recipient = { address: to, name: recipient.name, fingerprint: recipient.fingerprint };
       draft.amount = amountInput.value;
 
       if (to === ownAddress && !draft.selfConfirmed) { confirmSelfSend(); return; }
@@ -561,10 +877,13 @@ registerScreen('send', {
       // `disabled` attribute is a rendering, not a rule.
       if (currentSend(ctx)) return; // one transfer at a time
       if (unknownOutcome(ctx) && !unknownConfirmed) return; // the last one's fate is still unknown
+      if (!draft.recipient) return;
       const store = startSend(ctx, {
         asset: asset.index,
-        to: draft.to,
+        to: draft.recipient.address,
         amount: reviewUnits.toString(),
+        // What the confirmation line showed, and nothing a chain without memos could not carry.
+        memo: memoSupported ? draft.memo : '',
       }, asset);
       attach(store);
     });
@@ -590,6 +909,8 @@ registerScreen('send', {
 
     return () => {
       clearTimeout(debounceTimer);
+      if (scanning) { try { scanning.abort(); } catch { /* already stopped */ } }
+      offScan(); offPick(); offMemo(); offClearMemo();
       stopScreenTicker();
       if (attached) attached.listeners.delete(onStoreChange);
       backBtn.removeEventListener('click', onBack);

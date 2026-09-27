@@ -2165,4 +2165,85 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     await backend.sync.rescan();
     assert.ok(farm.callsTo('7400').length > 0, 'clearing the override did not go back to the defaults');
   });
+
+  // ---------------------------------------------- address sharing and the memo (spec 2026-09-26) ---
+
+  scoped('address: fingerprint, parseLink and formatLink are the core’s, over its one call()', async () => {
+    const { backend, core } = build();
+    await backend.wallet.create(PASSWORD);
+    assert.equal(await backend.address.fingerprint(ADDRESS), 'STUB-FING-ERPR-INT0');
+    assert.ok(core.calls.some(([m, p]) => m === 'address_fingerprint' && p.address === ADDRESS));
+    const link = await backend.address.formatLink({ address: ADDRESS, amount: '1.5', memo: 'hi' });
+    assert.equal(link, `randpay:${ADDRESS}?amount=1.5&memo=hi`);
+    const blank = core.calls.filter(([m]) => m === 'uri_format').pop()[1];
+    assert.deepEqual(blank, { address: ADDRESS, amount: '1.5', memo: 'hi' }, 'an empty field is left out, never sent as ""');
+    const parsed = await backend.address.parseLink(link);
+    assert.deepEqual(parsed, { address: ADDRESS, amount: '1.5', asset: null, memo: 'hi', fingerprint: 'STUB-FING-ERPR-INT0' });
+    await assert.rejects(backend.address.parseLink('bitcoin:x'), /not a randpay: link/);
+  });
+
+  scoped('contacts: stored under `contacts` beside the other keys, the CLI’s rules, and gone with a wipe', async () => {
+    const { backend, storage } = build();
+    await backend.wallet.create(PASSWORD);
+    await backend.contacts.add('alice', ADDRESS);
+    assert.deepEqual(await backend.contacts.list(), [{ name: 'alice', address: ADDRESS }]);
+    assert.deepEqual(storage.local.get('contacts'), { entries: { alice: ADDRESS } });
+    assert.equal(await backend.contacts.nameOf(ADDRESS), 'alice');
+    await assert.rejects(backend.contacts.add('RandPay:x', `rand1${'z'.repeat(60)}`), /cannot start with rand1 or randpay:/);
+    await assert.rejects(backend.contacts.add('bob', 'not-an-address'), /not a shielded address/);
+    await assert.rejects(backend.contacts.add('alias', ADDRESS), /already saved as alice/);
+    await backend.contacts.remove('alice');
+    assert.deepEqual(await backend.contacts.list(), []);
+    await backend.contacts.add('carol', ADDRESS);
+    await backend.wallet.wipe();
+    assert.equal(storage.local.get('contacts'), undefined, 'a wipe takes the contacts with it');
+  });
+
+  scoped('send.limits reads envelope_bytes from rand_getLimits, and a node without it carries no memo', async () => {
+    const memoNode = build({ fetch: stubFetch({ rand_getLimits: () => ({ max_block_bytes: 4194304, envelope_bytes: 1860 }) }) });
+    await memoNode.backend.wallet.create(PASSWORD);
+    assert.deepEqual(await memoNode.backend.send.limits(), { envelopeBytes: 1860 });
+
+    const legacy = build({ fetch: stubFetch({ rand_getLimits: () => ({ max_block_bytes: 4194304, envelope_bytes: null }) }) });
+    await legacy.backend.wallet.create(PASSWORD);
+    assert.deepEqual(await legacy.backend.send.limits(), { envelopeBytes: null });
+
+    const old = build(); // the default stub node has no rand_getLimits at all: -32601
+    await old.backend.wallet.create(PASSWORD);
+    assert.deepEqual(await old.backend.send.limits(), { envelopeBytes: null });
+  });
+
+  scoped('a note’s memo and a sent row’s memo reach sync as `memo`, and a note without one has none', async () => {
+    const rows = [
+      { index: 0, cm: '0a'.repeat(32), height: 5, envelope: { kem_ct: '', to_receiver: '', to_sender: '', body: '' } },
+      { index: 1, cm: '0b'.repeat(32), height: 7, envelope: { kem_ct: '', to_receiver: '', to_sender: '', body: '' } },
+    ];
+    let served = false;
+    const withMemo = {
+      index: 1, note: '00'.repeat(112), cm: '0b'.repeat(32), nf: '0c'.repeat(32),
+      amount: '2500000000', asset: 0, time: 7, from: '00'.repeat(32), height: 7, spent: false, pending: null, memo: 'rent',
+    };
+    const without = { ...withMemo, index: 0, cm: '0a'.repeat(32), nf: '0d'.repeat(32), height: 5, memo: null };
+    const sent = { index: 9, amount: '100', asset: 0, height: 7, to_pk: 'ee'.repeat(32), time: 3, memo: 'thanks' };
+    const core = stubCore({
+      scan_page: ({ rows: page }) => ({
+        received: page.length ? [without, withMemo] : [], sent: page.length ? [sent] : [],
+        next_index: page.length ? page[page.length - 1].index + 1 : 0, rows: page.length,
+      }),
+    });
+    const fetch = stubFetch({
+      rand_getCommitments: ([from]) => { if (from === 0 && !served) { served = true; return rows; } return []; },
+      rand_getBlockByHeight: ([h]) => ({ height: h, timestamp_ms: 1788000000000 }),
+    });
+    const { backend } = build({ core, fetch });
+    await backend.wallet.create(PASSWORD);
+    const result = await backend.sync.scan(() => {});
+    const byIndex = new Map(result.notes.map((n) => [n.index, n]));
+    assert.equal(byIndex.get(1).memo, 'rent');
+    assert.equal('memo' in byIndex.get(0), false, 'no memo, no field');
+    const ins = result.activity.filter((a) => a.kind === 'in');
+    assert.deepEqual(ins.map((a) => a.memo ?? null).sort(), ['rent', null].sort());
+    const out = result.activity.find((a) => a.kind === 'out');
+    assert.equal(out.memo, 'thanks');
+  });
 }

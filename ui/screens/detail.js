@@ -15,7 +15,7 @@ import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits, shortAddress, shortHex } from '../lib/format.js';
-import { kindOf } from '../lib/rows.js';
+import { kindOf, hasMemo } from '../lib/rows.js';
 // The explorer rules live in lib/ since task 1.5 (the `#sent` screen needs them too); re-exported
 // here because that is where they were, and where the tests import them from.
 import { explorerLink } from '../lib/explorer.js';
@@ -34,6 +34,16 @@ function notFoundMarkup(ctx, title, backGo, message) {
   return h`
     ${raw(detailTopbar(ctx, title, backGo))}
     <div class="card"><div class="empty"><span class="empty-title">${message}</span></div></div>`;
+}
+
+// The memo sealed with a note (spec 2026-09-26 §2.3), under the amount. The slot is markup; the
+// text is the sender's and goes in as a text node only.
+function memoSlot(record) {
+  return hasMemo(record) ? '<p class="memo" data-role="memo"></p>' : '';
+}
+function fillMemo(root, record) {
+  const el = root.querySelector('[data-role="memo"]');
+  if (el && hasMemo(record)) el.textContent = record.memo;
 }
 
 // ------------------------------------------------------------------------------------ tx ------
@@ -100,6 +110,7 @@ registerScreen('tx', {
       <div class="card stack">
         <div class="card-head"><h3>${k.title}</h3>${statusChip}</div>
         <span class="amount ${k.sign === '+' ? 'in' : ''}">${k.sign}${formatUnits(item.amount, 6, asset.decimals)}<span class="unit">${asset.symbol}</span></span>
+        ${raw(memoSlot(item))}
         ${addressRow}
         ${blockRow}
         ${feeRow}
@@ -107,6 +118,7 @@ registerScreen('tx', {
         ${noteLink}
         ${explorerBtn}
       </div>`;
+    fillMemo(root, item);
 
     // The reveal, the masking and the copy are lib/reveal.js — the same implementation the send
     // receipt and the settings key panels use, so the "only ever in one text node" rule is written
@@ -178,10 +190,12 @@ registerScreen('note', {
       <div class="card stack">
         <div class="card-head"><h3>Shielded note</h3>${statusChip}</div>
         <span class="amount">${formatUnits(note.amount, 6, asset.decimals)}<span class="unit">${asset.symbol}</span></span>
+        ${raw(memoSlot(note))}
         <div class="kv"><span class="k">Note index</span><span class="v amount">${note.index}</span></div>
         ${blockRow}
         ${commitmentRow}
       </div>`;
+    fillMemo(root, note);
 
     const offCopy = on(root, '[data-role="copy-commitment"]', 'click', async (evt) => {
       evt.preventDefault();

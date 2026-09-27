@@ -57,6 +57,9 @@ export const METHODS = {
   // -- node-held viewing keys (explorer-style scanning) --------------------------------------
   importViewingKey: { params: ['viewingKey'] },
   getViewingNotes: { params: ['viewingKey'] },
+  // Loopback-only on the node (it forgets an imported viewing key); listed because the table covers
+  // every method the vendored node dispatches, not because this wallet calls it.
+  removeViewingKey: { params: ['viewingKey'] },
   checkTransaction: { params: ['hash', 'key'] },
 
   // -- programs -------------------------------------------------------------------------------

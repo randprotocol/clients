@@ -13,6 +13,23 @@ const MIN_PASSWORD_LEN = 10;
 export const NO_SPENDABLE_RAND_TEXT = 'a transfer pays its fee in RAND, and this wallet holds no '
   + 'spendable RAND: receive some RAND (on a testnet, `rand faucet`) and retry';
 
+/**
+ * A stand-in for the core's `address_fingerprint` (spec 2026-09-26 §2.1): deterministic per
+ * address, in the real grouped shape (four groups of four Crockford digits). NOT the real
+ * derivation — the fake has no core — so tests compare against this function, never a literal.
+ */
+export function fakeFingerprint(address) {
+  const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  let h = 2166136261;
+  let out = '';
+  const s = String(address);
+  for (let round = 0; out.length < 16; round += 1) {
+    for (let i = 0; i < s.length; i += 1) h = Math.imul(h ^ s.charCodeAt(i) ^ round, 16777619) >>> 0;
+    out += ALPHABET[h % 32];
+  }
+  return out.match(/.{4}/g).join('-');
+}
+
 function fixedAddress() {
   return 'rand1' + 'q'.repeat(40);
 }
@@ -98,6 +115,10 @@ function createBackend(initial = {}, overrides = {}) {
     rescans: [],
     bridgeEnabled: true,
     bridgeChains: [2, 3, 4],
+    // The chain's `envelope_bytes` (`send.limits`): a memo chain by default; `null` is a chain
+    // that carries no memo.
+    envelopeBytes: 1860,
+    contacts: new Map(),
     ...initial,
   };
 
@@ -223,6 +244,7 @@ function createBackend(initial = {}, overrides = {}) {
 
   const sendDefs = {
     canProve: () => ({ ok: false, reason: 'test' }),
+    limits: () => ({ envelopeBytes: state.envelopeBytes }),
     // Chain 14 transfers any asset, and the fee is RAND out of slots 2–3 of the same bundle — so
     // a wallet holding a token and no RAND cannot send that token, and the refusal is the core's
     // own sentence, made before anything is selected (ui/backend.js on `send.estimate`).
@@ -308,6 +330,62 @@ function createBackend(initial = {}, overrides = {}) {
     },
   };
 
+  // OPTIONAL in the contract (ui/backend.js): the address-sharing formats. The link grammar here
+  // is the real one's shape (`randpay:<address>[?amount=…&asset=…&memo=…]`, percent-encoded
+  // memo) without its checks beyond what the screens' tests lean on.
+  const isAddress = (a) => typeof a === 'string' && a.startsWith('rand1') && a.length >= 45;
+  const addressDefs = {
+    fingerprint: (a) => {
+      if (!isAddress(a)) throw new Error('address: not a shielded address');
+      return fakeFingerprint(a);
+    },
+    parseLink: (uri) => {
+      const m = /^randpay:([^?]*)(?:\?(.*))?$/i.exec(String(uri || '').trim());
+      if (!m || !isAddress(m[1])) throw new Error('not a randpay: link');
+      const out = { address: m[1], amount: null, asset: null, memo: null, fingerprint: fakeFingerprint(m[1]) };
+      for (const pair of (m[2] || '').split('&').filter(Boolean)) {
+        const eq = pair.indexOf('=');
+        const k = eq < 0 ? pair : pair.slice(0, eq);
+        if (!['amount', 'asset', 'memo'].includes(k)) throw new Error(`unknown parameter ${k}`);
+        out[k] = decodeURIComponent(eq < 0 ? '' : pair.slice(eq + 1));
+      }
+      return out;
+    },
+    formatLink: ({ address, amount, asset, memo } = {}) => {
+      if (!isAddress(address)) throw new Error('address: not a shielded address');
+      const q = [];
+      if (amount) q.push(`amount=${amount}`);
+      if (asset) q.push(`asset=${asset}`);
+      if (memo) q.push(`memo=${encodeURIComponent(memo)}`);
+      return `randpay:${address}${q.length ? `?${q.join('&')}` : ''}`;
+    },
+  };
+
+  // OPTIONAL in the contract: the address book, with the CLI's rules (ui/lib/contacts.js is the
+  // real implementation; this fake keeps its own Map so a test can seed it through the API).
+  const contactsDefs = {
+    list: () => [...state.contacts.keys()].sort().map((name) => ({ name, address: state.contacts.get(name) })),
+    add: (name, address) => {
+      const lower = String(name).toLowerCase();
+      if (!name || [...String(name)].length > 64 || lower.startsWith('rand1') || lower.startsWith('randpay:')) {
+        throw new Error('a contact name is 1-64 characters and cannot start with rand1 or randpay:');
+      }
+      if (!isAddress(address)) throw new Error('not a shielded address');
+      if (state.contacts.has(name)) throw new Error(`a contact named ${name} exists`);
+      for (const [other, saved] of state.contacts) if (saved === address) throw new Error(`this address is already saved as ${other}`);
+      state.contacts.set(name, address);
+      return contactsDefs.list();
+    },
+    remove: (name) => {
+      if (!state.contacts.delete(name)) throw new Error(`no contact named ${name}`);
+    },
+    nameOf: (address) => {
+      for (const [name, saved] of state.contacts) if (saved === address) return name;
+      return null;
+    },
+    addressOf: (name) => (state.contacts.has(name) ? state.contacts.get(name) : null),
+  };
+
   const rpcDefs = {
     // The two methods the settings screen's "Test connection" uses; anything else echoes, as
     // before, so a test can assert on a call without this fake pretending to be a whole node.
@@ -348,6 +426,8 @@ function createBackend(initial = {}, overrides = {}) {
     send: buildGroup('send', sendDefs, overrides.send, calls),
     faucet: buildGroup('faucet', faucetDefs, overrides.faucet, calls),
     bridge: buildGroup('bridge', bridgeDefs, overrides.bridge, calls),
+    address: buildGroup('address', addressDefs, overrides.address, calls),
+    contacts: buildGroup('contacts', contactsDefs, overrides.contacts, calls),
     rpc: buildGroup('rpc', rpcDefs, overrides.rpc, calls),
     settings: buildGroup('settings', settingsDefs, overrides.settings, calls),
     platform: buildGroup('platform', platformDefs, overrides.platform, calls),

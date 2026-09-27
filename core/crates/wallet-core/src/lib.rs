@@ -3292,6 +3292,41 @@ mod tests {
         }
 
         #[test]
+        fn prove_transfer_and_prove_burn_shapes() {
+            // wallet.js `send()`: `c.proveTransfer({ spend_key, chain_id, to, asset, amount, fee,
+            // anchor_height, anchor_root, inputs, fee_inputs, profile, memo, envelope_bytes })` —
+            // `memo` a string (`''` for none), `envelope_bytes` a JSON number from
+            // `rand_getLimits`, or `null` on a chain (or an older node) that reports none.
+            // Built key by key from the JS side's names, not by patching a Rust fixture, so a
+            // renamed or re-typed field on either side fails here.
+            let env_len = |e: &Envelope| e.kem_ct.len() + e.to_receiver.len() + e.to_sender.len() + e.body.len();
+            let f = fixture_prove_request("test", 0).unwrap();
+            let js = |memo: &str, envelope_bytes: Value| json!({
+                "spend_key": f["spend_key"], "chain_id": f["chain_id"], "to": f["to"],
+                "asset": 0, "amount": f["amount"], "fee": f["fee"],
+                "anchor_height": f["anchor_height"], "anchor_root": f["anchor_root"],
+                "inputs": f["inputs"], "fee_inputs": [], "profile": "test",
+                "memo": memo, "envelope_bytes": envelope_bytes,
+            });
+            let req: ProveRequest = serde_json::from_value(js("coffee", json!(1860))).unwrap();
+            assert_eq!((req.memo.as_str(), req.envelope_bytes), ("coffee", Some(1860)));
+            let (_w, b) = build_transfer_unproven(&req).unwrap();
+            assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == 1860));
+            // A node without `envelope_bytes`: JS sends `null` and `''`, the legacy envelope.
+            let req: ProveRequest = serde_json::from_value(js("", Value::Null)).unwrap();
+            assert_eq!((req.memo.as_str(), req.envelope_bytes), ("", None));
+            let (_w, b) = build_transfer_unproven(&req).unwrap();
+            // The legacy envelope: kem_ct 1 088 + 60 + 60 + a body of the note alone (12 + 112 + 16).
+            assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == 1348));
+
+            // wallet.js `burn()`: `c.proveBurn({ …, envelope_bytes })` — no memo on a burn.
+            let mut burn = fixture_burn_request("test").unwrap();
+            burn["envelope_bytes"] = json!(1860);
+            let req: BurnRequest = serde_json::from_value(burn).unwrap();
+            assert_eq!(req.envelope_bytes, Some(1860));
+        }
+
+        #[test]
         fn rebuilt_deposit_shape() {
             // wallet.js:220 `rebuiltDeposit: (spend_key, action) => call('rebuilt_deposit',
             // { spend_key, action })`, where `action` is a raw node block-action object

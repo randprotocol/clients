@@ -114,6 +114,13 @@ const RESCAN_CONTROL = '<div class="stack tight">'
   + '<button class="btn block" type="button" data-role="rescan">Rescan wallet</button>'
   + '</div>';
 
+// Offered only where the backend has the (optional) `contacts` group.
+function contactsMarkup() {
+  return sectionMarkup('Contacts', h`
+    <p class="caption">Names for the addresses you pay often, kept on this device only. Send to a contact by name; its fingerprint is checked when you save it.</p>
+    <button class="btn block" type="button" data-go="contacts">Manage contacts</button>`);
+}
+
 function appearanceMarkup(settings) {
   const current = settings.theme || 'system';
   const segments = THEMES.map((t) => h`
@@ -209,6 +216,7 @@ registerScreen('settings', {
     const body = root.querySelector('[data-role="body"]');
     body.innerHTML = h`
       ${raw(networkMarkup(settings))}
+      ${raw(ctx.backend.contacts && typeof ctx.backend.contacts.list === 'function' ? contactsMarkup() : '')}
       ${raw(appearanceMarkup(settings))}
       ${raw(securityMarkup(settings))}
       ${raw(aboutMarkup(platform, settings))}`;

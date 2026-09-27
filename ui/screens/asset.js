@@ -9,7 +9,7 @@ import { h, raw } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits } from '../lib/format.js';
-import { avatarMarkup, activityRowMarkup, listMarkup } from '../lib/rows.js';
+import { avatarMarkup, activityRowMarkup, listMarkup, fillRowMemos } from '../lib/rows.js';
 import { detailTopbar, wireSelection } from '../lib/panes.js';
 import { UNLISTED_TEXT, canSendAsset, canWithdrawAsset } from '../lib/assets.js';
 
@@ -126,6 +126,7 @@ registerScreen('asset', {
     }
 
     root.innerHTML = bodyMarkup(ctx, { asset, activity, assetsByIndex, withdraw });
+    fillRowMemos(root, activity);
     for (const el of root.querySelectorAll('.avatar[data-hue]')) el.style.setProperty('--hue', el.dataset.hue);
     // When this screen is the content pane's list (a transaction opened from it on a wide
     // screen), its rows carry the selection marker like any other list's.

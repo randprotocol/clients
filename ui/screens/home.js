@@ -19,7 +19,7 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits, shortAddress, timeAgo } from '../lib/format.js';
 import { totalInRand } from '../lib/assets.js';
-import { assetRowMarkup, activityRowMarkup, listMarkup } from '../lib/rows.js';
+import { assetRowMarkup, activityRowMarkup, listMarkup, fillRowMemos } from '../lib/rows.js';
 import { wrongChainBannerMarkup, behindBannerMarkup, identityUnknownBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
 import { wireSelection } from '../lib/panes.js';
 import { brandMarkup, paintField } from '../lib/entropy.js';
@@ -238,6 +238,7 @@ registerScreen('home', {
       el.activity.innerHTML = recent.length === 0
         ? emptyActivityMarkup()
         : h`<div class="card flush">${listMarkup(recent.map((item) => activityRowMarkup(item, byIndex)))}</div>`;
+      fillRowMemos(el.activity, recent);
       selection.apply();
     }
 

@@ -457,6 +457,23 @@ export function checkTransaction(reply) {
   return { height: intField(m, 'height', record.height) };
 }
 
+/**
+ * `rand_getLimits` → the chain's `envelope_bytes` (spec 2026-09-26 §2.4): the exact size every
+ * note envelope must be on a chain that declares one, or `null` on a chain that does not (every
+ * genesis before the memo, chain 14 included) — which seals the legacy envelope and carries no
+ * memo. A missing field is `null` too: an older node's reply simply has no such key.
+ *
+ * Anything else is refused rather than read as "no memo": a proof sealed at the wrong size is
+ * refused by a memo chain as a permanent `EnvelopeSize`, after two minutes of proving.
+ */
+export function checkLimits(reply) {
+  const m = 'rand_getLimits';
+  if (!reply || typeof reply !== 'object' || Array.isArray(reply)) fail(m, 'not an object', reply);
+  const v = reply.envelope_bytes;
+  if (v === undefined || v === null) return { envelopeBytes: null };
+  return { envelopeBytes: intField(m, 'envelope_bytes', v, { max: 1 << 20 }) || fail(m, 'envelope_bytes is zero', v) };
+}
+
 /** `rand_sendTransaction` / `rand_mint` → the transaction hash. */
 export function checkSubmitted(method, reply) {
   return hashField(method, 'the transaction hash', reply);

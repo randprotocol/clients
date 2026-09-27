@@ -15,7 +15,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import './dom-env.mjs';
 import { registerScreen } from '../app.js';
-import { unlockedBackend, NO_SPENDABLE_RAND_TEXT } from './fake-backend.mjs';
+import { unlockedBackend, NO_SPENDABLE_RAND_TEXT, fakeFingerprint } from './fake-backend.mjs';
 import { mountApp } from './helpers.mjs';
 import { explainProvingError } from '../screens/send.js';
 import { markUnknownOutcome, unknownOutcome } from '../screens/send/state.js';
@@ -284,7 +284,10 @@ test('an invalid recipient shows the backend’s own reason inline', async (t) =
   const b = unlockedBackend();
   const { app, root } = await mountApp(t, b, { hash: '#send/0' });
   await app.idle();
-  root.querySelector('textarea[name=to]').value = 'not-an-address';
+  // `rand1`-prefixed, so it is read as an address (spec 2026-09-26 §3.1's order: address, link,
+  // contact name) and the backend's own reason is what comes back. Anything without the prefix is
+  // a contact name now, refused with the three-way sentence (tested below).
+  root.querySelector('textarea[name=to]').value = 'rand1-not-an-address';
   root.querySelector('input[name=amount]').value = '1';
   submit(root);
   await app.idle();
@@ -1095,4 +1098,188 @@ test('re-rendering the review clears a tick the user is no longer looking at', a
   prove.click();
   await turns();
   assert.equal(sends(), sendsBefore, 'and the stale tick did not carry over');
+});
+
+// ------------------------------------------------ address sharing and the memo (spec 2026-09-26) ---
+// A recipient is a `rand1…` address, a `randpay:` link or a contact name, tried in that order (the
+// CLI's `rand send <to>`); a link's amount and memo fill in what the form leaves empty, and a
+// value given both ways and differing is refused, never guessed. The review carries the one
+// confirmation line every surface shows: `to <name> · fingerprint XXXX-… · <amount> <asset> ·
+// memo "<text>"`.
+
+const LINK = (params = '') => `randpay:${TO}${params}`;
+
+/** Puts `text` on the fake clipboard and presses Paste, as a user sharing a link would. */
+async function pasteRecipient(root, b, text) {
+  await b.platform.copy(text);
+  root.querySelector('[data-role="paste"]').click();
+  await turns(6);
+}
+
+async function detailsOf(t, b, hash = '#send/0') {
+  const { app, root } = await mountApp(t, b, { hash });
+  await app.idle();
+  return { app, root };
+}
+
+function typeInto(el, value) {
+  el.value = value;
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+test('pasting a randpay: link fills the amount and the memo in the draft', async (t) => {
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }) } });
+  const { app, root } = await detailsOf(t, b);
+  await pasteRecipient(root, b, LINK('?amount=1.5&memo=coffee%20%26%20cake'));
+  assert.equal(root.querySelector('input[name=amount]').value, '1.5');
+  assert.equal(root.querySelector('textarea[name=memo]').value, 'coffee & cake');
+  // …and it is the draft, not only the DOM: the flow carries it to the send request.
+  submit(root);
+  await app.idle();
+  root.querySelector('[data-action="prove"]').click();
+  await app.idle();
+  const [, req] = b.calls.find((c) => c[0] === 'send.send');
+  assert.equal(req.to, TO, 'the link resolves to its address');
+  assert.equal(req.amount, '1500000000');
+  assert.equal(req.memo, 'coffee & cake');
+});
+
+test('a link amount that differs from a typed one is refused and blocks Continue', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await detailsOf(t, b);
+  typeInto(root.querySelector('input[name=amount]'), '2');
+  await pasteRecipient(root, b, LINK('?amount=1.5'));
+  assert.match(root.textContent, /The link asks for 1\.5 RAND; you typed 2 RAND/);
+  assert.equal(root.querySelector('input[name=amount]').value, '2', 'what was typed is left alone, never overwritten');
+  submit(root);
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0, 'no estimate: the form did not continue');
+  assertGone(root.querySelector('[data-action="prove"]'), 'the review');
+  assert.match(root.textContent, /The link asks for 1\.5 RAND; you typed 2 RAND/);
+
+  // Agreeing with the link lifts it.
+  typeInto(root.querySelector('input[name=amount]'), '1.50');
+  submit(root);
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 1, '1.50 and 1.5 are the same amount');
+});
+
+test('the review carries the confirmation line: contact, fingerprint, amount and memo', async (t) => {
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }) } });
+  await b.contacts.add('alice', TO);
+  const { app, root } = await detailsOf(t, b);
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('input[name=amount]').value = '1.25';
+  typeInto(root.querySelector('textarea[name=memo]'), 'rent <b>march</b>');
+  submit(root);
+  await app.idle();
+  const line = root.querySelector('[data-role="confirm-line"]');
+  assert.ok(line, 'the confirmation line is on the review');
+  assert.equal(line.textContent, `to alice · fingerprint ${fakeFingerprint(TO)} · 1.25 RAND · memo "rent <b>march</b>"`);
+  assert.equal(line.querySelector('b'), null, 'the memo is text, never markup');
+});
+
+test('with no contact and no memo the line still names the fingerprint and an empty memo', async (t) => {
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }) } });
+  const { root } = await review(t, b, { to: TO, amount: '1' });
+  assert.equal(root.querySelector('[data-role="confirm-line"]').textContent, `to fingerprint ${fakeFingerprint(TO)} · 1 RAND · memo ""`);
+});
+
+test('a contact name is a recipient, resolved to its address', async (t) => {
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }) } });
+  await b.contacts.add('alice', TO);
+  const { app, root } = await review(t, b, { to: 'alice', amount: '1' });
+  assert.match(root.querySelector('[data-role="confirm-line"]').textContent, /^to alice · fingerprint /);
+  root.querySelector('[data-action="prove"]').click();
+  await app.idle();
+  const [, req] = b.calls.find((c) => c[0] === 'send.send');
+  assert.equal(req.to, TO);
+});
+
+test('the contact picker fills the recipient with a saved name', async (t) => {
+  const b = unlockedBackend();
+  await b.contacts.add('alice', TO);
+  const { root } = await detailsOf(t, b);
+  root.querySelector('[data-role="pick-contact"]').click();
+  await turns(4);
+  const pick = document.querySelector('[data-pick-contact="alice"]');
+  assert.ok(pick, 'the sheet lists the contact');
+  assert.equal(pick.querySelector('[data-role="pick-name"]').textContent, 'alice');
+  pick.click();
+  await turns(4);
+  assert.equal(root.querySelector('textarea[name=to]').value, 'alice');
+});
+
+test('something that is not an address, a link or a contact is refused with all three named', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await detailsOf(t, b);
+  root.querySelector('textarea[name=to]').value = 'nobody';
+  root.querySelector('input[name=amount]').value = '1';
+  submit(root);
+  await app.idle();
+  assert.match(root.textContent, /not a shielded address, a randpay: link, or a saved contact/);
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0);
+});
+
+test('the memo counter counts UTF-8 bytes, not characters, and an over-long memo blocks Continue', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await detailsOf(t, b);
+  const memo = root.querySelector('textarea[name=memo]');
+  typeInto(memo, 'ééé');
+  assert.equal(root.querySelector('[data-role="memo-count"]').textContent, '6/510 bytes');
+  typeInto(memo, '€'.repeat(171)); // 513 bytes, 171 characters
+  assert.equal(root.querySelector('[data-role="memo-count"]').textContent, '513/510 bytes');
+  root.querySelector('textarea[name=to]').value = TO;
+  root.querySelector('input[name=amount]').value = '1';
+  submit(root);
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0, 'an over-long memo does not continue');
+  assert.match(root.textContent, /513 bytes; the limit is 510/);
+});
+
+test('on a chain that carries no memos the field is hidden, and a link’s memo blocks Continue until cleared', async (t) => {
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }), limits: async () => ({ envelopeBytes: null }) } });
+  const { app, root } = await detailsOf(t, b);
+  assertGone(root.querySelector('textarea[name=memo]'), 'the memo field');
+  await pasteRecipient(root, b, LINK('?amount=1&memo=coffee'));
+  assert.match(root.textContent, /This network doesn't carry memos; the memo will not be sent/);
+  submit(root);
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0, 'blocked while the memo stands');
+
+  root.querySelector('[data-role="clear-memo"]').click();
+  await turns();
+  assert.doesNotMatch(root.textContent, /doesn't carry memos/);
+  submit(root);
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 1, 'cleared, it continues');
+  assert.match(root.querySelector('[data-role="confirm-line"]').textContent, /memo ""$/);
+  root.querySelector('[data-action="prove"]').click();
+  await app.idle();
+  const [, req] = b.calls.find((c) => c[0] === 'send.send');
+  assert.equal(req.memo, '', 'nothing is sent that this chain cannot carry');
+});
+
+test('the camera button is offered only where something can scan, and a scan fills the recipient', async (t) => {
+  const plain = unlockedBackend();
+  const first = await detailsOf(t, plain);
+  assertGone(first.root.querySelector('[data-role="scan"]'), 'a scan button with nothing behind it');
+  first.app.destroy();
+
+  const b = unlockedBackend({ platform: { scanQr: async () => LINK('?amount=2') } });
+  const { root } = await detailsOf(t, b);
+  root.querySelector('[data-role="scan"]').click();
+  await turns(6);
+  assert.equal(root.querySelector('textarea[name=to]').value, LINK('?amount=2'));
+  assert.equal(root.querySelector('input[name=amount]').value, '2');
+});
+
+test('a link naming a different asset than the one being sent is refused', async (t) => {
+  const b = unlockedBackend(listing([randRow(), tokenRow()]));
+  const { app, root } = await detailsOf(t, b, '#send/0');
+  root.querySelector('textarea[name=to]').value = LINK('?amount=1&asset=1');
+  submit(root);
+  await app.idle();
+  assert.match(root.textContent, /The link asks for zUSD; you are sending RAND/);
+  assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0);
 });

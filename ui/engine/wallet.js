@@ -28,7 +28,7 @@
 import {
   checkHead, checkTreeInfo, checkCommitments, checkNullifiers, checkAnchor, checkWitness,
   checkBlockHeader, checkBridgeState, checkSubmitted, checkGenesisHash, checkBlockActions,
-  checkTransaction, intField,
+  checkTransaction, checkLimits, intField,
 } from './validate.js';
 import { isTransportFailure } from './rpc.js';
 
@@ -48,6 +48,29 @@ const MAX_BLOCK_TIMES_PER_SCAN = 128;
  * over it (the chain-14 core does).
  */
 export const BUNDLE_INPUTS = 2;
+
+/**
+ * The chain's `envelope_bytes`, from `rand_getLimits` on `client` — the client the caller verified,
+ * never a fresh one (spec 2026-09-26 §2.4). `prove_transfer` and `prove_burn` seal every output
+ * at exactly this size, and the ledger refuses any other size on a chain that declares one.
+ *
+ * `null` means the legacy envelope and no memo: a chain that reports `null` (every genesis before
+ * the memo), a reply without the field, or a node that predates `rand_getLimits` altogether
+ * (JSON-RPC `-32601`, or a client object with no such method). **Anything else propagates** — a
+ * node that did not answer is not a node that said "no memo", and guessing `null` on a memo chain
+ * spends two minutes proving a transaction the chain is certain to refuse.
+ */
+export async function envelopeBytesOf(client, signal) {
+  if (!client || typeof client.getLimits !== 'function') return null;
+  let reply;
+  try {
+    reply = await client.getLimits(signal ? { signal } : undefined);
+  } catch (err) {
+    if (err && err.code === -32601) return null;
+    throw err;
+  }
+  return checkLimits(reply).envelopeBytes;
+}
 
 /**
  * Every numeric field of the store that must be a safe non-negative integer, and the subset that
@@ -848,7 +871,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    * Not reachable from the wasm shells: a bundle proof peaks at ~5.7 GB and wasm32 stops at
    * 4 GiB, so `backend-wasm.js` refuses before it ever gets here (see `send.canProve`).
    */
-  async function send(spendKey, { to, asset = 0, amountUnits, feeUnits, wait = true, onPhase, signal, client: given, identity }, settingsOverride) {
+  async function send(spendKey, { to, asset = 0, amountUnits, feeUnits, memo = '', wait = true, onPhase, signal, client: given, identity }, settingsOverride) {
     const s = settingsOverride || (await currentSettings());
     // The client the caller verified, for every step: the fee, the anchor, the witnesses, the
     // broadcast and every retry. A transfer assembled from two nodes is not a transfer.
@@ -865,6 +888,11 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     const inputs = plan.inputs || [];
     const feeInputs = plan.fee_inputs || [];
     onPhase?.('witness');
+    // The envelope size is the chain's, read from the same verified client as everything else,
+    // before the witnesses — a reply this wallet cannot use refuses the send while nothing has
+    // been proved. The core refuses a non-empty memo on a chain that reports `null`, also before
+    // proving (wallet-core's `envelope_format_for`).
+    const envelopeBytes = await envelopeBytesOf(client, signal);
     const { anchor, paths } = await anchorAndWitnesses(client, [...inputs, ...feeInputs], signal);
     onPhase?.('prove');
     const provenChainId = provenChainIdOf(st, identity);
@@ -882,6 +910,9 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       // transfer's fee comes out of `inputs` itself.
       fee_inputs: feeInputs.map((note, i) => ({ note, path: paths[inputs.length + i] })),
       profile: 'production',
+      // Sealed with the payment only; change and dummies carry an empty field of the same size.
+      memo: String(memo ?? ''),
+      envelope_bytes: envelopeBytes,
     });
     // The last point at which nothing has left this device. Past it a failure means the outcome is
     // unknown, not "not sent" (see ui/backend.js on `send.send`'s rejection fields).
@@ -904,6 +935,9 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       tx_key: res.payment_tx_key, commitment: res.payment_commitment,
       spent_indices: res.spent_indices, status: 'pending', created_ms: Date.now(),
     };
+    // The sender's own copy of what it wrote: the chain will hand it back through `ovk` on the
+    // next scan too, but a pending transfer is shown from this record until then.
+    if (memo) submission.memo = String(memo);
     fresh.submissions.unshift(submission);
     await persist(fresh);
     if (wait) {
@@ -968,6 +1002,9 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     const assetInputs = plan.inputs || [];
     const feeInputs = plan.fee_inputs || [];
     onPhase?.('witness');
+    // A burn carries no memo, but its change and dummies are sealed at the chain's size all the
+    // same (see `envelopeBytesOf`).
+    const envelopeBytes = await envelopeBytesOf(client, signal);
     // One fetch for both groups, so the whole bundle is folded against the same root.
     const { anchor, paths } = await anchorAndWitnesses(client, [...assetInputs, ...feeInputs], signal);
     onPhase?.('prove');
@@ -987,6 +1024,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       inputs: assetInputs.map((note, i) => ({ note, path: paths[i] })),
       fee_inputs: feeInputs.map((note, i) => ({ note, path: paths[assetInputs.length + i] })),
       profile: 'production',
+      envelope_bytes: envelopeBytes,
     });
     // The last point at which nothing has left this device.
     throwIfAborted(signal);
@@ -1065,13 +1103,13 @@ export function activity(store) {
   const rows = [];
   for (const n of store.notes) {
     if (toUnits(n.amount) === 0n) continue; // zero-value change notes are real leaves that buy nothing
-    rows.push({ kind: 'received', index: n.index, amount: n.amount, asset: n.asset, height: n.height, from: n.from, spent: n.spent, pending: n.pending != null, note: n, sort: n.height });
+    rows.push({ kind: 'received', index: n.index, amount: n.amount, asset: n.asset, height: n.height, from: n.from, spent: n.spent, pending: n.pending != null, note: n, memo: n.memo ?? null, sort: n.height });
   }
   const subs = store.submissions || [];
   for (const s of store.sent) {
     const sub = subs.find((x) => x.to_pk === s.to_pk && x.amount === s.amount && x.time === s.time);
     if (sub) { if (!sub.height) sub.height = s.height; continue; }
-    rows.push({ kind: 'sent', index: s.index, amount: s.amount, asset: s.asset, height: s.height, to_pk: s.to_pk, sort: s.height });
+    rows.push({ kind: 'sent', index: s.index, amount: s.amount, asset: s.asset, height: s.height, to_pk: s.to_pk, memo: s.memo ?? null, sort: s.height });
   }
   for (const s of subs) rows.push({ kind: s.kind === 'faucet' ? 'faucet' : 'submission', hash: s.hash, amount: s.amount, status: s.status, created_ms: s.created_ms, sub: s, height: s.height || 0, sort: s.height || Number.MAX_SAFE_INTEGER });
   return rows.sort((a, b) => (b.sort || 0) - (a.sort || 0) || (b.created_ms || 0) - (a.created_ms || 0) || (b.index || 0) - (a.index || 0));

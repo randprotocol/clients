@@ -284,6 +284,7 @@ function ensureBuiltinScreensLoaded() {
       import('./screens/activity.js'),
       import('./screens/detail.js'),
       import('./screens/receive.js'),
+      import('./screens/contacts.js'),
       import('./screens/faucet.js'),
       import('./screens/send.js'),
       import('./screens/withdraw.js'),

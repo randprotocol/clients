@@ -217,6 +217,31 @@ export function stubCore(overrides = {}) {
     },
 
     prove_transfer: () => { throw new Error('prove_transfer must never run in wasm'); },
+    // The address-sharing trio (spec 2026-09-26 §2), in the core's own shapes: every one of them
+    // is wallet-core's code in a real build, so this stub only has to answer in its shapes. The
+    // link grammar here is deliberately the simplest one that round-trips the tests' values.
+    address_fingerprint: ({ address }) => {
+      if (!String(address).startsWith('rand1')) throw new Error('address: not a shielded address');
+      return { fingerprint: 'STUB-FING-ERPR-INT0' };
+    },
+    uri_format: ({ address, amount, asset, memo }) => {
+      if (!String(address).startsWith('rand1')) throw new Error('address: not a shielded address');
+      const q = [];
+      if (amount) q.push(`amount=${amount}`);
+      if (asset) q.push(`asset=${asset}`);
+      if (memo) q.push(`memo=${encodeURIComponent(memo)}`);
+      return { uri: `randpay:${address}${q.length ? `?${q.join('&')}` : ''}` };
+    },
+    uri_parse: ({ uri }) => {
+      const m = /^randpay:(rand1[^?]*)(?:\?(.*))?$/i.exec(String(uri));
+      if (!m) throw new Error('not a randpay: link');
+      const out = { address: m[1], amount: null, asset: null, memo: null, fingerprint: 'STUB-FING-ERPR-INT0' };
+      for (const pair of (m[2] || '').split('&').filter(Boolean)) {
+        const [k, v = ''] = pair.split('=');
+        out[k] = decodeURIComponent(v);
+      }
+      return out;
+    },
     format_amount: ({ units }) => String(units),
   };
   const impl = { ...defaults, ...overrides };

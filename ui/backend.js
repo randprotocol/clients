@@ -85,7 +85,11 @@
  *                 `ctx.state` or a DOM attribute (see ui/screens/detail.js).
  *  - `status?`  — for `kind: 'pending'` only, where the transaction is in the pipeline
  *                 (`'pending' | 'proving' | 'submitting' | 'confirming'`).
- * A **note** is `{index, asset, amount, blockHeight, spent, commitment, time}`.
+ *  - `memo?`    — the memo sealed with the payment (spec 2026-09-26 §2.3), a non-empty string;
+ *                 absent when there is none. The sender's text: screens render it as a text node
+ *                 only, never as markup.
+ * A **note** is `{index, asset, amount, blockHeight, spent, commitment, time, memo?}` — `memo?`
+ * exactly as on an activity item.
  *
  * `settings.get()` → `{rpcUrl, rpcUrls, theme, autoLockMin, explorerUrl, chainId}`. `explorerUrl`
  * may be empty, in which case no explorer link is offered at all; `chainId` is the network's own
@@ -99,8 +103,11 @@
  *
  * ---- sending (task 1.5) ----
  *
- * A **send request** is `{asset, to, amount}` — `asset` an asset index, `to` a `rand1…` address,
- * `amount` a units string **in units of `asset`**. Every index can be transferred: chain 14's
+ * A **send request** is `{asset, to, amount, memo?}` — `asset` an asset index, `to` a `rand1…`
+ * address (never a link or a contact name: the screen resolves those first), `amount` a units
+ * string **in units of `asset`**, `memo` the text sealed with the payment (`''` or absent for
+ * none; at most 510 UTF-8 bytes, and only on a chain whose `send.limits()` reports an envelope
+ * size — the core refuses a memo on any other chain before proving). Every index can be transferred: chain 14's
  * bundle carries a private asset in slots 0–1 and RAND in slots 2–3, so a token transfer is one
  * transaction and one proof, exactly like a RAND one. Its fee is still RAND, out of the same
  * bundle, so a wallet holding a token and no RAND cannot send that token; the backend refuses
@@ -303,6 +310,29 @@
  *       exactly as `send.send`'s do, and **it refuses exactly what `estimate` refuses, before a
  *       proof starts** — the two run one shared list, because a gate on one and not the other is
  *       a proof spent on a transaction the chain was always going to refuse.
+ *  - `send.limits?()` → `{envelopeBytes}`: the chain's `envelope_bytes` from `rand_getLimits`
+ *    (spec 2026-09-26 §2.4), or `null` where the chain carries no memo or the node predates the
+ *    method. The send screen offers a memo field only when this is a number.
+ *  - `address?` — a whole OPTIONAL GROUP, the address-sharing formats, every one the core's own
+ *    code (spec 2026-09-26 §2); pure — no node, no key:
+ *     · `address.fingerprint(address)` → `'XXXX-XXXX-XXXX-XXXX'`, 80 bits of the address in
+ *       Crockford base32. Display only; always recomputed from the address in hand.
+ *     · `address.parseLink(uri)` → `{address, amount, asset, memo, fingerprint}` for a `randpay:`
+ *       link (absent parameters `null`; `amount` the display decimal as written), or a rejection
+ *       with the core's sentence.
+ *     · `address.formatLink({address, amount?, asset?, memo?})` → the link; empty fields are left
+ *       out.
+ *  - `contacts?` — a whole OPTIONAL GROUP, the address book (ui/lib/contacts.js; stored under
+ *    `contacts` beside the other keys, cleared by a wipe), with the CLI's rules: a name is 1–64
+ *    characters, never starts with `rand1`/`randpay:` in any case, is unique, and an address lives
+ *    under one name. `list()` → `[{name, address}]` by name; `add(name, address)` (the address is
+ *    checked by the core first); `remove(name)`; `nameOf(address)` / `addressOf(name)` → string or
+ *    `null`. Rejections carry the CLI's sentences.
+ *  - `platform.scanQr?()` → the text of a scanned QR code, for a native shell with a camera. Where
+ *    it is missing the screens use the browser's `BarcodeDetector` (ui/lib/scan-qr.js) if there
+ *    is one, and offer no scan button at all otherwise.
+ *  - `platform.share?({title, text})` → the system share sheet, for the receive screen's payment
+ *    link. Where it is missing no Share button is offered.
  *  - `dispose?()` — OPTIONAL, on the **backend itself**, not a group. Releases whatever it holds
  *    outside its own object (a BroadcastChannel, a port, a watcher). The shell calls it from
  *    `destroy()`, last, after the wallet session has ended; it must be idempotent and must not

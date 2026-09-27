@@ -13,7 +13,7 @@ import { icons } from '../../lib/icons.js';
 import { formatUnits, shortAddress, elapsed } from '../../lib/format.js';
 import { avatarMarkup, listMarkup } from '../../lib/rows.js';
 import { UNLISTED_TEXT, canSendAsset, feeDecimals, feeSymbol } from '../../lib/assets.js';
-import { PHASE_LABELS, CANCELLABLE, UNKNOWN_NOTICE, UNKNOWN_CONFIRM, proveCost } from './state.js';
+import { PHASE_LABELS, CANCELLABLE, UNKNOWN_NOTICE, UNKNOWN_CONFIRM, MEMO_MAX_BYTES, NO_MEMO_NOTICE, proveCost } from './state.js';
 
 export function shellMarkup() {
   return h`
@@ -102,10 +102,29 @@ export function noRandMarkup() {
     <button class="btn block" type="button" data-go="faucet">${raw(icons.droplet())}Get test RAND from the faucet</button>`;
 }
 
-export function detailsStepMarkup(asset, draft, { canPaste = false, unknown = null } = {}) {
+export function detailsStepMarkup(asset, draft, {
+  canPaste = false, canScan = false, canPickContact = false, memoSupported = false, unknown = null,
+} = {}) {
   // No Paste button where the shell cannot read the clipboard (it is optional in the Backend
-  // contract): a button that does nothing is worse than no button.
+  // contract), and no camera button where nothing can scan: a button that does nothing is worse
+  // than no button.
   const paste = canPaste ? raw(h`<button class="btn sm" type="button" data-role="paste">Paste</button>`) : '';
+  const scan = canScan ? raw(h`<button class="btn sm" type="button" data-role="scan" aria-label="Scan a QR code">Scan</button>`) : '';
+  const pick = canPickContact ? raw(h`<button class="btn sm" type="button" data-role="pick-contact">Contacts</button>`) : '';
+  // The memo field only where the chain carries a memo (its limits report an envelope size). Its
+  // value is written by the screen as a property, never into this markup: it is user text.
+  const memo = memoSupported
+    ? raw(h`
+      <div class="field">
+        <div class="field-top">
+          <label class="label" for="send-memo">Memo</label>
+          <span class="caption" data-role="memo-count" aria-live="polite">0/${MEMO_MAX_BYTES} bytes</span>
+        </div>
+        <textarea id="send-memo" name="memo" rows="2" autocomplete="off" aria-describedby="send-memo-hint"></textarea>
+        <span class="hint" id="send-memo-hint">Optional. Encrypted with the payment: only the recipient, you, and anyone shown the transaction key can read it.</span>
+        <span class="error" id="send-memo-error"></span>
+      </div>`)
+    : '';
   return h`
     <h2 class="title" data-role="step-title" tabindex="-1">Where to?</h2>
     ${unknownNoticeMarkup(unknown)}
@@ -113,11 +132,12 @@ export function detailsStepMarkup(asset, draft, { canPaste = false, unknown = nu
       <div class="field">
         <div class="field-top">
           <label class="label" for="send-to">Recipient</label>
-          ${paste}
+          <span class="cluster">${pick}${scan}${paste}</span>
         </div>
-        <textarea id="send-to" name="to" rows="2" spellcheck="false" autocomplete="off" placeholder="rand1…" aria-describedby="send-to-hint">${draft.to}</textarea>
-        <span class="hint" id="send-to-hint">Addresses on this network start with rand1.</span>
+        <textarea id="send-to" name="to" rows="2" spellcheck="false" autocomplete="off" placeholder="rand1…, randpay:… or a contact" aria-describedby="send-to-hint">${draft.to}</textarea>
+        <span class="hint" id="send-to-hint">An address (rand1…), a payment link (randpay:…), or a saved contact’s name.</span>
         <span class="error" id="send-to-error"></span>
+        <span class="caption mono" data-role="to-link"></span>
       </div>
       <div class="field amount-field">
         <div class="field-top">
@@ -128,9 +148,45 @@ export function detailsStepMarkup(asset, draft, { canPaste = false, unknown = nu
         <span class="hint" id="send-amount-hint">Available ${formatUnits(asset.balance ?? '0', 6, asset.decimals)} ${asset.symbol}</span>
         <span class="error" id="send-amount-error"></span>
       </div>
+      ${memo}
+      <div data-role="memo-notice"></div>
       <div data-role="form-banner"></div>
       <button class="btn btn-primary block" type="submit">Review</button>
     </form>`;
+}
+
+/** The standing notice for a memo this chain cannot carry (a link brought one). It blocks
+ *  Continue until the user drops it; the memo itself is not shown here, only that there is one. */
+export function noMemoNoticeMarkup() {
+  return h`
+    <div class="banner warn" data-role="no-memo">
+      <span class="ic">${raw(icons.warning())}</span>
+      <span><span class="banner-title">${NO_MEMO_NOTICE}</span>Clear it to continue without it, or ask for a link without a memo.</span>
+    </div>
+    <button class="btn block" type="button" data-role="clear-memo">Clear the memo</button>`;
+}
+
+/** The contact picker's sheet. Names are written by the screen as text; this is the frame. */
+export function contactPickerMarkup(count) {
+  const list = count === 0
+    ? raw(h`<p class="sheet-sub">No contacts yet. Save one from Settings, or paste an address.</p>`)
+    : raw(h`<ul class="list" role="list">${raw(Array.from({ length: count }, () => '<li><button class="row" type="button" data-pick-contact=""><span class="row-main"><span class="row-title"><span class="truncate" data-role="pick-name"></span></span><span class="row-sub mono" data-role="pick-address"></span></span></button></li>').join(''))}</ul>`);
+  return h`
+    <h3 class="sheet-title">Send to a contact</h3>
+    ${list}
+    <div class="sheet-foot">
+      <button class="btn" type="button" data-role="manage-contacts">Manage contacts</button>
+      <button class="btn btn-primary" type="button" data-role="close-picker">Close</button>
+    </div>`;
+}
+
+/** The browser camera's sheet (./lib/scan-qr.js). */
+export function scanSheetMarkup() {
+  return h`
+    <h3 class="sheet-title">Scan a payment link</h3>
+    <video class="scan-video" data-role="scan-video" playsinline muted></video>
+    <p class="sheet-sub" data-role="scan-status">Point the camera at a Rand QR code.</p>
+    <div class="sheet-foot"><button class="btn" type="button" data-role="cancel-scan">Cancel</button></div>`;
 }
 
 export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown = null, assets = [] }) {
@@ -172,6 +228,7 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
   return h`
     <h2 class="title" data-role="step-title" tabindex="-1">Review</h2>
     ${unknownNoticeMarkup(unknown)}
+    <p class="confirm-line mono" data-role="confirm-line"></p>
     <div class="card">
       <div class="kv">
         <span class="k">To</span>

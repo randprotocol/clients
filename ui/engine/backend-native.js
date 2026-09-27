@@ -157,6 +157,10 @@ async function executeSend({ req, onPhase, options, client, identity, sendTransf
       asset,
       amountUnits: String((req && req.amount) ?? '0'),
       feeUnits: fee.toString(),
+      // Sealed with the payment (spec 2026-09-26 §2.3); `''` is no memo. The engine reads the
+      // chain's envelope size from the same verified client, and the core refuses a memo on a
+      // chain that carries none before anything is proved.
+      memo: typeof (req && req.memo) === 'string' ? req.memo : '',
       wait: true,
       onPhase: report,
       signal: options && options.signal,

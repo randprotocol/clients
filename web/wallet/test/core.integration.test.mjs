@@ -345,3 +345,33 @@ test('the real core refuses a vault this build cannot understand, without a KDF'
   });
   assert.equal(storage.local.get('unlockFailures'), undefined);
 });
+
+// ---------------------------------------------- address sharing (spec 2026-09-26 §2, §3.3) -----
+// The backend's `address` and `contacts` groups against the REAL core: the parameter names this
+// JavaScript sends are the ones wallet-core's dispatch reads, and the formats are fullnode's own.
+test('address: the real fingerprint, and a randpay: link that round-trips a memo', { skip }, async () => {
+  const { backend } = await build();
+  const { address } = await backend.wallet.create(PASSWORD);
+  const fp = await backend.address.fingerprint(address);
+  assert.match(fp, /^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){3}$/, 'four groups of four Crockford digits');
+  assert.equal(await backend.address.fingerprint(address), fp, 'deterministic');
+
+  assert.equal(await backend.address.formatLink({ address }), `randpay:${address}`, 'no parameters: the bare link');
+  const link = await backend.address.formatLink({ address, amount: '1.5', memo: 'rent & café' });
+  assert.ok(link.startsWith(`randpay:${address}?amount=1.5&memo=`));
+  const parsed = await backend.address.parseLink(link);
+  assert.deepEqual(parsed, { address, amount: '1.5', asset: null, memo: 'rent & café', fingerprint: fp });
+
+  await assert.rejects(backend.address.formatLink({ address, memo: 'x'.repeat(511) }));
+  await assert.rejects(backend.address.parseLink(`bitcoin:${address}`));
+  await assert.rejects(backend.address.fingerprint('rand1nope'));
+});
+
+test('contacts: a real address is saved; something the core cannot parse is not', { skip }, async () => {
+  const { backend, storage } = await build();
+  const { address } = await backend.wallet.create(PASSWORD);
+  await backend.contacts.add('me', address);
+  assert.deepEqual(storage.local.get('contacts'), { entries: { me: address } });
+  assert.equal(await backend.contacts.nameOf(address), 'me');
+  await assert.rejects(backend.contacts.add('nobody', 'rand1nope'));
+});

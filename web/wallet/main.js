@@ -71,6 +71,10 @@ function makePlatform(version) {
   if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
     platform.paste = () => navigator.clipboard.readText();
   }
+  // Optional too: the system share sheet, for the receive screen's payment link.
+  if (typeof navigator.share === 'function') {
+    platform.share = ({ title, text } = {}) => navigator.share({ title, text });
+  }
   return platform;
 }
 
