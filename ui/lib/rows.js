@@ -113,7 +113,7 @@ export function activityRowMarkup(item, assetsByIndex) {
   const meta = k.kind === 'pending' ? k.title : timeAgo(item.time * 1000);
   // The memo's SLOT only: its text is the sender's, and goes in as a text node (`fillRowMemos`),
   // never through this markup.
-  const memoSlot = hasMemo(item) ? raw('<span class="row-sub row-memo truncate" data-role="row-memo"></span>') : '';
+  const memoSlot = hasMemo(item) ? raw('<span class="row-sub row-memo memo-line" data-role="row-memo"></span>') : '';
   const body = h`
         <span class="avatar ${k.tint}">${raw(icons[k.icon]())}</span>
         <span class="row-main">

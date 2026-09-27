@@ -62,7 +62,9 @@ export function recipientKind(text) {
  * ignored, so a caller that still passes it cannot put it back on this line.)
  */
 export function confirmationLine({ name = null, fingerprint = null, amount, symbol }) {
-  const who = name ? `${name} · ` : '';
+  // A contact name is user-entered (and may end in a space): shown through the memo rule, the
+  // separator included, so the line never carries a control character or a run of spaces.
+  const who = name ? displayMemo(`${name} · `) : '';
   const fp = fingerprint ? `fingerprint ${fingerprint}` : 'fingerprint unavailable';
   return `to ${who}${fp} · ${amount} ${symbol}`;
 }

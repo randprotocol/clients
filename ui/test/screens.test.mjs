@@ -731,6 +731,33 @@ test('a memo on a note, an activity row or a tx detail shows its control and bid
   assert.equal(note.root.querySelector('[data-role="memo"]').textContent, shown);
 });
 
+test('final review 2: a padded or escaped memo shows as one short line on every view, never wrapped', async (t) => {
+  const cp = (...p) => String.fromCodePoint(...p);
+  const R = cp(0xFFFD);
+  const tail = 'to alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND';
+  const evil = `x${cp(0x3000).repeat(120)}${cp(13, 0x1B)}[2K${tail}`;
+  const shown = `x ${R}${R}[2K${tail}`;
+  const b = unlockedBackend();
+  const cached = await b.sync.cached();
+  const activity = cached.activity.map((a) => (a.hash === `0x${'aa'.repeat(32)}` ? { ...a, memo: evil } : a));
+  const notes = cached.notes.map((n) => (n.index === 3 ? { ...n, memo: evil } : n));
+  b.sync.cached = async () => ({ ...cached, activity, notes });
+  const list = await at(t, '#activity', b);
+  const row = list.root.querySelector('[data-role="row-memo"]');
+  assert.equal(row.textContent, shown);
+  assert.ok(row.classList.contains('memo-line'), 'the activity row memo is one nowrap line');
+  list.app.destroy();
+  const detail = await at(t, `#tx/0x${'aa'.repeat(32)}`, b);
+  const d = detail.root.querySelector('[data-role="memo"]');
+  assert.equal(d.textContent, shown);
+  assert.ok(d.classList.contains('memo-line'), 'the tx detail memo is one nowrap line');
+  detail.app.destroy();
+  const note = await at(t, '#note/3', b);
+  const n = note.root.querySelector('[data-role="memo"]');
+  assert.equal(n.textContent, shown);
+  assert.ok(n.classList.contains('memo-line'), 'the note detail memo is one nowrap line');
+});
+
 // ------------------------------------------------------------------------------------- faucet ---
 test('faucet: disables the button while in flight and shows the node error inline on failure', async (t) => {
   const b = unlockedBackend();

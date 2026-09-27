@@ -1,37 +1,31 @@
-// How a memo is shown (spec 2026-09-26 §2.3; final whole-branch review, finding 3).
+// How a memo is shown (spec 2026-09-26 §2.3; final whole-branch reviews 1 and 2).
 //
-// A memo is somebody else's text: the sender's, or — on the confirmation before a send — whoever
-// made the randpay: link. It always goes onto the page as a text node, so it can never be markup;
-// this is the other half. A line break could draw a second "to … · fingerprint …" line under the
-// real one, and a bidi control (U+202A–U+202E, U+2066–U+2069, the LRM/RLM/ALM marks) could
-// reorder what is shown around it. So every control character — Unicode category Cc (C0, DEL,
-// C1), the bidi controls and marks, and the line/paragraph separators U+2028/U+2029 — is shown as
-// U+FFFD, visibly, one for one. Ordinary spaces and every other character are left alone.
+// A memo is anyone's text: memos are live on chains 14 and 15 (the ledger accepts a 1860-byte
+// envelope anywhere under the 2048 cap), so anyone can pay a dust note carrying any memo to any
+// public address, and a randpay: link can carry any memo. It always goes onto the page as a text
+// node, so it can never be markup; this is the other half — one rule, the same on every surface
+// (the CLI's `memo_display::sanitize`, iOS and Android `Memo.display`, randprotocol.org's
+// `/account`), applied BEFORE any truncation:
 //
+//   - every control character, Unicode category Cc (C0 — tab and newline too — DEL and C1),
+//     every format character, Cf (the bidi embeddings, overrides and isolates, LRM/RLM/ALM, the
+//     zero-width space and joiners, U+2060–U+2064, U+FEFF, the soft hyphen, …), and the
+//     line/paragraph separators U+2028/U+2029 (Zl, Zp) are shown as U+FFFD, one for one;
+//   - every run of space separators, Zs (U+0020, U+00A0, U+2003, U+3000, …), becomes one U+0020,
+//     so a memo cannot pad itself out to push a fake "to … · fingerprint …" into view.
+//
+// Every memo view is also one line that never wraps (`.memo-line`: nowrap + ellipsis).
 // Display only: the memo that is sealed and sent is the text as the user or the link gave it.
-// iOS (`Memo.display`) and Android (`Memo.display`) apply exactly the same set.
 
-const hex = (n) => n.toString(16).padStart(4, '0');
-const range = (a, b) => `\\u${hex(a)}-\\u${hex(b)}`;
-const one = (a) => `\\u${hex(a)}`;
-
-// Built from code points so the source holds no invisible characters.
-const NEUTRALISED = new RegExp(`[${[
-  range(0x0000, 0x001f), // C0
-  range(0x007f, 0x009f), // DEL and C1
-  one(0x061c), // ARABIC LETTER MARK
-  range(0x200e, 0x200f), // LRM, RLM
-  range(0x2028, 0x2029), // LINE SEPARATOR, PARAGRAPH SEPARATOR
-  range(0x202a, 0x202e), // LRE, RLE, PDF, LRO, RLO
-  range(0x2066, 0x2069), // LRI, RLI, FSI, PDI
-].join('')}]`, 'gu');
+const NEUTRALISED = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
+const SPACES = /\p{Zs}+/gu;
 
 export const REPLACEMENT = String.fromCodePoint(0xfffd);
 
-/** The memo as it may be shown: every control and bidi character replaced by U+FFFD. */
+/** The memo (or any other stranger-chosen text, like a contact name) as it may be shown. */
 export function displayMemo(text) {
   if (text === null || text === undefined) return '';
-  return String(text).replace(NEUTRALISED, REPLACEMENT);
+  return String(text).replace(NEUTRALISED, REPLACEMENT).replace(SPACES, ' ');
 }
 
 /** The one envelope size that carries a memo: fullnode's `EnvelopeFormat::for_chain` knows 1860

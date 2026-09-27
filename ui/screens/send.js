@@ -46,6 +46,7 @@ import {
   noMemoNoticeMarkup, contactPickerMarkup, scanSheetMarkup,
 } from './send/markup.js';
 import { canScanQr, scanQr, NO_CAMERA_TEXT } from '../lib/scan-qr.js';
+import { displayMemo } from '../lib/memo.js';
 import './send/sent.js'; // registers `#sent`
 
 // Re-exported from here because this is where it was asked for, and where it reads: the send
@@ -328,7 +329,7 @@ registerScreen('send', {
         if (!same) out.amount = `The link asks for ${link.amount} ${asset.symbol}; you typed ${typed} ${asset.symbol}.`;
       }
       if (link.memo !== null && link.memo !== '' && draft.memo && draft.memo !== link.memo) {
-        out.memo = `The link’s memo is "${link.memo}"; you typed "${draft.memo}".`;
+        out.memo = `The link’s memo is "${displayMemo(link.memo)}"; you typed "${displayMemo(draft.memo)}".`;
       }
       return out;
     }
@@ -435,12 +436,15 @@ registerScreen('send', {
         address = link.address;
         name = await contactNameOf(address);
       } else {
+        // A name is looked up exactly as typed, never trimmed: contact names are saved exactly
+        // as entered (CLI, iOS, Android and this UI alike — final review 2).
+        const typed = input.value;
         address = book && typeof book.addressOf === 'function'
-          ? await Promise.resolve(book.addressOf(text)).catch(() => null)
+          ? await Promise.resolve(book.addressOf(typed)).catch(() => null)
           : null;
         if (!live()) return null;
         if (!address) { setFieldError(input, NOT_A_RECIPIENT); return null; }
-        name = text;
+        name = typed;
       }
       if (!live()) return null;
       const fingerprint = (link && link.fingerprint) || await fingerprintOf(address);
@@ -885,7 +889,8 @@ registerScreen('send', {
       if (!memoSupported && draft.memo) { paintMemoNotice(); return; }
 
       const to = recipient.address;
-      draft.to = toInput.value.trim();
+      // As typed: a contact name is never trimmed (an address or link resolves trimmed anyway).
+      draft.to = toInput.value;
       draft.recipient = { address: to, name: recipient.name, fingerprint: recipient.fingerprint };
       draft.amount = amountInput.value;
 

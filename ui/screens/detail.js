@@ -40,7 +40,7 @@ function notFoundMarkup(ctx, title, backGo, message) {
 // The memo sealed with a note (spec 2026-09-26 §2.3), under the amount. The slot is markup; the
 // text is the sender's and goes in as a text node only.
 function memoSlot(record) {
-  return hasMemo(record) ? '<p class="memo" data-role="memo"></p>' : '';
+  return hasMemo(record) ? '<p class="memo memo-line" data-role="memo"></p>' : '';
 }
 function fillMemo(root, record) {
   const el = root.querySelector('[data-role="memo"]');

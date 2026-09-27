@@ -1393,6 +1393,39 @@ test('asset=00 names RAND, as the core and the CLI read an index', async (t) => 
   assert.equal(root.querySelector('[data-role="confirm-line"]').textContent, `to fingerprint ${fakeFingerprint(TO)} · 1 RAND`);
 });
 
+test('final review 2: a padded, escaped link memo is one nowrap line on the confirmation', async (t) => {
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }) } });
+  const { app, root } = await detailsOf(t, b);
+  const fake = `x${' '.repeat(400)}\r\u001b[2Kto alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND`;
+  await pasteRecipient(root, b, LINK(`?amount=1&memo=${encodeURIComponent(fake)}`));
+  submit(root);
+  await app.idle();
+  const memoEl = root.querySelector('[data-role="confirm-memo"]');
+  const R = String.fromCodePoint(0xFFFD);
+  assert.equal(memoEl.textContent, `memo "x ${R}${R}[2Kto alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND"`);
+  assert.ok(memoEl.classList.contains('memo-line'), 'the confirmation memo never wraps');
+});
+
+test('final review 2: a contact name is looked up exactly as saved — the name is never trimmed', async (t) => {
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }) } });
+  await b.contacts.add('alice ', TO);
+  const { root } = await review(t, b, { to: 'alice ', amount: '1' });
+  // Found by its exact name; shown through the display rule, so its trailing space and the
+  // separator's collapse into one.
+  assert.equal(root.querySelector('[data-role="confirm-line"]').textContent, `to alice · fingerprint ${fakeFingerprint(TO)} · 1 RAND`);
+});
+
+test('final review 2: a trimmed spelling of a saved name is not that contact', async (t) => {
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }) } });
+  await b.contacts.add('alice ', TO);
+  const { app, root } = await detailsOf(t, b);
+  root.querySelector('textarea[name=to]').value = 'alice';
+  root.querySelector('input[name=amount]').value = '1';
+  submit(root);
+  await app.idle();
+  assert.ok(root.querySelector('textarea[name=to]'), 'still on the form: "alice" is not "alice "');
+});
+
 test('a link memo cannot draw a second recipient line on the confirmation', async (t) => {
   // Final review, finding 3: the memo used to sit, unescaped, on the same line as the fingerprint.
   const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }) } });

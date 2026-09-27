@@ -1419,8 +1419,17 @@ body.wide .narrow { max-width: 440px; margin: 0 auto; }
   padding-left: var(--s-3);
   border-left: 2px solid var(--border);
   color: var(--text-soft);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+}
+/* Every memo view (activity rows, tx and note details, the send confirmation): one line that
+   never wraps, the rest cut with an ellipsis — the text itself already went through
+   lib/memo.js's displayMemo (final review 2). */
+.memo-line {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
 }
 .row-memo { font-style: italic; }
 .scan-video { width: 100%; max-height: 50vh; border-radius: var(--r-md); background: #000; }
