@@ -239,6 +239,10 @@ final class SendLinkTests: XCTestCase {
         XCTAssertTrue(modifiers.contains(".lineLimit(1)"), modifiers)
         XCTAssertTrue(modifiers.contains(".truncationMode(.tail)"), modifiers)
         XCTAssertFalse(modifiers.contains("fixedSize"), modifiers)
+        // Final review, finding: `lineLimit(1)` alone still lets a run of stacked combining marks
+        // (ordinary text — `Memo.display` neutralises controls and format characters, not marks)
+        // draw taller than this view and bleed over whatever sits below it.
+        XCTAssertTrue(modifiers.contains(".clipped()"), modifiers)
     }
 
     /// Contact names are saved exactly as typed, so a name is looked up exactly as typed too.

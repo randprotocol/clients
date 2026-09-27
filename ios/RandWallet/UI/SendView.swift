@@ -227,9 +227,13 @@ struct SendView: View {
                     // fingerprint back against the one the recipient sees on their Receive screen.
                     Text(confirmation).font(.mono).foregroundColor(Theme.textStrong)
                         .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
-                    // The memo: its own line, one line that never wraps (final review 2).
+                    // The memo: its own line, one line that never wraps (final review 2). `.clipped()`
+                    // too (final review, finding): `Memo.display` neutralises every control and
+                    // format character, but stacked combining marks are ordinary text — `lineLimit(1)`
+                    // alone lets a tall run of them draw past this view's own bounds and over
+                    // whatever sits below it.
                     Text(memoConfirmation).font(.mono).foregroundColor(Theme.text)
-                        .lineLimit(1).truncationMode(.tail)
+                        .lineLimit(1).truncationMode(.tail).clipped()
                 }
             }
             Text("Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.")
