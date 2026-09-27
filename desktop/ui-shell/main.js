@@ -20,6 +20,27 @@ function fatal(message) {
   document.body.append(box);
 }
 
+// `randpay:` deep links (spec 2026-09-26 §3.3): `src-tauri/src/main.rs` registers the OS as
+// handing this app `randpay:` links (the scheme in `tauri.conf.json`'s
+// `plugins.deep-link.desktop.schemes`) through `tauri-plugin-deep-link`, which re-emits every one
+// — a link opened while this app is already running (macOS), or the one it was launched with
+// (Windows/Linux, and macOS's `getCurrent()` for a cold start) — as the `deep-link://new-url`
+// event, `[url, …]`. This never parses the link: it forwards the raw string to the send screen
+// exactly as a pasted or scanned link is (`ui/screens/send.js`'s `takeRecipient` reaches
+// `core.call('uri_parse')`), through the same `#send?uri=` the web wallet's protocol handler opens
+// (`ui/lib/panes.js`'s `parseHash`).
+function wireDeepLinks(app) {
+  const { event, core } = window.__TAURI__;
+  const open = (urls) => {
+    const url = Array.isArray(urls) ? urls[0] : urls;
+    if (url) app.go(`send?uri=${encodeURIComponent(String(url))}`);
+  };
+  event.listen('deep-link://new-url', (e) => open(e.payload));
+  // A link this process was launched with (cold start) rather than one that arrived while it was
+  // already running: `on_open_url`/the CLI-argument path only fire for a *later* one.
+  core.invoke('plugin:deep-link|get_current').then(open).catch(() => { /* none pending */ });
+}
+
 async function boot() {
   const backend = await makeBackend();
 
@@ -35,7 +56,8 @@ async function boot() {
 
   // The shell mounts into <body>: it sets page-level classes (compact/wide) and the theme on
   // <html>, so it must own the page, not a box inside it.
-  await mount(document.body, backend, { mode: 'app' });
+  const app = await mount(document.body, backend, { mode: 'app' });
+  wireDeepLinks(app);
 }
 
 boot().catch((err) => fatal((err && err.message) || String(err)));

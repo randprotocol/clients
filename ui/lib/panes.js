@@ -39,11 +39,21 @@ export const TWO_PANE_QUERY = `(min-width: ${TWO_PANE_AT}px)`;
 /** The routes that can host a detail pane: screens that are lists of rows. */
 export const PARENT_ROUTES = ['home', 'activity', 'asset'];
 
-/** `#name/arg` → `{name, arg}`; the leading `#` is optional and `arg` may be undefined. */
+/**
+ * `#name/arg` → `{name, arg}`; the leading `#` is optional and `arg` may be undefined.
+ *
+ * `arg` also splits on a `?` (task 14: `#send?uri=<encoded randpay: link>`, a deep link's own
+ * route — a Tauri `randpay:` open, the web wallet's registered protocol handler, a receive
+ * screen's own link — arrives this way, one query string, never a second path segment) — whichever
+ * of `/` or `?` comes first, so `#send/1` and `#send?uri=…` both name `send` and hand the rest to
+ * the screen untouched. A leading `/` right after `#` (some browsers keep it in a registered
+ * protocol handler's URL, `#/send?uri=…`) is stripped the same way the `#` itself is: no route
+ * name starts with one.
+ */
 export function parseHash(hash) {
-  const s = String(hash || '').replace(/^#/, '');
+  const s = String(hash || '').replace(/^#\/?/, '');
   if (!s) return { name: '', arg: undefined };
-  const i = s.indexOf('/');
+  const i = s.search(/[/?]/);
   return i === -1 ? { name: s, arg: undefined } : { name: s.slice(0, i), arg: s.slice(i + 1) };
 }
 

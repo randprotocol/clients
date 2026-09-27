@@ -12,6 +12,7 @@
 import { mount } from './ui/app.js';
 import { makeWasmBackend } from './ui/engine/backend-wasm.js';
 import { idbStorage } from './idb.js';
+import { registerRandpayHandler, normalizeDeepLinkHash } from './deep-link.js';
 
 // ------------------------------------------------------------------------------- the core -----
 // A promise wrapper over the Web Worker in worker.js: `call(method, params)` resolves to the
@@ -93,7 +94,24 @@ function fatal(message) {
   document.body.append(box);
 }
 
+// `randpay:` deep links (spec 2026-09-26 §3.3): rewrites `location.hash` from whatever a browser
+// landed the page on (`registerRandpayHandler`'s own URL template, `#/send?uri=<web+randpay:…>`,
+// a browser open of a `web+randpay:` link the OS already resolved) into the plain `#send?uri=` the
+// shared router understands — see `deep-link.js`. Applied once before `mount()` so the very first
+// render already sees it, and again on every later `hashchange` so a `web+randpay:` link opened
+// in a tab this wallet is already mounted in (the browser may reuse the tab rather than opening a
+// new one) is rewritten too, not just a cold load.
+function applyDeepLinkNormalization() {
+  const normalized = normalizeDeepLinkHash(location.hash);
+  if (normalized && normalized !== location.hash) { location.hash = normalized; return true; }
+  return false;
+}
+
 async function boot() {
+  registerRandpayHandler();
+  applyDeepLinkNormalization();
+  window.addEventListener('hashchange', applyDeepLinkNormalization);
+
   const core = makeCore(new URL('./worker.js', import.meta.url));
 
   // Also warms the constants the backend reads (chain id, token symbol, decimals) — and tells us

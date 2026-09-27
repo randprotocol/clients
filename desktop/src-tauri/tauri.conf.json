@@ -23,6 +23,13 @@
       "csp": "default-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost https: http://127.0.0.1:* http://localhost:*"
     }
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["randpay"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["dmg", "msi", "appimage", "deb"],

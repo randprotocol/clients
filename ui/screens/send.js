@@ -114,6 +114,16 @@ registerScreen('send', {
     // An explicit `#send/<index>` names the asset and so skips the picker; so does a wallet with
     // only one asset to choose between. Otherwise the picker is a step of its own.
     const explicit = arg !== undefined && arg !== '' && /^\d+$/.test(String(arg));
+    // `#send?uri=<encoded randpay: link>` (task 14): a deep link names a recipient instead of an
+    // asset — a Tauri `randpay:` open, the web wallet's registered protocol handler, a receive
+    // screen's own share link. It is decoded here and nowhere else parses it: the string is handed
+    // to the recipient field exactly as a pasted or scanned link is (below), so it is resolved by
+    // the same `takeRecipient` → `core.call('uri_parse')` path every recipient goes through.
+    const linkMatch = typeof arg === 'string' ? /^uri=(.*)$/.exec(arg) : null;
+    let linkArg = null;
+    if (linkMatch) {
+      try { linkArg = decodeURIComponent(linkMatch[1]); } catch { linkArg = linkMatch[1]; }
+    }
     const rand = nativeAsset(assets);
     const requested = explicit ? Number(arg) : (assets.length === 1 ? assets[0].index : null);
     const steps = requested === null ? ['asset', 'details', 'review'] : ['details', 'review'];
@@ -152,6 +162,16 @@ registerScreen('send', {
       || (leftDraft && assets.find((a) => a.index === leftDraft.assetIndex && !isUnlisted(a)))
       || rand;
     let draft = draftFor(ctx, asset.index);
+
+    // A fresh link always wins over whatever the recipient field already held — a `#send?uri=`
+    // navigation is the user acting on this link now, exactly as a paste replaces a half-typed
+    // field. `draft.link` is dropped with it; `takeRecipient` (below, once the field is on the
+    // page) is what re-parses it.
+    if (linkArg !== null && draft.to !== linkArg) {
+      draft.to = linkArg;
+      draft.link = null;
+      draft.selfConfirmed = false;
+    }
 
     const platform = ctx.backend.platform;
     const formats = ctx.backend.address && typeof ctx.backend.address.parseLink === 'function' ? ctx.backend.address : null;
@@ -517,6 +537,13 @@ registerScreen('send', {
       attach(running);
     } else {
       goStep(step, { focus: false });
+      // The field already shows the link's raw text (draft.to, painted above); this is the async
+      // half — the same one a paste or a scan triggers — that resolves it, fills the hint, and
+      // auto-fills the amount/memo the link itself carries.
+      if (linkArg !== null && step === 'details') {
+        const linkInput = stepEl.querySelector('textarea[name=to]');
+        if (linkInput) takeRecipient(linkInput);
+      }
     }
 
     // ---- handlers ----

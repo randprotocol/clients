@@ -278,6 +278,43 @@ test('#send skips the picker when there is only one asset to list', async (t) =>
   assert.ok(root.querySelector('textarea[name=to]'), 'straight to the recipient');
 });
 
+// --------------------------------------------- task 14: `#send?uri=<link>` opens pre-filled ----
+// The shell (a Tauri `randpay:` open, the web wallet's registered protocol handler) forwards the
+// raw link string, never parses it: `#send?uri=<encoded randpay: link>` lands on the send screen
+// with the recipient field already holding the link's own text, resolved the one way any
+// recipient is (`core.call('uri_parse')`, reached through the same `takeRecipient` a paste or a
+// scan goes through).
+
+test('#send?uri=<link> lands on the send screen with the recipient filled', async (t) => {
+  const b = unlockedBackend(listing([randRow()]));
+  const link = `randpay:${TO}?amount=2`;
+  const { app, root } = await mountApp(t, b, { hash: `#send?uri=${encodeURIComponent(link)}` });
+  await app.idle();
+  assertGone(root.querySelector('[data-asset="0"]'), 'the recipient is already known — no picker');
+  assert.equal(root.querySelector('textarea[name=to]').value, link);
+  assert.match(root.querySelector('[data-role="to-link"]').textContent, /Payment link/);
+  assert.equal(root.querySelector('input[name=amount]').value, '2');
+});
+
+test('#send?uri=<link> replaces whatever the recipient field already held', async (t) => {
+  const b = unlockedBackend(listing([randRow()]));
+  const { app, root } = await mountApp(t, b, { hash: '#send/0' });
+  await app.idle();
+  root.querySelector('textarea[name=to]').value = 'partial-typing';
+  const link = `randpay:${TO}`;
+  await app.go(`send?uri=${encodeURIComponent(link)}`);
+  await app.idle();
+  assert.equal(root.querySelector('textarea[name=to]').value, link);
+});
+
+test('#send?uri= with an address that does not parse shows the same reason a paste would', async (t) => {
+  const b = unlockedBackend(listing([randRow()]));
+  const { app, root } = await mountApp(t, b, { hash: `#send?uri=${encodeURIComponent('randpay:not-an-address')}` });
+  await app.idle();
+  const field = root.querySelector('textarea[name=to]').closest('.field');
+  assert.ok(field.classList.contains('invalid'));
+});
+
 // ----------------------------------------------------- amendment 3: recipient validation ------
 
 test('an invalid recipient shows the backend’s own reason inline', async (t) => {

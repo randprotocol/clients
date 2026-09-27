@@ -25,13 +25,36 @@
 mod commands;
 mod storage;
 
+use tauri_plugin_deep_link::DeepLinkExt;
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // `randpay:` links (spec 2026-09-26 §3.3): the scheme is registered in tauri.conf.json's
+        // `plugins.deep-link.desktop.schemes`. On macOS that registration is read from the built
+        // bundle's Info.plist, so `cargo tauri dev` alone does not make the OS route `open
+        // "randpay:…"` to a dev build; on Windows/Linux the OS instead relaunches this binary
+        // with the link as its one argument, which is why `register_all()` is asked for here too
+        // — an AppImage or a dev binary that was never "installed" the usual way still gets the
+        // scheme. Either path, the plugin re-emits the link to the webview as the
+        // `deep-link://new-url` event (macOS: `RunEvent::Opened`, below; Windows/Linux: the CLI
+        // argument, at `init()`) — `ui-shell/main.js` is what listens and forwards it to the send
+        // screen; nothing here parses the link itself.
+        .plugin(tauri_plugin_deep_link::init())
         // The store is opened once, here, and handed to the commands as managed state: one path,
         // one lock, for the life of the process.
         .manage(storage::Storage::in_data_dir())
         .manage(storage::Session::default())
+        .setup(|app| {
+            // Windows/Linux only (macOS/Android/iOS register the scheme from the bundle's own
+            // config at build time and answer `Err(UnsupportedPlatform)` here — discarded, not
+            // fatal): makes sure the scheme is registered even for a dev binary or an AppImage
+            // that was never "installed" the usual way. A link the OS never routed here just
+            // falls back to paste, exactly as a browser that refused registerProtocolHandler does
+            // for the web wallet.
+            let _ = app.deep_link().register_all();
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::core_call,
             commands::system_memory_gib,

@@ -30,6 +30,7 @@ sysinfo = { version = "0.33", default-features = false, features = ["system"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dirs = "6"
+tauri-plugin-deep-link = "2"
 
 # Gone with the egui app this replaces: `eframe`/`egui` (the screens are ui/ now), `keyring` (the
 # spend key is in the shared password-derived vault, not the OS credential store — see
