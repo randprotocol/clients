@@ -54,27 +54,37 @@ enum Memo {
 
     static func byteCount(_ text: String) -> Int { text.utf8.count }
     static func counter(_ text: String) -> String { "\(byteCount(text))/\(maxBytes) bytes" }
-    /// The memo as it may be shown (final review, finding 3). A memo is somebody else's text — the
-    /// sender's, or a link's — and a line break in it could draw a second "to … · fingerprint …"
-    /// line, a bidi control reorder what is around it. Every scalar of category Cc (C0, DEL, C1),
-    /// the bidi controls U+202A–U+202E and U+2066–U+2069, the marks U+200E, U+200F, U+061C, and
-    /// the separators U+2028/U+2029 is shown as U+FFFD, one for one — by Unicode scalar, so a
-    /// CR LF (one Swift Character) is two. Everything else, ordinary spaces included, is left
-    /// alone. The shared UI's `displayMemo` and Android's `Memo.display` replace the same set.
-    /// Display only: the sealed memo is the text itself.
+    /// The memo — or any other stranger-chosen text, like a contact name — as it may be shown
+    /// (final reviews 1 and 2). Memos are live on chains 14 and 15: anyone can pay a dust note
+    /// carrying any memo to any public address, and a link carries any memo. One rule, the same as
+    /// the CLI's `memo_display::sanitize`, the shared UI's `displayMemo`, Android's `Memo.display`
+    /// and randprotocol.org's `/account`, applied before any truncation, by Unicode scalar (so a
+    /// CR LF, one Swift Character, is two): every scalar of category Cc (C0 — tab and newline
+    /// too — DEL, C1), Cf (the bidi embeddings, overrides and isolates, LRM/RLM/ALM, zero-width
+    /// space and joiners, U+2060–U+2064, U+FEFF, the soft hyphen, …), Zl and Zp (U+2028/U+2029)
+    /// is shown as U+FFFD, one for one; every run of Zs space separators (U+3000 and U+2003
+    /// included) becomes one U+0020. Display only: the sealed memo is the text itself.
     static func display(_ text: String) -> String {
         let replacement = Unicode.Scalar(UInt32(0xFFFD))!
         var out = String.UnicodeScalarView()
-        for s in text.unicodeScalars { out.append(neutralised(s.value) ? replacement : s) }
+        var inSpace = false
+        for s in text.unicodeScalars {
+            if s.properties.generalCategory == .spaceSeparator {
+                if !inSpace { out.append(" ") }
+                inSpace = true
+                continue
+            }
+            inSpace = false
+            out.append(neutralised(s) ? replacement : s)
+        }
         return String(out)
     }
 
-    static func neutralised(_ c: UInt32) -> Bool {
-        c <= 0x1F || (0x7F...0x9F).contains(c)
-            || c == 0x061C || c == 0x200E || c == 0x200F
-            || c == 0x2028 || c == 0x2029
-            || (0x202A...0x202E).contains(c)
-            || (0x2066...0x2069).contains(c)
+    static func neutralised(_ s: Unicode.Scalar) -> Bool {
+        switch s.properties.generalCategory {
+        case .control, .format, .lineSeparator, .paragraphSeparator: return true
+        default: return false
+        }
     }
 
     /// The refusal for a memo over the limit, or `nil`.
@@ -129,7 +139,7 @@ enum SendLinkRules {
             if !same { out.amount = "The link asks for \(wanted) \(symbol); you typed \(typed) \(symbol)." }
         }
         if let m = link.memo, !m.isEmpty, !typedMemo.isEmpty, typedMemo != m {
-            out.memo = "The link’s memo is \"\(m)\"; you typed \"\(typedMemo)\"."
+            out.memo = "The link’s memo is \"\(Memo.display(m))\"; you typed \"\(Memo.display(typedMemo))\"."
         }
         return out
     }
@@ -160,7 +170,9 @@ enum SendLinkRules {
     /// newline or a bidi control in it could draw a fake second recipient line. The memo is
     /// `memoLine`, a line of its own below this one.
     static func confirmationLine(name: String?, fingerprint: String?, amount: String, symbol: String) -> String {
-        let who = name.map { "\($0) · " } ?? ""
+        // A contact name is user-entered (and may end in a space): shown through the memo rule,
+        // the separator included, so the line never carries a control character or two spaces.
+        let who = name.map { Memo.display("\($0) · ") } ?? ""
         let fp = fingerprint.map { "fingerprint \($0)" } ?? "fingerprint unavailable"
         return "to \(who)\(fp) · \(amount) \(symbol)"
     }
@@ -182,8 +194,10 @@ enum SendLinkRules {
             let link = try RandCore.uriParse(s)
             return ResolvedRecipient(address: link.address, name: contacts.name(of: link.address), fingerprint: link.fingerprint, link: link)
         case .name:
-            guard let addr = contacts.address(of: s) else { throw RandCore.CoreError(message: notARecipient) }
-            return ResolvedRecipient(address: addr, name: s, fingerprint: try RandCore.addressFingerprint(addr), link: nil)
+            // A name is looked up exactly as typed, never trimmed: contact names are saved exactly
+            // as entered (the CLI, Android and the shared UI alike — final review 2).
+            guard let addr = contacts.address(of: text) else { throw RandCore.CoreError(message: notARecipient) }
+            return ResolvedRecipient(address: addr, name: text, fingerprint: try RandCore.addressFingerprint(addr), link: nil)
         }
     }
 }

@@ -116,7 +116,7 @@ final class SendLinkTests: XCTestCase {
         let bidi: [UInt32] = [0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, 0x200E, 0x200F, 0x061C, 0x2028, 0x2029]
         let bidiText = String(String.UnicodeScalarView(bidi.map { Unicode.Scalar($0)! }))
         XCTAssertEqual(Memo.display("x" + bidiText + "y"), "x" + String(repeating: r, count: bidi.count) + "y")
-        let ordinary = "two  spaces, " + cp(0xE9) + " and " + cp(0x1F600)
+        let ordinary = "one space, " + cp(0xE9) + " and " + cp(0x1F600)
         XCTAssertEqual(Memo.display(ordinary), ordinary)
         // "\r\n" is one Character in Swift but two scalars: both are shown.
         XCTAssertEqual(Memo.display("a" + cp(13, 10) + "b"), "a" + r + r + "b")
@@ -177,5 +177,78 @@ final class SendLinkTests: XCTestCase {
         XCTAssertThrowsError(try SendLinkRules.resolve("bob", contacts: book)) { e in
             XCTAssertEqual(e.localizedDescription, SendLinkRules.notARecipient)
         }
+    }
+
+    // ---- Final review 2, item A: one display rule (the CLI's, the shared UI's, Android's and
+    // randprotocol.org's), applied before any truncation. Memos are live on chains 14 and 15:
+    // anyone can pay a dust note carrying any memo to any public address.
+    private let tail = "to alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND"
+
+    private var hostile: [String] {
+        [
+            "x" + String(repeating: cp(0x3000), count: 120) + tail,
+            "x" + String(repeating: " ", count: 400) + tail,
+            "x" + String(repeating: cp(0x2003), count: 60) + tail,
+            cp(13, 0x1B) + "[2K" + tail,
+            cp(10, 10) + "to alice" + cp(0x2028) + tail + cp(0x2029),
+            cp(0x202E) + "DNAR 1" + cp(0x202C) + " " + cp(0x2066) + tail + cp(0x2069, 0x200E, 0x200F, 0x061C),
+            "a" + cp(0x200B, 0x200C, 0x200D) + "b" + cp(0x2060, 0x2061, 0x2062, 0x2063, 0x2064) + "c" + cp(0xFEFF) + "d" + cp(0xAD) + "e",
+            cp(9) + tail + cp(0x7F, 0x85, 0x9B) + "31m",
+        ]
+    }
+
+    /// No line break, no control/format/separator scalar, no space but U+0020, no run of two.
+    private func assertDisplayable(_ shown: String, file: StaticString = #filePath, line: UInt = #line) {
+        for s in shown.unicodeScalars {
+            let c = s.properties.generalCategory
+            XCTAssertFalse([.control, .format, .lineSeparator, .paragraphSeparator].contains(c),
+                           "U+\(String(s.value, radix: 16)) in \(shown)", file: file, line: line)
+            XCTAssertFalse(c == .spaceSeparator && s != " ", "non-ASCII space U+\(String(s.value, radix: 16)) in \(shown)", file: file, line: line)
+        }
+        XCTAssertFalse(shown.contains("  "), "a run of spaces in \(shown)", file: file, line: line)
+    }
+
+    func testAHostileMemoIsOneLineHidesNothingAndCannotPadItselfOut() {
+        let r = cp(0xFFFD)
+        for m in hostile {
+            assertDisplayable(Memo.display(m))
+            assertDisplayable(SendLinkRules.memoLine(m))
+            assertDisplayable(SendLinkRules.confirmationLine(name: m, fingerprint: "BBBB", amount: "1", symbol: "RAND"))
+        }
+        XCTAssertEqual(Memo.display("x" + String(repeating: cp(0x3000), count: 120) + "to alice"), "x to alice")
+        XCTAssertEqual(Memo.display("x" + String(repeating: " ", count: 400) + "to alice"), "x to alice")
+        XCTAssertEqual(Memo.display(cp(13, 0x1B) + "[2Kto alice"), r + r + "[2Kto alice")
+        XCTAssertEqual(Memo.display("a" + cp(0x200B) + "b" + cp(0xFEFF) + "c" + cp(0xAD) + "d"), "a" + r + "b" + r + "c" + r + "d")
+        // A saved name may end in a space: it and the separator collapse into one.
+        XCTAssertEqual(SendLinkRules.confirmationLine(name: "alice ", fingerprint: "BBBB", amount: "1", symbol: "RAND"),
+                       "to alice · fingerprint BBBB · 1 RAND")
+        // The link/typed memo conflict message shows both memos through the same rule.
+        let c = SendLinkRules.conflicts(link: link(amount: "1", memo: "a" + cp(10) + "b"), typedAmount: "1", typedMemo: "x  y")
+        XCTAssertEqual(c.memo, "The link’s memo is \"a" + r + "b\"; you typed \"x y\".")
+    }
+
+    /// The memo on the confirmation is one line that never wraps: `.lineLimit(1)` and tail
+    /// truncation on its `Text`, and no `fixedSize` that would let it grow.
+    func testTheConfirmationMemoIsOneTruncatedLine() throws {
+        let view = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("RandWallet/UI/SendView.swift")
+        let source = try String(contentsOf: view, encoding: .utf8)
+        guard let start = source.range(of: "Text(memoConfirmation)") else { return XCTFail("the memo Text") }
+        let rest = source[start.upperBound...]
+        let modifiers = String(rest[..<(rest.range(of: "\n                }")?.lowerBound ?? rest.endIndex)])
+        XCTAssertTrue(modifiers.contains(".lineLimit(1)"), modifiers)
+        XCTAssertTrue(modifiers.contains(".truncationMode(.tail)"), modifiers)
+        XCTAssertFalse(modifiers.contains("fixedSize"), modifiers)
+    }
+
+    /// Contact names are saved exactly as typed, so a name is looked up exactly as typed too.
+    func testAContactNameIsNeverTrimmedBeforeTheLookup() throws {
+        let w = try RandCore.keygen()
+        var book = ContactBook()
+        try book.add(name: "alice ", address: w.address)
+        let r = try SendLinkRules.resolve("alice ", contacts: book)
+        XCTAssertEqual(r.address, w.address)
+        XCTAssertEqual(r.name, "alice ")
+        XCTAssertThrowsError(try SendLinkRules.resolve("alice", contacts: book))
     }
 }
