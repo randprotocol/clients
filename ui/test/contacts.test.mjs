@@ -9,6 +9,7 @@ import { listContacts, addContact, removeContact, nameOf, CONTACTS_KEY } from '.
 import { mapStorage } from './backend-fixtures.mjs';
 import { unlockedBackend, fakeFingerprint } from './fake-backend.mjs';
 import { mountApp } from './helpers.mjs';
+import { HOSTILE, assertDisplayable } from './memo.test.mjs';
 
 const ALICE = `rand1${'a'.repeat(44)}`;
 const BOB = `rand1${'b'.repeat(44)}`;
@@ -72,6 +73,39 @@ test('the contacts screen lists names as text, never as markup', async (t) => {
   assert.equal(root.querySelector('img'), null, 'a name is never parsed as HTML');
   const names = [...root.querySelectorAll('[data-role="contact-name"]')].map((n) => n.textContent);
   assert.deepEqual(names, ['<img src=x onerror=alert(1)>']);
+});
+
+test('a hostile contact name displays sanitised, on the list and before saving', async (t) => {
+  // Final review, finding: contacts.js showed a saved name and the pre-save confirmation name
+  // through raw `textContent` — safe against markup, but not against the same bidi/zero-width/
+  // control-character tricks a memo uses to draw a forged line. `addContact`'s own 64-character
+  // limit already rules out the padding-heavy HOSTILE cases as *names* (a memo has no such cap),
+  // so this keeps only the ones a 64-character name can actually carry. Only one is added at a
+  // time — the backend's list sorts by name, and sanitising does not preserve that ordering, so
+  // pairing a hostile input to its shown output needs one name on the list at once.
+  const hostileNames = HOSTILE.filter((m) => [...m].length <= 64);
+  assert.ok(hostileNames.length >= 3, 'at least a few HOSTILE cases fit a contact name');
+  for (const m of hostileNames) {
+    const b = unlockedBackend();
+    await b.contacts.add(m, ALICE);
+    const { app, root } = await mountApp(t, b, { hash: '#contacts' });
+    await app.idle();
+    const shown = root.querySelector('[data-role="contact-name"]').textContent;
+    assertDisplayable(shown, m);
+
+    // The aria-label the "Remove" button carries is a display surface too (assistive tech reads
+    // it aloud); the underlying `data-remove` key stays the real name so removal still works.
+    const label = root.querySelector('[data-remove]').getAttribute('aria-label');
+    assertDisplayable(label.replace(/^Remove /, ''), label);
+    assert.equal(root.querySelector('[data-remove]').getAttribute('data-remove'), m, 'removal still keys on the real name');
+
+    // The pre-save confirmation (before any fingerprint is even shown) is the same rule.
+    root.querySelector('input[name=contact-name]').value = m;
+    root.querySelector('textarea[name=contact-address]').value = BOB;
+    root.querySelector('[data-role="contact-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await app.idle();
+    assertDisplayable(root.querySelector('[data-role="confirm-name"]').textContent, m);
+  }
 });
 
 test('adding a contact shows the fingerprint before it is saved', async (t) => {

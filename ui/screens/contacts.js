@@ -17,6 +17,7 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { shortAddress } from '../lib/format.js';
 import { canScanQr, scanQr } from '../lib/scan-qr.js';
+import { displayMemo } from '../lib/memo.js';
 
 function topbarMarkup() {
   return h`<div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="settings" aria-label="Back">${raw(icons.chevron())}</button><span class="topbar-title">Contacts</span><span class="spacer"></span></div>`;
@@ -118,11 +119,16 @@ registerScreen('contacts', {
       const items = listEl.querySelectorAll('li');
       list.forEach((c, i) => {
         const li = items[i];
-        li.querySelector('[data-role="contact-name"]').textContent = c.name;
+        // A saved name is the user's own text, but a link can suggest one (`addressFrom`'s
+        // caller may prefill it) — hostile in exactly the way a memo is, so it goes through the
+        // same display rule before it reaches the page (final review, finding — names shown
+        // unsanitised). `data-remove` stays the real name: it is the lookup key `book.remove`
+        // matches against, never shown.
+        li.querySelector('[data-role="contact-name"]').textContent = displayMemo(c.name);
         li.querySelector('[data-role="contact-address"]').textContent = shortAddress(c.address);
         const remove = li.querySelector('[data-remove]');
         remove.setAttribute('data-remove', c.name);
-        remove.setAttribute('aria-label', `Remove ${c.name}`);
+        remove.setAttribute('aria-label', `Remove ${displayMemo(c.name)}`);
       });
       // Fingerprints last, one core call each, so the names are on screen at once.
       const fps = await Promise.all(list.map((c) => (typeof ctx.backend.address?.fingerprint === 'function'
@@ -189,7 +195,7 @@ registerScreen('contacts', {
           <button class="btn btn-primary" type="button" data-role="save-contact">It matches — save</button>
           <button class="btn" type="button" data-role="cancel-contact">Cancel</button>
         </div>`;
-      confirmEl.querySelector('[data-role="confirm-name"]').textContent = name;
+      confirmEl.querySelector('[data-role="confirm-name"]').textContent = displayMemo(name);
       confirmEl.querySelector('[data-role="contact-fingerprint"]').textContent = fingerprint || 'unavailable in this app';
       confirmEl.querySelector('[data-role="confirm-address"]').textContent = address;
     });
