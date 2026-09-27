@@ -116,11 +116,16 @@ public final class SendDraft {
         }
     }
 
-    /** This app sends RAND only: a link naming no asset, {@code 0} or {@code RAND} is RAND. */
+    /**
+     * This app sends RAND only: a link naming no asset, or an index whose value is zero
+     * ({@code 0}, {@code 00}, …), is RAND — the core's {@code PaymentUri::parse} reads an index
+     * as digits, and the CLI and the shared UI read it by value. {@code RAND} is not a form the
+     * core's parser accepts, so it is no branch here; an id ({@code rpl1…}, 64 hex) names a token.
+     */
     public static boolean linkIsRand(String asset) {
         if (asset == null || asset.trim().isEmpty()) return true;
         String a = asset.trim();
-        return a.equals("0") || a.toUpperCase(Locale.ROOT).equals("RAND");
+        return a.matches("[0-9]+") && a.matches("0+");
     }
 
     /**
@@ -155,9 +160,10 @@ public final class SendDraft {
         return new Filled(a, m);
     }
 
-    /** A chain carries a memo only when its limits positively report an envelope size. */
+    /** A chain carries a memo only when its limits report exactly the 1860-byte envelope
+     *  ({@link Memo#supported}): any other size, and none, gets no memo field. */
     public static boolean memoSupported(Integer envelopeBytes) {
-        return envelopeBytes != null && envelopeBytes > 0;
+        return Memo.supported(envelopeBytes);
     }
 
     /** A memo on a chain that cannot carry one blocks Continue until it is cleared. */
@@ -165,11 +171,23 @@ public final class SendDraft {
         return !memoSupported && memo != null && !memo.isEmpty();
     }
 
-    /** The one confirmation line every surface shows before a send (spec 2026-09-26 §3). */
-    public static String confirmationLine(String name, String fingerprint, String amount, String symbol, String memo) {
+    /**
+     * The confirmation every surface shows before a send (spec 2026-09-26 §3), recipient part:
+     * {@code to <name?> · fingerprint XXXX-XXXX-XXXX-XXXX · <amount> <asset>}. It never carries
+     * memo text (final review, finding 3): a link's memo is somebody else's words, and on this
+     * line a newline or a bidi control in it could draw a fake second recipient line. The memo is
+     * {@link #memoLine}, a row of its own below this one.
+     */
+    public static String confirmationLine(String name, String fingerprint, String amount, String symbol) {
         String who = name != null ? name + " · " : "";
         String fp = fingerprint != null ? "fingerprint " + fingerprint : "fingerprint unavailable";
-        return "to " + who + fp + " · " + amount + " " + symbol + " · memo \"" + (memo == null ? "" : memo) + "\"";
+        return "to " + who + fp + " · " + amount + " " + symbol;
+    }
+
+    /** The memo's own row on the confirmation: {@code memo "<text>"}, with every control and bidi
+     *  character shown as U+FFFD ({@link Memo#display}), so it is one line that reads as a memo. */
+    public static String memoLine(String memo) {
+        return "memo \"" + Memo.display(memo) + "\"";
     }
 
     /**

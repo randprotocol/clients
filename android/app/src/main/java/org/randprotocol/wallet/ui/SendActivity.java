@@ -355,7 +355,8 @@ public class SendActivity extends BaseActivity {
         b.rTo.setText(Amounts.shortAddress(to));
         b.rFee.setText(Amounts.format(fee) + " RAND");
         b.rTotal.setText(Amounts.format(amount.add(fee)) + " RAND");
-        b.rConfirm.setText(SendDraft.confirmationLine(resolved.name, resolved.fingerprint, Amounts.format(amount), SendDraft.SYMBOL, memoToSend));
+        b.rConfirm.setText(SendDraft.confirmationLine(resolved.name, resolved.fingerprint, Amounts.format(amount), SendDraft.SYMBOL));
+        b.rMemo.setText(SendDraft.memoLine(memoToSend));
         showMemoryWarning();
         b.flipper.setDisplayedChild(REVIEW);
     }

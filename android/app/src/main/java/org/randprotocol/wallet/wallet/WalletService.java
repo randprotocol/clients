@@ -440,9 +440,9 @@ public final class WalletService {
             }
 
             // Read from the node this send talks to, right before proving: every output is sealed
-            // at exactly this size, and a chain that declares none carries no memo.
+            // at exactly this size, and only the 1860-byte envelope carries a memo.
             Integer envelopeBytes = rpc.envelopeBytes();
-            if (envelopeBytes == null && !memo.isEmpty()) throw new RpcException(0, Memo.NO_MEMO_NOTICE);
+            if (!Memo.supported(envelopeBytes) && !memo.isEmpty()) throw new RpcException(0, Memo.NO_MEMO_NOTICE);
 
             JSONObject req = new JSONObject();
             req.put("spend_key", sk);

@@ -105,11 +105,19 @@ public class SendLinkTest {
         assertNull(SendDraft.conflicts(link("1", null, null), "", "").amount);
     }
 
-    /** This app sends RAND only; a link asking for another asset is refused on the recipient. */
+    /**
+     * This app sends RAND only; a link asking for another asset is refused on the recipient. The
+     * asset is read the way the core's parser and the shared UI read it: digits by value, so
+     * {@code 0} and {@code 00} are RAND; {@code RAND} is not a form the core's parser accepts.
+     */
     @Test
     public void aLinkForAnotherAssetIsRefused() {
         assertNull(SendDraft.conflicts(link(null, "0", null), "", "").to);
-        assertNull(SendDraft.conflicts(link(null, "rand", null), "", "").to);
+        assertNull(SendDraft.conflicts(link(null, "00", null), "", "").to);
+        assertTrue(SendDraft.linkIsRand("000"));
+        assertFalse("the core refuses asset=RAND, so it is not a RAND branch here", SendDraft.linkIsRand("RAND"));
+        assertFalse(SendDraft.linkIsRand("rand"));
+        assertFalse(SendDraft.linkIsRand("01"));
         SendDraft.Conflicts c = SendDraft.conflicts(link("1", "1", null), "", "");
         assertEquals("The link asks for an asset this wallet does not hold (1).", c.to);
         assertNull(c.amount);
@@ -135,21 +143,59 @@ public class SendLinkTest {
     public void aLegacyChainCarriesNoMemo() {
         assertFalse(SendDraft.memoSupported(null));
         assertFalse(SendDraft.memoSupported(0));
-        assertTrue(SendDraft.memoSupported(1024));
+        // Exactly 1860 (fullnode's EnvelopeFormat::for_chain): any other size carries no memo.
+        assertFalse(SendDraft.memoSupported(1024));
+        assertFalse(SendDraft.memoSupported(1861));
+        assertTrue(SendDraft.memoSupported(1860));
         assertEquals("This network doesn't carry memos; the memo will not be sent", Memo.NO_MEMO_NOTICE);
         assertTrue(SendDraft.memoBlocksContinue(false, "hi"));
         assertFalse(SendDraft.memoBlocksContinue(false, ""));
         assertFalse(SendDraft.memoBlocksContinue(true, "hi"));
     }
 
+    /**
+     * The confirmation is two lines: the recipient, with no memo text on it, and the memo on its
+     * own line below (final review, finding 3).
+     */
     @Test
     public void confirmationLine() {
-        assertEquals("to alice · fingerprint 1WCV-YC8F-47BY-5RZY · 1.5 RAND · memo \"rent\"",
-                SendDraft.confirmationLine("alice", "1WCV-YC8F-47BY-5RZY", "1.5", "RAND", "rent"));
-        assertEquals("to fingerprint 1WCV-YC8F-47BY-5RZY · 2 RAND · memo \"\"",
-                SendDraft.confirmationLine(null, "1WCV-YC8F-47BY-5RZY", "2", "RAND", ""));
-        assertEquals("to fingerprint unavailable · 2 RAND · memo \"\"",
-                SendDraft.confirmationLine(null, null, "2", "RAND", ""));
+        assertEquals("to alice · fingerprint 1WCV-YC8F-47BY-5RZY · 1.5 RAND",
+                SendDraft.confirmationLine("alice", "1WCV-YC8F-47BY-5RZY", "1.5", "RAND"));
+        assertEquals("to fingerprint 1WCV-YC8F-47BY-5RZY · 2 RAND",
+                SendDraft.confirmationLine(null, "1WCV-YC8F-47BY-5RZY", "2", "RAND"));
+        assertEquals("to fingerprint unavailable · 2 RAND",
+                SendDraft.confirmationLine(null, null, "2", "RAND"));
+        assertEquals("memo \"rent\"", SendDraft.memoLine("rent"));
+        assertEquals("memo \"\"", SendDraft.memoLine(""));
+        assertEquals("memo \"\"", SendDraft.memoLine(null));
+    }
+
+    private static String cp(int... points) {
+        return new String(points, 0, points.length);
+    }
+
+    /** A link's memo cannot draw a second recipient line: it never reaches the recipient line,
+     *  and its own line is one line with every control and bidi character shown as U+FFFD. */
+    @Test
+    public void aMemoCannotFakeASecondRecipientLine() {
+        String fake = cp(10, 10) + "to alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND";
+        String r = cp(0xFFFD);
+        String line = SendDraft.memoLine(fake);
+        assertEquals("memo \"" + r + r + "to alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND\"", line);
+        for (int lb : new int[] {10, 13, 0x2028, 0x2029}) assertFalse(line.contains(cp(lb)));
+        assertEquals("to fingerprint BBBB · 1 RAND", SendDraft.confirmationLine(null, "BBBB", "1", "RAND"));
+    }
+
+    @Test
+    public void controlAndBidiCharactersAreNeutralised() {
+        String r = cp(0xFFFD);
+        assertEquals("a" + r + r + "b" + r + "c" + r + "d" + r + "e" + r + "f",
+                Memo.display("a" + cp(13, 9) + "b" + cp(0) + "c" + cp(0x7F) + "d" + cp(0x85) + "e" + cp(0x9F) + "f"));
+        int[] bidi = {0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, 0x200E, 0x200F, 0x061C, 0x2028, 0x2029};
+        assertEquals("x" + r.repeat(bidi.length) + "y", Memo.display("x" + cp(bidi) + "y"));
+        String ordinary = "two  spaces, " + cp(0xE9) + " and " + cp(0x1F600);
+        assertEquals(ordinary, Memo.display(ordinary));
+        assertEquals("", Memo.display(null));
     }
 
     /** {@code rand_getLimits}: the field's value, null when absent or null; anything else is an error. */
@@ -178,11 +224,13 @@ public class SendLinkTest {
     public void receiveMemoIsGatedOnEnvelopeBytes() {
         assertFalse(ReceiveLinkRules.showsMemo(null));
         assertFalse(ReceiveLinkRules.showsMemo(0));
-        assertTrue(ReceiveLinkRules.showsMemo(1024));
+        assertFalse(ReceiveLinkRules.showsMemo(1024));
+        assertTrue(ReceiveLinkRules.showsMemo(1860));
         assertNull(ReceiveLinkRules.linkMemo("hi", null));
         assertNull(ReceiveLinkRules.linkMemo("hi", 0));
-        assertNull(ReceiveLinkRules.linkMemo("", 1024));
-        assertEquals("hi", ReceiveLinkRules.linkMemo("hi", 1024));
+        assertNull(ReceiveLinkRules.linkMemo("hi", 1024));
+        assertNull(ReceiveLinkRules.linkMemo("", 1860));
+        assertEquals("hi", ReceiveLinkRules.linkMemo("hi", 1860));
     }
 
     /**
