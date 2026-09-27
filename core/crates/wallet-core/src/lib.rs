@@ -48,10 +48,10 @@ pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): the
-/// address-sharing branch (`feat/address-sharing`, on v0.5.7), which adds the address
+/// address-sharing branch (`feat/address-sharing`, on v0.5.9, workspace version 0.5.10), which adds the address
 /// fingerprint, `randpay:` links and the encrypted memo (spec 2026-09-26). Earlier: `9c142c1`
 /// (v0.5.1).
-pub const CHAIN_BUILD: &str = "2e769b7";
+pub const CHAIN_BUILD: &str = "1a13359";
 /// The chain the defaults below describe: chain 14, the testnet this wallet was first built for
 /// (`deploy/README.md`, genesis `1cff3b7d…`, cut 2026-09-20) — the shielded pool on the
 /// **hidden-asset bundle** (one 4-in/4-out proof for RAND, a bridged coin or an RPL token alike),
@@ -3838,7 +3838,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 14);
-            assert_eq!(v["chain_build"], "2e769b7");
+            assert_eq!(v["chain_build"], "1a13359");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
