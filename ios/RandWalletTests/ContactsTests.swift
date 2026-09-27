@@ -70,6 +70,27 @@ final class ContactsTests: XCTestCase {
         XCTAssertTrue(ContactsStore(backing: backing).book.sorted.isEmpty)
     }
 
+    /// Forgetting the wallet clears the contact book in memory as well as in the Keychain: the
+    /// app-lifetime store must not keep offering a forgotten wallet's contacts (final review,
+    /// finding 2).
+    func testForgetClearsTheBookAndItsBacking() throws {
+        let backing = MemoryBlob()
+        let store = ContactsStore(backing: backing)
+        try store.add(name: "alice", address: a1)
+        store.forget()
+        XCTAssertTrue(store.book.sorted.isEmpty, "nothing left in memory")
+        XCTAssertNil(backing.data, "nothing left in the backing")
+    }
+
+    /// Through the wallet: forgetting it clears the store the app holds for its whole lifetime.
+    @MainActor func testForgettingTheWalletClearsTheAppsContactsStore() throws {
+        let store = ContactsStore(backing: MemoryBlob())
+        try store.add(name: "alice", address: a1)
+        let wallet = WalletService(settings: Settings())
+        wallet.forgetWallet(contacts: store)
+        XCTAssertTrue(store.book.sorted.isEmpty)
+    }
+
     /// Garbage in the store reads as an empty book, never a crash.
     func testACorruptStoreReadsEmpty() {
         let backing = MemoryBlob()
@@ -92,4 +113,5 @@ final class MemoryBlob: SecretBlobStore {
     var data: Data?
     func read() -> Data? { data }
     func write(_ data: Data) throws { self.data = data }
+    func delete() { data = nil }
 }

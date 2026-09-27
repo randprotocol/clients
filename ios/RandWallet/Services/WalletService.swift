@@ -89,10 +89,13 @@ final class WalletService: ObservableObject {
         info = nil
     }
 
-    func forgetWallet() {
+    /// Forgets the wallet on this phone. `contacts` is the store the app holds for its whole
+    /// lifetime: it is emptied in memory as well as in the Keychain, so a forgotten wallet's
+    /// contacts are not offered to the next one (final review, finding 2).
+    func forgetWallet(contacts: ContactsStore) {
         lock()
         Keychain.deleteSpendKey()
-        KeychainBlob(account: "contacts").delete()
+        contacts.forget()
         NoteStore.delete()
         store = NoteStore()
         settings.hasBackedUpKey = false
@@ -229,7 +232,7 @@ final class WalletService: ObservableObject {
         // Read from the node this send talks to, right before proving: every output is sealed at
         // exactly this size, and a chain that declares none carries no memo.
         let envelopeBytes = try await rpc.envelopeBytes()
-        if envelopeBytes == nil && !memo.isEmpty { throw RpcClient.RpcError(code: 0, message: Memo.noMemoNotice) }
+        if !SendLinkRules.memoSupported(envelopeBytes: envelopeBytes) && !memo.isEmpty { throw RpcClient.RpcError(code: 0, message: Memo.noMemoNotice) }
         let request = ProveRequest(spendKey: sk, chainId: chainId, to: to, amount: String(amount), fee: String(fee),
                                    anchorHeight: anchor.height, anchorRoot: anchor.root, inputs: inputs, profile: "production",
                                    memo: memo, envelopeBytes: envelopeBytes)

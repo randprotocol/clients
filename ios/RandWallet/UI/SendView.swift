@@ -18,8 +18,9 @@ struct SendView: View {
     @State private var addressError: String?
     @State private var showScanner = false
     @State private var showContactPicker = false
-    /// Whether the connected chain carries a memo: only when `rand_getLimits` positively reports
-    /// an envelope size. Unknown (not yet read, or the node did not answer) hides the field.
+    /// Whether the connected chain carries a memo: only when `rand_getLimits` reports the
+    /// 1860-byte envelope. Any other size, or unknown (not yet read, or the node did not answer),
+    /// hides the field.
     @State private var memoSupported = false
 
     private let fee: UInt64 = 1_000_000
@@ -71,9 +72,12 @@ struct SendView: View {
     /// fills the form, nothing more: the user still reviews and confirms.
     private func takeLink() {
         guard case .form = step, let link = router.take() else { return }
-        amountText = ""
-        memo = ""
-        recipient = link
+        let intake = LinkIntake.take(link: link, currentRecipient: recipient)
+        amountText = intake.amount
+        memo = intake.memo
+        recipient = intake.recipient
+        // The same link again: `onChange(of: recipient)` will not fire, so fill it back in here.
+        if intake.resolveNow { resolveRecipient(intake.recipient) }
     }
 
     private var amountUnits: UInt64? { Amount.parse(amountText) }
@@ -90,9 +94,10 @@ struct SendView: View {
     }
     private var confirmation: String {
         SendLinkRules.confirmationLine(name: resolved?.name, fingerprint: resolved?.fingerprint,
-                                       amount: Amount.format(amountUnits ?? 0), symbol: "RAND",
-                                       memo: memoSupported ? memo : "")
+                                       amount: Amount.format(amountUnits ?? 0), symbol: "RAND")
     }
+    /// The memo's own line, below the recipient line and never on it (final review, finding 3).
+    private var memoConfirmation: String { SendLinkRules.memoLine(memoSupported ? memo : "") }
 
     private var form: some View {
         ScrollView {
@@ -221,6 +226,8 @@ struct SendView: View {
                     // The one line every surface shows before a send (spec 2026-09-26 §3): read the
                     // fingerprint back against the one the recipient sees on their Receive screen.
                     Text(confirmation).font(.mono).foregroundColor(Theme.textStrong)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                    Text(memoConfirmation).font(.mono).foregroundColor(Theme.text)
                         .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                 }
             }

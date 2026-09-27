@@ -37,6 +37,29 @@ final class LinkHandoffTests: XCTestCase {
         XCTAssertEqual(h.presentationEnded(linkPending: true, sheetUp: false, sendUp: false), .presentSend)
     }
 
+    /// A second link while the first one's dismissal is still in flight must not present Send
+    /// early: the sheets' flags are already down, but SwiftUI has not finished dismissing them
+    /// (final review, finding 9). Send still follows the dismissal's completion.
+    func testASecondLinkDuringADismissalWaitsForIt() {
+        var h = LinkHandoff()
+        XCTAssertEqual(h.linkArrived(sheetUp: true, sendUp: false), .dismissSheets)
+        XCTAssertEqual(h.linkArrived(sheetUp: false, sendUp: false), .none)
+        XCTAssertTrue(h.waiting)
+        XCTAssertEqual(h.presentationEnded(linkPending: true, sheetUp: false, sendUp: false), .presentSend)
+        XCTAssertFalse(h.waiting)
+    }
+
+    /// Re-opening the same link Send already holds clears the amount and memo; the recipient text
+    /// does not change, so `onChange(of: recipient)` never fires — the intake says to resolve it
+    /// again explicitly so the link's amount and memo are filled back in (final review, finding 9).
+    func testTheSameLinkAgainIsResolvedAgain() {
+        let link = "randpay:rand1abc?amount=1&memo=hi"
+        let same = LinkIntake.take(link: link, currentRecipient: link)
+        XCTAssertEqual(same, LinkIntake(recipient: link, amount: "", memo: "", resolveNow: true))
+        let other = LinkIntake.take(link: link, currentRecipient: "rand1old")
+        XCTAssertEqual(other, LinkIntake(recipient: link, amount: "", memo: "", resolveNow: false))
+    }
+
     /// A link Send already consumed is not re-opened.
     func testATakenLinkPresentsNothing() {
         var h = LinkHandoff()

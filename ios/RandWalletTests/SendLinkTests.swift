@@ -43,9 +43,16 @@ final class SendLinkTests: XCTestCase {
         XCTAssertNotNil(SendLinkRules.conflicts(link: link(amount: "1"), typedAmount: "abc", typedMemo: "").amount)
     }
 
-    /// This app sends RAND only; a link asking for another asset is refused on the recipient.
+    /// This app sends RAND only; a link asking for another asset is refused on the recipient. The
+    /// asset is read as the core's parser and the shared UI read it: digits by value, so `0` and
+    /// `00` are RAND; `RAND` is not a form the core's parser accepts, so it is no RAND branch.
     func testALinkForAnotherAssetIsRefused() {
         XCTAssertNil(SendLinkRules.conflicts(link: link(asset: "0"), typedAmount: "", typedMemo: "").to)
+        XCTAssertNil(SendLinkRules.conflicts(link: link(asset: "00"), typedAmount: "", typedMemo: "").to)
+        XCTAssertTrue(SendLinkRules.linkIsRand("000"))
+        XCTAssertFalse(SendLinkRules.linkIsRand("RAND"))
+        XCTAssertFalse(SendLinkRules.linkIsRand("rand"))
+        XCTAssertFalse(SendLinkRules.linkIsRand("01"))
         let c = SendLinkRules.conflicts(link: link(amount: "1", asset: "1"), typedAmount: "", typedMemo: "")
         XCTAssertEqual(c.to, "The link asks for an asset this wallet does not hold (1).")
         XCTAssertNil(c.amount)
@@ -66,18 +73,53 @@ final class SendLinkTests: XCTestCase {
     func testALegacyChainCarriesNoMemo() {
         XCTAssertFalse(SendLinkRules.memoSupported(envelopeBytes: nil))
         XCTAssertFalse(SendLinkRules.memoSupported(envelopeBytes: 0))
-        XCTAssertTrue(SendLinkRules.memoSupported(envelopeBytes: 1024))
+        // Exactly 1860 (fullnode's EnvelopeFormat::for_chain): any other size carries no memo.
+        XCTAssertFalse(SendLinkRules.memoSupported(envelopeBytes: 1024))
+        XCTAssertFalse(SendLinkRules.memoSupported(envelopeBytes: 1861))
+        XCTAssertTrue(SendLinkRules.memoSupported(envelopeBytes: 1860))
         XCTAssertEqual(Memo.noMemoNotice, "This network doesn't carry memos; the memo will not be sent")
         XCTAssertTrue(SendLinkRules.memoBlocksContinue(memoSupported: false, memo: "hi"))
         XCTAssertFalse(SendLinkRules.memoBlocksContinue(memoSupported: false, memo: ""))
         XCTAssertFalse(SendLinkRules.memoBlocksContinue(memoSupported: true, memo: "hi"))
     }
 
+    /// Two lines: the recipient, with no memo text on it, and the memo on its own line below
+    /// (final review, finding 3).
     func testConfirmationLine() {
-        XCTAssertEqual(SendLinkRules.confirmationLine(name: "alice", fingerprint: "1WCV-YC8F-47BY-5RZY", amount: "1.5", symbol: "RAND", memo: "rent"),
-                       "to alice · fingerprint 1WCV-YC8F-47BY-5RZY · 1.5 RAND · memo \"rent\"")
-        XCTAssertEqual(SendLinkRules.confirmationLine(name: nil, fingerprint: "1WCV-YC8F-47BY-5RZY", amount: "2", symbol: "RAND", memo: ""),
-                       "to fingerprint 1WCV-YC8F-47BY-5RZY · 2 RAND · memo \"\"")
+        XCTAssertEqual(SendLinkRules.confirmationLine(name: "alice", fingerprint: "1WCV-YC8F-47BY-5RZY", amount: "1.5", symbol: "RAND"),
+                       "to alice · fingerprint 1WCV-YC8F-47BY-5RZY · 1.5 RAND")
+        XCTAssertEqual(SendLinkRules.confirmationLine(name: nil, fingerprint: "1WCV-YC8F-47BY-5RZY", amount: "2", symbol: "RAND"),
+                       "to fingerprint 1WCV-YC8F-47BY-5RZY · 2 RAND")
+        XCTAssertEqual(SendLinkRules.memoLine("rent"), "memo \"rent\"")
+        XCTAssertEqual(SendLinkRules.memoLine(""), "memo \"\"")
+    }
+
+    private func cp(_ points: UInt32...) -> String {
+        String(String.UnicodeScalarView(points.map { Unicode.Scalar($0)! }))
+    }
+
+    /// A link's memo cannot draw a second recipient line: it never reaches the recipient line, and
+    /// its own line is one line with every control and bidi character shown as U+FFFD.
+    func testAMemoCannotFakeASecondRecipientLine() {
+        let fake = cp(10, 10) + "to alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND"
+        let r = cp(0xFFFD)
+        let line = SendLinkRules.memoLine(fake)
+        XCTAssertEqual(line, "memo \"" + r + r + "to alice · fingerprint AAAA-AAAA-AAAA-AAAA · 1 RAND\"")
+        for lb: UInt32 in [10, 13, 0x2028, 0x2029] { XCTAssertFalse(line.unicodeScalars.contains(Unicode.Scalar(lb)!)) }
+        XCTAssertEqual(SendLinkRules.confirmationLine(name: nil, fingerprint: "BBBB", amount: "1", symbol: "RAND"), "to fingerprint BBBB · 1 RAND")
+    }
+
+    func testControlAndBidiCharactersAreNeutralised() {
+        let r = cp(0xFFFD)
+        XCTAssertEqual(Memo.display("a" + cp(13, 9) + "b" + cp(0) + "c" + cp(0x7F) + "d" + cp(0x85) + "e" + cp(0x9F) + "f"),
+                       "a" + r + r + "b" + r + "c" + r + "d" + r + "e" + r + "f")
+        let bidi: [UInt32] = [0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, 0x200E, 0x200F, 0x061C, 0x2028, 0x2029]
+        let bidiText = String(String.UnicodeScalarView(bidi.map { Unicode.Scalar($0)! }))
+        XCTAssertEqual(Memo.display("x" + bidiText + "y"), "x" + String(repeating: r, count: bidi.count) + "y")
+        let ordinary = "two  spaces, " + cp(0xE9) + " and " + cp(0x1F600)
+        XCTAssertEqual(Memo.display(ordinary), ordinary)
+        // "\r\n" is one Character in Swift but two scalars: both are shown.
+        XCTAssertEqual(Memo.display("a" + cp(13, 10) + "b"), "a" + r + r + "b")
     }
 
     /// `rand_getLimits`: the field's value, `null` when absent or null.
@@ -108,11 +150,13 @@ final class SendLinkTests: XCTestCase {
     func testReceiveMemoIsGatedOnEnvelopeBytes() {
         XCTAssertFalse(ReceiveLinkRules.showsMemo(envelopeBytes: nil))
         XCTAssertFalse(ReceiveLinkRules.showsMemo(envelopeBytes: 0))
-        XCTAssertTrue(ReceiveLinkRules.showsMemo(envelopeBytes: 1024))
+        XCTAssertFalse(ReceiveLinkRules.showsMemo(envelopeBytes: 1024))
+        XCTAssertTrue(ReceiveLinkRules.showsMemo(envelopeBytes: 1860))
         XCTAssertNil(ReceiveLinkRules.linkMemo("hi", envelopeBytes: nil))
         XCTAssertNil(ReceiveLinkRules.linkMemo("hi", envelopeBytes: 0))
-        XCTAssertNil(ReceiveLinkRules.linkMemo("", envelopeBytes: 1024))
-        XCTAssertEqual(ReceiveLinkRules.linkMemo("hi", envelopeBytes: 1024), "hi")
+        XCTAssertNil(ReceiveLinkRules.linkMemo("hi", envelopeBytes: 1024))
+        XCTAssertNil(ReceiveLinkRules.linkMemo("", envelopeBytes: 1860))
+        XCTAssertEqual(ReceiveLinkRules.linkMemo("hi", envelopeBytes: 1860), "hi")
     }
 
     /// Resolution in the CLI's order: address, link, contact name.

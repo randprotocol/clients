@@ -72,6 +72,7 @@ struct ContactBook: Equatable {
 protocol SecretBlobStore: AnyObject {
     func read() -> Data?
     func write(_ data: Data) throws
+    func delete()
 }
 
 /// A generic-password Keychain item beside the spend key's (same service, its own account),
@@ -140,6 +141,13 @@ final class ContactsStore: ObservableObject {
 
     func removeAll() {
         try? save(ContactBook())
+    }
+
+    /// Forgetting the wallet: the backing item is deleted and the book in memory emptied, so the
+    /// store the app holds for its whole lifetime offers none of a forgotten wallet's contacts.
+    func forget() {
+        backing.delete()
+        book = ContactBook()
     }
 
     private func save(_ next: ContactBook) throws {

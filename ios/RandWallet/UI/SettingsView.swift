@@ -6,6 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject var settings: Settings
     @EnvironmentObject var wallet: WalletService
     @EnvironmentObject var auth: AuthService
+    @EnvironmentObject var contacts: ContactsStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -92,7 +93,7 @@ struct SettingsView: View {
             }
             .confirmationDialog("Forget this wallet on this phone? Without your spend key backup the funds are gone.", isPresented: $confirmForget, titleVisibility: .visible) {
                 Button("Forget wallet", role: .destructive) {
-                    wallet.forgetWallet()
+                    wallet.forgetWallet(contacts: contacts)
                     auth.lock()
                     dismiss()
                     onForget()

@@ -69,6 +69,11 @@ struct LinkHandoff: Equatable {
     mutating func linkArrived(sheetUp: Bool, sendUp: Bool) -> Action {
         // Send already up takes the link itself (or, mid-proof, leaves it pending for later).
         if sendUp { return .none }
+        // A dismissal is already in flight for an earlier link: its completion presents Send.
+        // The sheets' flags are down by now, but SwiftUI has not finished dismissing, so
+        // presenting here would be early (final review, finding 9). The router keeps the newer
+        // link; Send takes whatever is pending when it opens.
+        if waiting { return .none }
         if sheetUp { waiting = true; return .dismissSheets }
         waiting = false
         return .presentSend
