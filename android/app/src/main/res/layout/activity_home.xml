@@ -27,6 +27,7 @@
         <include android:id="@+id/action_receive" layout="@layout/view_action" />
         <include android:id="@+id/action_send" layout="@layout/view_action" />
         <include android:id="@+id/action_faucet" layout="@layout/view_action" />
+        <include android:id="@+id/action_contacts" layout="@layout/view_action" />
     </LinearLayout>
 
     <TextView android:id="@+id/error" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:padding="12dp" android:background="@drawable/bg_surface_card" android:textColor="@color/negative" android:textSize="13sp" android:visibility="gone" />

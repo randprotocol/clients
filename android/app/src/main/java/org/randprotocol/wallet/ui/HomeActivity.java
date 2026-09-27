@@ -34,6 +34,7 @@ public class HomeActivity extends BaseActivity {
         action(b.actionReceive, R.drawable.ic_arrow_down, R.string.home_receive, v -> startActivity(new Intent(this, ReceiveActivity.class)));
         action(b.actionSend, R.drawable.ic_arrow_up, R.string.home_send, v -> startActivity(new Intent(this, SendActivity.class)));
         action(b.actionFaucet, R.drawable.ic_drop, R.string.home_faucet, v -> faucet());
+        action(b.actionContacts, R.drawable.ic_person, R.string.home_contacts, v -> startActivity(new Intent(this, ContactsActivity.class)));
         b.qr.setOnClickListener(v -> startActivity(new Intent(this, ReceiveActivity.class)));
         b.settings.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         b.addressChip.setOnClickListener(v -> copy("address", wallet().address(), getString(R.string.home_copied)));

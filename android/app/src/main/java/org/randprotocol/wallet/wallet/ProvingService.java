@@ -27,6 +27,7 @@ public class ProvingService extends Service {
     public static final String EXTRA_TO = "to";
     public static final String EXTRA_AMOUNT = "amount";
     public static final String EXTRA_FEE = "fee";
+    public static final String EXTRA_MEMO = "memo";
     private static final String CHANNEL = "proving";
     private static final int NOTIFICATION_ID = 1;
 
@@ -38,11 +39,12 @@ public class ProvingService extends Service {
         String to = intent.getStringExtra(EXTRA_TO);
         BigInteger amount = new BigInteger(intent.getStringExtra(EXTRA_AMOUNT));
         BigInteger fee = new BigInteger(intent.getStringExtra(EXTRA_FEE));
+        String memo = intent.getStringExtra(EXTRA_MEMO);
 
         startInForeground(getString(R.string.proving_notification_title), getString(R.string.proving_notification_text));
         worker = new Thread(() -> {
             try {
-                WalletService.get(this).send(to, amount, fee);
+                WalletService.get(this).send(to, amount, fee, memo == null ? "" : memo);
             } finally {
                 stopForeground(STOP_FOREGROUND_REMOVE);
                 stopSelf();

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Title" android:text="@string/contacts_title" />
+
+    <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" style="@style/Text.Body" android:text="@string/contacts_empty" />
+    <LinearLayout android:id="@+id/list" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="vertical" />
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/contacts_new" />
+    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:hint="@string/contacts_name_hint">
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/name" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textPersonName|textNoSuggestions" android:maxLines="1" />
+    </com.google.android.material.textfield.TextInputLayout>
+    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="@string/contacts_address_hint">
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/address" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textMultiLine|textNoSuggestions" android:maxLines="3" android:typeface="monospace" android:textSize="12sp" />
+    </com.google.android.material.textfield.TextInputLayout>
+    <com.google.android.material.button.MaterialButton android:id="@+id/paste" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/send_paste" />
+    <TextView android:id="@+id/fingerprint" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Mono" android:textSize="12sp" android:textColor="@color/text_soft" android:visibility="gone" />
+    <TextView android:id="@+id/error" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="@color/negative" android:textSize="13sp" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/save" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="@string/contacts_save" android:enabled="false" />
+</LinearLayout>
+</ScrollView>

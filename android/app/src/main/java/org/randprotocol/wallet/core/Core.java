@@ -74,6 +74,32 @@ public final class Core {
         }
     }
 
+    /** {@code XXXX-XXXX-XXXX-XXXX}, sixteen characters the core computes from the address. */
+    public static String addressFingerprint(String address) throws CoreException {
+        return object("address_fingerprint", p("address", address)).optString("fingerprint", null);
+    }
+
+    /**
+     * A {@code randpay:} link, parsed: {@code {address, amount, asset, memo, fingerprint}}, the
+     * fingerprint recomputed by the core. Throws the core's message on a link it refuses.
+     */
+    public static JSONObject uriParse(String uri) throws CoreException {
+        return object("uri_parse", p("uri", uri.trim()));
+    }
+
+    /** The core formats and parses back, so this never returns a link another wallet refuses. */
+    public static String uriFormat(String address, String amount, String asset, String memo) throws CoreException {
+        JSONObject params = p("address", address);
+        try {
+            if (amount != null && !amount.isEmpty()) params.put("amount", amount);
+            if (asset != null && !asset.isEmpty()) params.put("asset", asset);
+            if (memo != null && !memo.isEmpty()) params.put("memo", memo);
+        } catch (JSONException e) {
+            throw new IllegalArgumentException(e);
+        }
+        return object("uri_format", params).optString("uri", null);
+    }
+
     /** Trial-decrypt a page of {@code rand_getCommitments} rows. */
     public static JSONObject scanPage(String spendKey, JSONArray rows) throws CoreException {
         return object("scan_page", p("spend_key", spendKey, "rows", rows));

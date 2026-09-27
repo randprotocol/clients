@@ -33,6 +33,7 @@
     <string name="home_receive">Receive</string>
     <string name="home_send">Send</string>
     <string name="home_faucet">Faucet</string>
+    <string name="home_contacts">Contacts</string>
     <string name="home_activity">Activity</string>
     <string name="home_empty">No activity yet. Ask the faucet for testnet RAND, or share your address.</string>
     <string name="home_settings">Settings</string>
@@ -41,13 +42,35 @@
     <string name="faucet_done">Faucet mint committed</string>
 
     <string name="receive_title">Receive</string>
-    <string name="receive_body">Share this address to get paid. It is public by design: holding it tells nobody what you own.</string>
+    <string name="receive_body">Anyone can pay this address. It reveals nothing about what you hold.</string>
     <string name="receive_copy">Copy address</string>
-    <string name="receive_share">Share</string>
+    <string name="receive_copy_link">Copy link</string>
+    <string name="receive_share">Share payment link</string>
+    <string name="receive_link_copied">Payment link copied</string>
+    <string name="receive_fingerprint">Fingerprint</string>
+    <string name="receive_fingerprint_note">Whoever pays you sees this fingerprint on their confirmation; if it does not match, it is not your address.</string>
+    <string name="receive_qr_description">QR code of your payment link</string>
+    <string name="receive_qr_too_long">This link is too long for a QR code; share or copy it instead.</string>
+    <string name="receive_link_title">Payment link</string>
+    <string name="receive_link_body_memo">Optional: ask for an amount, and add a note the payer’s wallet fills in for them.</string>
+    <string name="receive_link_body">Optional: ask for an amount the payer’s wallet fills in for them.</string>
+    <string name="receive_amount_hint">Amount — the payer decides</string>
+    <string name="receive_memo_hint">Memo</string>
+    <string name="receive_bad_amount">Enter the amount as a number, for example 1.25.</string>
 
     <string name="send_title">Send</string>
-    <string name="send_to_hint">Recipient address (rand1…)</string>
+    <string name="send_to_hint">rand1…, randpay: link or contact</string>
     <string name="send_paste">Paste</string>
+    <string name="send_scan">Scan</string>
+    <string name="send_contacts">Contacts</string>
+    <string name="send_scan_prompt">Scan a rand1 address or a randpay: link</string>
+    <string name="send_camera_denied">Scanning needs the camera. Allow it in Android settings, or paste the link instead.</string>
+    <string name="send_payment_link">"Payment link · "</string>
+    <string name="send_memo_hint">Memo (optional)</string>
+    <string name="send_memo_note">Encrypted with the payment: only the recipient, you and anyone either of you shows it to can read it.</string>
+    <string name="send_clear_memo">Clear memo</string>
+    <string name="send_over_balance">Amount plus fee exceeds your balance.</string>
+    <string name="send_no_contacts">No contacts yet. Add one from Contacts on the home screen.</string>
     <string name="send_amount_hint">Amount</string>
     <string name="send_max">Max</string>
     <string name="send_fee">Network fee</string>
@@ -58,6 +81,7 @@
     <string name="review_title">Review</string>
     <string name="review_amount">Amount</string>
     <string name="review_to">To</string>
+    <string name="review_confirmation">Read the fingerprint back against the one the recipient sees on their Receive screen.</string>
     <string name="review_fee">Fee</string>
     <string name="review_total">Total</string>
     <string name="review_note">Proving the transfer takes a few minutes on a phone. Keep the app open; a notification shows progress if you switch away.</string>
@@ -94,6 +118,20 @@
     <string name="status_committed">Committed in block %1$d</string>
     <string name="status_pending">Waiting for the commit</string>
     <string name="status_expired">Expired without committing</string>
+
+    <string name="contacts_title">Contacts</string>
+    <string name="contacts_empty">No contacts yet. A contact\'s name can be typed in Send\'s To field instead of the address.</string>
+    <string name="contacts_add">Add contact</string>
+    <string name="contacts_new">New contact</string>
+    <string name="contacts_name_hint">Name</string>
+    <string name="contacts_address_hint">rand1… or randpay: link</string>
+    <string name="contacts_save">Save contact</string>
+    <string name="contacts_bad_address">That is not a shielded address or a randpay: link.</string>
+    <string name="contacts_fingerprint">fingerprint %1$s</string>
+    <string name="contacts_fingerprint_unavailable">fingerprint unavailable</string>
+    <string name="contacts_remove_title">Remove %1$s?</string>
+    <string name="contacts_remove">Remove</string>
+    <string name="contacts_copy_address">Copy address</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_network">Network</string>

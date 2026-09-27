@@ -9,7 +9,13 @@
         <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:hint="@string/send_to_hint" app:endIconMode="clear_text">
             <com.google.android.material.textfield.TextInputEditText android:id="@+id/to" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textMultiLine|textNoSuggestions" android:maxLines="3" android:typeface="monospace" android:textSize="12sp" />
         </com.google.android.material.textfield.TextInputLayout>
-        <com.google.android.material.button.MaterialButton android:id="@+id/paste" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/send_paste" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <com.google.android.material.button.MaterialButton android:id="@+id/paste" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/send_paste" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/scan" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/send_scan" app:icon="@drawable/ic_qr" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/pick_contact" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/send_contacts" app:icon="@drawable/ic_person" />
+        </LinearLayout>
+        <TextView android:id="@+id/recipient_info" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Mono" android:textSize="12sp" android:textColor="@color/text_soft" android:visibility="gone" />
+        <TextView android:id="@+id/to_error" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/negative" android:textSize="13sp" android:visibility="gone" />
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="8dp">
             <com.google.android.material.textfield.TextInputLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:hint="@string/send_amount_hint" app:suffixText="RAND">
                 <com.google.android.material.textfield.TextInputEditText android:id="@+id/amount" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="numberDecimal" android:textSize="22sp" android:fontFeatureSettings="tnum" />
@@ -17,12 +23,27 @@
             <com.google.android.material.button.MaterialButton android:id="@+id/max" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="@string/send_max" />
         </LinearLayout>
         <TextView android:id="@+id/available" android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Caption" android:layout_marginTop="4dp" />
+        <TextView android:id="@+id/amount_error" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/negative" android:textSize="13sp" android:visibility="gone" />
+
+        <LinearLayout android:id="@+id/memo_group" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="12dp" android:visibility="gone">
+            <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="@string/send_memo_hint">
+                <com.google.android.material.textfield.TextInputEditText android:id="@+id/memo" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textMultiLine|textNoSuggestions" android:maxLines="5" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <TextView android:id="@+id/memo_counter" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:gravity="end" style="@style/Text.Caption" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Caption" android:text="@string/send_memo_note" />
+            <TextView android:id="@+id/memo_error" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/negative" android:textSize="13sp" android:visibility="gone" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/memo_notice_group" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="12dp" android:padding="12dp" android:background="@drawable/bg_surface_card" android:visibility="gone">
+            <TextView android:id="@+id/memo_notice" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Body" android:textColor="@color/warning" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/clear_memo" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/send_clear_memo" />
+        </LinearLayout>
+
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="16dp">
             <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" style="@style/Text.Body" android:text="@string/send_fee" />
             <TextView android:id="@+id/fee" android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Amount" android:textSize="15sp" />
         </LinearLayout>
         <TextView android:id="@+id/form_error" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:textColor="@color/negative" android:textSize="13sp" />
-        <com.google.android.material.button.MaterialButton android:id="@+id/review" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/send_review" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/review" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/send_review" android:enabled="false" />
     </LinearLayout>
     </ScrollView>
 
@@ -39,6 +60,10 @@
             <TextView android:id="@+id/r_fee" android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Amount" android:textSize="15sp" />
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="14dp" style="@style/Text.Caption" android:text="@string/review_total" />
             <TextView android:id="@+id/r_total" android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Amount" />
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="12dp" android:padding="18dp" android:background="@drawable/bg_surface_card">
+            <TextView android:id="@+id/r_confirm" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Mono" android:textSize="13sp" android:textStyle="bold" android:textIsSelectable="true" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Caption" android:text="@string/review_confirmation" />
         </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" style="@style/Text.Body" android:text="@string/review_note" />
         <TextView android:id="@+id/memory_warning" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" style="@style/Text.Body" android:textColor="@color/warning" android:visibility="gone" />

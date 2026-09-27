@@ -101,6 +101,37 @@ public class RpcClient {
 
     // ---- the methods the wallet uses ----
 
+    /**
+     * The chain's {@code envelope_bytes} from {@code rand_getLimits} (spec 2026-09-26 §2.4),
+     * mirroring {@code ui/engine/wallet.js}'s {@code envelopeBytesOf}: null means the legacy
+     * envelope and no memo — a chain that reports {@code null}, a reply without the field, or a
+     * node that predates the method ({@code -32601}). Any other failure propagates: a node that
+     * did not answer is not a node that said "no memo".
+     */
+    public Integer envelopeBytes() throws RpcException {
+        Object reply;
+        try {
+            reply = call("rand_getLimits", null);
+        } catch (RpcException e) {
+            if (e.code == -32601) return null;
+            throw e;
+        }
+        return envelopeBytesOf(reply);
+    }
+
+    /** {@code rand_getLimits}'s reply → its {@code envelope_bytes}: null when absent or null, else a size in 1..2^20. */
+    public static Integer envelopeBytesOf(Object reply) throws RpcException {
+        if (!(reply instanceof JSONObject)) throw new RpcException(0, "rand_getLimits: not an object");
+        JSONObject o = (JSONObject) reply;
+        if (!o.has("envelope_bytes") || o.isNull("envelope_bytes")) return null;
+        Object v = o.opt("envelope_bytes");
+        if (v instanceof Integer || v instanceof Long) {
+            long n = ((Number) v).longValue();
+            if (n > 0 && n <= (1 << 20)) return (int) n;
+        }
+        throw new RpcException(0, "rand_getLimits: envelope_bytes is not a positive size");
+    }
+
     public long chainId() throws RpcException {
         return ((Number) call("rand_chainId", null)).longValue();
     }

@@ -14,9 +14,12 @@ import org.randprotocol.wallet.rpc.RpcClient;
 import org.randprotocol.wallet.rpc.RpcException;
 import org.randprotocol.wallet.security.KeyVault;
 import org.randprotocol.wallet.security.Prefs;
+import org.randprotocol.wallet.store.Contacts;
+import org.randprotocol.wallet.store.EncryptedBlob;
 import org.randprotocol.wallet.store.NoteStore;
 import org.randprotocol.wallet.store.OwnedNote;
 import org.randprotocol.wallet.store.Submission;
+import org.randprotocol.wallet.ui.Memo;
 
 import java.io.File;
 import java.io.IOException;
@@ -75,6 +78,7 @@ public final class WalletService {
     private final NoteStore store;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final MutableLiveData<Snapshot> snapshot = new MutableLiveData<>();
+    private Contacts contacts;
     private String cachedAddress;
     private String cachedViewingKey;
 
@@ -97,6 +101,20 @@ public final class WalletService {
 
     public NoteStore store() {
         return store;
+    }
+
+    /** The contact book, opened on first use (its own EncryptedSharedPreferences file). */
+    public synchronized Contacts contacts() {
+        if (contacts == null) contacts = Contacts.open(new EncryptedBlob(app, "rand_wallet_contacts"));
+        return contacts;
+    }
+
+    /**
+     * The connected chain's {@code envelope_bytes} (null: this chain carries no memo). Blocking;
+     * call off the main thread. Throws when the node did not answer.
+     */
+    public Integer envelopeBytes() throws RpcException {
+        return rpc().envelopeBytes();
     }
 
     public LiveData<Snapshot> snapshot() {
@@ -148,6 +166,7 @@ public final class WalletService {
     public void removeWallet() {
         vault.erase();
         prefs.setBackedUp(false);
+        contacts().clear();
         synchronized (store) {
             store.clear();
             store.submissions.clear();
@@ -376,7 +395,8 @@ public final class WalletService {
      * Blocking and slow (the proof); {@link ProvingService} runs it and progress goes through
      * {@link SendMonitor}.
      */
-    public void send(String to, BigInteger amount, BigInteger fee) {
+    public void send(String to, BigInteger amount, BigInteger fee, String memo) {
+        if (memo == null) memo = "";
         SendState st = new SendState(SendState.Phase.PREPARING, "Syncing notes", null, null, amount.toString(), to, System.currentTimeMillis());
         SendMonitor.post(st);
         String sk = vault.spendKey();
@@ -419,6 +439,11 @@ public final class WalletService {
                 else if (attempt == 3) throw new RpcException(0, "the tree moved three times; try again");
             }
 
+            // Read from the node this send talks to, right before proving: every output is sealed
+            // at exactly this size, and a chain that declares none carries no memo.
+            Integer envelopeBytes = rpc.envelopeBytes();
+            if (envelopeBytes == null && !memo.isEmpty()) throw new RpcException(0, Memo.NO_MEMO_NOTICE);
+
             JSONObject req = new JSONObject();
             req.put("spend_key", sk);
             req.put("chain_id", prefs.chainId());
@@ -429,6 +454,10 @@ public final class WalletService {
             req.put("anchor_root", anchor.getString("root"));
             req.put("inputs", inputs);
             req.put("profile", "production");
+            // Sealed with the payment only; null (sent as JSON null, never left out) is the
+            // legacy envelope, where the core refuses a non-empty memo before proving.
+            req.put("memo", memo);
+            req.put("envelope_bytes", envelopeBytes == null ? JSONObject.NULL : envelopeBytes);
 
             SendMonitor.post(st.with(SendState.Phase.PROVING, "Proving your transfer"));
             JSONObject proved = Core.proveTransfer(req);
