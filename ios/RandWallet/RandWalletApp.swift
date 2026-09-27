@@ -55,3 +55,30 @@ final class LinkRouter: ObservableObject {
         return pending
     }
 }
+
+/// When Home presents Send for an incoming link. The link itself stays in `LinkRouter` until Send
+/// takes it, so nothing here can lose it; this only sequences the presentation. SwiftUI will not
+/// present while another sheet is still dismissing, so with a sheet up the sheets are dismissed
+/// and Send follows the dismissal's completion (`onDismiss`), never a timer.
+struct LinkHandoff: Equatable {
+    enum Action: Equatable { case none, presentSend, dismissSheets }
+
+    /// A link is waiting for the sheets to finish dismissing.
+    private(set) var waiting = false
+
+    mutating func linkArrived(sheetUp: Bool, sendUp: Bool) -> Action {
+        // Send already up takes the link itself (or, mid-proof, leaves it pending for later).
+        if sendUp { return .none }
+        if sheetUp { waiting = true; return .dismissSheets }
+        waiting = false
+        return .presentSend
+    }
+
+    /// A sheet or Send finished dismissing. `linkPending` is whether the router still holds a link.
+    mutating func presentationEnded(linkPending: Bool, sheetUp: Bool, sendUp: Bool) -> Action {
+        guard linkPending else { waiting = false; return .none }
+        if sheetUp || sendUp { waiting = true; return .none }
+        waiting = false
+        return .presentSend
+    }
+}

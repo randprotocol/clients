@@ -65,7 +65,6 @@ final class RpcClient {
         return n
     }
 
-
     func chainId() async throws -> UInt64 { try u64(await call("rand_chainId")) }
 
     func status() async throws -> [String: Any] { try await call("rand_status") as? [String: Any] ?? [:] }

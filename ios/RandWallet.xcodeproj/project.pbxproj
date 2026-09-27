@@ -20,6 +20,7 @@
 		3DA25B42D56E3D8712FA4EDF /* ReceiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 579B488EB09271EADE817752 /* ReceiveView.swift */; };
 		43D785D5C212AE422FE8BEE8 /* CoreSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9FD71335C8D0B8513015FE /* CoreSmokeTests.swift */; };
 		64554089BC7AAD37655A0162 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8548109BF97F5DB7DB99F6CE /* HomeView.swift */; };
+		71628504EFADE7B1A8B2E0A7 /* LinkHandoffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E39BB6F1188AB35E970520CF /* LinkHandoffTests.swift */; };
 		73DE625E5E18560ECF227095 /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 183284CD1DA185232100F09D /* NoteStore.swift */; };
 		746BF8D8C153106BFEF2336F /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA40E259F05440DD2DAE0A55 /* Models.swift */; };
 		76838E0AF20A51CF247552FA /* ContactsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B8C97D2A4B42DF67451B26 /* ContactsTests.swift */; };
@@ -83,6 +84,7 @@
 		D09C7A5E73D13000AE0776FF /* SendLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendLink.swift; sourceTree = "<group>"; };
 		D383A140E56010E9A65AA0C2 /* RandWallet.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RandWallet.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DE7B6AB7687B725C159B84EF /* Amount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Amount.swift; sourceTree = "<group>"; };
+		E39BB6F1188AB35E970520CF /* LinkHandoffTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkHandoffTests.swift; sourceTree = "<group>"; };
 		F435046A1ED71DE0910C5DE8 /* NoteStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStoreTests.swift; sourceTree = "<group>"; };
 		F8056ED7691CADE34213DA76 /* RandWalletCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = RandWalletCore.xcframework; path = Frameworks/RandWalletCore.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -167,6 +169,7 @@
 			children = (
 				51B8C97D2A4B42DF67451B26 /* ContactsTests.swift */,
 				3E9FD71335C8D0B8513015FE /* CoreSmokeTests.swift */,
+				E39BB6F1188AB35E970520CF /* LinkHandoffTests.swift */,
 				F435046A1ED71DE0910C5DE8 /* NoteStoreTests.swift */,
 				228AE584E190F486DBFBDEA4 /* SendLinkTests.swift */,
 			);
@@ -340,6 +343,7 @@
 			files = (
 				76838E0AF20A51CF247552FA /* ContactsTests.swift in Sources */,
 				43D785D5C212AE422FE8BEE8 /* CoreSmokeTests.swift in Sources */,
+				71628504EFADE7B1A8B2E0A7 /* LinkHandoffTests.swift in Sources */,
 				032203A43C3EB86266C74714 /* NoteStoreTests.swift in Sources */,
 				90AE055BC64ACE91BCA68904 /* SendLinkTests.swift in Sources */,
 			);

@@ -14,6 +14,9 @@ struct ReceiveView: View {
     @State private var memo = ""
     @State private var link = ""
     @State private var linkError: String?
+    /// The connected chain's `envelope_bytes`; `nil` (unknown, or a chain without memos) hides the
+    /// memo field and keeps memos out of the link.
+    @State private var envelopeBytes: Int?
 
     private var fingerprint: String? { try? RandCore.addressFingerprint(wallet.address) }
 
@@ -72,23 +75,32 @@ struct ReceiveView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("Done") { dismiss() } } }
             .onAppear { rebuild() }
+            .task {
+                envelopeBytes = (try? await wallet.envelopeBytes()) ?? nil
+                rebuild()
+            }
             .onChange(of: amountText) { _ in rebuild() }
             .onChange(of: memo) { _ in rebuild() }
+            .onChange(of: envelopeBytes) { _ in rebuild() }
         }
     }
 
     private var linkForm: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: "Payment link")
-            Text("Optional: ask for an amount, and add a note the payer’s wallet fills in for them.")
+            Text(ReceiveLinkRules.showsMemo(envelopeBytes: envelopeBytes)
+                 ? "Optional: ask for an amount, and add a note the payer’s wallet fills in for them."
+                 : "Optional: ask for an amount the payer’s wallet fills in for them.")
                 .font(.system(size: 13)).foregroundColor(Theme.textMute)
             HStack {
                 Field(placeholder: "Amount — the payer decides", text: $amountText, keyboard: .decimalPad)
                 Text("RAND").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.textSoft)
             }
-            HStack {
-                Field(placeholder: "Memo", text: $memo)
-                Text(Memo.counter(memo)).font(.caption12).foregroundColor(Memo.tooLong(memo) == nil ? Theme.textMute : Theme.negative)
+            if ReceiveLinkRules.showsMemo(envelopeBytes: envelopeBytes) {
+                HStack {
+                    Field(placeholder: "Memo", text: $memo)
+                    Text(Memo.counter(memo)).font(.caption12).foregroundColor(Memo.tooLong(memo) == nil ? Theme.textMute : Theme.negative)
+                }
             }
             ErrorText(message: linkError)
         }
@@ -97,14 +109,15 @@ struct ReceiveView: View {
     /// A field the user is still getting wrong leaves the link — and the QR — at the last good form.
     private func rebuild() {
         guard !wallet.address.isEmpty else { return }
-        if let tooLong = Memo.tooLong(memo) { linkError = tooLong; return }
+        let linkMemo = ReceiveLinkRules.linkMemo(memo, envelopeBytes: envelopeBytes)
+        if let m = linkMemo, let tooLong = Memo.tooLong(m) { linkError = tooLong; return }
         let amount = amountText.trimmingCharacters(in: .whitespaces)
         if !amount.isEmpty, Amount.parse(amount) == nil {
             linkError = "Enter the amount as a number, for example 1.25."
             return
         }
         do {
-            link = try RandCore.uriFormat(address: wallet.address, amount: amount, asset: nil, memo: memo)
+            link = try RandCore.uriFormat(address: wallet.address, amount: amount, asset: nil, memo: linkMemo)
             linkError = nil
         } catch {
             if link.isEmpty { link = "randpay:\(wallet.address)" }

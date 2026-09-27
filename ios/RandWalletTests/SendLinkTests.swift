@@ -99,8 +99,20 @@ final class SendLinkTests: XCTestCase {
         XCTAssertTrue(uri.hasPrefix("randpay:rand1"))
         let p = try RandCore.uriParse(uri)
         XCTAssertEqual(p, PaymentLink(address: w.address, amount: "1", asset: nil, memo: "hi", fingerprint: fp))
-        XCTAssertEqual(try RandCore.uriParse(w.address).address, w.address)
+        XCTAssertEqual(try RandCore.uriParse("randpay:\(w.address)").address, w.address)
         XCTAssertThrowsError(try RandCore.uriParse("randpay:rand1x"))
+    }
+
+    /// Receive's payment-link form: the memo field (and its counter) exists only on a chain whose
+    /// limits report an envelope size, and a memo never reaches a link for a chain without one.
+    func testReceiveMemoIsGatedOnEnvelopeBytes() {
+        XCTAssertFalse(ReceiveLinkRules.showsMemo(envelopeBytes: nil))
+        XCTAssertFalse(ReceiveLinkRules.showsMemo(envelopeBytes: 0))
+        XCTAssertTrue(ReceiveLinkRules.showsMemo(envelopeBytes: 1024))
+        XCTAssertNil(ReceiveLinkRules.linkMemo("hi", envelopeBytes: nil))
+        XCTAssertNil(ReceiveLinkRules.linkMemo("hi", envelopeBytes: 0))
+        XCTAssertNil(ReceiveLinkRules.linkMemo("", envelopeBytes: 1024))
+        XCTAssertEqual(ReceiveLinkRules.linkMemo("hi", envelopeBytes: 1024), "hi")
     }
 
     /// Resolution in the CLI's order: address, link, contact name.

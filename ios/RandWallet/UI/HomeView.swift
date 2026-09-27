@@ -8,6 +8,7 @@ struct HomeView: View {
     @EnvironmentObject var router: LinkRouter
     @State private var showReceive = false
     @State private var showContacts = false
+    @State private var handoff = LinkHandoff()
     @State private var showSend = false
     @State private var showSettings = false
     @State private var faucetBusy = false
@@ -52,28 +53,35 @@ struct HomeView: View {
                     Button { showSettings = true } label: { Image(systemName: "gearshape") }
                 }
             }
-            .sheet(isPresented: $showReceive) { ReceiveView() }
-            .fullScreenCover(isPresented: $showSend) { SendView() }
-            .sheet(isPresented: $showSettings) { SettingsView(onForget: onForget) }
-            .sheet(isPresented: $showContacts) { ContactsView() }
+            .sheet(isPresented: $showReceive, onDismiss: presentationEnded) { ReceiveView() }
+            .fullScreenCover(isPresented: $showSend, onDismiss: presentationEnded) { SendView() }
+            .sheet(isPresented: $showSettings, onDismiss: presentationEnded) { SettingsView(onForget: onForget) }
+            .sheet(isPresented: $showContacts, onDismiss: presentationEnded) { ContactsView() }
             // A `randpay:` link opens Send (which takes the link from the router); a Send already
             // open takes it itself.
-            .onAppear { if router.pending != nil { openSendForLink() } }
-            .onChange(of: router.pending) { p in if p != nil { openSendForLink() } }
+            .onAppear { if router.pending != nil { linkArrived() } }
+            .onChange(of: router.pending) { p in if p != nil { linkArrived() } }
             .task { await wallet.refresh() }
         }
     }
 
-    private func openSendForLink() {
-        guard !showSend else { return }
-        let sheetOpen = showReceive || showSettings || showContacts
-        showReceive = false
-        showSettings = false
-        showContacts = false
-        // SwiftUI presents nothing while a sheet is still dismissing: wait for it.
-        if sheetOpen {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { showSend = true }
-        } else {
+    private var sheetUp: Bool { showReceive || showSettings || showContacts }
+
+    /// A link arrived: present Send now, or dismiss the sheets and let their `onDismiss` do it.
+    private func linkArrived() {
+        switch handoff.linkArrived(sheetUp: sheetUp, sendUp: showSend) {
+        case .presentSend: showSend = true
+        case .dismissSheets:
+            showReceive = false
+            showSettings = false
+            showContacts = false
+        case .none: break
+        }
+    }
+
+    /// Any presentation finished dismissing: a link still pending opens Send now.
+    private func presentationEnded() {
+        if handoff.presentationEnded(linkPending: router.pending != nil, sheetUp: sheetUp, sendUp: showSend) == .presentSend {
             showSend = true
         }
     }

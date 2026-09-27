@@ -18,13 +18,10 @@ extension RandCore {
         return try call("address_fingerprint", ["address": address], as: R.self).fingerprint
     }
 
-    /// A `randpay:` link (or a bare address, which is a link with no parameters). Throws on a
-    /// link the core refuses.
+    /// A `randpay:` link. Throws on a link the core refuses. A bare address never comes here:
+    /// `SendLinkRules.resolve` sends it down the address path (`parse_address`).
     static func uriParse(_ uri: String) throws -> PaymentLink {
-        var s = uri.trimmingCharacters(in: .whitespacesAndNewlines)
-        // A scanned QR from an older wallet holds the bare address: the link with no parameters.
-        if RecipientKind(s) == .address { s = "randpay:" + s }
-        return try call("uri_parse", ["uri": s], as: PaymentLink.self)
+        try call("uri_parse", ["uri": uri.trimmingCharacters(in: .whitespacesAndNewlines)], as: PaymentLink.self)
     }
 
     /// The core formats and parses back, so this never returns a link another wallet refuses.
@@ -148,5 +145,17 @@ enum SendLinkRules {
             guard let addr = contacts.address(of: s) else { throw RandCore.CoreError(message: notARecipient) }
             return ResolvedRecipient(address: addr, name: s, fingerprint: try RandCore.addressFingerprint(addr), link: nil)
         }
+    }
+}
+
+/// Receive's payment-link form (spec 2026-09-26 §3.3, `ui/screens/receive.js`): the memo field and
+/// its counter exist only on a chain whose limits report an envelope size, and a chain without
+/// one never gets a memo in the link.
+enum ReceiveLinkRules {
+    static func showsMemo(envelopeBytes: Int?) -> Bool { SendLinkRules.memoSupported(envelopeBytes: envelopeBytes) }
+
+    /// The memo to put in the link, or `nil`.
+    static func linkMemo(_ memo: String, envelopeBytes: Int?) -> String? {
+        showsMemo(envelopeBytes: envelopeBytes) && !memo.isEmpty ? memo : nil
     }
 }
