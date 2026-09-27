@@ -11,8 +11,9 @@ license = "GPL-3.0-only"
 authors = ["RandProtocol Contributors"]
 
 [workspace.dependencies]
-# The chain's own crates, pinned by the submodule at core/vendor/fullnode (commit 9c142c1, v0.5.1,
-# the build chain 14 runs). Bump the submodule to move the wallet to a new chain build.
+# The chain's own crates, pinned by the submodule at core/vendor/fullnode (commit 2e769b7, fullnode's
+# `feat/address-sharing` on v0.5.7: the address fingerprint, `randpay:` links and the encrypted
+# memo; earlier 9c142c1, v0.5.1). Bump the submodule to move the wallet to a new chain build.
 randprotocol-core = { path = "vendor/fullnode/crates/randprotocol-core" }
 randprotocol-zkvm = { path = "vendor/fullnode/crates/randprotocol-zkvm" }
 wallet-core = { path = "crates/wallet-core" }

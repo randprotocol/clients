@@ -4,8 +4,8 @@ The one implementation of the chain's cryptography every client shares: the Pose
 hierarchy (spend key → viewing key → address), ML-KEM-768 + ChaCha20-Poly1305 envelopes, note
 commitments and nullifiers, coin selection, and the STARK proof of one **hidden-asset bundle** —
 four input and four output slots, tier 14. It is the fullnode's own crates (`randprotocol-core`,
-`randprotocol-zkvm`, vendored as the submodule `vendor/fullnode` at commit `9c142c1`, v0.5.1, the
-build chain 14 runs) behind one JSON entry point.
+`randprotocol-zkvm`, vendored as the submodule `vendor/fullnode` at commit `2e769b7`, fullnode's `feat/address-sharing`
+branch on v0.5.7) behind one JSON entry point.
 
 ```
 crates/wallet-core   the library and its tests; `wallet_core::call(method, params_json) -> reply_json`
@@ -54,6 +54,17 @@ assembles the whole transaction with the proof empty, takes the binding, proves 
 fills the proof in. `version`'s reply carries `bundle_inputs` (2, per group), `bundle_slots` (4),
 `rpl_transfer` (`true`), `bridge_burn` (`true`), `bridge_burn_proofs` (1), `transfer_proofs` (1)
 and `bridge_burn_fee` (0.01 RAND, the chain's `BRIDGE_BURN_FEE`) so a client never hard-codes these.
+
+Sharing an address and the memo (fullnode spec 2026-09-26, §2): `address_fingerprint` gives the
+address's display fingerprint (`1WCV-YC8F-47BY-5RZY` — two people compare it out loud, nothing on
+the wire carries it); `uri_parse`/`uri_format` read and write `randpay:<address>?amount=&asset=&memo=`
+links (the QR every client shows encodes the link, never the bare address). `prove_transfer`
+takes `memo` (default `""`) and `envelope_bytes` (default `null`, from the chain's
+`rand_getLimits`): every output is sealed in the chain's one envelope format — 1 860 bytes on a
+chain that declares it, the 1 348-byte legacy one otherwise — and only the payment carries the
+memo. A legacy chain has no room for one, so a non-empty memo there is refused before anything is
+proved. `prove_burn` takes `envelope_bytes` too. `scan_page` returns `memo` (or `null`) on every
+received note and sent row, and `open_with_tx_key` on the note it opens.
 
 ```bash
 # each proved for real, then put in front of the chain's own Ledger::validate

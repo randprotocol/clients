@@ -24,10 +24,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use randprotocol_core::gas;
 use randprotocol_core::ledger::TIME_WINDOW;
-use randprotocol_core::notes::{word8_from_hex, word8_to_hex, Bundle, Envelope, ShieldedAddress, Word8, DEPTH};
+use randprotocol_core::notes::{
+    word8_from_hex, word8_to_hex, Bundle, Envelope, EnvelopeFormat, ShieldedAddress, Word8, DEPTH, MEMO_TEXT_MAX_BYTES,
+};
+use randprotocol_core::payment_uri::PaymentUri;
 use randprotocol_core::types::TX_BINDING_WORDS;
 use randprotocol_core::{format_amount, parse_amount, Action, Transaction, FAUCET_MAX_UNITS};
-use randprotocol_zkvm::address::{address_of, envelope_from_core, seal_note};
+use randprotocol_zkvm::address::{address_of, envelope_from_core, seal_note_as};
 use randprotocol_zkvm::executor::prove_bundle;
 use randprotocol_zkvm::hidden::{self, HiddenDigestInput, HiddenOutput, A_SLOTS, SLOTS};
 use randprotocol_zkvm::machine::{Backend, FriProfile};
@@ -44,10 +47,13 @@ pub const ADDRESS_HRP: &str = randprotocol_core::notes::ADDRESS_PREFIX;
 pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode).
-pub const CHAIN_BUILD: &str = "9c142c1";
-/// The chain the defaults below describe: chain 14, the live testnet at this fullnode commit
-/// (v0.5.1, `deploy/README.md`, genesis `1cff3b7d…`, cut 2026-09-20) — the shielded pool on the
+/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): the
+/// address-sharing branch (`feat/address-sharing`, on v0.5.7), which adds the address
+/// fingerprint, `randpay:` links and the encrypted memo (spec 2026-09-26). Earlier: `9c142c1`
+/// (v0.5.1).
+pub const CHAIN_BUILD: &str = "2e769b7";
+/// The chain the defaults below describe: chain 14, the testnet this wallet was first built for
+/// (`deploy/README.md`, genesis `1cff3b7d…`, cut 2026-09-20) — the shielded pool on the
 /// **hidden-asset bundle** (one 4-in/4-out proof for RAND, a bridged coin or an RPL token alike),
 /// transaction binding, RPL tokens, staking and the call limits, zkVM constraint set 6,
 /// production FRI profile.
@@ -219,6 +225,43 @@ pub fn parse_address(s: &str) -> AddressInfo {
     }
 }
 
+// ------------------------------------------------------------------ sharing an address
+
+/// The address's fingerprint (spec 2026-09-26 §2.1): 80 bits of a domain-separated blake3 over
+/// the address's raw bytes, as four groups of four Crockford base32 digits (`1WCV-YC8F-47BY-5RZY`).
+/// Display only — two people compare it out loud; nothing on the wire carries it. Always
+/// recomputed from the address in hand, by fullnode's own `ShieldedAddress::fingerprint`.
+pub fn address_fingerprint(address: &str) -> Result<String> {
+    let a = ShieldedAddress::parse(address.trim()).map_err(|e| format!("address: {e}"))?;
+    Ok(a.fingerprint().to_string())
+}
+
+/// A `randpay:` link read into its fields (spec 2026-09-26 §2.2), with the fingerprint of the
+/// address it names — recomputed here, never taken from the link, which carries none. Absent
+/// parameters are `null`; `amount` is the display decimal as written (the asset's decimals are
+/// checked on the send path, where they are known).
+pub fn uri_parse(uri: &str) -> Result<Value> {
+    let u = PaymentUri::parse(uri.trim()).map_err(|e| e.to_string())?;
+    Ok(json!({
+        "address": u.address.to_string(),
+        "amount": u.amount,
+        "asset": u.asset,
+        "memo": u.memo,
+        "fingerprint": u.address.fingerprint().to_string(),
+    }))
+}
+
+/// A `randpay:` link from its fields. An empty `amount`, `asset` or `memo` is left out (a receive
+/// form's blank field means "the payer decides"). The link is parsed back before it is returned,
+/// so this never hands out a link [`uri_parse`] — or another wallet — would refuse.
+pub fn uri_format(address: &str, amount: Option<&str>, asset: Option<&str>, memo: Option<&str>) -> Result<String> {
+    let address = ShieldedAddress::parse(address.trim()).map_err(|e| format!("address: {e}"))?;
+    let given = |v: Option<&str>| v.filter(|s| !s.is_empty()).map(str::to_string);
+    let uri = PaymentUri { address, amount: given(amount), asset: given(asset), memo: given(memo) }.format();
+    PaymentUri::parse(&uri).map_err(|e| e.to_string())?;
+    Ok(uri)
+}
+
 // ------------------------------------------------------------------ notes as the clients see them
 
 /// A note this wallet owns, as the clients store it. `note` is the 112-byte plaintext (hex) so a
@@ -239,6 +282,11 @@ pub struct OwnedNote {
     pub spent: bool,
     #[serde(default)]
     pub pending: Option<u32>,
+    /// The memo the sender sealed with this note (spec 2026-09-26 §2.3), `null` for none — and
+    /// for every note on a chain whose envelopes carry no memo. `#[serde(default)]` so a note a
+    /// client stored before the memo existed still loads.
+    #[serde(default)]
+    pub memo: Option<String>,
 }
 
 impl OwnedNote {
@@ -267,6 +315,10 @@ pub struct SentRow {
     pub asset: u32,
     pub time: u32,
     pub height: u64,
+    /// The memo this wallet sealed with the note, `null` for none. `#[serde(default)]` like
+    /// [`OwnedNote::memo`].
+    #[serde(default)]
+    pub memo: Option<String>,
 }
 
 fn owned_note(w: &Wallet, index: u64, height: u64, cm: Word8, note: Note) -> OwnedNote {
@@ -282,6 +334,7 @@ fn owned_note(w: &Wallet, index: u64, height: u64, cm: Word8, note: Note) -> Own
         height,
         spent: false,
         pending: None,
+        memo: None,
     }
 }
 
@@ -320,20 +373,24 @@ impl EnvelopeHex {
 /// an envelope that opens is not proof of ownership (anyone can seal to a public address), so a
 /// received note is only kept when its `pk` is this wallet's.
 pub enum Found {
-    Received(Note),
-    Sent(Note),
+    /// A note this wallet owns, with the memo its sender sealed, if any.
+    Received(Note, Option<String>),
+    /// A note this wallet sent, with the memo it sealed, if any.
+    Sent(Note, Option<String>),
     Skipped,
 }
 
 pub fn classify(w: &Wallet, cm: Word8, envelope: &Envelope) -> Found {
     let env = envelope_from_core(envelope);
-    if let Some((_, note)) = env.open_as_receiver(cm, &w.vk) {
+    // The memo opens under the same transaction key the note did; a legacy body, an empty field
+    // or a malformed one is `None` (a malformed memo never costs the payee the note).
+    if let Some((key, note)) = env.open_as_receiver(cm, &w.vk) {
         if note.pk == w.vk.pk() {
-            return Found::Received(note);
+            return Found::Received(note, env.memo(cm, &key));
         }
     }
-    if let Some((_, note)) = env.open_as_sender(cm, &w.vk) {
-        return Found::Sent(note);
+    if let Some((key, note)) = env.open_as_sender(cm, &w.vk) {
+        return Found::Sent(note, env.memo(cm, &key));
     }
     Found::Skipped
 }
@@ -355,14 +412,17 @@ pub fn scan_page(w: &Wallet, rows: &[CommitmentRow]) -> Result<ScanResult> {
         let cm = word8_from_hex(&r.cm).ok_or("cm is not 64 hex characters")?;
         let env = r.envelope.decode()?;
         match classify(w, cm, &env) {
-            Found::Received(note) => out.received.push(owned_note(w, r.index, r.height, cm, note)),
-            Found::Sent(note) => out.sent.push(SentRow {
+            Found::Received(note, memo) => {
+                out.received.push(OwnedNote { memo, ..owned_note(w, r.index, r.height, cm, note) })
+            }
+            Found::Sent(note, memo) => out.sent.push(SentRow {
                 index: r.index,
                 to_pk: word8_to_hex(&note.pk),
                 amount: note.amount.to_string(),
                 asset: note.asset,
                 time: note.time,
                 height: r.height,
+                memo,
             }),
             Found::Skipped => {}
         }
@@ -830,6 +890,8 @@ struct BundlePlan {
     burn_a: u64,
     /// RAND burned from slots 2–3. Always 0 here: this crate builds no `Bond`.
     burn_r: u64,
+    /// The memo sealed with the payment slot, `""` for none — never with change or a dummy.
+    memo: String,
 }
 
 impl BundlePlan {
@@ -941,7 +1003,7 @@ struct Prepared {
 /// **each with a fresh blinding** — two identical dummies would repeat a nullifier or a commitment
 /// and taint the proof (spec §3.3), and a repeated one across transactions would be refused as
 /// spent. Every output envelope is sealed under its own fresh transaction key.
-fn build_bundle(w: &Wallet, plan: &BundlePlan, anchor: Word8, time: u32) -> Result<Prepared> {
+fn build_bundle(w: &Wallet, plan: &BundlePlan, format: EnvelopeFormat, anchor: Word8, time: u32) -> Result<Prepared> {
     let pk_self = w.vk.pk();
     let asset = plan.asset;
     // The guest stages every input under this wallet's key, and asserts on one that is not; the
@@ -984,10 +1046,12 @@ fn build_bundle(w: &Wallet, plan: &BundlePlan, anchor: Word8, time: u32) -> Resu
         let note = outs[k].note(k, pk_self, asset, time);
         commitments[k] = note.commitment();
         let key = TxKey::random();
+        // Every output in the chain's one envelope format, so all four are the same size; only the
+        // payment carries the memo (change and dummies seal an empty field).
         let sealed = match (&payee, &nobody) {
-            (Payee::To(dest), _) => seal_note(&w.vk, dest, &note, &key),
-            (Payee::Me, _) => seal_note(&w.vk, &w.address, &note, &key),
-            (Payee::Nobody, Some(t)) => seal_note(&t.vk, &t.address, &note, &key),
+            (Payee::To(dest), _) => seal_note_as(format, &w.vk, dest, &note, &key, &plan.memo),
+            (Payee::Me, _) => seal_note_as(format, &w.vk, &w.address, &note, &key, ""),
+            (Payee::Nobody, Some(t)) => seal_note_as(format, &t.vk, &t.address, &note, &key, ""),
             (Payee::Nobody, None) => return bad("a throwaway key for every dummy (wallet bug)"),
         };
         envelopes.push(sealed.map_err(|e| format!("sealing output {k}'s envelope: {e}"))?);
@@ -1127,6 +1191,14 @@ pub struct ProveRequest {
     /// `"production"` (chain 14) or `"test"`.
     #[serde(default = "default_profile")]
     pub profile: String,
+    /// The memo sealed with the payment (spec 2026-09-26 §2.3), `""` (the default) for none.
+    /// Only the payee's output carries it; change and dummies carry an empty field.
+    #[serde(default)]
+    pub memo: String,
+    /// The chain's `envelope_bytes`, from `rand_getLimits` — `null` (the default) on a chain that
+    /// does not declare it, which seals the legacy envelope and carries no memo.
+    #[serde(default)]
+    pub envelope_bytes: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -1174,6 +1246,22 @@ pub struct ProveResult {
     pub proofs: u8,
 }
 
+/// The envelope format a transaction is sealed in (spec 2026-09-26 §2.4), from the chain's
+/// `envelope_bytes` (`rand_getLimits`; `None` on a chain that does not declare it), and the memo
+/// checked against it — both before any witness is built or proof paid for. A chain without the
+/// field seals the legacy envelope, which has no room for a memo, so a non-empty one is refused
+/// rather than silently dropped.
+fn envelope_format_for(envelope_bytes: Option<u32>, memo: &str) -> Result<EnvelopeFormat> {
+    let format = EnvelopeFormat::for_chain(envelope_bytes);
+    if !memo.is_empty() && format == EnvelopeFormat::Legacy {
+        return bad("this chain carries no memo: its envelopes predate it (send again with an empty memo)");
+    }
+    if memo.len() > MEMO_TEXT_MAX_BYTES {
+        return bad(format!("memo is {} bytes, at most {MEMO_TEXT_MAX_BYTES}", memo.len()));
+    }
+    Ok(format)
+}
+
 /// Everything [`prove_transfer`] does except the proof: parse, check, select the slots, build the
 /// bundle and assemble the transaction with its proof empty. Split out so the shape the ledger
 /// checks — the slot layout, the burn words, the fee — is testable in milliseconds rather than the
@@ -1209,6 +1297,7 @@ fn build_transfer_unproven(req: &ProveRequest) -> Result<(Wallet, TransferBuild)
     let root = word8_from_hex(&req.anchor_root).ok_or("anchor_root is not 64 hex characters")?;
     let time = u32::try_from(req.anchor_height).map_err(|_| "anchor height does not fit a bundle's time field")?;
     let profile = profile_from_str(&req.profile)?;
+    let format = envelope_format_for(req.envelope_bytes, &req.memo)?;
 
     // Which group `inputs` belongs to is what `asset` decides — the whole difference between the
     // two shapes, and the reason a request with neither new field is still a RAND transfer.
@@ -1259,8 +1348,17 @@ fn build_transfer_unproven(req: &ProveRequest) -> Result<(Wallet, TransferBuild)
         }
     }
 
-    let plan = BundlePlan { asset: req.asset, a_slots, r_slots, to: Some((dest, amount)), fee, burn_a: 0, burn_r: 0 };
-    let prepared = build_bundle(&w, &plan, root, time)?;
+    let plan = BundlePlan {
+        asset: req.asset,
+        a_slots,
+        r_slots,
+        to: Some((dest, amount)),
+        fee,
+        burn_a: 0,
+        burn_r: 0,
+        memo: req.memo.clone(),
+    };
+    let prepared = build_bundle(&w, &plan, format, root, time)?;
     // The whole transaction first, its bundle's proof empty; then the proof, bound to it.
     let tx = Transaction::shielded(req.chain_id, prepared.bundle.clone(), Action::None);
     let spent_indices = a_spent.into_iter().chain(r_spent).collect();
@@ -1359,6 +1457,11 @@ pub struct BurnRequest {
     /// `"production"` (chain 14) or `"test"`.
     #[serde(default = "default_profile")]
     pub profile: String,
+    /// The chain's `envelope_bytes`, from `rand_getLimits`, exactly as [`ProveRequest`]'s: a burn
+    /// carries no memo, but its change and dummy outputs must still be the size the chain
+    /// requires. `null` (the default) seals the legacy envelope.
+    #[serde(default)]
+    pub envelope_bytes: Option<u32>,
 }
 
 /// What [`prove_burn`] returns. One bundle, so every array is slot-ordered exactly as
@@ -1475,6 +1578,9 @@ fn build_burn_unproven(req: &BurnRequest) -> Result<(Wallet, BurnBuild)> {
     let root = word8_from_hex(&req.anchor_root).ok_or("anchor_root is not 64 hex characters")?;
     let time = u32::try_from(req.anchor_height).map_err(|_| "anchor height does not fit a bundle's time field")?;
     let profile = profile_from_str(&req.profile)?;
+    // A burn pays nobody in the pool, so it carries no memo; its change and dummies still follow
+    // the chain's envelope format.
+    let format = envelope_format_for(req.envelope_bytes, "")?;
 
     let (a_slots, a_spent, a_held) = group_slots(&w, &req.inputs, req.asset)?;
     let (r_slots, r_spent, r_held) = group_slots(&w, &req.fee_inputs, 0)?;
@@ -1486,8 +1592,9 @@ fn build_burn_unproven(req: &BurnRequest) -> Result<(Wallet, BurnBuild)> {
     }
 
     // A burn pays nobody inside the pool: `to: None`, and the amount moves to `burn_a`.
-    let plan = BundlePlan { asset: req.asset, a_slots, r_slots, to: None, fee, burn_a: amount, burn_r: 0 };
-    let prepared = build_bundle(&w, &plan, root, time)?;
+    let plan =
+        BundlePlan { asset: req.asset, a_slots, r_slots, to: None, fee, burn_a: amount, burn_r: 0, memo: String::new() };
+    let prepared = build_bundle(&w, &plan, format, root, time)?;
     let action = Action::BridgeBurn {
         asset: req.asset,
         amount,
@@ -1667,11 +1774,14 @@ pub fn open_with_tx_key(cm_hex: &str, envelope: &EnvelopeHex, tx_key_hex: &str) 
         .try_into()
         .map_err(|_| "tx key must be 32 bytes")?;
     let env = envelope_from_core(&envelope.decode()?);
-    Ok(env.open_with_tx_key(cm, &TxKey(key)).map(|n| {
+    let key = TxKey(key);
+    Ok(env.open_with_tx_key(cm, &key).map(|n| {
         json!({
             "pk": word8_to_hex(&n.pk), "from": word8_to_hex(&n.from),
             "amount": n.amount.to_string(), "asset": n.asset, "time": n.time,
             "cm": word8_to_hex(&n.commitment()),
+            // The memo sealed with the note, `null` for none: whoever holds the key reads it.
+            "memo": env.memo(cm, &key),
         })
     }))
 }
@@ -1948,7 +2058,12 @@ fn asset_param(p: &Value) -> Result<u32> {
 /// - `wallet_info` `{spend_key}` → `{spend_key, viewing_key, pk, address, key_file}`
 /// - `import_key` `{input}` (64 hex or a key file) → wallet info
 /// - `parse_address` `{address}` → `{valid, pk, error}`
-/// - `scan_page` `{spend_key, rows: [getCommitments rows]}` → `{received, sent, next_index, rows}`
+/// - `address_fingerprint` `{address}` → `{fingerprint}` (`"1WCV-YC8F-47BY-5RZY"`, display only)
+/// - `uri_parse` `{uri}` → `{address, amount, asset, memo, fingerprint}`; absent parameters are
+///   `null`, `amount` is the display decimal as written, `fingerprint` is recomputed
+/// - `uri_format` `{address, amount?, asset?, memo?}` → `{uri}`; all strings, empty = absent
+/// - `scan_page` `{spend_key, rows: [getCommitments rows]}` → `{received, sent, next_index, rows}`;
+///   every received note and sent row carries `memo` (a string, or `null` for none)
 /// - `rebuilt_deposit` `{spend_key, action}` → owned note or null
 /// - `pending_cleared` `{note, read_through}` → bool; `read_through` is a block height (a JSON
 ///   number, or a digit string for a non-JS caller — never an amount)
@@ -1970,8 +2085,10 @@ fn asset_param(p: &Value) -> Result<u32> {
 ///   reply the client fetched. **Call this before `prove_burn`** — it is the only thing standing
 ///   between a typo and a wasted proof
 /// - `prove_burn` `{…BurnRequest}` → BurnResult (slow — one bundle proof)
-/// - `prove_transfer` `{…ProveRequest}` → ProveResult (slow — one bundle proof)
-/// - `open_with_tx_key` `{cm, envelope, tx_key}` → note or null. `cm`/`tx_key` are
+/// - `prove_transfer` `{…ProveRequest}` → ProveResult (slow — one bundle proof). `memo` (default
+///   `""`) is sealed with the payment only; `envelope_bytes` (default `null`) is the chain's, from
+///   `rand_getLimits` — `null` seals the legacy envelope and refuses a non-empty memo up front
+/// - `open_with_tx_key` `{cm, envelope, tx_key}` → note (with its `memo`, or `null`) or null. `cm`/`tx_key` are
 ///   `payment_commitment`/`payment_tx_key` from a `prove_transfer` reply — never index 0 of the
 ///   four-wide arrays, which on a RAND transfer is a dummy slot
 /// - `format_amount` `{units}` → `"1.5"`; `parse_amount` `{text}` → units string
@@ -1989,6 +2106,19 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
             Ok(ser(&wallet_info(&Wallet::from_hex(&sk)?)))
         }
         "parse_address" => Ok(ser(&parse_address(str_param(params, "address")?))),
+        "address_fingerprint" => Ok(json!({ "fingerprint": address_fingerprint(str_param(params, "address")?)? })),
+        "uri_parse" => uri_parse(str_param(params, "uri")?),
+        "uri_format" => {
+            let opt = |name: &str| -> Result<Option<&str>> {
+                match params.get(name) {
+                    None | Some(Value::Null) => Ok(None),
+                    Some(Value::String(s)) => Ok(Some(s.as_str())),
+                    Some(_) => bad(format!("{name} must be a string")),
+                }
+            };
+            let uri = uri_format(str_param(params, "address")?, opt("amount")?, opt("asset")?, opt("memo")?)?;
+            Ok(json!({ "uri": uri }))
+        }
         "scan_page" => {
             let w = Wallet::from_hex(str_param(params, "spend_key")?)?;
             let rows: Vec<CommitmentRow> =
@@ -2117,6 +2247,7 @@ mod erased {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use randprotocol_zkvm::address::seal_note;
 
     fn wallet(n: u32) -> Wallet {
         Wallet::from_spend_key(SpendKey([n; 8]))
@@ -2137,6 +2268,7 @@ mod tests {
             height: 1,
             spent: false,
             pending: None,
+            memo: None,
         }
     }
 
@@ -3008,6 +3140,8 @@ mod tests {
             inputs: vec![ProveInput { note: owned, path: path.iter().map(word8_to_hex).collect() }],
             fee_inputs: vec![],
             profile: "test".into(),
+            memo: String::new(),
+            envelope_bytes: None,
         };
         let res = prove_transfer(&req).unwrap();
         assert_eq!(res.change, (3_000_000_000u64 - 1_000_000_000 - gas::BUNDLE_BASE).to_string());
@@ -3224,10 +3358,10 @@ mod tests {
                     .decode()
                     .unwrap();
                     match classify(w, cm, &env) {
-                        Found::Received(_) => "mine",
+                        Found::Received(..) => "mine",
                         // A note this wallet *sent*: the payment, addressed to somebody else.
-                        Found::Sent(n) if n.pk == to.pk => "pay",
-                        Found::Sent(_) => "sent-elsewhere",
+                        Found::Sent(n, _) if n.pk == to.pk => "pay",
+                        Found::Sent(..) => "sent-elsewhere",
                         Found::Skipped => "nobody",
                     }
                 })
@@ -3669,7 +3803,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 14);
-            assert_eq!(v["chain_build"], "9c142c1");
+            assert_eq!(v["chain_build"], "2e769b7");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
@@ -3681,6 +3815,191 @@ mod tests {
             // The guest changed with the chain, so every artefact must be rebuilt: chain 13's was
             // `4a27356f…`.
             assert_ne!(v["hc_bundle"].as_str().unwrap(), "", "the pinned guest digest is reported");
+        }
+    }
+
+    // ================================================================= address sharing and memo
+    //
+    // Spec 2026-09-26 (fullnode `docs/superpowers/specs/2026-09-26-address-sharing-and-memo-design.md`)
+    // §2 and §3.3: the fingerprint, the `randpay:` link, a memo on send and memos in scans — all
+    // fullnode's own code, reached through `dispatch`.
+    mod address_sharing {
+        use super::*;
+        use randprotocol_core::notes::{EnvelopeFormat, MEMO_ENVELOPE_BYTES};
+        use randprotocol_zkvm::address::{open_memo, seal_note_as};
+
+        /// The spec's Appendix A address (fullnode `crates/randprotocol-core/tests/vectors/
+        /// address-sharing.json`, `fingerprints[0]`): a throwaway key, never used.
+        const SEED_ADDRESS: &str = "rand18pdYjYn3mQ32Hzc7kzf8cwVK3UyNJpiEEnjHm2zSpGYY2uyRskgaDmDd9LDuUHbLjqo7EfguCcudiPnXorA1B16Cfbt9y815cDMaDXLp7WjWnmdhBqeJS8PZF6fGa4TUsxqBRm5ihqaR1AknXm9p7zXBSziZdwJgsALuS4X4NVStM3bkANWScfpdhyKftjCx4QJo6GyY9UKhE3HKi7TZVYCQY73WZSkY7XpBjQ9GRYaHpnuGvg5Yro2nQqQVkFVABf1KsTAo18uM9UgxLxjaQzJiHpBpT9r4MeTGXhiqWFFeg7yPiL25sN3WmoRuYBJxfsAwfE52y4qEGzp5sDvjfE5gKJG7rzydwpcECWxD8Gi3FdEqXT9WgFf6g9vEtuARoewEi41zBWK6ScXbVDPpEEEFptFNd6LxaGXDq74rrLtfch6mARA1R6zpwXpxE4XZUDV4F1FTLZ31NgAbvBse2FJdDR5657WdoM9zCLuwH9hBhzCNiuNmt9eyspeWBAYNcU7n8JwQK1s3EgfJaeutUyyfV2A5nUng7v4mSwoYbmHc7u31TrwxqDaynXWZZF5EhcpxXJm98gkR19ybBmpnoeyH1eWkmeo6mPmfic55euA4VuhzMhjJ2SPjrQME54yuZsGmHvz2CrN9GJfQUXzdjxmYf9CRS8s634i1n7bPqx76NUN8dCp2WfspmfNdSSeCK8TCaKp71WYMzD7KFsCkxbSEPzLYWd17GYGgrWecP8caYC1My36w8Pbqyez1GDatW7hnMi4VznDNBaz3K6NS82djJVSXAv6J7qvFZ4zr2FpD4mvrELW9jaSdeH6KtZj1FS7uVmzcjKip2MYKnxrzj7ynkrtNbxQyDHt5bPoXSgoPfWqJBjijdTAPVwvmxofQoXZvhhJupcRB6Z9fpfCjHPoE4LCRM1tif7jhg3bnxhrefyfjtCQs1L9ZfC2pHqgZXdFxeZBWGZL7uEmzZ3d7A7d9mPNH6j4AwFXobNc6f6u912w8LtHemSLeNPVwiHZLdGY7ppxiJaao8Dr82ZSh9LGvF9f7p2CRYh9gdEyy86N3U3p1zQ8usSsrzE1nUVAwV5uUxFQBv7t2acdX6kLs4ZPe2k57szeCnQDv7iyQpbfMh79L61n6bMvrPLZ1njAZrD2uj6i4cUUdbhV82b6xKUpzB75iExZPoQGo9yqeD3kF8rRLLbs2rRZatvi7nACnY33ijPcmeUyjSvBPvkn5wHyfcfsX7rNWowA7EoJA8ik2NmkjumxRvpbZss9dMDJnVYMxHUSyDaKBna1Q3V64Q34n87c3PLAwzEfx8xJcfzdsvzCcWjyBEk1DcY7DQ18N5E4k97gou9rHuugrzddvRkyPzgTtBCuB2ZiAxsDNYF8H7QZN7ouDsqGT6u5XcV1w58pGUSm4GY2idEh53bXLyFrUFqb3H2gmswBw2mG4heNLVuJGmCSZ6m5nab9Apya9ruuSaYdBro9d9ra1PAMufm7de5vzwHiRJeEKTmm2YioywpqmiCKhxrDwhM1eFuE4ozMK39T1UJX8zTe1qU9vSQ6jdaoqrKPNvnCeVtMKHj9c8vG7J7Sm8m6bkXEyhCfoW7NeuKwVFwrwukk3pm7EpLCRrcKL3gyfZzch4jMdxFHUPJQsk6Qhv6T2Djprc";
+
+        /// The legacy envelope: `kem_ct` 1 088 + `to_receiver` 60 + `to_sender` 60 + a body of the
+        /// note alone (12 + 112 + 16).
+        const LEGACY_ENVELOPE_BYTES: usize = 1348;
+
+        fn env_len(e: &Envelope) -> usize {
+            e.kem_ct.len() + e.to_receiver.len() + e.to_sender.len() + e.body.len()
+        }
+
+        fn row_of(index: u64, cm: Word8, env: &Envelope) -> CommitmentRow {
+            CommitmentRow {
+                index,
+                cm: word8_to_hex(&cm),
+                height: 9,
+                envelope: EnvelopeHex {
+                    kem_ct: hex::encode(&env.kem_ct),
+                    to_receiver: hex::encode(&env.to_receiver),
+                    to_sender: hex::encode(&env.to_sender),
+                    body: hex::encode(&env.body),
+                },
+            }
+        }
+
+        #[test]
+        fn fingerprint_and_links_through_dispatch() {
+            let a = SEED_ADDRESS;
+            let v = dispatch("address_fingerprint", &json!({"address": a})).unwrap();
+            assert_eq!(v["fingerprint"], "1WCV-YC8F-47BY-5RZY");
+            let u = dispatch("uri_format", &json!({"address": a, "amount": "1.5", "memo": "hi"})).unwrap();
+            let p = dispatch("uri_parse", &json!({"uri": u["uri"]})).unwrap();
+            assert_eq!((p["amount"].as_str(), p["memo"].as_str()), (Some("1.5"), Some("hi")));
+            assert!(dispatch("uri_parse", &json!({"uri": "randpay:rand1x"})).is_err());
+        }
+
+        /// `uri_parse` answers every field, absent ones as `null`, and the fingerprint of the
+        /// address it carries (recomputed, never read off the link); a bare address is a link.
+        #[test]
+        fn uri_parse_names_every_field_and_the_fingerprint() {
+            let p = dispatch("uri_parse", &json!({"uri": format!("randpay:{SEED_ADDRESS}")})).unwrap();
+            assert_eq!(p["address"], SEED_ADDRESS);
+            assert_eq!(p["fingerprint"], "1WCV-YC8F-47BY-5RZY");
+            assert!(p["amount"].is_null() && p["asset"].is_null() && p["memo"].is_null(), "{p}");
+            let u = dispatch("uri_format", &json!({"address": SEED_ADDRESS})).unwrap();
+            assert_eq!(u["uri"], format!("randpay:{SEED_ADDRESS}"));
+            let u = dispatch("uri_format", &json!({"address": SEED_ADDRESS, "asset": "1", "memo": "a b&c"})).unwrap();
+            assert_eq!(u["uri"], format!("randpay:{SEED_ADDRESS}?asset=1&memo=a%20b%26c"));
+            let p = dispatch("uri_parse", &json!({"uri": u["uri"]})).unwrap();
+            assert_eq!((p["asset"].as_str(), p["memo"].as_str()), (Some("1"), Some("a b&c")));
+        }
+
+        /// `uri_format` never hands out a link `uri_parse` would refuse.
+        #[test]
+        fn uri_format_refuses_what_parse_refuses() {
+            assert!(dispatch("uri_format", &json!({"address": "rand1x"})).is_err());
+            assert!(dispatch("uri_format", &json!({"address": SEED_ADDRESS, "amount": "0"})).is_err());
+            assert!(dispatch("uri_format", &json!({"address": SEED_ADDRESS, "amount": "1."})).is_err());
+            assert!(dispatch("uri_format", &json!({"address": SEED_ADDRESS, "memo": "x".repeat(511)})).is_err());
+            assert!(dispatch("uri_format", &json!({"address": SEED_ADDRESS, "memo": "x".repeat(510)})).is_ok());
+            assert!(dispatch("address_fingerprint", &json!({"address": "rand1x"})).is_err());
+            assert!(dispatch("uri_parse", &json!({"uri": format!("bitcoin:{SEED_ADDRESS}")})).is_err());
+        }
+
+        /// The sealing step of `prove_transfer`, without the proof: the four envelopes of a RAND
+        /// transfer built with the chain's `envelope_bytes` and a memo.
+        fn seal_outputs_for(envelope_bytes: Option<u32>, memo: &str) -> Result<(ProveRequest, TransferBuild)> {
+            let mut req = fixture_prove_request("test", 0).unwrap();
+            req["memo"] = json!(memo);
+            req["envelope_bytes"] = json!(envelope_bytes);
+            let req: ProveRequest = serde_json::from_value(req).unwrap();
+            let (_w, b) = build_transfer_unproven(&req)?;
+            Ok((req, b))
+        }
+
+        #[test]
+        fn a_memo_chain_seals_every_output_at_1860_bytes_and_only_the_payment_carries_the_memo() {
+            assert_eq!(MEMO_ENVELOPE_BYTES, 1860);
+            let (_req, b) = seal_outputs_for(Some(1860), "coffee").unwrap();
+            let bundle = &b.prepared.bundle;
+            for (k, e) in bundle.envelopes.iter().enumerate() {
+                assert_eq!(env_len(e), 1860, "slot {k}");
+            }
+            let pay = b.plan.payment_slot().unwrap();
+            for k in 0..BUNDLE_SLOTS {
+                let memo = open_memo(&bundle.envelopes[k], bundle.commitments[k], &b.prepared.tx_keys[k]);
+                assert_eq!(memo.as_deref(), if k == pay { Some("coffee") } else { None }, "slot {k}");
+            }
+            // The receipt path reads the memo with the payment's key.
+            let (_, key, cm) = payment_of(&b.plan, &b.prepared);
+            let e = &bundle.envelopes[pay];
+            let hexed = row_of(0, bundle.commitments[pay], e).envelope;
+            let opened = open_with_tx_key(&cm.unwrap(), &hexed, &key.unwrap()).unwrap().unwrap();
+            assert_eq!(opened["memo"], "coffee");
+        }
+
+        #[test]
+        fn a_memo_chain_without_a_memo_is_still_uniform() {
+            let (_req, b) = seal_outputs_for(Some(1860), "").unwrap();
+            assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == 1860));
+        }
+
+        #[test]
+        fn a_legacy_chain_seals_1348_bytes_and_refuses_a_memo_before_proving() {
+            let (_req, b) = seal_outputs_for(None, "").unwrap();
+            assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == LEGACY_ENVELOPE_BYTES));
+            let e = seal_outputs_for(None, "hi").err().expect("a memo on a legacy chain is refused");
+            assert!(e.contains("no memo"), "{e}");
+            // An absent `envelope_bytes` and `memo` is the pre-memo request shape: legacy, no memo.
+            let req: ProveRequest = serde_json::from_value(fixture_prove_request("test", 0).unwrap()).unwrap();
+            assert_eq!(req.envelope_bytes, None);
+            assert_eq!(req.memo, "");
+        }
+
+        #[test]
+        fn a_memo_over_510_bytes_is_refused_before_proving() {
+            let e = seal_outputs_for(Some(1860), &"x".repeat(511)).err().expect("too long");
+            assert!(e.contains("510"), "{e}");
+            assert!(seal_outputs_for(Some(1860), &"x".repeat(510)).is_ok());
+        }
+
+        /// A burn seals change and dummies only, but on a memo chain they must be 1 860 bytes too.
+        #[test]
+        fn a_burn_follows_the_chain_envelope_format() {
+            let mut req = fixture_burn_request("test").unwrap();
+            req["envelope_bytes"] = json!(1860);
+            let req: BurnRequest = serde_json::from_value(req).unwrap();
+            let (_w, b) = build_burn_unproven(&req).unwrap();
+            assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == 1860));
+            let req: BurnRequest = serde_json::from_value(fixture_burn_request("test").unwrap()).unwrap();
+            let (_w, b) = build_burn_unproven(&req).unwrap();
+            assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == LEGACY_ENVELOPE_BYTES));
+        }
+
+        /// A scan returns the memo on both sides — the payee's received note and the sender's
+        /// sent row — and `null` for a memo-less or legacy output.
+        #[test]
+        fn scan_page_returns_memos_on_received_and_sent() {
+            let alice = wallet(1);
+            let bob = wallet(2);
+            let n1 = Note::new(bob.vk.pk(), alice.vk.pk(), 5, 0, 3);
+            let e1 = seal_note_as(EnvelopeFormat::Memo, &alice.vk, &bob.address, &n1, &TxKey::random(), "coffee").unwrap();
+            let n2 = Note::new(bob.vk.pk(), alice.vk.pk(), 6, 0, 3);
+            let e2 = seal_note_as(EnvelopeFormat::Memo, &alice.vk, &bob.address, &n2, &TxKey::random(), "").unwrap();
+            let n3 = Note::new(bob.vk.pk(), alice.vk.pk(), 7, 0, 3);
+            let e3 = seal_note(&alice.vk, &bob.address, &n3, &TxKey::random()).unwrap();
+            let rows = vec![row_of(0, n1.commitment(), &e1), row_of(1, n2.commitment(), &e2), row_of(2, n3.commitment(), &e3)];
+
+            let bob_scan = scan_page(&bob, &rows).unwrap();
+            let memos: Vec<_> = bob_scan.received.iter().map(|n| n.memo.clone()).collect();
+            assert_eq!(memos, vec![Some("coffee".to_string()), None, None]);
+            let alice_scan = scan_page(&alice, &rows).unwrap();
+            let memos: Vec<_> = alice_scan.sent.iter().map(|s| s.memo.clone()).collect();
+            assert_eq!(memos, vec![Some("coffee".to_string()), None, None]);
+
+            // Through the JSON entry point, `memo` is a field of every row.
+            let v = dispatch("scan_page", &json!({"spend_key": bob.spend_key_hex(), "rows": [
+                serde_json::to_value(&rows[0].envelope).map(|e| json!({"index": 0, "cm": rows[0].cm, "height": 9, "envelope": e})).unwrap(),
+                serde_json::to_value(&rows[2].envelope).map(|e| json!({"index": 2, "cm": rows[2].cm, "height": 9, "envelope": e})).unwrap(),
+            ]})).unwrap();
+            assert_eq!(v["received"][0]["memo"], "coffee");
+            assert!(v["received"][1]["memo"].is_null());
+        }
+
+        /// A note stored by a client before the memo existed still deserializes.
+        #[test]
+        fn an_owned_note_without_a_memo_field_still_loads() {
+            let mut v = serde_json::to_value(owned(3, 0, 9)).unwrap();
+            v.as_object_mut().unwrap().remove("memo");
+            let n: OwnedNote = serde_json::from_value(v).unwrap();
+            assert_eq!(n.memo, None);
         }
     }
 }
