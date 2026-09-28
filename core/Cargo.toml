@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/wallet-core", "crates/wallet-ffi", "crates/wallet-wasm"]
+members = ["crates/wallet-core", "crates/wallet-ffi", "crates/wallet-wasm", "crates/e2e-fixtures"]
 # The vendored fullnode crates inherit from their own workspace root, not this one.
 exclude = ["vendor"]
 

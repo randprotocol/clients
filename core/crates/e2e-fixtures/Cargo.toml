@@ -1,0 +1,19 @@
+[package]
+name = "e2e-fixtures"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bridge fixtures for the withdraw end-to-end test (web/wallet/test/withdraw.e2e.test.mjs): a bridged genesis for a local one-validator chain, and test-guardian-signed deposit attestations with their PQ co-signatures, so a wallet can be minted a bridged token and burn it"
+publish = false
+
+[[bin]]
+name = "e2e-fixtures"
+path = "src/main.rs"
+
+[dependencies]
+randprotocol-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+hex = { workspace = true }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
