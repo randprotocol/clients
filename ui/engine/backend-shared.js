@@ -1946,7 +1946,9 @@ export function makeSharedBackend({
         return { ok: false, reason: (err && err.message) || 'The bridge could not be asked.' };
       }
       if (!state.enabled) return { ok: false, reason: BRIDGE_DISABLED_TEXT };
-      return { ok: true };
+      // `via` exactly as `canProve` reports it: a burn through a paired prover is proved there,
+      // and the withdraw screen says so the way the send screen does.
+      return prove.via ? { ok: true, via: prove.via } : { ok: true };
     },
 
     /**

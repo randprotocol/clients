@@ -303,7 +303,7 @@
  *       map keyed by chain id, and that map's keys are the answer (see `checkBridgeState`,
  *       ui/engine/validate.js). `mintPaused` is the bridge refusing *deposits*; burns are
  *       unaffected, which is why it is reported rather than folded into `enabled`.
- *     · `bridge.canWithdraw()` → `{ok, reason?}`, in the same shape and with the same rules as
+ *     · `bridge.canWithdraw()` → `{ok, reason?, via?}`, in the same shape and with the same rules as
  *       `send.canProve()`. It asks two questions in a fixed order: can this device prove at all (a
  *       burn is ONE bundle proof, the same one a transfer is — ~5.7 GB, about two minutes;
  *       the answer is `send.canProve()`'s own sentence, verbatim), and is the bridge enabled. Both

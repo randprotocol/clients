@@ -248,6 +248,13 @@ test('an own prover that answers makes canProve say yes, via the prover — on t
   const big = build({ native: true, storage: env.storage, core: env.core, systemMemoryGiB: () => 16 });
   assert.deepEqual(await big.backend.send.canProve(), { ok: true });
 
+  // A withdrawal is the same proof, so `canWithdraw` carries the same `via` — and only when the
+  // bridge is on: the prover route alone is not a yes.
+  const bridged = build({ storage: env.storage, core: env.core, fetch: sendableFetch({ rand_getBridgeState: () => ({ enabled: true, emitters: {}, assets: [] }) }) });
+  assert.deepEqual(await bridged.backend.bridge.canWithdraw(), { ok: true, via: 'prover' });
+  const unbridged = build({ storage: env.storage, core: env.core, fetch: sendableFetch({ rand_getBridgeState: () => ({ enabled: false, emitters: {}, assets: [] }) }) });
+  assert.equal((await unbridged.backend.bridge.canWithdraw()).ok, false);
+
   // A prover that does not answer is not a way to prove, and the reason says so.
   const silent = build({ storage: env.storage, core: env.core, fetch: sendableFetch({ prover_info: () => { throw Object.assign(new Error('down'), { code: -32000 }); } }) });
   const answer = await silent.backend.send.canProve();
