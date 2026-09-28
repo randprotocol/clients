@@ -63,9 +63,9 @@ const GONE = [
   'ui/test', 'ui/node_modules', 'ui/scripts', 'ui/gallery.html', 'ui/dev.html', 'ui/package.json',
 ];
 
-/** What the popup and the app actually import, as their own root sees them. */
+/** What the popup, the side panel and the app actually import, as their own root sees them. */
 const NEEDED = [
-  'manifest.json', 'popup.html', 'popup.js', 'app.html', 'app.js', 'background.js', 'worker.js',
+  'manifest.json', 'popup.html', 'popup.js', 'sidepanel.html', 'sidepanel.js', 'app.html', 'app.js', 'background.js', 'worker.js',
   'backend-extension.js', 'lib/browser.js', 'lib/core.js', 'lib/idle-lock.js', 'lib/boot.js',
   'lib/platform.js',
   'ui/app.js', 'ui/backend.js', 'ui/tokens.css', 'ui/base.css', 'ui/components.css',

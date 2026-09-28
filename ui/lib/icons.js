@@ -11,6 +11,8 @@ function svg(inner, { strokeWidth = 2 } = {}) {
 
 export const icons = {
   home: () => svg('<path d="m4 11 8-7 8 7"/><path d="M6 10v9h12v-9"/>'),
+  // A window with its right-hand panel ruled off: "open in the browser's side panel".
+  sidebar: () => svg('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M14.5 4.5v15"/>'),
   activity: () => svg('<circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 1.8"/>'),
   compass: () => svg('<circle cx="12" cy="12" r="8"/><path d="m15 9-2 4-4 2 2-4z"/>'),
   settings: () => svg('<circle cx="12" cy="12" r="3"/><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6l1.4 1.4m10 10 1.4 1.4m0-12.8-1.4 1.4m-10 10-1.4 1.4"/>'),

@@ -3,6 +3,7 @@
 //
 // Query params:
 //   ?mode=popup                — forces the 360x600 popup layout (default: 'app', responsive)
+//   ?mode=sidebar              — the browser side panel: one column, full height, never wide
 //   ?theme=dark|light          — forces a theme via backend.settings (default: whatever the OS reports)
 //   ?state=new|locked|unlocked — wallet state before mount (default: 'new', i.e. onboarding)
 //   ?scan=fail                 — sync.scan() rejects (cached data still shows; for the retry banner)
@@ -34,7 +35,7 @@ import { fakeBackend, unlockedBackend } from './test/fake-backend.mjs';
 import { CANNOT_PROVE_REASON } from './engine/backend-wasm.js';
 
 const params = new URLSearchParams(location.search);
-const mode = params.get('mode') === 'popup' ? 'popup' : 'app';
+const mode = ['popup', 'sidebar'].includes(params.get('mode')) ? params.get('mode') : 'app';
 const theme = params.get('theme');
 const state = params.get('state') || 'new';
 const scan = params.get('scan');

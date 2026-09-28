@@ -52,6 +52,38 @@ test("mode: 'popup' sets body.compact", async (t) => {
   assert.ok(document.body.classList.contains('popup'));
 });
 
+test("mode: 'sidebar' is compact at any width and never goes wide", async (t) => {
+  await mountApp(t, unlockedBackend(), { mode: 'sidebar' });
+  assert.ok(document.body.classList.contains('compact'));
+  assert.ok(document.body.classList.contains('sidebar'));
+  assert.equal(document.body.classList.contains('popup'), false);
+  assert.equal(document.body.classList.contains('wide'), false);
+});
+
+test('home offers the side panel from the popup only, and only where the shell has one', async (t) => {
+  const withPanel = () => {
+    const b = unlockedBackend();
+    b.platform.openSidebar = () => { b.calls.push(['platform.openSidebar']); };
+    return b;
+  };
+  await t.test('popup + openSidebar: the button is there and calls it', async (t) => {
+    const b = withPanel();
+    const { root } = await mountApp(t, b, { mode: 'popup' });
+    const btn = root.querySelector('[data-action="open-sidebar"]');
+    assert.ok(btn, 'no side-panel button in the popup');
+    btn.click();
+    assert.deepEqual(b.calls.filter((c) => c[0] === 'platform.openSidebar'), [['platform.openSidebar']]);
+  });
+  await t.test('the side panel itself does not offer to open itself', async (t) => {
+    const { root } = await mountApp(t, withPanel(), { mode: 'sidebar' });
+    assert.equal(root.querySelector('[data-action="open-sidebar"]'), null);
+  });
+  await t.test('a popup with no side panel to open renders no dead button', async (t) => {
+    const { root } = await mountApp(t, unlockedBackend(), { mode: 'popup' });
+    assert.equal(root.querySelector('[data-action="open-sidebar"]'), null);
+  });
+});
+
 test('the tab bar exists once unlocked and marks the active tab with aria-current', async (t) => {
   const { root } = await mountApp(t, unlockedBackend());
   const nav = root.querySelector('.tabbar, .sidebar');

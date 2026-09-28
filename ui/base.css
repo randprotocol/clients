@@ -342,6 +342,15 @@ body.compact.popup {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
+/* A browser side panel: the popup's single column at the window's full height, as wide as the
+   user drags the panel. It never goes wide (app.js keeps `mode: 'sidebar'` compact), so a panel
+   dragged past 420 px keeps the phone column centred rather than growing a second one. */
+body.compact.sidebar {
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
 
 /* Wide: desktop. Sidebar | content (| detail pane, when one is on screen).
 

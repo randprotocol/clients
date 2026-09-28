@@ -298,12 +298,15 @@ function ensureBuiltinScreensLoaded() {
 /**
  * `mount(container, backend, { mode = 'app' } = {})` — throws (via `assertBackend`) if `backend`
  * does not satisfy BACKEND_SHAPE. Renders into `container`; sets `document.documentElement`'s
- * theme and `document.body`'s compact/wide/popup classes (these are page-level, not
+ * theme and `document.body`'s compact/wide/popup/sidebar classes (these are page-level, not
  * container-scoped, so the real shells should mount into `document.body`). Returns
  * `{ go(hash), idle(), destroy() }`.
  */
 export async function mount(container, backend, { mode = 'app' } = {}) {
   assertBackend(backend);
+  // `popup` (the toolbar's 360×600) and `sidebar` (a browser side panel: the window's full height,
+  // as wide as the user drags it) are both a phone-shaped column that never goes wide.
+  const narrow = mode === 'popup' || mode === 'sidebar';
   await ensureBuiltinScreensLoaded();
 
   const inflight = new Set();
@@ -414,11 +417,11 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   let lastUnlocked = false;
   /** The wide layout is on: a sidebar and a desktop-width column. */
   function wideLayout() {
-    return mode !== 'popup' && viewportWide && lastUnlocked;
+    return !narrow && viewportWide && lastUnlocked;
   }
   /** …and there is room to put a detail beside it. */
   function twoPaneLayout() {
-    return mode !== 'popup' && viewportTwoPane && lastUnlocked;
+    return !narrow && viewportTwoPane && lastUnlocked;
   }
   function applyBodyLayout() {
     const wide = wideLayout();
@@ -428,10 +431,10 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     // a detail column is actually mounted.
     if (!wide) document.body.classList.remove('two-pane');
   }
-  if (mode === 'popup') {
-    document.body.classList.add('compact', 'popup');
+  if (narrow) {
+    document.body.classList.add('compact', mode);
   } else {
-    document.body.classList.remove('popup');
+    document.body.classList.remove('popup', 'sidebar');
     if (typeof matchMedia === 'function') {
       const listen = (list, fn) => {
         if (typeof list.addEventListener === 'function') list.addEventListener('change', fn);
@@ -786,7 +789,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     const showNav = unlocked && screen.nav !== false;
     // Two panes need the second breakpoint, not the first: between 900 and TWO_PANE_AT there is
     // a sidebar but no room to split what is left.
-    const twoPane = showNav && mode !== 'popup' && viewportTwoPane;
+    const twoPane = showNav && !narrow && viewportTwoPane;
 
     // ---- who goes where ----
     const plan = planPanes({
@@ -1170,7 +1173,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
         try { backend.dispose(); } catch (err) { console.error('rand-wallet: backend.dispose() failed', err); }
       }
       container.textContent = '';
-      document.body.classList.remove('compact', 'wide', 'popup', 'nav-on', 'two-pane');
+      document.body.classList.remove('compact', 'wide', 'popup', 'sidebar', 'nav-on', 'two-pane');
     },
   };
 }

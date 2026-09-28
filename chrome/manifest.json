@@ -13,9 +13,10 @@
     "default_title": "Rand Wallet",
     "default_icon": { "16": "icons/icon-16.png", "32": "icons/icon-32.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" }
   },
+  "side_panel": { "default_path": "sidepanel.html" },
   "background": { "service_worker": "background.js" },
   "options_ui": { "page": "app.html#settings", "open_in_tab": true },
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "sidePanel"],
   "host_permissions": ["https://rpc.randprotocol.org/*", "https://rpc1.randprotocol.org/*", "https://rpc2.randprotocol.org/*", "https://rpc3.randprotocol.org/*"],
   "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
   "content_security_policy": {

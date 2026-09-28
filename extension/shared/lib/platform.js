@@ -34,6 +34,27 @@ export function makePlatform() {
       }
     },
   };
+  // The side panel: Chrome's `sidePanel` (the manifest's `side_panel`, Chrome 116+) or Firefox's
+  // `sidebarAction` (`sidebar_action`). Both open only inside the user's own click, so the call is
+  // made synchronously from it — which is why Chrome's window id is looked up now, ahead of any
+  // click, rather than awaited inside one. The popup closes itself once the panel has the wallet.
+  if (ext.sidePanel && typeof ext.sidePanel.open === 'function') {
+    let windowId = null;
+    const known = ext.windows && typeof ext.windows.getCurrent === 'function'
+      ? ext.windows.getCurrent().then((w) => { windowId = w.id; }).catch(() => {})
+      : Promise.resolve();
+    platform.openSidebar = async () => {
+      if (windowId === null) await known;
+      if (windowId === null) throw new Error('no browser window to open the side panel in');
+      await ext.sidePanel.open({ windowId });
+      window.close();
+    };
+  } else if (ext.sidebarAction && typeof ext.sidebarAction.open === 'function') {
+    platform.openSidebar = async () => {
+      await ext.sidebarAction.open();
+      window.close();
+    };
+  }
   // Reading the clipboard needs a permission some contexts will not have: where it is missing the
   // send screen offers no Paste button at all.
   if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {

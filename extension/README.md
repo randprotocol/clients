@@ -12,6 +12,8 @@ plus the one thing a browser extension has to do differently: auto-lock.
 ```
 shared/
   popup.html/js           the toolbar popup (360×600) — mounts the shared UI in `mode: 'popup'`
+  sidepanel.html/js       the browser side panel (Chrome `side_panel`, Firefox `sidebar_action`),
+                          full height — `mode: 'sidebar'`; the popup's home opens it
   app.html/js             the same wallet in a tab (options page, first-run welcome), `mode: 'app'`
   backend-extension.js    the Backend: makeWasmBackend over chrome.storage + this platform
   background.js           the auto-lock alarm, and onboarding on first install (classic script)

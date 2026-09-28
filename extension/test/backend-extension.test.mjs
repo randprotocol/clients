@@ -18,7 +18,16 @@ globalThis.chrome = {
       return perms.granted;
     },
   },
+  windows: { getCurrent: async () => ({ id: 7 }) },
+  sidePanel: {
+    open: async (arg) => {
+      panel.calls.push(['open', arg]);
+      if (panel.openThrows) throw new Error('`sidePanel.open()` may only be called in response to a user gesture.');
+    },
+  },
 };
+const panel = { calls: [], openThrows: false, closed: 0 };
+globalThis.window = { close: () => { panel.closed += 1; } };
 
 const { makePlatform } = await import('../shared/lib/platform.js');
 
@@ -56,4 +65,21 @@ test('a URL that does not parse is false without asking the browser anything', a
   const platform = makePlatform();
   assert.equal(await platform.ensureHostPermission('not a url'), false);
   assert.deepEqual(perms.calls, []);
+});
+
+test('the side panel opens in this window, then the popup closes itself', async () => {
+  panel.calls.length = 0; panel.closed = 0; panel.openThrows = false;
+  const platform = makePlatform();
+  assert.equal(typeof platform.openSidebar, 'function');
+  await platform.openSidebar();
+  assert.deepEqual(panel.calls, [['open', { windowId: 7 }]]);
+  assert.equal(panel.closed, 1);
+});
+
+test('a side panel the browser refuses leaves the popup open and says so', async () => {
+  panel.calls.length = 0; panel.closed = 0; panel.openThrows = true;
+  const platform = makePlatform();
+  await assert.rejects(() => platform.openSidebar(), /user gesture/);
+  assert.equal(panel.closed, 0, 'the popup closed with no side panel to take its place');
+  panel.openThrows = false;
 });

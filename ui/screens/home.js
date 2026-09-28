@@ -80,13 +80,19 @@ function emptyActivityMarkup() {
 
 /** The whole screen, built once. Everything `after()` fills later is a `[data-role]` container
  *  that stays put across every update. */
-function shellMarkup() {
+function shellMarkup(ctx) {
+  // The popup's way into the browser's side panel, where the same wallet stays open beside the
+  // page. Only a popup offers it, and only on a shell that has a side panel to open.
+  const toSidebar = ctx && ctx.mode === 'popup' && typeof ctx.backend.platform.openSidebar === 'function'
+    ? h`<button class="btn-icon" type="button" data-action="open-sidebar" aria-label="Open in side panel" title="Open in side panel">${raw(icons.sidebar())}</button>`
+    : '';
   return h`
     <h1 class="sr-only">Home</h1>
     <div class="topbar">
       ${raw(brandMarkup())}
       <span class="grow"></span>
       <span data-role="address-slot"></span>
+      ${raw(toSidebar)}
     </div>
     <section class="hero" aria-label="Balance">
       <canvas class="field" aria-hidden="true"></canvas>
@@ -154,7 +160,7 @@ function startScan(ctx, store) {
 }
 
 registerScreen('home', {
-  render: () => shellMarkup(),
+  render: (ctx) => shellMarkup(ctx),
   // Deliberately NOT async: the shell is already on screen, so `after()` wires it up, kicks the
   // fetches off and returns its cleanup immediately. Awaiting data here would make `mount()` (and
   // every navigation to home) block on the node.
@@ -449,6 +455,13 @@ registerScreen('home', {
       writeVeil(next);
       paintVeil(next);
     });
+    const offSidebar = on(root, '[data-action="open-sidebar"]', 'click', (evt) => {
+      evt.preventDefault();
+      // Called straight from the click: a browser opens a side panel only inside a user gesture.
+      Promise.resolve(ctx.backend.platform.openSidebar()).catch(() => {
+        if (live()) ctx.toast('The side panel could not be opened.', { kind: 'negative' });
+      });
+    });
     const offCopy = on(root, '[data-role="copy-address"]', 'click', async (evt) => {
       evt.preventDefault();
       if (!address) return;
@@ -489,6 +502,7 @@ registerScreen('home', {
       offSync();
       offVeil();
       offCopy();
+      offSidebar();
       field?.destroy();
       offRescanChain();
       offRescanPlain();

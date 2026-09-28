@@ -1,8 +1,9 @@
-// What both extension pages do, which is the same thing in two window shapes: build the backend
-// and mount the shared UI on it.
+// What every extension page does, which is the same thing in three window shapes: build the
+// backend and mount the shared UI on it.
 //
 //   popup.html  `boot('popup')`  the toolbar popup, a hard 360×600 window (ui/base.css sizes it
 //                                from `body.compact.popup`, which the shell sets for this mode)
+//   sidepanel.html `boot('sidebar')` the browser's side panel: one column, the window's height
 //   app.html    `boot('app')`    the same wallet in a real tab, where the layout may widen
 //
 // The shell mounts into `<body>`: it sets page-level classes and the theme on `<html>`, so it has

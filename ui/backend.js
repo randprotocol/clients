@@ -262,6 +262,10 @@
  *    user's own click. The settings screen calls it inside the submit handler, before saving a new
  *    RPC URL, and abandons the save if it resolves false.
  *  - `platform.openFlowInTab?(flow)` — a popup shell escaping its 360×600 window for a long flow.
+ *  - `platform.openSidebar?()` — a browser extension moving the wallet from its popup into the
+ *    browser's side panel (Chrome `sidePanel`, Firefox `sidebarAction`). Must be called straight
+ *    from the user's click — both browsers open a panel only inside a gesture — and closes the
+ *    popup on success. Home offers it only in `mode: 'popup'` and only where it exists.
  *  - `platform.paste?()` → string. Reads the clipboard, for the send screen's Paste affordance
  *    (a shielded address is pasted, never typed). Optional because reading the clipboard needs a
  *    permission some shells will not have: where it is missing, no Paste button is offered at all
