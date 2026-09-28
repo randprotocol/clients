@@ -91,9 +91,13 @@
  * A **note** is `{index, asset, amount, blockHeight, spent, commitment, time, memo?}` — `memo?`
  * exactly as on an activity item.
  *
- * `settings.get()` → `{rpcUrl, rpcUrls, theme, autoLockMin, explorerUrl, chainId}`. `explorerUrl`
- * may be empty, in which case no explorer link is offered at all; `chainId` is the network's own
- * id and is the only source of any network label (no screen writes a chain number).
+ * `settings.get()` → `{rpcUrl, rpcUrls, theme, autoLockMin, explorerUrl, chainId, prover}`.
+ * `explorerUrl` may be empty, in which case no explorer link is offered at all; `chainId` is the
+ * network's own id and is the only source of any network label (no screen writes a chain number).
+ * `prover` is `{mode: 'device'}` until a prover is paired, then `{mode: 'remote', name, url, kemEk,
+ * fingerprint, own}` (delegated proving, spec 2026-09-28 §4.1). It is **read-only** through
+ * `settings.set` — only the optional `prover` group writes it — and it never carries the pairing
+ * token, which lives in the vault.
  *
  * The node is two fields, not one (task 5.0). `rpcUrls` is the **default endpoint set** the
  * wallet moves between on its own when one of them is unreachable; `rpcUrl` is the user's single
@@ -113,11 +117,14 @@
  * bundle, so a wallet holding a token and no RAND cannot send that token; the backend refuses
  * with the core's own sentence before any work is done.
  *
- * `send.canProve()` → `{ok, reason?}`. `ok: false` means this shell cannot produce the transfer
- * proof at all (the wasm shells: the proof needs ~5.7 GB and wasm32 stops at 4 GiB); `reason` is
- * shown to the user verbatim, so it is written for them, not for a log. **A shell whose
- * `canProve()` is false never simulates a send**: `send.send` rejects there, before anything is
- * selected, whatever the asset.
+ * `send.canProve()` → `{ok, reason?, via?}`. The device is asked first; where it cannot prove (the
+ * wasm shells: the proof needs ~5.7 GB and wasm32 stops at 4 GiB; a desktop without the memory) a
+ * prover the user paired **as their own** that answers `prover.probe()` makes it `{ok: true, via:
+ * 'prover'}`. `ok: false` means neither can; `reason` is shown to the user verbatim, so it is
+ * written for them, not for a log (the wasm shells' names both ways out: pair a prover, or use the
+ * desktop app). It may ask the paired prover, never the node. **A shell whose `canProve()` is
+ * false never simulates a send**: `send.send` rejects there, before anything is selected, whatever
+ * the asset.
  *
  * `send.estimate(req)` → `{fee, inputs, feeInputs, change, feeChange, proofs}`. `fee` and
  * `feeChange` are units strings in the *native* asset; `change` is in units of `asset`. `inputs`
@@ -130,10 +137,15 @@
  * to consolidate first, or that they hold no RAND for the fee.
  *
  * `send.send(req, onPhase, options?)` → `{hash, txKey}`.
- *  - `onPhase(phase)` is called as the transfer moves through
+ *  - `onPhase(phase, detail?)` is called as the transfer moves through
  *    `'selecting' | 'witness' | 'proving' | 'submitting' | 'confirming'`. **The phase is how the UI
  *    decides what a failure means** (see the rejection fields below), so a backend must report
- *    `'submitting'` before it hands the transaction to the node, not after.
+ *    `'submitting'` before it hands the transaction to the node, not after. `detail` is OPTIONAL
+ *    and today only accompanies `'proving'` on a paired prover: `{position, prover}` while the job
+ *    waits in its queue (1-based), `{prover}` while it is being proved — `prover` the pairing's
+ *    name. A screen that reads one argument sees exactly what it always did.
+ *  - While a remote proof is pending (see `send.pending?`), `send.send` rejects `definite` with
+ *    "A proof is still pending — resume or cancel it." rather than start a second one.
  *  - `options` is OPTIONAL and today carries one OPTIONAL field:
  *    - `signal?` — an `AbortSignal`. It aborts when the wallet session ends (a lock, a wipe, an
  *      unlock, a new wallet, the UI being torn down) and when the user cancels, which the UI only
@@ -294,8 +306,8 @@
  *       `send.canProve()`. It asks two questions in a fixed order: can this device prove at all (a
  *       burn is ONE bundle proof, the same one a transfer is — ~5.7 GB, about two minutes;
  *       the answer is `send.canProve()`'s own sentence, verbatim), and is the bridge enabled. Both
- *       must pass. On every wasm shell the first is unconditionally false, so this is too, and no
- *       node is asked.
+ *       must pass. On a wasm shell with no paired prover the first is false, so this is too, and no
+ *       node is asked; with one, the burn is proved by the prover exactly as a transfer is.
  *     · `bridge.estimate({asset, amount, relayerFee, toChain, token, to})` → `{fee, relayerFee,
  *       receive, change, feeChange, proofs}`. `toChain` and `token` are one of the asset's
  *       `backings` — the coin this withdrawal releases. `fee` is RAND; `relayerFee` is in units of
@@ -314,6 +326,27 @@
  *       exactly as `send.send`'s do, and **it refuses exactly what `estimate` refuses, before a
  *       proof starts** — the two run one shared list, because a gate on one and not the other is
  *       a proof spent on a transaction the chain was always going to refuse.
+ *  - `prover?` — a whole OPTIONAL GROUP, delegated proving (spec 2026-09-28, Phase 1): a prover
+ *    the user runs (the desktop app's, or `rand-prover` on their own machine) proves for a device
+ *    that cannot. Phase 1 sends a spend-key job only to a pairing whose link says `own`.
+ *     · `prover.pair(link, password, {name}?)` → the new `settings.prover`. The password is checked
+ *       first (the token is sealed under it, as a second vault record); the `randprover:` link is
+ *       parsed by the core; its URL must be https, or http to this machine only; the prover must
+ *       answer `prover_info` with the key the link names, or nothing is stored. Re-pairing
+ *       replaces the token in the vault and in the unlocked session. Rejects with a sentence.
+ *       Before calling it a screen must show the spec §4.4 warning (this prover receives the spend
+ *       key each time it proves; pair only a machine you run yourself).
+ *     · `prover.probe()` → `{ok: true, queue: {depth, max, proving}, witnessKinds, fee, hcBundles}`
+ *       or `{ok: false, reason}`; never rejects.
+ *     · `prover.forget()` — removes `settings.prover`, the vault's token and the session's copy.
+ *  - `send.pending?()` → `{job, name, kind, startedAt}` or `null`: a remote proof still in flight —
+ *    typically a popup closed mid-proof. It lives in session storage and is forgotten on lock.
+ *  - `send.resume?(onPhase, options?)` → `{hash, txKey}` (a transfer) or `{hash}` (a withdrawal):
+ *    carries the pending proof on — the SAME job — and submits it once, with `send.send`'s phases
+ *    (from `'proving'`) and rejection fields. A screen calls it on mount when `pending()` reports
+ *    one.
+ *  - `send.cancelPending?()` → boolean: cancels the pending job on the prover (best effort) and
+ *    forgets it.
  *  - `send.limits?()` → `{envelopeBytes}`: the chain's `envelope_bytes` from `rand_getLimits`
  *    (spec 2026-09-26 §2.4), or `null` where the chain carries no memo or the node predates the
  *    method. The send screen offers a memo field only when this is a number.
