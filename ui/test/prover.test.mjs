@@ -231,6 +231,25 @@ test('an own prover that answers makes canProve say yes, via the prover — on t
 
 // ------------------------------------------------------------------------------ sending --------
 
+test('a_proof_is_made_on_the_chains_fri_profile', async () => {
+  // The chain says which FRI profile its validators verify (`rand_status.fri_profile`); a proof on
+  // any other is refused at the node after the whole proof was paid for. Only the two names the
+  // core knows are taken; anything else — absent, or a value no chain serves — is production.
+  for (const [served, want] of [['test', 'test'], ['production', 'production'], [undefined, 'production'], ['weird', 'production']]) {
+    const env = await sendableWallet({
+      fetch: sendableFetch({
+        rand_status: () => ({ height: 100, peer_count: 3, syncing: false, hc_bundle: HC_V2, ...(served === undefined ? {} : { fri_profile: served }) }),
+        prover_status: () => ({ state: 'done', reply: PROVER_REPLY }),
+      }),
+    });
+    await env.backend.prover.pair(proverLink(), PASSWORD);
+    await env.backend.send.send(SEND, () => {});
+    const [[, prepared]] = coreCalled(env, 'prepare_transfer');
+    assert.equal(prepared.profile, want, `rand_status.fri_profile ${served} → ${prepared.profile}`);
+  }
+});
+
+
 test('a_send_through_the_prover_seals_submits_polls_and_submits_the_finished_tx', async () => {
   const script = [{ state: 'queued', position: 2 }, { state: 'queued', position: 2 }, { state: 'proving' }, { state: 'done', reply: PROVER_REPLY }];
   const env = await sendableWallet({ fetch: sendableFetch({ prover_status: () => script.shift() }) });
