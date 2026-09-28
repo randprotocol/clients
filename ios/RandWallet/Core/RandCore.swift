@@ -71,6 +71,21 @@ enum RandCore {
         let params = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] ?? [:]
         return try call("prove_transfer", params, as: ProveResult.self)
     }
+    /// Delegated proving: the transfer `prove_transfer` would build, its witness sealed to a
+    /// paired prover. `params` carries the spend key and the pairing token — never log it. The
+    /// reply's `pending` carries neither.
+    static func prepareTransfer(_ params: [String: Any]) throws -> (sealedHex: String, pending: Any) {
+        guard let v = try call("prepare_transfer", params) as? [String: Any],
+              let sealed = v["sealed_hex"] as? String, let pending = v["pending"] else {
+            throw CoreError(message: "prepare_transfer returned no sealed job")
+        }
+        return (sealed, pending)
+    }
+    /// Opens the prover's reply, checks it and verifies the proof: the ProveResult
+    /// `prove_transfer` would have returned, or the core's refusal.
+    static func finishProof(pending: Any, replyHex: String) throws -> ProveResult {
+        try call("finish_proof", ["pending": pending, "reply_hex": replyHex], as: ProveResult.self)
+    }
     static func formatAmount(units: String) throws -> String {
         try call("format_amount", ["units": units]) as? String ?? units
     }

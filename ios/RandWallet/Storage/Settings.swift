@@ -22,6 +22,15 @@ final class Settings: ObservableObject {
     @Published var autoLockMinutes: Int { didSet { defaults.set(autoLockMinutes, forKey: "autoLockMinutes") } }
     @Published var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: "theme") } }
     @Published var hasBackedUpKey: Bool { didSet { defaults.set(hasBackedUpKey, forKey: "hasBackedUpKey") } }
+    /// The paired prover (delegated proving, Phase 1), or `nil`: proofs are made on this device.
+    /// Its five public fields only — the token is in the Keychain (`Keychain.saveProverToken`).
+    /// Written by `ProverPairingService` alone, which checks the prover's key first.
+    @Published var prover: ProverPairing? {
+        didSet {
+            if let p = prover, let data = try? JSONEncoder().encode(p) { defaults.set(data, forKey: "prover") }
+            else { defaults.removeObject(forKey: "prover") }
+        }
+    }
 
     init() {
         let core = try? RandCore.constants()
@@ -30,6 +39,7 @@ final class Settings: ObservableObject {
         autoLockMinutes = defaults.object(forKey: "autoLockMinutes") as? Int ?? 15
         theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hasBackedUpKey = defaults.bool(forKey: "hasBackedUpKey")
+        prover = defaults.data(forKey: "prover").flatMap { try? JSONDecoder().decode(ProverPairing.self, from: $0) }
     }
 
     var rpcURL: URL? { URL(string: rpcUrl.trimmingCharacters(in: .whitespaces)) }

@@ -10,7 +10,8 @@ RandWallet/
   Network/     RpcClient — JSON-RPC 2.0 over URLSession
   Storage/     NoteStore (Application Support, complete file protection), Keychain, Settings,
                Contacts (Keychain-backed JSON, the CLI's rules)
-  Services/    WalletService (scan / send / faucet), AuthService (lock, Face ID)
+  Services/    WalletService (scan / send / faucet), AuthService (lock, Face ID), ProverClient and
+               ProverPairingService (a paired prover: JSON-RPC, the poll loop, pairing)
   UI/          Welcome · Lock · Home · Receive · Send → Review → Proving → Sent · Activity · Settings
                · Contacts; `randpay:` links open Send pre-filled (never sent without Confirm)
 RandWalletTests/   NoteStore logic and an FFI smoke test
@@ -63,8 +64,10 @@ only network host is the RPC URL the user configures, plus randscan.org when a l
 
 ## Security notes
 
-- The spend key is the only secret, kept in the Keychain with
+- The spend key is the only wallet secret, kept in the Keychain with
   `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`; the viewing key and address are derived on unlock.
+  A paired prover's token (Settings → Prover, `../docs/prover.md` §6) sits beside it under its own
+  account, with the same accessibility; the pairing's public fields are in `UserDefaults`.
 - Unlock is Face ID / Touch ID with the device passcode as fallback; auto-lock after the interval
   in Settings when backgrounded (never during a proof).
 - The note store is a cache of chain data and is written with complete file protection.

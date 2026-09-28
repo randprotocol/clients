@@ -18,6 +18,13 @@ struct SettingsView: View {
     @State private var showReveal = false
     @State private var confirmForget = false
     @State private var confirmRescan = false
+    // The prover (delegated proving, spec 2026-09-28 §4.4). The link holds a secret: it lives in
+    // this field until Save, and the field is emptied once it is paired.
+    @State private var proverLink = ""
+    @State private var pairing = false
+    @State private var proverStatus: (ok: Bool, title: String, message: String)?
+    @State private var probeLine = "Asking the prover…"
+    @State private var showProverScanner = false
 
     var body: some View {
         NavigationStack {
@@ -28,6 +35,8 @@ struct SettingsView: View {
                     Button(testing ? "Testing…" : "Save and test connection") { Task { await saveAndTest() } }.disabled(testing)
                     if let c = connection { Text(c).font(.system(size: 13)).foregroundColor(Theme.textSoft) }
                 }
+
+                proverSection
 
                 Section {
                     if let vk = wallet.viewingKey {
@@ -85,6 +94,13 @@ struct SettingsView: View {
                 rpcDraft = settings.rpcUrl
                 chainDraft = String(settings.chainId)
             }
+            .sheet(isPresented: $showProverScanner) {
+                QRScannerView(prompt: "Point the camera at your prover's pairing QR code") { code in
+                    proverLink = code.trimmingCharacters(in: .whitespacesAndNewlines)
+                    showProverScanner = false
+                }
+            }
+            .task { await probeProver() }
             .sheet(isPresented: $showReveal) {
                 if let r = revealed { RevealView(title: r.title, value: r.value) }
             }
@@ -100,6 +116,85 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder private var proverSection: some View {
+        Section {
+            if let p = settings.prover {
+                row("Proofs are made by", "My own prover · \(p.name)")
+                row("Fingerprint", p.fingerprint)
+                Text(probeLine).font(.system(size: 13)).foregroundColor(Theme.textSoft)
+                Button("Forget this prover", role: .destructive) { forgetProver() }
+            } else {
+                row("Proofs are made by", "This device")
+                Text("Where this device cannot make a proof, pair a prover you run yourself — rand-prover on your own machine, reachable from this phone over https.")
+                    .font(.system(size: 13)).foregroundColor(Theme.textSoft)
+            }
+            HStack(spacing: 8) {
+                TextField("randprover:…", text: $proverLink).font(.mono).autocorrectionDisabled().textInputAutocapitalization(.never)
+                Button { showProverScanner = true } label: { Image(systemName: "qrcode.viewfinder") }
+                    .accessibilityLabel("Scan QR code").buttonStyle(.borderless)
+                Button("Paste") { if let s = UIPasteboard.general.string { proverLink = s.trimmingCharacters(in: .whitespacesAndNewlines) } }
+                    .buttonStyle(.borderless)
+            }
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Theme.negative)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Your spend key goes to this prover").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.text)
+                    Text(ProverPairingService.warning).font(.system(size: 13)).foregroundColor(Theme.text)
+                }
+            }
+            Button(pairing ? "Pairing…" : "Save") { Task { await saveProver() } }.disabled(pairing)
+            if let s = proverStatus {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(s.title).font(.system(size: 14, weight: .semibold)).foregroundColor(s.ok ? Theme.positive : Theme.negative)
+                    Text(s.message).font(.system(size: 13)).foregroundColor(Theme.textSoft)
+                }
+            }
+        } header: { Text("Prover") } footer: {
+            Text("Pairing link: the randprover: link your prover shows. It carries a secret — paste it here and nowhere else. A prover must be reached over https (plain http only on this device).")
+        }
+    }
+
+    private func saveProver() async {
+        let link = proverLink.trimmingCharacters(in: .whitespacesAndNewlines)
+        proverStatus = nil
+        guard !link.isEmpty else {
+            proverStatus = (false, "Not paired", "Paste the randprover: link your prover shows.")
+            return
+        }
+        pairing = true
+        defer { pairing = false }
+        let seen: ProverPairingService.Preview
+        do { seen = try ProverPairingService.preview(link) } catch {
+            proverStatus = (false, "Not paired", error.localizedDescription)
+            return
+        }
+        do {
+            let (paired, token) = try await ProverPairingService.pair(link)
+            try ProverPairingService.save(paired, token: token, settings: settings)
+            proverLink = "" // the token goes with it
+            if let w = seen.warning {
+                proverStatus = (false, "Saved; not usable in this build", w)
+            } else {
+                proverStatus = (true, "Paired", "Proofs this device cannot make go to \(paired.name). Its fingerprint is \(paired.fingerprint) — check that your prover shows the same.")
+            }
+            await probeProver()
+        } catch {
+            proverStatus = (false, "Not paired", error.localizedDescription)
+        }
+    }
+
+    private func forgetProver() {
+        ProverPairingService.forget(settings: settings)
+        proverStatus = (true, "Forgotten", "Proofs are made on this device again. The prover's pairing is gone from this wallet.")
+    }
+
+    private func probeProver() async {
+        guard let p = settings.prover else { return }
+        probeLine = "Asking the prover…"
+        let answer = await ProverPairingService.probe(p)
+        if settings.prover == p { probeLine = ProverPairingService.statusLine(answer) }
     }
 
     private func row(_ k: String, _ v: String) -> some View {

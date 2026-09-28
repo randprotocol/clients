@@ -65,6 +65,38 @@ final class RpcClient {
         return n
     }
 
+    /// The chain's proof-size cap, `rand_getLimits.max_proof_bytes` — what a remote prover's proof
+    /// is held to (`finish_proof`). `nil` (not reported, or a node without the method) means the
+    /// core's own vendored `MAX_PROOF_BYTES`, never "unbounded".
+    func maxProofBytes() async throws -> Int? {
+        let reply: Any
+        do {
+            reply = try await call("rand_getLimits")
+        } catch let e as RpcError where e.code == -32601 {
+            return nil
+        }
+        guard let obj = reply as? [String: Any] else { throw RpcError(code: 0, message: "rand_getLimits: not an object") }
+        guard let v = obj["max_proof_bytes"], !(v is NSNull) else { return nil }
+        guard let n = v as? Int, n > 0, n <= 1 << 30 else {
+            throw RpcError(code: 0, message: "rand_getLimits: max_proof_bytes is not a positive size")
+        }
+        return n
+    }
+
+    /// The chain's proof parameters from `rand_status`: its bundle guest (`hc_bundle`, 64 hex, or
+    /// `nil` for this build's default) and its FRI profile (`"test"` only when the node says so).
+    func proofParams() async throws -> (hcBundle: String?, profile: String) {
+        let st: [String: Any]
+        do {
+            st = try await status()
+        } catch let e as RpcError where e.code == -32601 {
+            return (nil, "production")
+        }
+        let hc = (st["hc_bundle"] as? String ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        let valid = hc.count == 64 && hc.allSatisfy { $0.isHexDigit }
+        return (valid ? hc : nil, st["fri_profile"] as? String == "test" ? "test" : "production")
+    }
+
     func chainId() async throws -> UInt64 { try u64(await call("rand_chainId")) }
 
     func status() async throws -> [String: Any] { try await call("rand_status") as? [String: Any] ?? [:] }

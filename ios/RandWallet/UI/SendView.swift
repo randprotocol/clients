@@ -7,6 +7,7 @@ struct SendView: View {
     @EnvironmentObject var wallet: WalletService
     @EnvironmentObject var contacts: ContactsStore
     @EnvironmentObject var router: LinkRouter
+    @EnvironmentObject var settings: Settings
     @Environment(\.dismiss) private var dismiss
 
     enum Step { case form, review, working, done(WalletService.SendOutcome), failed(String) }
@@ -238,8 +239,13 @@ struct SendView: View {
             }
             Text("Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.")
                 .font(.system(size: 13)).foregroundColor(Theme.textMute).multilineTextAlignment(.center)
-            if !ProverRequirements.deviceHasEnoughMemory {
-                Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Until the prover's memory use drops, send from the rand command-line wallet on a computer with the key file from Settings › Export.")
+            if let p = remoteProver {
+                // Delegated proving, Phase 1: this device cannot fit the proof, and a prover the
+                // user paired as their own will make it.
+                Text("This device does not have the memory for this proof, so your prover, \(p.name), will make it. Your spend key goes to it inside a sealed job; this phone checks the proof before anything is sent.")
+                    .font(.system(size: 13)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
+            } else if !ProverRequirements.deviceHasEnoughMemory {
+                Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Pair a prover you run yourself in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.")
                     .font(.system(size: 13)).foregroundColor(Theme.warning).multilineTextAlignment(.center)
             }
             Spacer()
@@ -256,9 +262,17 @@ struct SendView: View {
             Text(phaseTitle).font(.title).foregroundColor(Theme.textStrong)
             Text(phaseDetail).font(.body15).foregroundColor(Theme.textSoft).multilineTextAlignment(.center).padding(.horizontal, 24)
             if case .proving(let started) = wallet.phase { ElapsedText(since: started) }
+            if case .provingRemotely(_, _, let started) = wallet.phase { ElapsedText(since: started) }
             Spacer()
         }
         .padding(20)
+    }
+
+    /// The prover a send will use: only where this device cannot prove and the pairing is the
+    /// user's own (whether it answers is checked when the send starts).
+    private var remoteProver: ProverPairing? {
+        guard !ProverRequirements.deviceHasEnoughMemory, let p = settings.prover, p.own else { return nil }
+        return p
     }
 
     private var phaseTitle: String {
@@ -267,6 +281,9 @@ struct SendView: View {
         case .selecting: return "Choosing notes…"
         case .fetchingWitnesses: return "Fetching witnesses…"
         case .proving: return "Proving your transfer…"
+        case .provingRemotely(let name, let position, _):
+            if let n = position { return "Waiting at position \(n) on \(name)" }
+            return "Proving on \(name)…"
         case .submitting: return "Submitting…"
         case .waitingForCommit: return "Waiting for the block…"
         default: return "Working…"
@@ -275,6 +292,7 @@ struct SendView: View {
     private var phaseDetail: String {
         switch wallet.phase {
         case .proving: return "About a minute or two on this device. Keep the app open."
+        case .provingRemotely: return "Your prover makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent."
         case .waitingForCommit(let h): return "Transaction \(h.shortened(head: 8, tail: 6)) is in the mempool."
         default: return ""
         }

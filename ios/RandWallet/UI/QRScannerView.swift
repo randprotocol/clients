@@ -2,8 +2,10 @@ import SwiftUI
 import AVFoundation
 import UIKit
 
-/// Scans a recipient address QR with the camera. Falls back to a message on the simulator.
+/// Scans a QR code with the camera — a recipient address, or a prover's pairing link. Falls back
+/// to a message on the simulator.
 struct QRScannerView: View {
+    var prompt = "Point the camera at a Rand Wallet address"
     let onCode: (String) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -13,7 +15,7 @@ struct QRScannerView: View {
                 ScannerRepresentable(onCode: onCode).ignoresSafeArea()
                 VStack {
                     Spacer()
-                    Text("Point the camera at a Rand Wallet address").font(.system(size: 14, weight: .medium))
+                    Text(prompt).font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white).padding(10).background(Color.black.opacity(0.5)).clipShape(Capsule()).padding(.bottom, 32)
                 }
             }

@@ -13,6 +13,9 @@ final class WalletService: ObservableObject {
         case selecting
         case fetchingWitnesses
         case proving(started: Date)
+        /// A paired prover makes the proof: `position` while the job waits in its queue, `nil`
+        /// while it is handed over or being proved.
+        case provingRemotely(prover: String, position: Int?, started: Date)
         case submitting
         case waitingForCommit(hash: String)
         case done
@@ -96,6 +99,8 @@ final class WalletService: ObservableObject {
         lock()
         Keychain.deleteSpendKey()
         contacts.forget()
+        // A prover's pairing token was issued to this phone's wallet; it goes with the wallet.
+        ProverPairingService.forget(settings: settings)
         NoteStore.delete()
         store = NoteStore()
         settings.hasBackedUpKey = false
@@ -203,6 +208,9 @@ final class WalletService: ObservableObject {
         let addr = try RandCore.parseAddress(to)
         guard addr.valid else { throw RpcClient.RpcError(code: 0, message: addr.error ?? "invalid address") }
         defer { phase = .idle }
+        // Where the proof is made, decided before any work: this device, or a prover the user
+        // paired as their own (delegated proving, Phase 1).
+        let route = try await proveRoute()
 
         phase = .syncing
         try await scan()
@@ -237,8 +245,13 @@ final class WalletService: ObservableObject {
                                    anchorHeight: anchor.height, anchorRoot: anchor.root, inputs: inputs, profile: "production",
                                    memo: memo, envelopeBytes: envelopeBytes)
         let started = Date()
-        phase = .proving(started: started)
-        let proof = try await Self.prove(request)
+        let proof: ProveResult
+        if let route {
+            proof = try await proveRemotely(request, route: route, rpc: rpc, started: started)
+        } else {
+            phase = .proving(started: started)
+            proof = try await Self.prove(request)
+        }
         let provingSeconds = Date().timeIntervalSince(started)
         // The receipt's key is the PAYMENT output's own, named by the core — never a slot index:
         // chain 14's four slots put dummies ahead of the payment for a RAND transfer.
@@ -280,6 +293,73 @@ final class WalletService: ObservableObject {
         return try await Task.detached(priority: .userInitiated) {
             try RandCore.proveTransfer(request)
         }.value
+    }
+
+    /// A remote route: the pairing and its token.
+    struct ProveRoute {
+        let pairing: ProverPairing
+        let token: String
+    }
+
+    /// `nil` when this device proves — it has the memory, or no prover is paired as the user's own
+    /// (then the review step's memory warning stands, as before). A paired own prover that does
+    /// not answer, answers with another key, or takes no spend-key job refuses the send here,
+    /// before anything is built: nothing is sent.
+    func proveRoute() async throws -> ProveRoute? {
+        if ProverRequirements.deviceHasEnoughMemory { return nil }
+        guard let p = settings.prover, p.own else { return nil }
+        let reason = "This device does not have the memory for this proof."
+        switch await ProverPairingService.probe(p) {
+        case .unavailable(let why):
+            throw ProverRefusal(message: "\(reason) Your paired prover is not available: \(why).")
+        case .ok(let info) where !info.witnessKinds.contains("spend_key"):
+            throw ProverRefusal(message: "\(reason) Your paired prover is not available: it does not take a spend-key job.")
+        case .ok:
+            break
+        }
+        guard let token = Keychain.loadProverToken(), !token.isEmpty else {
+            throw ProverRefusal(message: "Your prover's pairing could not be opened. Pair the prover again in Settings.")
+        }
+        return ProveRoute(pairing: p, token: token)
+    }
+
+    /// The same transfer `prove_transfer` would build, its witness sealed by the core to the
+    /// paired prover's key; the reply opened, checked and verified by the core (`finish_proof`)
+    /// before its result is used exactly where a local proof's would be. The spend key leaves this
+    /// process only inside the sealed job. No resume: the job lives in this call.
+    private func proveRemotely(_ request: ProveRequest, route: ProveRoute, rpc: RpcClient, started: Date) async throws -> ProveResult {
+        let name = route.pairing.name
+        phase = .provingRemotely(prover: name, position: nil, started: started)
+        let maxProofBytes = try await rpc.maxProofBytes()
+        let (hcBundle, profile) = try await rpc.proofParams()
+        var params = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] ?? [:]
+        params["profile"] = profile
+        var target: [String: Any] = ["kem_ek": route.pairing.kemEk, "token": route.token, "witness_kind": "spend_key"]
+        if let hcBundle { target["hc_bundle"] = hcBundle }
+        params["prover"] = target
+        if let maxProofBytes { params["max_proof_bytes"] = maxProofBytes }
+        let job = params
+        params = [:]
+        let prepared = try await Task.detached(priority: .userInitiated) { try RandCore.prepareTransfer(job) }.value
+        let client = try ProverClient(url: route.pairing.url)
+
+        UIApplication.shared.isIdleTimerDisabled = true
+        let bg = UIApplication.shared.beginBackgroundTask(withName: "remote-prove")
+        defer {
+            UIApplication.shared.isIdleTimerDisabled = false
+            if bg != .invalid { UIApplication.shared.endBackgroundTask(bg) }
+        }
+        return try await RemoteProver(client: client).prove(
+            sealedHex: prepared.sealedHex, pending: prepared.pending,
+            finish: { pending, reply in try RandCore.finishProof(pending: pending, replyHex: reply) },
+            onPhase: { [weak self] p in
+                await MainActor.run {
+                    switch p {
+                    case .proving: self?.phase = .provingRemotely(prover: name, position: nil, started: started)
+                    case .queued(let n): self?.phase = .provingRemotely(prover: name, position: n, started: started)
+                    }
+                }
+            })
     }
 
     /// The connected chain's `envelope_bytes` (`nil`: no memo on this chain).
