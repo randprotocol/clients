@@ -115,12 +115,7 @@ pub struct InputCursor<F: FnMut(u32) -> u32> {
 
 impl<F: FnMut(u32) -> u32> InputCursor<F> {
     pub fn new(read: F, len: u32) -> Self {
-        InputCursor {
-            read,
-            pos: 0,
-            len,
-            truncated: false,
-        }
+        InputCursor { read, pos: 0, len, truncated: false }
     }
 
     /// The next word, or 0 with the truncation flag set once the vector is exhausted.
@@ -232,10 +227,7 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub const ZERO: Workspace = Workspace {
-        input: CallInput::ZERO,
-        bufs: Buffers::ZERO,
-    };
+    pub const ZERO: Workspace = Workspace { input: CallInput::ZERO, bufs: Buffers::ZERO };
 }
 
 /// Decode the input vector into `dst`, in place. The host is needed because each witness's leaf
@@ -255,9 +247,7 @@ pub fn decode_input<H: Host, F: FnMut(u32) -> u32>(
     c: &mut InputCursor<F>,
 ) -> Result<(), ParseError> {
     dst.code_len = c.bytes(&mut dst.code).ok_or(ParseError::CodeTooLong)?;
-    dst.calldata_len = c
-        .bytes(&mut dst.calldata)
-        .ok_or(ParseError::CalldataTooLong)?;
+    dst.calldata_len = c.bytes(&mut dst.calldata).ok_or(ParseError::CalldataTooLong)?;
     dst.env = Env {
         address: c.u256(),
         caller: c.u256(),
@@ -297,9 +287,7 @@ pub fn decode_input<H: Host, F: FnMut(u32) -> u32>(
 /// `word[i] = LE(bytes[4i..4i+4])` — how a 32-byte Keccak digest enters a sponge message, the
 /// packing `guest_sdk::keccak256`'s test guest uses.
 pub fn hash_words(h: &[u8; 32]) -> [u32; 8] {
-    core::array::from_fn(|i| {
-        u32::from_le_bytes([h[4 * i], h[4 * i + 1], h[4 * i + 2], h[4 * i + 3]])
-    })
+    core::array::from_fn(|i| u32::from_le_bytes([h[4 * i], h[4 * i + 1], h[4 * i + 2], h[4 * i + 3]]))
 }
 
 /// `keccak256(be32(n_logs) ‖ per log: be32(n_topics) ‖ topics as 32 big-endian bytes each)` — the
@@ -343,11 +331,7 @@ pub fn public_output<H: Host>(
 ) -> [u32; 8] {
     let status = o.status();
     let post = if status == 1 { post_root } else { pre_root };
-    let ret: &[u8] = if status == 2 {
-        &[]
-    } else {
-        &o.ret[..o.ret_len]
-    };
+    let ret: &[u8] = if status == 2 { &[] } else { &o.ret[..o.ret_len] };
     let mut msg = [0u32; OUT_WORDS];
     msg[0..8].copy_from_slice(&hash_words(&keccak256(h, code)));
     msg[8..16].copy_from_slice(pre_root);

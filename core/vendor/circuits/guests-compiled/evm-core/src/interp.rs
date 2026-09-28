@@ -118,10 +118,7 @@ pub struct Log {
 }
 
 impl Log {
-    pub const EMPTY: Log = Log {
-        n_topics: 0,
-        topics: [U256::ZERO; MAX_TOPICS],
-    };
+    pub const EMPTY: Log = Log { n_topics: 0, topics: [U256::ZERO; MAX_TOPICS] };
 }
 
 /// What the run produced. `ret`/`logs` are fixed-size, so `ret_len`/`n_logs` say how much of each
@@ -438,9 +435,7 @@ impl<'a, H: Host> Interpreter<'a, H> {
                     G_SSTORE_RESET
                 };
                 self.charge(cost)?;
-                self.storage
-                    .store(&mut *self.h, &slot, value)
-                    .map_err(halt_of)?;
+                self.storage.store(&mut *self.h, &slot, value).map_err(halt_of)?;
             }
             0x56 => {
                 let dest = self.pop()?;
@@ -519,11 +514,7 @@ impl<'a, H: Host> Interpreter<'a, H> {
                 let start = self.mem(&offset, len)?;
                 self.ret[..len].copy_from_slice(&self.bufs.memory[start..start + len]);
                 self.ret_len = len;
-                return Ok(Some(if op == 0xf3 {
-                    Halt::Return
-                } else {
-                    Halt::Revert
-                }));
+                return Ok(Some(if op == 0xf3 { Halt::Return } else { Halt::Revert }));
             }
             0xfe => return Ok(Some(Halt::Invalid)),
 
@@ -595,11 +586,7 @@ impl<'a, H: Host> Interpreter<'a, H> {
         let from = src_offset(&offset);
         for i in 0..len {
             let s = from.saturating_add(i as u64);
-            self.bufs.memory[start + i] = if s < src.len() as u64 {
-                src[s as usize]
-            } else {
-                0
-            };
+            self.bufs.memory[start + i] = if s < src.len() as u64 { src[s as usize] } else { 0 };
         }
         Ok(())
     }
@@ -628,11 +615,7 @@ pub fn scan_jumpdests(code: &[u8], bits: &mut [u32; MAX_CODE_BYTES / 32]) {
             bits[i / 32] |= 1 << (i % 32);
         }
         // `PUSH1`–`PUSH32` (`PUSH0` carries no immediate, so it is not in this range).
-        i += if (0x60..=0x7f).contains(&op) {
-            1 + (op - 0x5f) as usize
-        } else {
-            1
-        };
+        i += if (0x60..=0x7f).contains(&op) { 1 + (op - 0x5f) as usize } else { 1 };
     }
 }
 
