@@ -111,3 +111,24 @@ linter warns when the floor predates a key the manifest uses). In Firefox an MV3
 permissions are granted by the install prompt; a user who declined them there sees the bridge fall
 back to "Install Rand Wallet" until the site is granted in the extension's permissions panel.
 
+### Tested in a real browser
+
+`extension/test/bridge-chrome.e2e.test.mjs` and `bridge-firefox.e2e.test.mjs` load the PACKED
+extension into a real Chrome (Playwright) and a real Firefox (selenium-webdriver + geckodriver),
+create a wallet through the extension's own backend, open a running randbridge.org build on its
+Withdraw tab, click Connect, approve in the consent window, and check the address and recipient
+hash the page gets — then the refusals: a second connect needs no window, `disconnect` forgets,
+a locked wallet answers `LOCKED` and the page says to unlock. Both skip, naming what is missing,
+unless the drivers are installed and a bridge is running:
+
+```bash
+npm --prefix extension install                 # playwright, selenium-webdriver, geckodriver (dev only)
+chrome/pack.sh && firefox/pack.sh
+# in a randbridge.org checkout: npm run build; node e2e/mock-status.mjs &
+#   STATUS_URL=http://127.0.0.1:8799 node .next/standalone/server.js
+RAND_BRIDGE_URL=http://localhost:3000 node --test extension/test/bridge-chrome.e2e.test.mjs extension/test/bridge-firefox.e2e.test.mjs
+```
+
+The withdrawal itself — a burn proved by a paired `rand-prover`, against a real node with a
+bridged genesis — is `web/wallet/test/withdraw.e2e.test.mjs`, run by `scripts/e2e-withdraw.sh`
+(the transfer's counterpart is `scripts/e2e-prover.sh`).

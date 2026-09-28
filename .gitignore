@@ -30,3 +30,4 @@ desktop/dist/
 desktop/dist-ui/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
+extension/node_modules/
