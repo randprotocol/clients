@@ -509,7 +509,12 @@ registerScreen('settings', {
       const link = String(proverLinkInput.value || '').trim();
       let password = proverPasswordInput.value;
       proverStatusEl.innerHTML = '';
-      if (!link) { showStatus('negative', 'Not paired', 'Paste the randprover: link your prover shows.', proverStatusEl); return; }
+      if (!link) {
+        proverPasswordInput.value = '';
+        password = '';
+        showStatus('negative', 'Not paired', 'Paste the randprover: link your prover shows.', proverStatusEl);
+        return;
+      }
       if (!password) { showStatus('negative', 'Not paired', 'Enter this wallet\'s password — the pairing is sealed under it.', proverStatusEl); return; }
       pairing = true;
       const saveBtn = body.querySelector('[data-role="save-prover"]');
@@ -558,14 +563,12 @@ registerScreen('settings', {
       proverLinkInput.value = ''; // the token goes with it
       settings = { ...settings, prover: paired };
       paintProverState();
-      showStatus('positive', 'Paired', `Proofs this device cannot make go to ${paired.name || seen.url}. Its fingerprint is ${paired.fingerprint || seen.fingerprint} — check that your prover shows the same.`, proverStatusEl);
-      // The engine's own sentence, relayed: Phase 1 never sends a job to a prover not marked own.
+      // The engine's own sentence, relayed: Phase 1 never sends a job to a prover not marked own,
+      // so such a pairing is reported as saved, not as where proofs now go.
       if (seen.warning) {
-        proverStatusEl.insertAdjacentHTML('beforeend', h`
-          <div class="banner warn">
-            <span class="ic">${raw(icons.warning())}</span>
-            <span><span class="banner-title">This pairing will not be used</span>${seen.warning}</span>
-          </div>`);
+        showStatus('warn', 'Saved; not usable in this build', seen.warning, proverStatusEl);
+      } else {
+        showStatus('positive', 'Paired', `Proofs this device cannot make go to ${paired.name || seen.url}. Its fingerprint is ${paired.fingerprint || seen.fingerprint} — check that your prover shows the same.`, proverStatusEl);
       }
     });
 

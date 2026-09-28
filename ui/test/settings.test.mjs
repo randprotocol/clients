@@ -653,6 +653,18 @@ test('a link that is not marked own relays the engine\'s Phase 1 warning', async
   await app.idle();
   const status = root.querySelector('[data-role="prover-status"]').textContent;
   assert.match(status, /does not mark the prover as your own/);
+  assert.match(status, /Saved; not usable in this build/);
+  assert.doesNotMatch(status, /Paired|go to/, 'no banner says proofs now go to this prover');
+});
+
+test('an empty link empties the password field too', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await settings(t, b);
+  submitProver(root, { link: '' });
+  await app.idle();
+  assert.match(root.querySelector('[data-role="prover-status"]').textContent, /Paste the randprover: link/);
+  assert.equal(root.querySelector('[name=proverPassword]').value, '');
+  assert.equal(b.calls.filter((c) => c[0] === 'prover.preview').length, 0);
 });
 
 test('Scan fills the pairing link where the platform has a camera', async (t) => {

@@ -1508,12 +1508,12 @@ test('without a prover the proving step keeps the device sentence', async (t) =>
 });
 
 /** A backend with a pending remote transfer whose `resume` never settles on its own. */
-function pendingSend({ kind = 'transfer' } = {}) {
+function pendingSend({ kind = 'transfer', name = 'my-desktop' } = {}) {
   const ctl = { resumes: 0, options: null, emit: null, settle: null, fail: null, cancelled: 0 };
   const b = unlockedBackend({
     send: {
       canProve: async () => ({ ok: true, via: 'prover' }),
-      pending: async () => ({ job: 'job-1', name: 'my-desktop', kind, startedAt: Date.now() - 5000 }),
+      pending: async () => ({ job: 'job-1', name, kind, startedAt: Date.now() - 5000 }),
       resume: (onPhase, options) => {
         ctl.resumes += 1;
         ctl.options = options;
@@ -1584,4 +1584,31 @@ test('a pending withdrawal is not resumed by the send screen', async (t) => {
   await turns(6);
   assert.equal(ctl.resumes, 0);
   assert.match(root.textContent, /withdrawal/i, 'the screen says a withdrawal proof is pending');
+});
+
+test('after a cancelled send, Prove starts the next one', async (t) => {
+  const { b, ctl } = controlledSend();
+  const { root } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  assert.equal(ctl.calls, 1);
+  const signal = ctl.options[0].signal;
+  root.querySelector('[data-role="cancel"]').click();
+  assert.equal(signal.aborted, true);
+  const err = new Error('The operation was aborted.');
+  err.name = 'AbortError';
+  ctl.fail(err);
+  await turns(6);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  assert.equal(ctl.calls, 2, 'send.send was called again after the cancel');
+});
+
+test('Cancel on a resumed proof whose prover has no name still cancels the pending job', async (t) => {
+  const { b, ctl } = pendingSend({ name: '' });
+  const { root } = await mountApp(t, b, { hash: '#send' });
+  await turns(6);
+  root.querySelector('[data-role="cancel"]').click();
+  await turns(6);
+  assert.equal(ctl.cancelled, 1);
 });

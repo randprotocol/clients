@@ -630,7 +630,27 @@ test('Cancel on a resumed withdrawal cancels the pending job', async (t) => {
 
 test('a pending transfer is not resumed by the withdraw screen', async (t) => {
   const { b, ctl } = pendingBurn({ kind: 'transfer' });
-  await mountApp(t, b, { hash: '#withdraw/1' });
+  const { root } = await mountApp(t, b, { hash: '#withdraw/1' });
   await turns(8);
   assert.equal(ctl.resumes, 0);
+  assert.ok(root.querySelector('[data-role="pending-elsewhere"]'), 'the pending transfer is named');
+  assert.match(text(root), /transfer is still being proved/);
+});
+
+test('after a cancelled withdrawal, Prove starts the next one', async (t) => {
+  const { b, ctl } = controlledWithdraw();
+  const { app, root } = await toProving(t, b);
+  assert.equal(ctl.calls, 1);
+  root.querySelector('[data-role="cancel"]').click();
+  const err = new Error('aborted');
+  err.name = 'AbortError';
+  ctl.fail(err);
+  await turns(6);
+  const confirm = root.querySelector('input[name=confirm]');
+  confirm.value = EVM.slice(-4);
+  confirm.dispatchEvent(new Event('input', { bubbles: true }));
+  await app.idle();
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  assert.equal(ctl.calls, 2, 'bridge.withdraw was called again after the cancel');
 });

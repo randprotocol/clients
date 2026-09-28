@@ -1007,7 +1007,7 @@ registerScreen('send', {
       try { store.controller.abort(); } catch { /* already aborted */ }
       // A proof on the paired prover is also cancelled there and forgotten (best effort — the
       // abort already asks the engine to), so it is not picked up again on the next mount.
-      if (store.proverName && typeof ctx.backend.send.cancelPending === 'function') {
+      if ((store.proverName || store.resumed) && typeof ctx.backend.send.cancelPending === 'function') {
         Promise.resolve(ctx.backend.send.cancelPending()).catch(() => {});
       }
       paintPhase(store);

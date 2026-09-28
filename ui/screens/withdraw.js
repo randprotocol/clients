@@ -689,6 +689,14 @@ registerScreen('withdraw', {
     // the send screen's to resume.
     if (!running && pendingJob && pendingJob.kind === 'burn' && typeof ctx.backend.send.resume === 'function') {
       running = resumeWithdrawal(ctx, pendingJob, index);
+    } else if (!running && pendingJob && pendingJob.kind !== 'burn') {
+      // A pending TRANSFER is the send screen's to resume; the engine refuses a new withdrawal
+      // meanwhile (with its own sentence), and this says so up front.
+      stepEl.insertAdjacentHTML('beforebegin', h`
+        <div class="banner warn" data-role="pending-elsewhere">
+          <span class="ic">${raw(icons.warning())}</span>
+          <span><span class="banner-title">A transfer is still being proved</span>Its proof is pending on ${String(pendingJob.name || 'your prover')}. Open Send to let it finish or cancel it; a new withdrawal waits until then.</span>
+        </div>`);
     }
     if (running) attach(running);
     else goStep(draft.estimate ? 'review' : (draft.padded ? 'amount' : 'chain'), { focus: false });
@@ -839,7 +847,7 @@ registerScreen('withdraw', {
       store.cancelling = true;
       try { store.controller.abort(); } catch { /* already aborted */ }
       // On the paired prover it is also cancelled there and forgotten (best effort).
-      if (store.proverName && typeof ctx.backend.send.cancelPending === 'function') {
+      if ((store.proverName || store.resumed) && typeof ctx.backend.send.cancelPending === 'function') {
         Promise.resolve(ctx.backend.send.cancelPending()).catch(() => {});
       }
       paintPhase();
