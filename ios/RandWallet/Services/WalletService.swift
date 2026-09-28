@@ -300,13 +300,13 @@ final class WalletService: ObservableObject {
 
     typealias ProveRoute = ProverPairingService.Route
 
-    /// `ProverPairingService.route` with this device's memory, the stored pairing, its probe and
-    /// the Keychain's token.
+    /// `ProverPairingService.route` with this device's memory, the stored (display) pairing, its
+    /// probe and the Keychain's record — the token, key and URL a job is sealed and sent to.
     func proveRoute() async throws -> ProveRoute? {
         try await ProverPairingService.route(deviceCanProve: ProverRequirements.deviceHasEnoughMemory,
                                              pairing: settings.prover,
                                              probe: { await ProverPairingService.probe($0) },
-                                             token: { Keychain.loadProverToken() })
+                                             secret: { Keychain.loadProverSecret() })
     }
 
     /// The same transfer `prove_transfer` would build, its witness sealed by the core to the

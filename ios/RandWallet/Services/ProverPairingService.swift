@@ -1,6 +1,24 @@
 import Foundation
 
-/// A paired prover as Settings keeps it: public fields only. The token is in the Keychain.
+/// The half of a pairing that decides where the spend key goes — the bearer token and the prover's
+/// key and URL — kept together in the Keychain (`Keychain.saveProverSecret`). A send seals to this
+/// `kemEk` and posts to this `url`; `Settings.prover` is only what the screens show.
+struct ProverSecret: Codable, Equatable {
+    var token: String
+    var kemEk: String
+    var url: String
+    var fingerprint: String
+
+    /// The record as stored, or `nil` for anything else (a pre-release bare token included).
+    static func decode(_ text: String) -> ProverSecret? {
+        guard let s = try? JSONDecoder().decode(ProverSecret.self, from: Data(text.utf8)),
+              ![s.token, s.kemEk, s.url, s.fingerprint].contains(where: \.isEmpty) else { return nil }
+        return s
+    }
+}
+
+/// A paired prover as Settings keeps it: public fields only, for display. The token — and the key
+/// and URL a job is actually sealed to and sent to — are in the Keychain (`ProverSecret`).
 struct ProverPairing: Codable, Equatable {
     /// What the proving screen calls it: the prover's host (and port).
     var name: String
@@ -93,18 +111,18 @@ enum ProverPairingService {
         return (ProverPairing(name: name, url: url, kemEk: p.kemEk, fingerprint: p.fingerprint, own: p.own), p.token)
     }
 
-    /// The token in the Keychain first, then the pairing in Settings: a pairing is never visible
-    /// without the token it needs.
+    /// The Keychain record first — the token with the key and URL it belongs to — then the display
+    /// copy in Settings: a pairing is never visible without the record a send needs.
     @MainActor
     static func save(_ pairing: ProverPairing, token: String, settings: Settings) throws {
-        try Keychain.saveProverToken(token)
+        try Keychain.saveProverSecret(ProverSecret(token: token, kemEk: pairing.kemEk.lowercased(), url: pairing.url, fingerprint: pairing.fingerprint))
         settings.prover = pairing
     }
 
     @MainActor
     static func forget(settings: Settings) {
         settings.prover = nil
-        Keychain.deleteProverToken()
+        Keychain.deleteProverSecret()
     }
 
     /// Whether the paired prover answers with the pairing's key.
@@ -121,20 +139,27 @@ enum ProverPairingService {
         return .ok(info)
     }
 
-    /// A remote route: the pairing and its token.
+    /// A remote route: the pairing — its `url`, `kemEk` and `fingerprint` the Keychain record's, only
+    /// `name` and `own` from Settings — and its token.
     struct Route {
         let pairing: ProverPairing
         let token: String
     }
 
     /// Where a send's proof is made. `nil` = this device: it can prove, or no prover is paired as
-    /// the user's own (Phase 1 sends a spend-key job nowhere else). A paired own prover that does
-    /// not answer, answers with another key, or takes no spend-key job — or whose token is gone —
-    /// refuses the send here, before anything is built: nothing is sent.
-    static func route(deviceCanProve: Bool, pairing: ProverPairing?,
-                      probe: (ProverPairing) async -> Probe, token: () -> String?) async throws -> Route? {
+    /// the user's own (Phase 1 sends a spend-key job nowhere else). A paired own prover whose
+    /// Keychain record is gone, that does not answer, answers with another key, or takes no
+    /// spend-key job refuses the send here, before anything is built: nothing is sent. The probe
+    /// and the route use the Keychain record's URL and key (`secret`), never `pairing`'s, which is
+    /// the plaintext display copy in Settings.
+    static func route(deviceCanProve: Bool, pairing display: ProverPairing?,
+                      probe: (ProverPairing) async -> Probe, secret: () -> ProverSecret?) async throws -> Route? {
         if deviceCanProve { return nil }
-        guard let p = pairing, p.own else { return nil }
+        guard let d = display, d.own else { return nil }
+        guard let s = secret(), !s.token.isEmpty else {
+            throw ProverRefusal(message: "Your prover's pairing could not be opened. Pair the prover again in Settings.")
+        }
+        let p = ProverPairing(name: d.name, url: s.url, kemEk: s.kemEk, fingerprint: s.fingerprint, own: true)
         let reason = "This device does not have the memory for this proof."
         switch await probe(p) {
         case .unavailable(let why):
@@ -144,10 +169,7 @@ enum ProverPairingService {
         case .ok:
             break
         }
-        guard let t = token(), !t.isEmpty else {
-            throw ProverRefusal(message: "Your prover's pairing could not be opened. Pair the prover again in Settings.")
-        }
-        return Route(pairing: p, token: t)
+        return Route(pairing: p, token: s.token)
     }
 
     /// The one status line Settings shows under the pairing.

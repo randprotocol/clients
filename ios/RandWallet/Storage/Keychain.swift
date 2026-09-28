@@ -2,13 +2,16 @@ import Foundation
 import Security
 import LocalAuthentication
 
-/// The spend key in the Keychain — and, beside it under its own account, a paired prover's token
-/// (delegated proving, Phase 1) — accessible only when this device is unlocked, never synced or
-/// migrated to another device.
+/// The spend key in the Keychain — and, beside it under its own account, a paired prover's secret
+/// record (delegated proving, Phase 1: the token AND the key and URL a job is sealed to) —
+/// accessible only when this device is unlocked, never synced or migrated to another device.
 enum Keychain {
     private static let service = "org.randprotocol.wallet"
     private static let account = "spend_key"
-    private static let proverTokenAccount = "prover_token"
+    private static let proverPairingAccount = "prover_pairing"
+    /// A pre-release build's bare token. Never read (it names no seal target: pair again); removed
+    /// with the pairing.
+    private static let legacyProverTokenAccount = "prover_token"
 
     struct KeychainError: LocalizedError {
         let status: OSStatus
@@ -20,11 +23,22 @@ enum Keychain {
     static var hasSpendKey: Bool { loadSpendKey() != nil }
     static func deleteSpendKey() { delete(account: account) }
 
-    /// The paired prover's bearer token (64 hex). It travels only inside a job the core sealed to
-    /// the prover's key; never in `Settings`, never in a log.
-    static func saveProverToken(_ hex: String) throws { try save(hex, account: proverTokenAccount) }
-    static func loadProverToken() -> String? { load(account: proverTokenAccount) }
-    static func deleteProverToken() { delete(account: proverTokenAccount) }
+    /// The paired prover's secret record, `{token, kemEk, url, fingerprint}` as JSON. The token
+    /// travels only inside a job the core sealed to the prover's key; the key and URL here — not
+    /// `Settings.prover`, which is display only — decide where that job is sealed and sent. Never in
+    /// `Settings`, never in a log.
+    static func saveProverSecret(_ secret: ProverSecret) throws {
+        let json = String(decoding: try JSONEncoder().encode(secret), as: UTF8.self)
+        try save(json, account: proverPairingAccount)
+        delete(account: legacyProverTokenAccount)
+    }
+    static func loadProverSecret() -> ProverSecret? {
+        load(account: proverPairingAccount).flatMap { ProverSecret.decode($0) }
+    }
+    static func deleteProverSecret() {
+        delete(account: proverPairingAccount)
+        delete(account: legacyProverTokenAccount)
+    }
 
     private static func save(_ value: String, account: String) throws {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,

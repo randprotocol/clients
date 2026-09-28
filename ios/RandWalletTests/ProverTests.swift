@@ -294,6 +294,8 @@ final class ProverTests: XCTestCase {
         XCTAssertFalse(pendingText.contains(spendKey), "pending carries no spend key")
     }
 
+    static let secret = ProverSecret(token: token, kemEk: kemEk, url: "https://prover.example:8600", fingerprint: fingerprint)
+
     private static func info(_ kinds: [String]) throws -> ProverInfo {
         try ProverInfo(["kem_ek": kemEk, "witness_kinds": kinds, "queue": ["depth": 0, "max": 8]])
     }
@@ -305,38 +307,71 @@ final class ProverTests: XCTestCase {
         var probed = 0
         let okProbe: (ProverPairing) async -> ProverPairingService.Probe = { _ in probed += 1; return .ok(try! Self.info(["spend_key"])) }
 
-        let device = try await ProverPairingService.route(deviceCanProve: true, pairing: own, probe: okProbe, token: { Self.token })
+        let device = try await ProverPairingService.route(deviceCanProve: true, pairing: own, probe: okProbe, secret: { Self.secret })
         XCTAssertNil(device)
         XCTAssertEqual(probed, 0, "a device that can prove asks nobody")
-        let none = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: okProbe, token: { Self.token })
+        let none = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: okProbe, secret: { Self.secret })
         XCTAssertNil(none)
-        let notMine = try await ProverPairingService.route(deviceCanProve: false, pairing: notOwn, probe: okProbe, token: { Self.token })
+        let notMine = try await ProverPairingService.route(deviceCanProve: false, pairing: notOwn, probe: okProbe, secret: { Self.secret })
         XCTAssertNil(notMine, "a pairing not marked own never gets a spend-key job")
         XCTAssertEqual(probed, 0)
 
         do {
             _ = try await ProverPairingService.route(deviceCanProve: false, pairing: own,
-                                                     probe: { _ in .ok(try! Self.info(["viewing_key"])) }, token: { Self.token })
+                                                     probe: { _ in .ok(try! Self.info(["viewing_key"])) }, secret: { Self.secret })
             XCTFail()
         } catch {
             XCTAssertEqual(error as? ProverRefusal, ProverRefusal(message: "This device does not have the memory for this proof. Your paired prover is not available: it does not take a spend-key job."))
         }
         do {
             _ = try await ProverPairingService.route(deviceCanProve: false, pairing: own,
-                                                     probe: { _ in .unavailable("the prover at x did not answer (down)") }, token: { Self.token })
+                                                     probe: { _ in .unavailable("the prover at x did not answer (down)") }, secret: { Self.secret })
             XCTFail()
         } catch {
             XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. Your paired prover is not available: the prover at x did not answer (down).")
         }
         do {
-            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: own, probe: okProbe, token: { nil })
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: own, probe: okProbe, secret: { nil })
             XCTFail()
         } catch {
             XCTAssertEqual(error.localizedDescription, "Your prover's pairing could not be opened. Pair the prover again in Settings.")
         }
-        let remote = try await ProverPairingService.route(deviceCanProve: false, pairing: own, probe: okProbe, token: { Self.token })
+        let remote = try await ProverPairingService.route(deviceCanProve: false, pairing: own, probe: okProbe, secret: { Self.secret })
         XCTAssertEqual(remote?.pairing, own)
         XCTAssertEqual(remote?.token, Self.token)
+    }
+
+    // MARK: final review — the Keychain record decides the seal target
+
+    /// `Settings.prover` is plaintext (UserDefaults): anything that can write it could name another
+    /// key and URL. The route, the probe and the sealed job's target all come from the Keychain
+    /// record instead; only the name and `own` are read from Settings.
+    func testATamperedSettingsKemEkDoesNotMoveTheSealTarget() async throws {
+        var tampered = Self.route.pairing
+        tampered.kemEk = String(repeating: "66", count: 1184)
+        tampered.url = "https://evil.example"
+        tampered.fingerprint = "EVIL-EVIL-EVIL-EVIL"
+        var probedAt: ProverPairing?
+        let route = try await ProverPairingService.route(
+            deviceCanProve: false, pairing: tampered,
+            probe: { probedAt = $0; return .ok(try! Self.info(["spend_key"])) },
+            secret: { Self.secret })
+        XCTAssertEqual(probedAt?.url, Self.secret.url, "the probe asked the tampered URL")
+        XCTAssertEqual(probedAt?.kemEk, Self.kemEk)
+        XCTAssertEqual(route?.pairing.kemEk, Self.kemEk, "the route took the tampered key")
+        XCTAssertEqual(route?.pairing.url, Self.secret.url)
+        XCTAssertEqual(route?.pairing.name, tampered.name, "the display name is still Settings'")
+        let req = ProveRequest(spendKey: "5a", chainId: 16, to: "rand1x", amount: "1", fee: "1", anchorHeight: 1, anchorRoot: "00",
+                               inputs: [], profile: "test", memo: "", envelopeBytes: nil)
+        let params = try RemoteSendParams.build(request: req, route: try XCTUnwrap(route), maxProofBytes: nil)
+        XCTAssertEqual((params["prover"] as? [String: Any])?["kem_ek"] as? String, Self.kemEk, "the job was sealed to the tampered key")
+    }
+
+    func testTheKeychainRecordRoundTripsAndABareTokenIsNoPairing() throws {
+        let json = String(decoding: try JSONEncoder().encode(Self.secret), as: UTF8.self)
+        XCTAssertEqual(ProverSecret.decode(json), Self.secret)
+        XCTAssertNil(ProverSecret.decode(Self.token), "a pre-release bare token names no seal target")
+        XCTAssertNil(ProverSecret.decode(#"{"token":"","kemEk":"a","url":"b","fingerprint":"c"}"#))
     }
 
     func testARedirectIsNotFollowed() async throws {

@@ -232,7 +232,7 @@ struct RemoteProver {
     var now: () -> Date = Date.init
 
     /// `finish(pending, replyHex)` is the core's `finish_proof`; `onPhase` is told each change.
-    func prove<Result>(sealedHex: String, pending: Any,
+    func prove<Result: Sendable>(sealedHex: String, pending: Any,
                        finish: @escaping (Any, String) throws -> Result,
                        onPhase: @escaping (RemoteProofPhase) async -> Void) async throws -> Result {
         await onPhase(.proving)
@@ -286,7 +286,8 @@ struct RemoteProver {
                     throw ProverRefusal(message: "The prover finished but sent no proof.")
                 }
                 do {
-                    return try finish(pending, reply)
+                    // Off the calling actor, as the local proof is: `finish_proof` verifies a STARK.
+                    return try await Task.detached(priority: .userInitiated) { try finish(pending, reply) }.value
                 } catch {
                     throw ProverRefusal(message: "The prover's proof was refused by this wallet: \(error.localizedDescription)")
                 }
