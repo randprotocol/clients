@@ -12,12 +12,13 @@ final class RpcClient {
     let url: URL
     private let session: URLSession
 
-    init(url: URL) {
+    init(url: URL, session: URLSession? = nil) {
         self.url = url
+        if let session { self.session = session; return }
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 30
         cfg.timeoutIntervalForResource = 120
-        session = URLSession(configuration: cfg)
+        self.session = URLSession(configuration: cfg)
     }
 
     func call(_ method: String, _ params: [Any] = []) async throws -> Any {

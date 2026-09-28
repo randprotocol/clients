@@ -39,6 +39,7 @@ final class ProverTests: XCTestCase {
     override func tearDown() {
         StubProver.handler = nil
         StubProver.requests = []
+        StubProver.hosts = []
         super.tearDown()
     }
 
@@ -213,6 +214,142 @@ final class ProverTests: XCTestCase {
         }
         XCTAssertTrue(StubProver.requests.contains { $0.contains("prover_cancel") })
     }
+
+    // MARK: fix round 1 — the chain's parameters, the remote params, the route, redirects
+
+    static let v2 = String(repeating: "ab", count: 32)
+
+    func testTheLocalRequestCarriesTheChainsProfileAndGuest() async throws {
+        StubProver.handler = { method, _ in
+            XCTAssertEqual(method, "rand_status")
+            return .result(["height": 5, "fri_profile": "test", "hc_bundle": Self.v2.uppercased()])
+        }
+        let rpc = RpcClient(url: URL(string: "https://node.example")!, session: StubProver.session())
+        let (hc, profile) = try await rpc.proofParams()
+        XCTAssertEqual(hc, Self.v2)
+        XCTAssertEqual(profile, "test")
+        let req = ProveRequest(spendKey: "5a", chainId: 16, to: "rand1x", amount: "1", fee: "1", anchorHeight: 1, anchorRoot: "00",
+                               inputs: [], profile: profile, memo: "", envelopeBytes: nil, hcBundle: hc)
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(req)) as? [String: Any]
+        XCTAssertEqual(json?["profile"] as? String, "test")
+        XCTAssertEqual(json?["hc_bundle"] as? String, Self.v2)
+        // A node that reports neither: production, and no hc_bundle key at all (the core's default).
+        StubProver.handler = { _, _ in .result(["height": 5]) }
+        let (none, prod) = try await rpc.proofParams()
+        XCTAssertNil(none)
+        XCTAssertEqual(prod, "production")
+        let bare = ProveRequest(spendKey: "5a", chainId: 16, to: "rand1x", amount: "1", fee: "1", anchorHeight: 1, anchorRoot: "00",
+                                inputs: [], profile: prod, memo: "", envelopeBytes: nil)
+        let bareJson = try JSONSerialization.jsonObject(with: JSONEncoder().encode(bare)) as? [String: Any]
+        XCTAssertNil(bareJson?["hc_bundle"])
+    }
+
+    private static let route = ProverPairingService.Route(
+        pairing: ProverPairing(name: "prover.example:8600", url: "https://prover.example:8600", kemEk: kemEk, fingerprint: fingerprint, own: true),
+        token: token)
+
+    func testTheRemoteParamsCarryThePairingTheCapAndTheChainsParameters() throws {
+        let req = ProveRequest(spendKey: "5a", chainId: 16, to: "rand1x", amount: "1", fee: "1", anchorHeight: 1, anchorRoot: "00",
+                               inputs: [], profile: "test", memo: "", envelopeBytes: nil, hcBundle: Self.v2)
+        let p = try RemoteSendParams.build(request: req, route: Self.route, maxProofBytes: 2_000_000)
+        let target = p["prover"] as? [String: Any]
+        XCTAssertEqual(target?["kem_ek"] as? String, Self.kemEk)
+        XCTAssertEqual(target?["token"] as? String, Self.token)
+        XCTAssertEqual(target?["witness_kind"] as? String, "spend_key")
+        XCTAssertEqual(target?["hc_bundle"] as? String, Self.v2)
+        XCTAssertEqual(p["hc_bundle"] as? String, Self.v2)
+        XCTAssertEqual(p["max_proof_bytes"] as? Int, 2_000_000)
+        XCTAssertEqual(p["profile"] as? String, "test")
+        XCTAssertEqual(p["spend_key"] as? String, "5a")
+        let noCap = try RemoteSendParams.build(request: req, route: Self.route, maxProofBytes: nil)
+        XCTAssertNil(noCap["max_proof_bytes"])
+    }
+
+    /// The real core seals a real transfer to the pairing's key; what reaches the prover's wire
+    /// is the sealed job and job ids — never the spend key, never the token.
+    func testTheSpendKeyAndTokenNeverReachTheProversWire() async throws {
+        guard var fixture = try RandCore.call("fixture_prove_request", ["profile": "test"]) as? [String: Any],
+              let spendKey = fixture["spend_key"] as? String else { return XCTFail("no fixture") }
+        fixture.removeValue(forKey: "hc_bundle")
+        let params = RemoteSendParams.build(requestJSON: fixture, route: Self.route, maxProofBytes: nil)
+        let prepared = try RandCore.prepareTransfer(params)
+        StubProver.handler = { method, _ in
+            method == "prover_submit" ? .result(["job": "job-1"]) : .result(["state": "failed", "error": "stub"])
+        }
+        let client = try ProverClient(url: Self.route.pairing.url, session: StubProver.session())
+        do {
+            _ = try await RemoteProver(client: client, poll: 0).prove(
+                sealedHex: prepared.sealedHex, pending: prepared.pending, finish: { _, _ in 0 }, onPhase: { _ in })
+            XCTFail("the stub fails the job")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "The prover could not make this proof (failed: stub).")
+        }
+        XCTAssertEqual(StubProver.requests.count, 2)
+        XCTAssertTrue(StubProver.requests[0].contains(prepared.sealedHex))
+        for body in StubProver.requests {
+            XCTAssertFalse(body.contains(spendKey), "the spend key went on the wire")
+            XCTAssertFalse(body.contains(Self.token), "the token went on the wire")
+        }
+        let pendingText = String(decoding: try JSONSerialization.data(withJSONObject: prepared.pending), as: UTF8.self)
+        XCTAssertFalse(pendingText.contains(spendKey), "pending carries no spend key")
+    }
+
+    private static func info(_ kinds: [String]) throws -> ProverInfo {
+        try ProverInfo(["kem_ek": kemEk, "witness_kinds": kinds, "queue": ["depth": 0, "max": 8]])
+    }
+
+    func testTheRouteGatesOnOwnSpendKeyJobsAndTheToken() async throws {
+        let own = Self.route.pairing
+        var notOwn = own
+        notOwn.own = false
+        var probed = 0
+        let okProbe: (ProverPairing) async -> ProverPairingService.Probe = { _ in probed += 1; return .ok(try! Self.info(["spend_key"])) }
+
+        let device = try await ProverPairingService.route(deviceCanProve: true, pairing: own, probe: okProbe, token: { Self.token })
+        XCTAssertNil(device)
+        XCTAssertEqual(probed, 0, "a device that can prove asks nobody")
+        let none = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: okProbe, token: { Self.token })
+        XCTAssertNil(none)
+        let notMine = try await ProverPairingService.route(deviceCanProve: false, pairing: notOwn, probe: okProbe, token: { Self.token })
+        XCTAssertNil(notMine, "a pairing not marked own never gets a spend-key job")
+        XCTAssertEqual(probed, 0)
+
+        do {
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: own,
+                                                     probe: { _ in .ok(try! Self.info(["viewing_key"])) }, token: { Self.token })
+            XCTFail()
+        } catch {
+            XCTAssertEqual(error as? ProverRefusal, ProverRefusal(message: "This device does not have the memory for this proof. Your paired prover is not available: it does not take a spend-key job."))
+        }
+        do {
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: own,
+                                                     probe: { _ in .unavailable("the prover at x did not answer (down)") }, token: { Self.token })
+            XCTFail()
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. Your paired prover is not available: the prover at x did not answer (down).")
+        }
+        do {
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: own, probe: okProbe, token: { nil })
+            XCTFail()
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Your prover's pairing could not be opened. Pair the prover again in Settings.")
+        }
+        let remote = try await ProverPairingService.route(deviceCanProve: false, pairing: own, probe: okProbe, token: { Self.token })
+        XCTAssertEqual(remote?.pairing, own)
+        XCTAssertEqual(remote?.token, Self.token)
+    }
+
+    func testARedirectIsNotFollowed() async throws {
+        StubProver.handler = { _, _ in .redirect("https://elsewhere.example/steal") }
+        let client = try ProverClient(url: "https://prover.example", session: StubProver.session())
+        do {
+            _ = try await client.info()
+            XCTFail("a redirect was followed to an answer")
+        } catch {
+            XCTAssertEqual((error as? ProverError)?.failure, .http)
+        }
+        XCTAssertFalse(StubProver.hosts.contains("elsewhere.example"), "the POST was carried to another host")
+    }
 }
 
 actor PhaseLog {
@@ -226,11 +363,13 @@ final class StubProver: URLProtocol {
         case result(Any)
         case error(Int, String, [String: Any]?)
         case http(Int, Data)
+        case redirect(String)
         case transport
     }
 
     static var handler: ((String, Any) -> Reply)?
     static var requests: [String] = []
+    static var hosts: [String] = []
 
     static func session() -> URLSession {
         let cfg = URLSessionConfiguration.ephemeral
@@ -245,6 +384,7 @@ final class StubProver: URLProtocol {
     override func startLoading() {
         let body = request.httpBody ?? Self.read(request.httpBodyStream)
         Self.requests.append(String(decoding: body, as: UTF8.self))
+        Self.hosts.append(request.url?.host ?? "")
         let obj = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] ?? [:]
         let method = obj["method"] as? String ?? ""
         let reply = Self.handler?(method, obj["params"] ?? []) ?? .transport
@@ -254,6 +394,15 @@ final class StubProver: URLProtocol {
         switch reply {
         case .transport:
             client?.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost))
+            return
+        case .redirect(let to):
+            let resp = HTTPURLResponse(url: request.url!, statusCode: 307, httpVersion: "HTTP/1.1", headerFields: ["Location": to])!
+            var next = request
+            next.url = URL(string: to)
+            client?.urlProtocol(self, wasRedirectedTo: next, redirectResponse: resp)
+            client?.urlProtocol(self, didReceive: resp, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data())
+            client?.urlProtocolDidFinishLoading(self)
             return
         case .result(let r):
             status = 200

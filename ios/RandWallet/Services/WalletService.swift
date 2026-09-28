@@ -241,9 +241,12 @@ final class WalletService: ObservableObject {
         // exactly this size, and a chain that declares none carries no memo.
         let envelopeBytes = try await rpc.envelopeBytes()
         if !SendLinkRules.memoSupported(envelopeBytes: envelopeBytes) && !memo.isEmpty { throw RpcClient.RpcError(code: 0, message: Memo.noMemoNotice) }
+        // The chain's guest and FRI profile, read once for either route: a proof on another guest
+        // or profile is refused by the chain, whoever makes it.
+        let (hcBundle, profile) = try await rpc.proofParams()
         let request = ProveRequest(spendKey: sk, chainId: chainId, to: to, amount: String(amount), fee: String(fee),
-                                   anchorHeight: anchor.height, anchorRoot: anchor.root, inputs: inputs, profile: "production",
-                                   memo: memo, envelopeBytes: envelopeBytes)
+                                   anchorHeight: anchor.height, anchorRoot: anchor.root, inputs: inputs, profile: profile,
+                                   memo: memo, envelopeBytes: envelopeBytes, hcBundle: hcBundle)
         let started = Date()
         let proof: ProveResult
         if let route {
@@ -295,32 +298,15 @@ final class WalletService: ObservableObject {
         }.value
     }
 
-    /// A remote route: the pairing and its token.
-    struct ProveRoute {
-        let pairing: ProverPairing
-        let token: String
-    }
+    typealias ProveRoute = ProverPairingService.Route
 
-    /// `nil` when this device proves — it has the memory, or no prover is paired as the user's own
-    /// (then the review step's memory warning stands, as before). A paired own prover that does
-    /// not answer, answers with another key, or takes no spend-key job refuses the send here,
-    /// before anything is built: nothing is sent.
+    /// `ProverPairingService.route` with this device's memory, the stored pairing, its probe and
+    /// the Keychain's token.
     func proveRoute() async throws -> ProveRoute? {
-        if ProverRequirements.deviceHasEnoughMemory { return nil }
-        guard let p = settings.prover, p.own else { return nil }
-        let reason = "This device does not have the memory for this proof."
-        switch await ProverPairingService.probe(p) {
-        case .unavailable(let why):
-            throw ProverRefusal(message: "\(reason) Your paired prover is not available: \(why).")
-        case .ok(let info) where !info.witnessKinds.contains("spend_key"):
-            throw ProverRefusal(message: "\(reason) Your paired prover is not available: it does not take a spend-key job.")
-        case .ok:
-            break
-        }
-        guard let token = Keychain.loadProverToken(), !token.isEmpty else {
-            throw ProverRefusal(message: "Your prover's pairing could not be opened. Pair the prover again in Settings.")
-        }
-        return ProveRoute(pairing: p, token: token)
+        try await ProverPairingService.route(deviceCanProve: ProverRequirements.deviceHasEnoughMemory,
+                                             pairing: settings.prover,
+                                             probe: { await ProverPairingService.probe($0) },
+                                             token: { Keychain.loadProverToken() })
     }
 
     /// The same transfer `prove_transfer` would build, its witness sealed by the core to the
@@ -331,15 +317,7 @@ final class WalletService: ObservableObject {
         let name = route.pairing.name
         phase = .provingRemotely(prover: name, position: nil, started: started)
         let maxProofBytes = try await rpc.maxProofBytes()
-        let (hcBundle, profile) = try await rpc.proofParams()
-        var params = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] ?? [:]
-        params["profile"] = profile
-        var target: [String: Any] = ["kem_ek": route.pairing.kemEk, "token": route.token, "witness_kind": "spend_key"]
-        if let hcBundle { target["hc_bundle"] = hcBundle }
-        params["prover"] = target
-        if let maxProofBytes { params["max_proof_bytes"] = maxProofBytes }
-        let job = params
-        params = [:]
+        let job = try RemoteSendParams.build(request: request, route: route, maxProofBytes: maxProofBytes)
         let prepared = try await Task.detached(priority: .userInitiated) { try RandCore.prepareTransfer(job) }.value
         let client = try ProverClient(url: route.pairing.url)
 

@@ -121,6 +121,35 @@ enum ProverPairingService {
         return .ok(info)
     }
 
+    /// A remote route: the pairing and its token.
+    struct Route {
+        let pairing: ProverPairing
+        let token: String
+    }
+
+    /// Where a send's proof is made. `nil` = this device: it can prove, or no prover is paired as
+    /// the user's own (Phase 1 sends a spend-key job nowhere else). A paired own prover that does
+    /// not answer, answers with another key, or takes no spend-key job — or whose token is gone —
+    /// refuses the send here, before anything is built: nothing is sent.
+    static func route(deviceCanProve: Bool, pairing: ProverPairing?,
+                      probe: (ProverPairing) async -> Probe, token: () -> String?) async throws -> Route? {
+        if deviceCanProve { return nil }
+        guard let p = pairing, p.own else { return nil }
+        let reason = "This device does not have the memory for this proof."
+        switch await probe(p) {
+        case .unavailable(let why):
+            throw ProverRefusal(message: "\(reason) Your paired prover is not available: \(why).")
+        case .ok(let info) where !info.witnessKinds.contains("spend_key"):
+            throw ProverRefusal(message: "\(reason) Your paired prover is not available: it does not take a spend-key job.")
+        case .ok:
+            break
+        }
+        guard let t = token(), !t.isEmpty else {
+            throw ProverRefusal(message: "Your prover's pairing could not be opened. Pair the prover again in Settings.")
+        }
+        return Route(pairing: p, token: t)
+    }
+
     /// The one status line Settings shows under the pairing.
     static func statusLine(_ probe: Probe) -> String {
         switch probe {

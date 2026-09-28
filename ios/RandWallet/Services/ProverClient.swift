@@ -111,7 +111,7 @@ final class ProverClient {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: req)
+            (data, response) = try await session.data(for: req, delegate: NoRedirects.shared)
         } catch let e as URLError where e.code == .cancelled {
             throw CancellationError()
         } catch is CancellationError {
@@ -178,6 +178,37 @@ final class ProverClient {
             let reason = (e.data?["reason"] as? String).map { ": \($0)" } ?? ""
             return ProverRefusal(message: "The prover refused the job (\(e.message)\(reason)).")
         }
+    }
+}
+
+/// What `prepare_transfer` takes for a remote proof: the very request `prove_transfer` would
+/// (its `profile` and `hc_bundle` the chain's, like a local proof's), plus the prover target and the
+/// chain's proof-size cap. It carries the spend key and the token — handed to the core, never logged.
+enum RemoteSendParams {
+    static func build(request: ProveRequest, route: ProverPairingService.Route, maxProofBytes: Int?) throws -> [String: Any] {
+        guard let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] else {
+            throw RandCore.CoreError(message: "the transfer request did not encode")
+        }
+        return build(requestJSON: json, route: route, maxProofBytes: maxProofBytes)
+    }
+
+    /// The same, from the request as JSON (`prove_transfer`'s parameters).
+    static func build(requestJSON: [String: Any], route: ProverPairingService.Route, maxProofBytes: Int?) -> [String: Any] {
+        var params = requestJSON
+        var target: [String: Any] = ["kem_ek": route.pairing.kemEk, "token": route.token, "witness_kind": "spend_key"]
+        if let hc = requestJSON["hc_bundle"] as? String { target["hc_bundle"] = hc }
+        params["prover"] = target
+        if let maxProofBytes { params["max_proof_bytes"] = maxProofBytes }
+        return params
+    }
+}
+
+/// Refuses every HTTP redirect: a 307 would carry the POST to a host the URL rule never saw.
+final class NoRedirects: NSObject, URLSessionTaskDelegate {
+    static let shared = NoRedirects()
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(nil)
     }
 }
 

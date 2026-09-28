@@ -14,7 +14,9 @@ RandWallet/
                ProverPairingService (a paired prover: JSON-RPC, the poll loop, pairing)
   UI/          Welcome · Lock · Home · Receive · Send → Review → Proving → Sent · Activity · Settings
                · Contacts; `randpay:` links open Send pre-filled (never sent without Confirm)
-RandWalletTests/   NoteStore logic and an FFI smoke test
+RandWalletTests/   NoteStore logic, an FFI smoke test, the link / contact rules, and ProverTests (a
+                   pairing link through the core; the prover client, route and remote send path
+                   against a URLProtocol stub)
 ```
 
 ## Build and run

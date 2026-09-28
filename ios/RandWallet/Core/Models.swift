@@ -117,11 +117,14 @@ struct ProveRequest: Encodable {
     /// The chain's `envelope_bytes` from `rand_getLimits`; `nil` seals the legacy envelope, and
     /// the core refuses a non-empty memo then, before proving.
     let envelopeBytes: Int?
+    /// The chain's bundle guest, `rand_status.hc_bundle` (64 hex); `nil` (omitted) leaves the core
+    /// on this build's default guest. A proof of the wrong guest is refused by the chain.
+    var hcBundle: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case spendKey = "spend_key", chainId = "chain_id", to, amount, fee
         case anchorHeight = "anchor_height", anchorRoot = "anchor_root", inputs, profile
-        case memo, envelopeBytes = "envelope_bytes"
+        case memo, envelopeBytes = "envelope_bytes", hcBundle = "hc_bundle"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -138,6 +141,7 @@ struct ProveRequest: Encodable {
         try c.encode(memo, forKey: .memo)
         // An explicit null, as the other clients send it.
         try c.encode(envelopeBytes, forKey: .envelopeBytes)
+        try c.encodeIfPresent(hcBundle, forKey: .hcBundle)
     }
 }
 
