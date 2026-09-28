@@ -18,8 +18,19 @@
 // Parsing a pairing link and a prover's fingerprint are the core's (`parse_prover_link`,
 // `prover_fingerprint`): no base58 and no blake3 are re-implemented here.
 
+import { urlRule } from '../lib/url-rule.js';
+
 /** The session-storage key the one pending remote proof lives under (see `remoteProve`). */
 export const PENDING_PROOF_KEY = 'pendingProof';
+/**
+ * The session-storage key of the last job a window CLAIMED for submission (`claimRecord`): a job
+ * id and nothing else. Deliberately not cleared on lock, so a window that finds the pending record
+ * gone can tell "another window took it" (maybe submitted — never retry) from "a lock removed it"
+ * (nothing was sent).
+ */
+export const CLAIMED_PROOF_KEY = 'claimedProof';
+/** The Web Lock name the claim is serialised under, across every tab and popup of the wallet. */
+export const CLAIM_LOCK = 'rand-pending-proof';
 
 /** The prover's JSON-RPC error codes this wallet reads (fullnode `randprotocol-prover::http`). */
 export const PROVER_UNKNOWN_JOB = -32001;
@@ -62,14 +73,11 @@ function abortError() {
  * error: a pairing without a URL names nothing.
  */
 export function checkProverUrl(text) {
-  const value = String(text || '').trim().replace(/\/+$/, '');
-  if (!value) return { error: 'The pairing link has no prover address.' };
-  let parsed;
-  try { parsed = new URL(value); } catch { return { error: 'The pairing link\'s prover address is not a URL.' }; }
-  const local = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]';
-  if (parsed.protocol === 'https:') return { url: value };
-  if (parsed.protocol === 'http:' && local) return { url: value };
-  if (parsed.protocol === 'http:') return { error: 'Use https for a prover — plain http is only allowed for a prover on this machine.' };
+  const r = urlRule(text);
+  if (r.url) return { url: r.url };
+  if (r.empty) return { error: 'The pairing link has no prover address.' };
+  if (r.problem === 'not-url') return { error: 'The pairing link\'s prover address is not a URL.' };
+  if (r.problem === 'plain-http') return { error: 'Use https for a prover — plain http is only allowed for a prover on this machine.' };
   return { error: 'A prover address must be https://.' };
 }
 
@@ -192,6 +200,55 @@ async function readRecord(storage) {
   try { return (await storage.session.get(PENDING_PROOF_KEY)) || null; } catch { return null; }
 }
 
+/**
+ * Serialises `work` against every other claim: across windows through the Web Locks API (the
+ * backend's `locks`), and within this JavaScript realm through a promise chain, which is also the
+ * whole story where there is no Web Locks API (Node, tests).
+ */
+let localClaims = Promise.resolve();
+function exclusively(locks, work) {
+  const run = () => (locks && typeof locks.request === 'function'
+    ? locks.request(CLAIM_LOCK, { mode: 'exclusive' }, work)
+    : work());
+  const result = localClaims.then(run, run);
+  localClaims = result.then(() => {}, () => {});
+  return result;
+}
+
+/**
+ * Takes `job` for submission **exactly once**. Inside one exclusive section: the pending record
+ * must still name this job; it is removed and the job written as claimed. Anyone else — a second
+ * tab resuming the same job, a popup that was only asleep — finds the record gone and gets the
+ * rejection below, which is `definite: false` on purpose: the other window may already have put
+ * this transaction on the wire, and a "retry" here would select other notes and pay twice.
+ */
+async function claimRecord(storage, job, locks) {
+  const verdict = await exclusively(locks, async () => {
+    const current = await readRecord(storage);
+    if (current && current.job === job) {
+      try { await storage.session.set(CLAIMED_PROOF_KEY, job); } catch { /* the removal is the claim */ }
+      await storage.session.remove(PENDING_PROOF_KEY);
+      return 'mine';
+    }
+    let claimed = null;
+    try { claimed = await storage.session.get(CLAIMED_PROOF_KEY); } catch { claimed = null; }
+    return claimed === job ? 'taken' : 'gone';
+  });
+  if (verdict === 'mine') return;
+  if (verdict === 'taken') {
+    const err = new Error('This proof was already submitted from another window. Check Activity before sending again.');
+    err.definite = false;
+    err.alreadySubmitted = true;
+    throw err;
+  }
+  // Nobody claimed it: the record went with a lock (or a cancel) while the prover worked, and
+  // nothing was submitted by anyone.
+  const err = new Error('The wallet locked while your prover was working, so nothing was sent. Send again.');
+  err.definite = true;
+  err.pendingLost = true;
+  throw err;
+}
+
 async function removeRecord(storage, job) {
   const rec = await readRecord(storage);
   if (rec && (job === undefined || rec.job === job)) {
@@ -230,21 +287,21 @@ export async function startRemoteProof({ client, prepared, storage, meta = {}, s
 /**
  * Poll `record.job` until the prover answers, then open the reply through the core. Resolves with
  * `finish_proof`'s result — the ProveResult or BurnResult `prove_*` would have returned — after
- * **claiming** the record: it is removed from `storage.session` only if it still names this job,
- * and if it no longer does (another window finished the same job first) this rejects rather than
- * submit a second time.
+ * **claiming** the job (`claimRecord`, serialised through `locks`): exactly one window ever gets
+ * past it, and every other rejects (`definite: false`) rather than submit a second time.
  *
  * `onPhase('prove', {position, prover})` while queued, `onPhase('prove', {prover})` while proving,
  * each only when it changes. Transport failures are retried until `maxWait` (the prover may be
  * restarting); a JSON-RPC error stops. `signal` aborts with `prover_cancel` and forgets the record.
  */
 export async function pollRemoteProof({
-  client, core, record, storage, onPhase, signal,
+  client, core, record, storage, onPhase, signal, locks, announced,
   poll = DEFAULT_POLL_MS, maxWait = DEFAULT_MAX_WAIT_MS, now = Date.now, sleep = defaultSleep,
 }) {
   const { job, name } = record;
   const started = now();
-  let last = '';
+  // `announced` is the detail the caller already reported, so it is not reported twice.
+  let last = announced === undefined ? '' : JSON.stringify(announced);
   const say = (detail) => {
     const key = JSON.stringify(detail);
     if (key === last) return;
@@ -290,11 +347,7 @@ export async function pollRemoteProof({
         // refused, and none of it goes near the node.
         throw await giveUp(definite(`The prover's proof was refused by this wallet: ${err && err.message}`, { badProof: true }));
       }
-      const current = await readRecord(storage);
-      if (!current || current.job !== job) {
-        throw new Error('This proof was already submitted from another window. Check Activity.');
-      }
-      await removeRecord(storage, job);
+      await claimRecord(storage, job, locks);
       return res;
     } else if (state === 'failed' || state === 'expired') {
       const why = typeof st.error === 'string' && st.error ? `: ${st.error}` : '';
@@ -310,9 +363,12 @@ export async function pollRemoteProof({
 }
 
 /** `startRemoteProof` then `pollRemoteProof`: the whole remote proof for a fresh send. */
-export async function remoteProve({ client, core, prepared, storage, meta, onPhase, signal, poll, maxWait, now, sleep }) {
+export async function remoteProve({ client, core, prepared, storage, meta = {}, onPhase, signal, locks, poll, maxWait, now, sleep }) {
+  // Reported before the submit, so even a job the prover answers `done` at once shows the phase.
+  const announced = { prover: meta.name };
+  if (typeof onPhase === 'function') onPhase('prove', announced);
   const record = await startRemoteProof({ client, prepared, storage, meta, signal, now });
-  return pollRemoteProof({ client, core, record, storage, onPhase, signal, poll, maxWait, now, sleep });
+  return pollRemoteProof({ client, core, record, storage, onPhase, signal, locks, announced, poll, maxWait, now, sleep });
 }
 
 /** The pending record, or `null`. */

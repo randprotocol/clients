@@ -17,6 +17,7 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { wireSecretReveal } from '../lib/reveal.js';
+import { urlRule } from '../lib/url-rule.js';
 
 const THEMES = [
   { value: 'system', label: 'System' },
@@ -51,14 +52,11 @@ const SPEND_KEY_WARNING = 'Anyone with this key can spend everything this wallet
  * door, and the failover the defaults exist for would be unreachable.
  */
 export function checkRpcUrl(text) {
-  const value = String(text || '').trim().replace(/\/+$/, '');
-  if (!value) return { url: '', cleared: true };
-  let parsed;
-  try { parsed = new URL(value); } catch { return { error: 'That is not a URL. It should look like https://rpc.example.' }; }
-  const local = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]';
-  if (parsed.protocol === 'https:') return { url: value };
-  if (parsed.protocol === 'http:' && local) return { url: value };
-  if (parsed.protocol === 'http:') return { error: 'Use https — plain http is only allowed for a node on this machine.' };
+  const r = urlRule(text);
+  if (r.empty) return { url: '', cleared: true };
+  if (r.url) return { url: r.url };
+  if (r.problem === 'not-url') return { error: 'That is not a URL. It should look like https://rpc.example.' };
+  if (r.problem === 'plain-http') return { error: 'Use https — plain http is only allowed for a node on this machine.' };
   return { error: 'Use an https:// address.' };
 }
 

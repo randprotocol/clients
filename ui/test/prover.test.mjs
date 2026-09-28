@@ -34,7 +34,7 @@ function sendableFetch(table = {}) {
   });
 }
 
-function build({ core, storage, fetch, native, systemMemoryGiB } = {}) {
+function build({ core, storage, fetch, native, systemMemoryGiB, locks = null } = {}) {
   const env = {
     core: core || stubCore(),
     storage: storage || mapStorage(),
@@ -43,7 +43,7 @@ function build({ core, storage, fetch, native, systemMemoryGiB } = {}) {
   };
   const make = native ? makeNativeBackend : makeWasmBackend;
   env.backend = make({
-    ...env, locks: null, broadcast: null,
+    ...env, locks, broadcast: null,
     proverOptions: { poll: 1, maxWait: 5000 },
     ...(native ? { systemMemoryGiB: systemMemoryGiB ?? (() => 4) } : {}),
   });
@@ -218,6 +218,7 @@ test('a_send_through_the_prover_seals_submits_polls_and_submits_the_finished_tx'
 
   assert.deepEqual(phases, [
     ['selecting'], ['witness'],
+    ['proving', { prover: '127.0.0.1:8546' }],
     ['proving', { position: 2, prover: '127.0.0.1:8546' }],
     ['proving', { prover: '127.0.0.1:8546' }],
     ['submitting'], ['confirming'],
@@ -281,10 +282,11 @@ test('a_closed_popup_resumes_the_same_job_and_submits_once', async () => {
     return true;
   });
   const phases = [];
-  const out = await b.backend.send.resume((p) => phases.push(p));
+  const out = await b.backend.send.resume((p, detail) => phases.push(detail === undefined ? [p] : [p, detail]));
   assert.equal(out.hash, PROVED_TX_HASH);
   assert.equal(out.txKey, '72'.repeat(32));
-  assert.deepEqual(phases.filter((p, i) => p !== phases[i - 1]), ['proving', 'submitting', 'confirming']);
+  // One 'proving' (reported before the first poll, not repeated when the prover says the same).
+  assert.deepEqual(phases, [['proving', { prover: '127.0.0.1:8546' }], ['submitting'], ['confirming']]);
 
   // The same job, submitted to the prover once and to the node once.
   assert.equal(count(fetchA, 'prover_submit') + count(fetchB, 'prover_submit'), 1);
@@ -298,7 +300,13 @@ test('a_closed_popup_resumes_the_same_job_and_submits_once', async () => {
   // And if popup A was only asleep, not gone: its poll comes back "done" after B submitted. It
   // opens the same reply, finds the job no longer its to claim, and does not submit a second time.
   wakeA({ state: 'done', reply: PROVER_REPLY });
-  await assert.rejects(abandoned, /already submitted from another window/);
+  await assert.rejects(abandoned, (err) => {
+    assert.match(err.message, /already submitted from another window/);
+    // Never "retry is safe": the other window's transaction may be on the wire already.
+    assert.equal(err.definite, false);
+    assert.equal(err.alreadySubmitted, true);
+    return true;
+  });
   assert.equal(count(fetchA, 'rand_sendTransaction') + count(fetchB, 'rand_sendTransaction'), 1);
   assertKeyNeverLeaked({ ...b, fetch: fetchB });
   assertKeyNeverLeaked({ ...a, fetch: fetchA }, PROVER_TOKEN);
@@ -382,4 +390,75 @@ test('the device path proves with the chain\'s bundle guest', async () => {
   const [[, proved]] = coreCalled(env, 'prove_transfer');
   assert.equal(proved.hc_bundle, HC_V2);
   assert.equal(count(env.fetch, 'prover_submit'), 0);
+});
+
+test('two windows resuming the same finished job submit it exactly once', async () => {
+  const a = await sendableWallet({ fetch: sendableFetch({ prover_status: () => new Promise(() => {}) }) });
+  await a.backend.prover.pair(proverLink(), PASSWORD);
+  a.backend.send.send(SEND, () => {}).catch(() => {});
+  await until(() => a.storage.sessionMap.has('pendingProof'), 'the job to be recorded');
+
+  const fetchB = sendableFetch();
+  const fetchC = sendableFetch();
+  const b = build({ storage: a.storage, core: a.core, fetch: fetchB });
+  const c = build({ storage: a.storage, core: a.core, fetch: fetchC });
+  const results = await Promise.allSettled([b.backend.send.resume(() => {}), c.backend.send.resume(() => {})]);
+  const won = results.filter((r) => r.status === 'fulfilled');
+  const lost = results.filter((r) => r.status === 'rejected');
+  assert.equal(won.length, 1, 'both windows submitted, or neither did');
+  assert.equal(won[0].value.hash, PROVED_TX_HASH);
+  assert.equal(lost.length, 1);
+  assert.match(lost[0].reason.message, /already submitted from another window/);
+  assert.equal(lost[0].reason.definite, false);
+  assert.equal(count(fetchB, 'rand_sendTransaction') + count(fetchC, 'rand_sendTransaction'), 1);
+  assert.equal(await b.backend.send.pending(), null);
+});
+
+test('a pending record removed by a lock under a live poll says nothing was sent', async () => {
+  let wake;
+  const env = await sendableWallet({ fetch: sendableFetch({ prover_status: () => new Promise((r) => { wake = r; }) }) });
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  const sending = env.backend.send.send(SEND, () => {});
+  await until(() => wake !== undefined, 'the send to be polling');
+  await env.backend.wallet.lock();
+  wake({ state: 'done', reply: PROVER_REPLY });
+  await assert.rejects(sending, (err) => {
+    assert.match(err.message, /locked while your prover was working, so nothing was sent/);
+    assert.equal(err.definite, true);
+    return true;
+  });
+  assert.equal(count(env.fetch, 'rand_sendTransaction'), 0);
+});
+
+test('pairing recomputes the fingerprint in the core rather than trusting the prover\'s own', async () => {
+  // A prover that reports the link's fingerprint but serves another key.
+  const env = build({ fetch: sendableFetch({ prover_info: () => ({ ...proverInfo('OTHER'), kem_fingerprint: proverFingerprint('KEY') }) }) });
+  await env.backend.wallet.create(PASSWORD);
+  await assert.rejects(() => env.backend.prover.pair(proverLink(), PASSWORD), /different key/);
+  // And one that serves the right key but claims any fingerprint it likes still pairs: the core's word counts.
+  const ok = build({ fetch: sendableFetch({ prover_info: () => ({ ...proverInfo('KEY'), kem_fingerprint: 'LIES-LIES-LIES-LIES' }) }) });
+  await ok.backend.wallet.create(PASSWORD);
+  assert.equal((await ok.backend.prover.pair(proverLink(), PASSWORD)).fingerprint, proverFingerprint('KEY'));
+  assert.ok(ok.core.calls.some(([m, p]) => m === 'prover_fingerprint' && p.kem_ek === proverEk('KEY')));
+});
+
+test('settings.prover is read back as the six pairing fields and nothing else', async () => {
+  const env = build();
+  await env.backend.wallet.create(PASSWORD);
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  const stored = env.storage.local.get('settings');
+  stored.prover.token = PROVER_TOKEN;
+  stored.prover.extra = 'x';
+  env.storage.local.set('settings', stored);
+  const { prover } = await env.backend.settings.get();
+  assert.deepEqual(Object.keys(prover).sort(), ['fingerprint', 'kemEk', 'mode', 'name', 'own', 'url']);
+});
+
+test('the claim is taken under the Web Lock the backend was given', async () => {
+  const taken = [];
+  const locks = { async request(name, options, fn) { taken.push([name, options && options.mode]); return fn({ name }); } };
+  const env = await sendableWallet({ locks });
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  await env.backend.send.send(SEND, () => {});
+  assert.deepEqual(taken.filter(([n]) => n === 'rand-pending-proof'), [['rand-pending-proof', 'exclusive']]);
 });

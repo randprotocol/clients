@@ -99,9 +99,13 @@ export function proverEk(key = 'KEY') {
   const byte = (key.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0) % 256).toString(16).padStart(2, '0');
   return byte.repeat(1184);
 }
+/** The stub core's fingerprint of a prover key (hex) — what its `prover_fingerprint` answers. */
+export function fingerprintOfEk(ek) {
+  return `${String(ek).slice(0, 4).toUpperCase()}-PROV-ERFP-0000`;
+}
 /** The stub core's fingerprint of `proverEk(key)`. */
 export function proverFingerprint(key = 'KEY') {
-  return `${key.toUpperCase().padEnd(4, '0').slice(0, 4)}-PROV-ERFP-0000`;
+  return fingerprintOfEk(proverEk(key));
 }
 /** A `randprover:` link in the stub core's grammar (the real one is the core's, base58 and all). */
 export function proverLink({ key = 'KEY', url = PROVER_URL, token = PROVER_TOKEN, own = true } = {}) {
@@ -286,7 +290,7 @@ export function stubCore(overrides = {}) {
       if (!/^[0-9a-f]{64}$/.test(q.token || '')) throw new Error('token is not 64 hex digits');
       return { kem_ek: proverEk(m[1]), url: q.url, token: q.token, own: q.own === '1', fingerprint: proverFingerprint(m[1]) };
     },
-    prover_fingerprint: ({ kem_ek: ek }) => `STUB-${String(ek).slice(0, 4)}-0000-0000`,
+    prover_fingerprint: ({ kem_ek: ek }) => fingerprintOfEk(ek),
     prepare_transfer: (p) => stubPrepared('transfer', p),
     prepare_burn: (p) => stubPrepared('burn', p),
     finish_proof: ({ pending, reply_hex: reply }) => {

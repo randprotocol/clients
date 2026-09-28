@@ -442,6 +442,19 @@ export function makeSharedBackend({
     return list.length > 0 ? list : [...FALLBACK.rpcUrls];
   }
 
+  /**
+   * `settings.prover` as read back: exactly the pairing's six fields when it is a remote pairing,
+   * `{mode: 'device'}` otherwise — nothing else stored under it (a token, above all) is ever read.
+   */
+  function proverSettingOf(p) {
+    if (!p || typeof p !== 'object' || p.mode !== 'remote') return { mode: 'device' };
+    const str = (v) => (typeof v === 'string' ? v : '');
+    return {
+      mode: 'remote', name: str(p.name), url: str(p.url), kemEk: str(p.kemEk),
+      fingerprint: str(p.fingerprint), own: p.own === true,
+    };
+  }
+
   async function getSettings() {
     const stored = (await storage.get(K.settings)) || {};
     const base = await defaults();
@@ -455,7 +468,7 @@ export function makeSharedBackend({
     // `chainId` likewise: no screen sets it, it is the chain this build's core was made for, and
     // `setSettings` used to write it back with everything else — so every wallet that ever changed
     // its theme had chain 14 pinned in storage, and moving the core to chain 16 moved nobody.
-    const merged = { ...base, ...stored, rpcUrls: base.rpcUrls, chainId: base.chainId };
+    const merged = { ...base, ...stored, rpcUrls: base.rpcUrls, chainId: base.chainId, prover: proverSettingOf(stored.prover) };
     // Migration (task 5.0). `setSettings` writes the WHOLE settings object back, defaults
     // included, so anyone who ever changed their theme while `rpc.randprotocol.org` was the
     // single default has it sitting in storage as `rpcUrl`. Read as an override it would pin
@@ -1437,6 +1450,18 @@ export function makeSharedBackend({
     await storage.set(K.settings, stored);
   }
 
+  /**
+   * Whether the prover's reported key is the pairing's: its `kem_ek` must be the one the link
+   * named, and the fingerprint is recomputed by the core from that key — the prover's own
+   * `kem_fingerprint` is its word, not evidence.
+   */
+  async function sameProverKey(info, kemEk, fingerprint) {
+    if (!info.kemEk || info.kemEk !== kemEk) return false;
+    let fp;
+    try { fp = await c.proverFingerprint(info.kemEk); } catch { return false; }
+    return typeof fp === 'string' && fp === fingerprint;
+  }
+
   function proverClientFor(url) {
     return makeProverClient({ fetch: fetchImpl, url });
   }
@@ -1469,7 +1494,7 @@ export function makeSharedBackend({
         throw new Error(`The prover at ${checked.url} did not answer: ${(err && err.message) || err}`);
       }
       const kemEk = String(parsed.kem_ek).toLowerCase();
-      if (info.kemFingerprint !== parsed.fingerprint || (info.kemEk && info.kemEk !== kemEk)) {
+      if (!(await sameProverKey(info, kemEk, parsed.fingerprint))) {
         throw new Error('The prover at that address has a different key from the one the link names. Do not pair it.');
       }
       const vault = await encryptSecret(password, String(parsed.token));
@@ -1496,7 +1521,7 @@ export function makeSharedBackend({
       } catch (err) {
         return { ok: false, reason: `the prover at ${p.url} did not answer (${(err && err.message) || err})` };
       }
-      if (info.kemFingerprint !== p.fingerprint) {
+      if (!(await sameProverKey(info, String(p.kemEk || '').toLowerCase(), p.fingerprint))) {
         return { ok: false, reason: 'the prover at that address now has a different key; pair it again' };
       }
       return { ok: true, queue: info.queue, witnessKinds: info.witnessKinds, fee: info.fee, hcBundles: info.hcBundles };
@@ -1554,7 +1579,7 @@ export function makeSharedBackend({
       return remoteProve({
         client: proverClientFor(route.url), core, prepared, storage,
         meta: { kind, name: route.name, ...(meta || {}) },
-        onPhase, signal, ...proverTiming,
+        onPhase, signal, locks: locksApi, ...proverTiming,
       });
     };
   }
@@ -1588,7 +1613,10 @@ export function makeSharedBackend({
      * OPTIONAL in the contract: `(onPhase, options?)` → `{hash, txKey?}`. Carries the pending remote
      * proof on from where it is — polls the SAME job, opens and checks the reply through the core,
      * submits once, waits and re-scans — with `send.send`'s phases and rejection fields. A transfer
-     * resolves `{hash, txKey}`, a withdrawal `{hash}`.
+     * resolves `{hash, txKey}`, a withdrawal `{hash}`. Exactly one window claims a finished job
+     * (another resuming it rejects `definite: false`, "already submitted"); a popup closed after
+     * its claim but before the submit loses that proof — nothing was sent, the user sends again,
+     * and nothing is paid twice.
      */
     async resume(onPhase, options = {}) {
       const release = holdUnlock();
@@ -1602,10 +1630,11 @@ export function makeSharedBackend({
         return await runPhased(onPhase, async (report) => {
           const { spend_key: spendKey } = await requireUnlocked();
           const { client } = await requireVerifiedChain();
-          report('prove', { prover: rec.name });
+          const announced = { prover: rec.name };
+          report('prove', announced);
           const res = await pollRemoteProof({
             client: proverClientFor(rec.url), core, record: rec, storage,
-            onPhase: report, signal: options.signal, ...proverTiming,
+            onPhase: report, signal: options.signal, locks: locksApi, announced, ...proverTiming,
           });
           const opts = { onPhase: report, signal: options.signal, client, wait: true };
           if (rec.kind === 'burn') {
