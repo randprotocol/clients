@@ -101,7 +101,8 @@ fn proving(svc: &Shared) -> bool {
 }
 
 /// Accepted work not yet finished: proving, or queued behind it (a stopped service's worker still
-/// takes the next queued job — the vendored `Service` has no shutdown).
+/// takes the next queued job: the vendored `Service` gained `shutdown` at fullnode `e6d1327`, but
+/// the stop path here does not call it yet — wiring it in is the final wave's job).
 fn busy(svc: &Shared) -> bool {
     let q = svc.info().queue;
     q.proving + q.depth > 0

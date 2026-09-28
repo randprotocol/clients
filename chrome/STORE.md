@@ -9,12 +9,13 @@
 
 Rand Wallet is a lightweight wallet for the Rand Protocol testnet (RAND). The chain is fully
 shielded: there are no accounts and no public balances. Your wallet is a single spend key; your
-balance is the set of notes that key can open; a transfer is a zero-knowledge proof built in
-your browser.
+balance is the set of notes that key can open; a transfer is a zero-knowledge proof, made by a
+prover you pair and run yourself — the Rand Wallet desktop app on the same computer, or your own
+server — because a proof needs more memory than a browser gives an extension.
 
 - Create a wallet or import a spend key / wallet.key.json
 - Receive: your rand1… address as text and QR
-- Send: choose the notes, prove the 2-in-2-out bundle locally (a few minutes), submit
+- Send: choose the notes, have your paired prover make the proof (a few minutes), check it, submit
 - Testnet faucet: 100 RAND into a note only you can open
 - Activity: every note received and every payment sent
 - Disclosure on your terms: copy the viewing key to open your history on randscan.org, or a
@@ -34,12 +35,16 @@ Testnet software: not audited, not for real value.
   planned failover set, so one endpoint being down is not the wallet being down. It never
   contacts more than one at a time.
 - Optional host permissions (`https://*/*`, `http://localhost/*`, `http://127.0.0.1/*`): only
-  requested when the user enters a different RPC URL in Settings (their own node).
+  requested when the user enters a different RPC URL in Settings (their own node), or pairs a
+  prover in Settings → Prover (the desktop app on `http://127.0.0.1`, or their own server over
+  https).
 - No content scripts, no tabs permission, no remote code. WebAssembly is bundled
   (`'wasm-unsafe-eval'`) and built from the open-source core.
 
-**Privacy disclosures**: collects no user data; does not use remote code; the only requests go
-to the RPC node the user configures. Keys never leave the device. Privacy policy:
+**Privacy disclosures**: collects no user data; does not use remote code; requests go only to the
+RPC node the user configures and, if the user pairs one, to their own prover. Keys stay on the
+device, except that with a paired prover the spend key is sent inside a sealed, encrypted job to
+that prover — which the wallet allows only for a prover the user marked as their own machine. Privacy policy:
 https://randprotocol.org/clients#privacy
 
 **Screenshots to take** (1280×800 or 640×400): welcome, home with balance, receive (QR), send

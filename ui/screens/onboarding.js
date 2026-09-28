@@ -42,7 +42,7 @@ registerScreen('welcome', {
           <button class="btn btn-primary block" type="button" data-go="create">Create a new wallet</button>
           <button class="btn block" type="button" data-go="import">I already have a wallet</button>
         </div>
-        <p class="caption onboard-foot">${raw(icons.shield())}Your keys never leave this device.</p>
+        <p class="caption onboard-foot">${raw(icons.shield())}Your keys stay on this device unless you pair a prover you run.</p>
       </div>`;
   },
   // There is no address yet, so the welcome plate is the network's own field: the same seed on

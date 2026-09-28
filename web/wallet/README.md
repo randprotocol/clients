@@ -34,7 +34,7 @@ git-ignored, and nothing in it is ever edited by hand.
 
 ## Sending: through a prover you pair
 
-A transfer on this chain is a STARK proof of a 2-in-2-out bundle. The prover peaks at about
+A transfer on this chain is a STARK proof of a 4-in/4-out bundle. The prover peaks at about
 **5.7 GB** of memory (`wallet-core`'s `PROVER_PEAK_MEMORY_BYTES`, re-measured on chain 14's
 constraint set) and a browser gives WebAssembly a **4 GiB** address space. There is no way to fit one in the
 other, so this shell never proves for itself: it builds the transaction, has a prover you pair make
@@ -52,18 +52,24 @@ The same holds for the browser extension. It is not a property of this shell.
 
 ## Security model
 
-**Your keys never leave this machine.** There is no server-side anything: `serve.mjs` hands over
-static files and nothing else. The only network traffic the wallet itself makes is JSON-RPC to the
-Rand node you name in Settings.
+**Your keys stay on this machine unless you pair a prover.** There is no server-side anything:
+`serve.mjs` hands over static files and nothing else. The wallet itself talks to two kinds of host:
+the Rand node you name in Settings (JSON-RPC), and — only once you have paired one — the prover you
+paired as your own. The spend key leaves the page only inside a job sealed to that prover
+(ML-KEM-768 + ChaCha20-Poly1305, under the key its pairing link names), so the prover can spend
+(that is why the wallet sends such a job only to a prover whose link marks it as your own,
+`own=1`), and nobody on the path can read it. The wallet verifies every proof the prover sends
+back before it submits anything ([`docs/prover.md`](../../docs/prover.md) §5).
 
 **Where the spend key can exist**, and nowhere else:
 
 1. inside the wasm core, for the duration of a call it is a parameter of;
 2. in `idb.js`'s **session** — a `Map` in a module, so it dies with the page;
-3. in a local variable of the one backend method using it, for that call.
+3. in a local variable of the one backend method using it, for that call;
+4. sealed inside a prover job (above), which is the one thing handed to `fetch` that holds it.
 
 It is never in IndexedDB, never in `localStorage` or `sessionStorage`, never in a URL, never in an
-error message and never in anything handed to `fetch`. A reload therefore loses the session and
+error message and never in clear in anything handed to `fetch`. A reload therefore loses the session and
 the lock screen comes back — that is the design, not a limitation.
 
 **The vault.** The spend key at rest is AES-256-GCM under a key derived from your password with

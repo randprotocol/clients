@@ -1,7 +1,7 @@
 # addons.mozilla.org listing — Rand Wallet
 
 **Name**: Rand Wallet
-**Summary** (250 chars max): A shielded wallet for RAND on the Rand Protocol chain. Private balances and transfers proved in your browser, a testnet faucet, and viewing keys to open your history on randscan.org.
+**Summary** (250 chars max): A shielded wallet for RAND on the Rand Protocol chain. Private balances and transfers proved by your own paired prover, a testnet faucet, and viewing keys to open your history on randscan.org.
 **Categories**: Privacy & Security; Other
 **License**: GPL-3.0-only
 **Homepage**: https://randprotocol.org/clients  **Support**: https://github.com/randprotocol
@@ -16,7 +16,9 @@ Rust source is included in the repository at the tagged version. No remote code;
 network requests are JSON-RPC POSTs to the node URL in Settings, or, when that is empty, to
 the default endpoint (https://rpc.randprotocol.org; https://rpc1.randprotocol.org,
 https://rpc2.randprotocol.org and https://rpc3.randprotocol.org are the planned failover set —
-whichever answers, one at a time). `'wasm-unsafe-eval'` is
+whichever answers, one at a time) — and, only when the user pairs one in Settings → Prover, to
+that prover's URL (the desktop app on `http://127.0.0.1`, or the user's own https server), which
+receives the spend key inside a sealed job. `'wasm-unsafe-eval'` is
 required to instantiate the bundled
 module.
 

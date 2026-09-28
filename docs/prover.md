@@ -17,7 +17,8 @@ The wallet becomes a **light client**: it still picks the notes, builds the outp
 envelopes and binds the transaction, exactly as before, and a **prover** only fills in the one
 bundle proof. The wallet seals everything the proof needs into a job only that prover can open,
 sends it, waits, checks the proof that comes back, and submits the transaction to its own node
-itself — the prover never sees the transaction and never talks to the chain. On the chain this
+itself. The prover sees what the proof needs — this payment's notes and amounts, and your spend
+key (§2) — but not the transaction it goes into, and it never talks to the chain. On the chain this
 prover is the third role that proves or verifies, beside validators and aggregators, and in this
 phase it is one you run for yourself.
 
@@ -114,7 +115,8 @@ The prover is not trusted to be correct, only to be yours. The core (`finish_pro
 2. the proof fits the chain's proof-size cap (`rand_getLimits.max_proof_bytes`);
 3. the digest **read off the proof itself** is the one the wallet computed from its own
    transaction, and the digest the prover claims is that same one;
-4. the proof is a tier-14 bundle proof;
+4. the tier the prover reports is 14, the one tier a bundle proof has (the proof is then verified
+   at that pinned tier);
 5. the proof verifies, on this device, against the chain's bundle guest and this transaction's
    binding.
 
