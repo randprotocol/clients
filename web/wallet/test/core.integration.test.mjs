@@ -375,3 +375,34 @@ test('contacts: a real address is saved; something the core cannot parse is not'
   assert.equal(await backend.contacts.nameOf(address), 'me');
   await assert.rejects(backend.contacts.add('nobody', 'rand1nope'));
 });
+
+// -------------------------------------------- delegated proving (plan 2026-09-28, Task 3) -----
+// `parse_prover_link` and `prover_fingerprint` against the REAL core, on a link built here from a
+// known key: 1 184 bytes of 0x07 (the parser checks only the length; it need not be a valid
+// ML-KEM key). The fingerprint is pinned in wallet-core's own unit test too. Base58 is encoded here
+// in the TEST only — the engine never does it, which is the point of asking the core.
+function base58(bytes) {
+  const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let n = 0n;
+  for (const b of bytes) n = n * 256n + BigInt(b);
+  let out = '';
+  while (n > 0n) { out = alphabet[Number(n % 58n)] + out; n /= 58n; }
+  for (const b of bytes) { if (b !== 0) break; out = `1${out}`; }
+  return out;
+}
+
+test('prover: the real core parses a pairing link and fingerprints its key', { skip }, async () => {
+  const core = await realCore();
+  const ek = new Uint8Array(1184).fill(7);
+  const token = '3c'.repeat(32);
+  const link = `randprover:${base58(ek)}?url=${encodeURIComponent('http://127.0.0.1:8546')}&token=${token}&own=1`;
+  const parsed = await core.call('parse_prover_link', { link });
+  assert.deepEqual(parsed, {
+    kem_ek: '07'.repeat(1184), url: 'http://127.0.0.1:8546', token, own: true, fingerprint: 'Z254-BQX0-VPMT-8YJR',
+  });
+  assert.equal(await core.call('prover_fingerprint', { kem_ek: '07'.repeat(1184) }), 'Z254-BQX0-VPMT-8YJR');
+  const notOwn = await core.call('parse_prover_link', { link: link.replace('&own=1', '') });
+  assert.equal(notOwn.own, false);
+  await assert.rejects(core.call('parse_prover_link', { link: 'https://127.0.0.1:8546' }));
+  assert.equal((await core.call('version')).prover_wire, 1);
+});

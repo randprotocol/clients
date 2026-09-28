@@ -23,6 +23,7 @@ import {
   mapStorage, casStorage, drain, stubCore, stubFetch, stubPlatform, chainFetch, nodeWithout,
   nodeFarm, node, unreachable, coreOn, withKdfSpy, assertKeyNeverLeaked, capturingMapWrites, CORE_VERSION,
   tokenRegistry, zusd, backing, assetRows, USDT_ETH, USDC_ETH, USDT_BSC, NO_SPENDABLE_RAND,
+  PROVER_TOKEN, proverLink,
 } from './backend-fixtures.mjs';
 
 /**
@@ -790,6 +791,26 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assertKeyNeverLeaked(env, VIEWING_KEY);
     // And the session is the only home of the plaintext.
     assert.equal((await storage.session.get('unlocked')).spend_key, SPEND_KEY);
+  });
+
+  scoped('a paired prover sees neither the spend key nor the pairing token in clear', async () => {
+    // The prover's requests go through the same injected fetch as the node's, so the probe below
+    // covers them: pairing, probing and a lock/unlock round trip put neither secret on any wire,
+    // in persistent storage in the clear, or on the clipboard. (A send through the prover is
+    // covered in prover.test.mjs, where the job is sealed.)
+    const env = build();
+    const { backend, storage } = env;
+    await backend.wallet.create(PASSWORD);
+    await backend.prover.pair(proverLink(), PASSWORD);
+    assert.equal((await backend.prover.probe()).ok, true);
+    await backend.send.canProve();
+    await backend.wallet.lock();
+    await backend.wallet.unlock(PASSWORD);
+    assert.ok(env.fetch.requests.some((r) => r.body.method === 'prover_info'), 'the prover was never asked');
+    assertKeyNeverLeaked(env);
+    assertKeyNeverLeaked(env, PROVER_TOKEN);
+    assertKeyNeverLeaked(env, PASSWORD);
+    assert.equal((await storage.session.get('unlocked')).prover_token, PROVER_TOKEN);
   });
 
   // =============================================================== fix round 1 ====================

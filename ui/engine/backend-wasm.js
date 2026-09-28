@@ -11,8 +11,9 @@
 //
 // This file itself is only two things: `canProve()`, which is hard-coded `{ok: false}` because a
 // bundle proof cannot run in wasm at all (see below), and the `executeSend` this shell supplies to
-// `send.send` when `canProve()` somehow said otherwise (never happens today; see the comment on
-// `executeSend`). Everything else — session lifecycle, storage, chain-identity verification, scan,
+// `send.send`, which runs only when a prover the user paired as their own makes the proof
+// (delegated proving: `backend-shared.js` answers `{ok: true, via: 'prover'}` then) and is the
+// desktop app's own transfer (`./execute.js`). Everything else — session lifecycle, storage, chain-identity verification, scan,
 // rescan, the unlock-attempt throttle, roughly 1100 lines — has nothing to do with wasm
 // specifically, and lives once in `./backend-shared.js`'s `makeSharedBackend`, which a later
 // native/desktop backend (task 3.2) builds on unchanged. Read that file's header for the shared
@@ -31,51 +32,55 @@
 // ---- what this shell cannot do ----
 //
 // A bundle proof peaks at ~5.7 GB (`wallet-core`'s own PROVER_PEAK_MEMORY_BYTES) and wasm32 stops
-// at 4 GiB, so `send.canProve()` is `{ok: false}` and `send.send()` rejects before anything is
-// selected — for a transfer of RAND, for a transfer of an RPL token (which chain 14 admits, and
+// at 4 GiB, so without a paired prover `send.canProve()` is `{ok: false}` and `send.send()` rejects
+// before anything is selected — for a transfer of RAND, for a transfer of an RPL token (which chain 14 admits, and
 // which is the same one bundle) and for a withdrawal alike. Everything else — keys, addresses,
 // scanning, the note store, assets, fee estimates, the faucet — is real.
 import { makeSharedBackend, UNLOCKED_SESSION_KEY, unlockDelayMs } from './backend-shared.js';
+import { executeTransfer, executeBurn } from './execute.js';
 
 export { UNLOCKED_SESSION_KEY, unlockDelayMs };
 
-/** Shown to the user verbatim, so it is written for them (ui/backend.js on `send.canProve`). */
-export const CANNOT_PROVE_REASON = 'A transfer proof needs about 5.7 GB of memory and browsers '
-  + 'give WebAssembly 4 GB. Send from the Rand Wallet desktop app — your keys import there.';
+/**
+ * Shown to the user verbatim, so it is written for them (ui/backend.js on `send.canProve`). The
+ * delegated-proving spec's sentence (§4.2): it names both ways out — a prover the user pairs, or
+ * the desktop app. `backend-shared.js` answers `{ok: true, via: 'prover'}` instead of this when
+ * a prover of the user's own is paired and answering.
+ */
+export const CANNOT_PROVE_REASON = 'This browser cannot make a transfer proof (it needs about 5.7 GB). '
+  + 'Pair your own prover in Settings, or send from the desktop app.';
 
 async function canProve() {
   return { ok: false, reason: CANNOT_PROVE_REASON };
 }
 
 /**
- * Never actually reached: `canProve()` above always answers `ok: false`, and `send.send`
- * (backend-shared.js) refuses there, before calling this at all. It exists anyway, in the same
- * shape a real `executeSend` would have, so that shape is proven out even though this shell has no
- * way to exercise it — and so that if `canProve()` were ever changed, `send.send` would still fail
- * the way it always has, rather than silently starting to prove.
+ * Reached only through a paired prover (`ctx.via === 'prover'`): the proof is made there and the
+ * rest is the desktop app's transfer. Anything else — `canProve()` above always answers `ok:
+ * false` — refuses the way it always has, rather than silently starting to prove here.
  */
-async function executeSend({ reason }) {
-  const err = new Error(reason || CANNOT_PROVE_REASON);
+async function executeSend(ctx) {
+  // Delegated proving: the proof is made by the user's own paired prover, not in this browser, so
+  // the rest of the transfer is exactly the desktop app's.
+  if (ctx && ctx.via === 'prover') return executeTransfer(ctx);
+  const err = new Error((ctx && ctx.reason) || CANNOT_PROVE_REASON);
   err.definite = true;
   throw err;
 }
 
 /**
- * Never reached either, and for one more reason than `executeSend`: `bridge.canWithdraw()` asks
- * `canProve()` first, so it is unconditionally `{ok: false}` here and no screen offers Withdraw
- * at all. A withdrawal is one bundle proof (~5.7 GB, ~1.5 minutes natively) — the same one a
- * transfer is — so a shell that cannot produce one cannot withdraw. Present so the group's shape
- * is real rather than missing, and so `bridge.withdraw()` refuses the way it always has if
- * `canProve()` ever changes.
+ * `executeSend` for a withdrawal: a burn is one bundle proof — the same one a transfer is — so it
+ * runs only through a paired prover, and refuses the way it always has otherwise.
  */
-async function executeWithdraw({ reason }) {
-  const err = new Error(reason || CANNOT_PROVE_REASON);
+async function executeWithdraw(ctx) {
+  if (ctx && ctx.via === 'prover') return executeBurn(ctx);
+  const err = new Error((ctx && ctx.reason) || CANNOT_PROVE_REASON);
   err.definite = true;
   throw err;
 }
 
-export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, locks, broadcast } = {}) {
+export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, locks, broadcast, proverOptions } = {}) {
   return makeSharedBackend({
-    core, storage, platform, fetch: fetchImpl, locks, broadcast, canProve, executeSend, executeWithdraw,
+    core, storage, platform, fetch: fetchImpl, locks, broadcast, canProve, executeSend, executeWithdraw, proverOptions,
   });
 }

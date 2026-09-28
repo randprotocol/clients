@@ -470,8 +470,16 @@ export function checkLimits(reply) {
   const m = 'rand_getLimits';
   if (!reply || typeof reply !== 'object' || Array.isArray(reply)) fail(m, 'not an object', reply);
   const v = reply.envelope_bytes;
-  if (v === undefined || v === null) return { envelopeBytes: null };
-  return { envelopeBytes: intField(m, 'envelope_bytes', v, { max: 1 << 20 }) || fail(m, 'envelope_bytes is zero', v) };
+  const envelopeBytes = v === undefined || v === null
+    ? null
+    : intField(m, 'envelope_bytes', v, { max: 1 << 20 }) || fail(m, 'envelope_bytes is zero', v);
+  // The chain's proof-size cap, which a remote prover's proof is held to (`finish_proof`). Absent
+  // means the core's own vendored `MAX_PROOF_BYTES` — never "unbounded".
+  const p = reply.max_proof_bytes;
+  const maxProofBytes = p === undefined || p === null
+    ? null
+    : intField(m, 'max_proof_bytes', p, { max: 1 << 30 }) || fail(m, 'max_proof_bytes is zero', p);
+  return { envelopeBytes, maxProofBytes };
 }
 
 /** `rand_sendTransaction` / `rand_mint` → the transaction hash. */

@@ -86,7 +86,38 @@ export const CORE_VERSION = Object.freeze({
   bundle_inputs: 2, bundle_slots: 4, bundle_asset_slots: 2,
   transfer_proofs: 1, bridge_burn_proofs: 1, rpl_transfer: true,
   bridge_burn_fee: '10000000',
+  // Delegated proving (plan 2026-09-28): the prover wire this core seals and opens.
+  prover_wire: 1,
 });
+
+// ------------------------------------------------------------------------ a paired prover -----
+/** A prover on this machine, as a pairing link names it (http is allowed only here). */
+export const PROVER_URL = 'http://127.0.0.1:8546';
+export const PROVER_TOKEN = '7a'.repeat(32);
+/** The stub core's key for a link whose key part is `key`: 1 184 bytes, as hex. */
+export function proverEk(key = 'KEY') {
+  const byte = (key.split('').reduce((a, ch) => a + ch.charCodeAt(0), 0) % 256).toString(16).padStart(2, '0');
+  return byte.repeat(1184);
+}
+/** The stub core's fingerprint of `proverEk(key)`. */
+export function proverFingerprint(key = 'KEY') {
+  return `${key.toUpperCase().padEnd(4, '0').slice(0, 4)}-PROV-ERFP-0000`;
+}
+/** A `randprover:` link in the stub core's grammar (the real one is the core's, base58 and all). */
+export function proverLink({ key = 'KEY', url = PROVER_URL, token = PROVER_TOKEN, own = true } = {}) {
+  return `randprover:${key}?url=${encodeURIComponent(url)}&token=${token}${own ? '&own=1' : ''}`;
+}
+/** `prover_info` for the prover whose link key is `key`. */
+export function proverInfo(key = 'KEY', { witnessKinds = ['spend_key'], depth = 0 } = {}) {
+  return {
+    version: '0.6.2', kem_fingerprint: proverFingerprint(key), kem_ek: proverEk(key),
+    hc_bundles: ['f0'.repeat(32)], profiles: ['production'], backend: 'cpu',
+    witness_kinds: witnessKinds, queue: { depth, max: 4, proving: 0 }, fee: null,
+  };
+}
+/** The sealed job the stub core "seals": a constant, carrying nothing it was given. */
+export const SEALED_JOB = '5e'.repeat(64);
+export const PROVER_REPLY = 'e1'.repeat(64);
 
 /**
  * `wallet-core`'s `NO_SPENDABLE_RAND`, verbatim — a token transfer pays its fee in RAND out of
@@ -243,6 +274,25 @@ export function stubCore(overrides = {}) {
       return out;
     },
     format_amount: ({ units }) => String(units),
+    // Delegated proving: the core's own parser and fingerprint (in a stub grammar), and the proof
+    // split — `prepare_*` returns a constant sealed job and a `pending` that carries, like the real
+    // one, no spend key; `finish_proof` assembles the result `prove_*` would have from it.
+    parse_prover_link: ({ link }) => {
+      const m = /^randprover:([A-Za-z0-9]+)\?(.*)$/.exec(String(link));
+      if (!m) throw new Error('not a randprover: link');
+      const q = {};
+      for (const pair of m[2].split('&')) { const [k, v = ''] = pair.split('='); q[k] = decodeURIComponent(v); }
+      if (!q.url) throw new Error('the link has no url');
+      if (!/^[0-9a-f]{64}$/.test(q.token || '')) throw new Error('token is not 64 hex digits');
+      return { kem_ek: proverEk(m[1]), url: q.url, token: q.token, own: q.own === '1', fingerprint: proverFingerprint(m[1]) };
+    },
+    prover_fingerprint: ({ kem_ek: ek }) => `STUB-${String(ek).slice(0, 4)}-0000-0000`,
+    prepare_transfer: (p) => stubPrepared('transfer', p),
+    prepare_burn: (p) => stubPrepared('burn', p),
+    finish_proof: ({ pending, reply_hex: reply }) => {
+      if (reply !== PROVER_REPLY) throw new Error('the prover\'s reply does not open');
+      return stubResult(pending);
+    },
   };
   const impl = { ...defaults, ...overrides };
   return {
@@ -254,6 +304,51 @@ export function stubCore(overrides = {}) {
       return fn(params);
     },
   };
+}
+
+/** `prepare_*`'s reply in the stub: the request's public facts in `pending`, never its spend key. */
+function stubPrepared(kind, p) {
+  if (!p.prover || !/^[0-9a-f]{64}$/.test(p.prover.token || '')) throw new Error('prover: token must be 64 hex characters');
+  const asset = Number(p.asset) || 0;
+  const slot = kind === 'transfer' ? (asset === 0 ? 2 : 0) : null;
+  const pending = {
+    kind, tx_hex: 'ab'.repeat(200), expected: 'ee'.repeat(32), reply_key: 'cc'.repeat(32),
+    max_proof_bytes: p.max_proof_bytes ?? 2097152, profile: p.profile || 'production',
+    hc_bundle: (p.prover && p.prover.hc_bundle) || p.hc_bundle || 'f0'.repeat(32),
+    scalars: {
+      time: 7, asset, amount: String(p.amount), change: '0', fee_change: '0', fee: String(p.fee),
+      // Two-hex-digit patterns no fixture key uses (SPEND_KEY is a1…, PK c3…), so a leak probe
+      // never mistakes a slot array for a secret.
+      nullifiers: ['50', '51', '52', '53'].map((x) => x.repeat(32)),
+      commitments: ['60', '61', '62', '63'].map((x) => x.repeat(32)),
+      tx_keys: ['70', '71', '72', '73'].map((x) => x.repeat(32)),
+      payment_slot: slot,
+      payment_tx_key: slot === null ? null : `7${slot}`.repeat(32),
+      payment_commitment: slot === null ? null : `6${slot}`.repeat(32),
+      spent_indices: [...(p.inputs || []), ...(p.fee_inputs || [])].map((i) => i.note.index),
+      proofs: 1,
+      relayer_fee: kind === 'burn' ? String(p.relayer_fee) : null,
+      to_chain: kind === 'burn' ? Number(p.to_chain) : null,
+      token: kind === 'burn' ? String(p.token) : null,
+      to: kind === 'burn' ? String(p.to) : null,
+    },
+  };
+  return { sealed_hex: SEALED_JOB, pending, expected: pending.expected };
+}
+
+/** `finish_proof`'s result in the stub: `prove_*`'s shape, from `pending.scalars`. */
+export const PROVED_TX_HASH = '9d'.repeat(32);
+function stubResult(pending) {
+  const sc = pending.scalars;
+  const base = {
+    tx_hex: pending.tx_hex, hash: PROVED_TX_HASH, time: sc.time, asset: sc.asset, amount: sc.amount,
+    change: sc.change, fee_change: sc.fee_change, fee: sc.fee, tier: 14, proof_bytes: 1_429_764,
+    tx_bytes: 1_435_625, nullifiers: sc.nullifiers, commitments: sc.commitments, tx_keys: sc.tx_keys,
+    payment_slot: sc.payment_slot, payment_tx_key: sc.payment_tx_key, payment_commitment: sc.payment_commitment,
+    spent_indices: sc.spent_indices, proofs: sc.proofs,
+  };
+  if (pending.kind === 'burn') Object.assign(base, { relayer_fee: sc.relayer_fee, to_chain: sc.to_chain, token: sc.token, to: sc.to });
+  return base;
 }
 
 // --------------------------------------------------------------------------------- stub fetch --
@@ -277,6 +372,13 @@ export function stubFetch(table = {}) {
     // methods), so the DEFAULT stub has to be an honest node — the anonymous one is a fixture
     // some tests build deliberately.
     rand_getGenesisHash: () => GENESIS,
+    // A paired prover's four methods (they reach the prover's URL, not the node's, through the
+    // same injected fetch — which is how the key-leak probes see them). The default job proves at
+    // once; a test scripts `prover_status` to walk it through queued and proving.
+    prover_info: () => proverInfo(),
+    prover_submit: () => ({ job: 'job-1' }),
+    prover_status: () => ({ state: 'done', reply: PROVER_REPLY }),
+    prover_cancel: () => ({ cancelled: true }),
   };
   const impl = { ...defaults, ...table };
   const fn = async (url, init) => {
@@ -287,8 +389,12 @@ export function stubFetch(table = {}) {
       return { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, error: { code: -32601, message: `unknown method ${body.method}` } }) };
     }
     let result;
-    try { result = handler(body.params); } catch (err) {
-      return { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, error: { code: -32000, message: err.message } }) };
+    try { result = await handler(body.params); } catch (err) {
+      // A handler may throw a JSON-RPC error of its own (`err.code`, `err.data`) — the prover's
+      // `busy` is one — and every other throw is the node's generic -32000.
+      const error = { code: Number.isInteger(err.code) ? err.code : -32000, message: err.message };
+      if (err.data !== undefined) error.data = err.data;
+      return { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, error }) };
     }
     return { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, result }) };
   };

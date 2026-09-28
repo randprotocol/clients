@@ -28,9 +28,12 @@
 //              scans at a time. `null` turns it off.
 //   broadcast  optional; defaults to `new BroadcastChannel('rand-wallet')`. How the scanning tab
 //              tells the others it has finished. `null` turns it off.
-//   canProve()   -> Promise<{ok, reason?}>   `send.canProve` verbatim (ui/backend.js). Called
-//                    first, before any network access, because "this shell cannot prove at all"
-//                    can never be wrong and costs nothing to say.
+//   canProve()   -> Promise<{ok, reason?}>   whether THIS DEVICE can prove. Called first, before
+//                    any network access, because "this shell cannot prove at all" can never be
+//                    wrong and costs nothing to say. Where it says no, this file asks a prover the
+//                    user paired as their own (delegated proving, `prover` group below) and, if one
+//                    answers, `send.canProve` is `{ok: true, via: 'prover'}` — the node is still
+//                    never asked.
 //   executeSend(ctx) -> Promise<{hash, txKey}>   Called only after `canProve()` answered
 //                    `ok: true` AND `requireVerifiedChain()` succeeded — i.e. with a client already
 //                    proved to be on the wallet's chain. An implementation must reuse `ctx.client`
@@ -43,7 +46,10 @@
 //                    through unchanged; `client`, `url`, `identity` are exactly
 //                    `requireVerifiedChain()`'s return value; `reason` is whatever `canProve()`
 //                    returned alongside `ok: true` (normally `undefined` — a shell that can prove
-//                    usually has no reason to report).
+//                    usually has no reason to report). `via` is `'prover'` when the proof will be
+//                    made by a paired prover (then `sendTransfer` already carries the engine's
+//                    `prove` hook, and a shell whose device cannot prove runs the transfer exactly
+//                    as one that can — `ui/engine/execute.js`), `undefined` for the device.
 //
 //                    The last three are what a shell that can ACTUALLY send needs, and they are
 //                    handed over rather than rebuilt because there must be exactly one of each:
@@ -78,6 +84,11 @@ import { makeRpc, isAllowedRpcMethod, rpcUrlList } from './rpc.js';
 import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, HEIGHT_SPAN, envelopeBytesOf } from './wallet.js';
 import { listContacts, addContact, removeContact, nameOf as contactNameOf, addressOf as contactAddressOf, CONTACTS_KEY } from '../lib/contacts.js';
 import { checkFee, checkTokens, checkSubmitted, checkBridgeState, MAX_TOKEN_PAGE, NodeReplyError } from './validate.js';
+import {
+  PENDING_PROOF_KEY, checkProverUrl, makeProverClient, readInfo, remoteProve, pollRemoteProof,
+  pendingProof, cancelPendingProof,
+} from './prover.js';
+import { runPhased } from './execute.js';
 
 /**
  * The one key under `storage.session` — the unlocked wallet session, and the only place the
@@ -109,6 +120,15 @@ const K = Object.freeze({
   contacts: CONTACTS_KEY,
   failures: 'unlockFailures',
   unlocked: UNLOCKED_SESSION_KEY,
+  // Delegated proving (plan 2026-09-28, ruling R2): the pairing token, as a second vault record
+  // (`encryptSecret(password, token)`) beside the spend key's. Never in `settings`: a token is a
+  // bearer credential for a machine that receives the spend key. Decrypted on unlock into the
+  // session record (`prover_token`), where the spend key already is.
+  proverToken: 'proverToken',
+  // SESSION, not persistent (ruling R1): the one remote proof in flight, `{job, pending, url, name,
+  // startedAt, kind, to?, memo?}` — `pending` is the core's, and carries no spend key. It is what
+  // a popup closed mid-proof resumes from; it is cleared on lock like the spend key.
+  pendingProof: PENDING_PROOF_KEY,
 });
 
 const MIN_PASSWORD_LEN = 10;
@@ -312,6 +332,7 @@ function uiActivity(row, st) {
 
 export function makeSharedBackend({
   core, storage, platform, fetch: fetchImpl, locks, broadcast, canProve, executeSend, executeWithdraw,
+  proverOptions,
 } = {}) {
   if (!core || typeof core.call !== 'function') throw new Error('makeSharedBackend needs a core with call()');
   if (!storage || typeof storage.get !== 'function' || !storage.session) throw new Error('makeSharedBackend needs a storage');
@@ -400,6 +421,9 @@ export function makeSharedBackend({
       explorerUrl: k.explorer_url || FALLBACK.explorerUrl,
       theme: FALLBACK.theme,
       autoLockMin: FALLBACK.autoLockMin,
+      // Proving on this device until the user pairs a prover (the `prover` group below writes the
+      // remote form; `settings.set` cannot).
+      prover: { mode: 'device' },
     };
   }
 
@@ -449,6 +473,9 @@ export function makeSharedBackend({
   async function setSettings(patch) {
     const previous = await getSettings();
     const next = { ...previous, ...(patch || {}) };
+    // `prover` is written by the `prover` group only — pairing checks the prover's key and puts
+    // its token in the vault; a screen writing `settings.prover` directly would do neither.
+    next.prover = previous.prover;
     // **`rpcUrls` is read-only, and that is enforced here rather than asked for in a comment.**
     // This function writes the whole merged object, so without this line the FIRST `settings.set`
     // a wallet ever makes — a theme change, an auto-lock change, anything at all — would freeze
@@ -718,6 +745,20 @@ export function makeSharedBackend({
     chainState.clear();
     behindUrls.clear();
     try { await storage.session.remove(K.unlocked); } catch { /* nothing to remove */ }
+    // Ruling R1: a pending remote proof lives exactly as long as the unlocked session does.
+    try { await storage.session.remove(K.pendingProof); } catch { /* nothing to remove */ }
+  }
+
+  /**
+   * The paired prover's token, opened with the password that just opened the vault, or
+   * `undefined` when there is none. A token record that will not open (damaged, or written under
+   * a password since changed) costs the prover, never the unlock: the wallet opens, and a send
+   * through the prover says to pair it again.
+   */
+  async function openProverToken(password) {
+    const rec = await storage.get(K.proverToken);
+    if (!rec) return undefined;
+    try { return await decryptSecret(password, rec); } catch { return undefined; }
   }
 
   // ------------------------------------------------------------------- unlock attempt throttle --
@@ -820,9 +861,14 @@ export function makeSharedBackend({
     });
   }
 
-  /** Records a freshly created/imported/unlocked wallet. The vault is written first. */
-  async function startSession(info) {
-    await storage.session.set(K.unlocked, { spend_key: info.spend_key, viewing_key: info.viewing_key });
+  /**
+   * Records a freshly created/imported/unlocked wallet. The vault is written first. `proverToken`
+   * is the paired prover's token, decrypted with the same password (ruling R2), when there is one.
+   */
+  async function startSession(info, proverToken) {
+    const record = { spend_key: info.spend_key, viewing_key: info.viewing_key };
+    if (typeof proverToken === 'string' && proverToken) record.prover_token = proverToken;
+    await storage.session.set(K.unlocked, record);
     // A wallet wiped and created again in the same page had no multi-tab coordination at all
     // until a reload, because `wipe()` closed the channel for good.
     ensureChannel();
@@ -873,7 +919,7 @@ export function makeSharedBackend({
       if (!key) throw new Error('wrong password');
       const info = await c.walletInfo(key);
       await storage.set(K.wallet, { ...((await storage.get(K.wallet)) || {}), address: info.address, pk: info.pk });
-      await startSession(info);
+      await startSession(info, await openProverToken(password));
       return { address: info.address, pk: info.pk };
     },
 
@@ -1379,9 +1425,204 @@ export function makeSharedBackend({
     return toUnits(k.bundle_base_fee);
   }
 
+  // --------------------------------------------------------------- delegated proving ----------
+  // Plan 2026-09-28 (Phase 1). A shell that cannot prove on this device — every wasm shell, and a
+  // desktop without the memory — may prove through a prover the user paired as their OWN: the
+  // spend key reaches it only inside a job the core sealed to its ML-KEM key, and `finish_proof`
+  // checks whatever comes back before anything is submitted.
+
+  async function writeProverSetting(value) {
+    const stored = (await storage.get(K.settings)) || {};
+    if (value) stored.prover = value; else delete stored.prover;
+    await storage.set(K.settings, stored);
+  }
+
+  function proverClientFor(url) {
+    return makeProverClient({ fetch: fetchImpl, url });
+  }
+
+  const proverTiming = {
+    ...(proverOptions && Number.isFinite(proverOptions.poll) ? { poll: proverOptions.poll } : {}),
+    ...(proverOptions && Number.isFinite(proverOptions.maxWait) ? { maxWait: proverOptions.maxWait } : {}),
+  };
+
+  /**
+   * OPTIONAL in the contract: the `prover` group. Pairing reads the link through the core
+   * (`parse_prover_link` — the key, the URL, the token, `own`, the fingerprint), holds the URL to
+   * the node's rule, asks the prover itself for its key and refuses a prover whose key is not the
+   * one the link names; only then is anything stored — the token in the vault (never in
+   * `settings`), the rest in `settings.prover`.
+   */
+  const prover = {
+    async pair(link, password, { name } = {}) {
+      // The password first, before any network: the token is sealed under it, and a token sealed
+      // under a mistyped password would silently never open at the next unlock.
+      const key = await openVault(password);
+      if (!key) throw new Error('wrong password');
+      const parsed = await c.parseProverLink(String(link || '').trim());
+      const checked = checkProverUrl(parsed.url);
+      if (checked.error) throw new Error(checked.error);
+      let info;
+      try {
+        info = readInfo(await proverClientFor(checked.url).info());
+      } catch (err) {
+        throw new Error(`The prover at ${checked.url} did not answer: ${(err && err.message) || err}`);
+      }
+      const kemEk = String(parsed.kem_ek).toLowerCase();
+      if (info.kemFingerprint !== parsed.fingerprint || (info.kemEk && info.kemEk !== kemEk)) {
+        throw new Error('The prover at that address has a different key from the one the link names. Do not pair it.');
+      }
+      const vault = await encryptSecret(password, String(parsed.token));
+      await storage.set(K.proverToken, vault);
+      const label = typeof name === 'string' && name.trim() ? name.trim().slice(0, 64) : new URL(checked.url).host;
+      const setting = {
+        mode: 'remote', name: label, url: checked.url, kemEk, fingerprint: parsed.fingerprint, own: parsed.own === true,
+      };
+      await writeProverSetting(setting);
+      // Re-pairing replaces the token everywhere it lives: the vault above, and the unlocked
+      // session, where a send reads it.
+      const session = await unlockedSession();
+      if (session) await storage.session.set(K.unlocked, { ...session, prover_token: String(parsed.token) });
+      return { ...setting };
+    },
+
+    /** `{ok: true, queue, witnessKinds, fee, hcBundles}` from the paired prover, or `{ok: false, reason}`. */
+    async probe() {
+      const { prover: p } = await getSettings();
+      if (!p || p.mode !== 'remote' || typeof p.url !== 'string') return { ok: false, reason: 'No prover is paired.' };
+      let info;
+      try {
+        info = readInfo(await proverClientFor(p.url).info());
+      } catch (err) {
+        return { ok: false, reason: `the prover at ${p.url} did not answer (${(err && err.message) || err})` };
+      }
+      if (info.kemFingerprint !== p.fingerprint) {
+        return { ok: false, reason: 'the prover at that address now has a different key; pair it again' };
+      }
+      return { ok: true, queue: info.queue, witnessKinds: info.witnessKinds, fee: info.fee, hcBundles: info.hcBundles };
+    },
+
+    /** Forget the pairing: `settings.prover`, the vault's token record and the session's copy. */
+    async forget() {
+      await writeProverSetting(null);
+      await storage.remove(K.proverToken);
+      const session = await unlockedSession();
+      if (session && 'prover_token' in session) {
+        const { prover_token: gone, ...rest } = session;
+        void gone;
+        await storage.session.set(K.unlocked, rest);
+      }
+    },
+  };
+
+  /**
+   * `send.canProve`'s answer and, when it is the prover, the pairing to use. The device first (its
+   * answer needs nothing but this machine); then a paired prover that is the user's own (Phase 1:
+   * a spend-key job goes nowhere else), answering, and taking spend-key jobs.
+   */
+  async function proveRoute() {
+    const device = await canProve();
+    if (device && device.ok) return { answer: device };
+    const { prover: p } = await getSettings();
+    if (!p || p.mode !== 'remote' || p.own !== true) return { answer: device };
+    const probe = await prover.probe();
+    if (!probe.ok || !probe.witnessKinds.includes('spend_key')) {
+      const why = probe.ok ? 'it does not take a spend-key job' : probe.reason;
+      return { answer: { ok: false, reason: `${(device && device.reason) || 'This device cannot prove.'} Your paired prover is not available: ${why}.` } };
+    }
+    return { answer: { ok: true, via: 'prover' }, route: p };
+  }
+
+  /** The engine's `prove` hook for one send or withdrawal through `route`, or `undefined` for the device. */
+  async function proveHookFor(route) {
+    if (!route) return undefined;
+    let session;
+    try { session = await requireUnlocked(); } catch (err) { err.definite = true; throw err; }
+    const token = session.prover_token;
+    if (typeof token !== 'string' || !token) {
+      const err = new Error('Your prover\'s pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.');
+      err.definite = true;
+      throw err;
+    }
+    return async ({ kind, request, maxProofBytes, hcBundle, meta, onPhase, signal }) => {
+      const params = {
+        ...request,
+        prover: { kem_ek: route.kemEk, token, witness_kind: 'spend_key', ...(hcBundle ? { hc_bundle: hcBundle } : {}) },
+        ...(maxProofBytes ? { max_proof_bytes: maxProofBytes } : {}),
+      };
+      const prepared = kind === 'burn' ? await c.prepareBurn(params) : await c.prepareTransfer(params);
+      return remoteProve({
+        client: proverClientFor(route.url), core, prepared, storage,
+        meta: { kind, name: route.name, ...(meta || {}) },
+        onPhase, signal, ...proverTiming,
+      });
+    };
+  }
+
+  const PENDING_REFUSAL = 'A proof is still pending — resume or cancel it.';
+
+  async function refuseWhilePending() {
+    if (await pendingProof(storage)) {
+      const err = new Error(PENDING_REFUSAL);
+      err.definite = true;
+      err.pending = true;
+      throw err;
+    }
+  }
+
   const send = {
     async canProve() {
-      return canProve();
+      return (await proveRoute()).answer;
+    },
+
+    /**
+     * OPTIONAL in the contract: `{job, name, kind, startedAt}` of the remote proof still in flight
+     * (a popup closed mid-proof), or `null`. A screen that finds one offers `resume`.
+     */
+    async pending() {
+      const rec = await pendingProof(storage);
+      return rec ? { job: rec.job, name: rec.name, kind: rec.kind, startedAt: rec.startedAt } : null;
+    },
+
+    /**
+     * OPTIONAL in the contract: `(onPhase, options?)` → `{hash, txKey?}`. Carries the pending remote
+     * proof on from where it is — polls the SAME job, opens and checks the reply through the core,
+     * submits once, waits and re-scans — with `send.send`'s phases and rejection fields. A transfer
+     * resolves `{hash, txKey}`, a withdrawal `{hash}`.
+     */
+    async resume(onPhase, options = {}) {
+      const release = holdUnlock();
+      try {
+        const rec = await pendingProof(storage);
+        if (!rec) {
+          const err = new Error('No proof is pending.');
+          err.definite = true;
+          throw err;
+        }
+        return await runPhased(onPhase, async (report) => {
+          const { spend_key: spendKey } = await requireUnlocked();
+          const { client } = await requireVerifiedChain();
+          report('prove', { prover: rec.name });
+          const res = await pollRemoteProof({
+            client: proverClientFor(rec.url), core, record: rec, storage,
+            onPhase: report, signal: options.signal, ...proverTiming,
+          });
+          const opts = { onPhase: report, signal: options.signal, client, wait: true };
+          if (rec.kind === 'burn') {
+            const sub = await engine.completeBurn(spendKey, res, opts);
+            return { hash: sub.hash };
+          }
+          const sub = await engine.completeSend(spendKey, res, { ...opts, to: rec.to, memo: rec.memo || '' });
+          return { hash: sub.hash, txKey: sub.tx_key };
+        });
+      } finally {
+        release();
+      }
+    },
+
+    /** OPTIONAL in the contract: cancel the pending remote proof (best effort) and forget it. */
+    async cancelPending() {
+      return cancelPendingProof({ storage, fetch: fetchImpl });
     },
 
     /**
@@ -1449,12 +1690,13 @@ export function makeSharedBackend({
     },
 
     /**
-     * `(req, onPhase, options?)` — the contract's signature. `canProve()` answers first, and
-     * always without touching the network: a shell that *structurally* cannot prove (wasm:
-     * ~5.7 GB against a 4 GiB address space) should say so before asking anything of a node — that
-     * answer can never be wrong, and it is what the user needs. Only once `canProve()` says
-     * `ok: true` does this go on to prove the chain (`requireVerifiedChain()`), and only then does
-     * `executeSend` run — with the client that call verified, never a fresh one.
+     * `(req, onPhase, options?)` — the contract's signature. A pending remote proof refuses a
+     * second send. Then `proveRoute()` answers, without touching the node: a shell that
+     * *structurally* cannot prove (wasm: ~5.7 GB against a 4 GiB address space) and has no prover
+     * of the user's own paired says so before asking anything of a node — that answer can never be
+     * wrong, and it is what the user needs. Only once it says `ok: true` does this go on to prove
+     * the chain (`requireVerifiedChain()`), and only then does `executeSend` run — with the client
+     * that call verified, never a fresh one.
      */
     async send(req, onPhase, options = {}) {
       // Taken even by a shell that gives up at `canProve()`: it is the rule, not the special case
@@ -1462,22 +1704,26 @@ export function makeSharedBackend({
       // whose `executeSend` runs a minutes-long proof needs exactly this hold.
       const release = holdUnlock();
       try {
-        const { ok, reason } = await canProve();
+        await refuseWhilePending();
+        const { answer: { ok, reason, via }, route } = await proveRoute();
         if (!ok) {
           const err = new Error(reason);
           err.definite = true;
           throw err;
         }
+        const prove = await proveHookFor(route);
         const { client, url, identity } = await requireVerifiedChain();
         return await executeSend({
-          req, onPhase, options, client, url, identity, reason,
+          req, onPhase, options, client, url, identity, reason, via,
           // Not a fresh engine, not a fresh session read and not a second fee helper: the ones
           // this backend already uses, so a send cannot diverge from what the rest of the file
           // sees. `sendTransfer` is `engine.send` narrowed to the one capability `executeSend`
           // uses — not the whole `engine` object, which also exposes `chainIdentity`,
           // `chainVerdict`, `loadStore`, `scan` and `rescan`. See the header on `executeSend` for
           // why each is here.
-          sendTransfer: (spendKey, opts) => engine.send(spendKey, opts),
+          // With a prover, the engine's one `prove` hook seals the job instead of proving here;
+          // everything else about the transfer is unchanged.
+          sendTransfer: (spendKey, opts) => engine.send(spendKey, prove ? { ...opts, prove } : opts),
           requireUnlocked, bundleFee,
         });
       } finally {
@@ -1604,7 +1850,7 @@ export function makeSharedBackend({
      * unconditionally false on every wasm shell, so is this, and no node is ever asked there.
      */
     async canWithdraw() {
-      const prove = await canProve();
+      const prove = (await proveRoute()).answer;
       if (!prove || !prove.ok) {
         return { ok: false, reason: (prove && prove.reason) || 'Proving is not available here.' };
       }
@@ -1660,8 +1906,10 @@ export function makeSharedBackend({
       // A burn is user-initiated work that takes minutes; the idle timer must not cut it in half.
       const release = holdUnlock();
       try {
-        const { ok, reason } = await canProve();
+        await refuseWhilePending();
+        const { answer: { ok, reason, via }, route } = await proveRoute();
         if (!ok) throw definite(reason);
+        const prove = await proveHookFor(route);
         // ONE verified client for the whole operation: taken here, handed to `screenBurn` so its
         // `rand_getBridgeState` is that node's answer, and threaded into `executeWithdraw`.
         const verified = await requireVerifiedChain();
@@ -1669,12 +1917,12 @@ export function makeSharedBackend({
         const { asset, token } = await screenBurn(req, verified);
         const fee = req.fee === undefined || req.fee === null ? (await burnFee()).toString() : String(req.fee);
         return await executeWithdraw({
-          req: { ...req, asset, token, fee }, onPhase, options, client, url, identity, reason,
+          req: { ...req, asset, token, fee }, onPhase, options, client, url, identity, reason, via,
           // `engine.burn` narrowed to the one capability, for the same reasons `sendTransfer` is
           // (see this file's header): one `makeWallet`, one writer of the note store. Nothing else
           // of the engine is handed over, and nothing that is not read is handed over either —
           // `bridgeState` and `burnFee` used to ride along here and neither was ever touched.
-          sendBurn: (spendKey, opts) => engine.burn(spendKey, opts),
+          sendBurn: (spendKey, opts) => engine.burn(spendKey, prove ? { ...opts, prove } : opts),
           requireUnlocked,
         });
       } finally {
@@ -1789,7 +2037,7 @@ export function makeSharedBackend({
     closeChannel();
   }
 
-  const backend = { wallet, sync, assets, send, faucet, rpc, settings, platform, address, contacts, dispose };
+  const backend = { wallet, sync, assets, send, faucet, rpc, settings, platform, address, contacts, prover, dispose };
   // `bridge` is OPTIONAL in the contract and is not in BACKEND_SHAPE: a shell that supplied no
   // `executeWithdraw` simply does not have the group, and every screen feature-detects it
   // (`ctx.backend.bridge?.canWithdraw`). Both real shells do supply one — the wasm shell's always

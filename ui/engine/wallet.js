@@ -61,15 +61,47 @@ export const BUNDLE_INPUTS = 2;
  * spends two minutes proving a transaction the chain is certain to refuse.
  */
 export async function envelopeBytesOf(client, signal) {
-  if (!client || typeof client.getLimits !== 'function') return null;
+  return (await chainLimitsOf(client, signal)).envelopeBytes;
+}
+
+/**
+ * `rand_getLimits`' two fields a transfer needs, from one request: `envelopeBytes` (above) and
+ * `maxProofBytes`, the chain's proof-size cap — `null` where the node does not say, which the core
+ * reads as its own vendored `MAX_PROOF_BYTES`, never as "unbounded". The same missing-method rule
+ * as `envelopeBytesOf`.
+ */
+export async function chainLimitsOf(client, signal) {
+  if (!client || typeof client.getLimits !== 'function') return { envelopeBytes: null, maxProofBytes: null };
   let reply;
   try {
     reply = await client.getLimits(signal ? { signal } : undefined);
   } catch (err) {
+    if (err && err.code === -32601) return { envelopeBytes: null, maxProofBytes: null };
+    throw err;
+  }
+  return checkLimits(reply);
+}
+
+const HC_BUNDLE_RE = /^[0-9a-f]{64}$/;
+
+/**
+ * The chain's bundle guest, `rand_status.hc_bundle` (64 hex), from the verified client — what a
+ * proof must be made with. `null` (a node that does not report it, or predates `rand_status`)
+ * leaves the core on this build's default guest. A proof of the wrong guest is refused by the
+ * chain, so this is only ever a way to be refused sooner; the core refuses a guest it does not
+ * carry before building anything.
+ */
+export async function hcBundleOf(client, signal) {
+  if (!client || typeof client.status !== 'function') return null;
+  let st;
+  try {
+    st = await client.status(signal ? { signal } : undefined);
+  } catch (err) {
     if (err && err.code === -32601) return null;
     throw err;
   }
-  return checkLimits(reply).envelopeBytes;
+  const hc = st && typeof st.hc_bundle === 'string' ? st.hc_bundle.trim().toLowerCase() : '';
+  return HC_BUNDLE_RE.test(hc) ? hc : null;
 }
 
 /**
@@ -255,6 +287,14 @@ export function coreApi(core) {
     /** The most one bundle can move, and — for a token — why the answer is zero when it is. */
     maxSendable: (req) => call('max_sendable', req),
     proveTransfer: (req) => call('prove_transfer', req),
+    // Delegated proving (plan 2026-09-28): the same build, sealed to a paired prover instead of
+    // proved here (`{sealed_hex, pending, expected}`; `pending` carries no spend key), and the
+    // prover's reply opened, checked and verified into the result `prove_*` would have returned.
+    prepareTransfer: (req) => call('prepare_transfer', req),
+    prepareBurn: (req) => call('prepare_burn', req),
+    finishProof: (pending, reply_hex) => call('finish_proof', { pending, reply_hex }),
+    parseProverLink: (link) => call('parse_prover_link', { link }),
+    proverFingerprint: (kem_ek) => call('prover_fingerprint', { kem_ek }),
     // A bridge burn. `plan_burn` selects both groups' notes (the token to burn and the RAND to pay
     // with) and costs nothing; `prove_burn` proves the ONE bundle they share, which since chain 14
     // is a single proof of about two minutes rather than two of about three and a half.
@@ -868,10 +908,14 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    * Both groups' witnesses come from ONE `anchorAndWitnesses` call, because `prove_transfer` takes
    * a single `anchor_height`/`anchor_root` and the bundle is folded against one root.
    *
-   * Not reachable from the wasm shells: a bundle proof peaks at ~5.7 GB and wasm32 stops at
-   * 4 GiB, so `backend-wasm.js` refuses before it ever gets here (see `send.canProve`).
+   * A wasm shell reaches it only with a paired prover: a bundle proof peaks at ~5.7 GB and wasm32
+   * stops at 4 GiB, so the proof is made by `prove` — the backend's hook that seals the witness to
+   * the prover through the core's `prepare_transfer` and returns `finish_proof`'s result, the same
+   * shape `prove_transfer` returns. Without the hook the core proves here. Either way the request
+   * carries the chain's bundle guest (`hcBundleOf`), and everything after the proof is
+   * `completeSend`.
    */
-  async function send(spendKey, { to, asset = 0, amountUnits, feeUnits, memo = '', wait = true, onPhase, signal, client: given, identity }, settingsOverride) {
+  async function send(spendKey, { to, asset = 0, amountUnits, feeUnits, memo = '', wait = true, onPhase, signal, client: given, identity, prove }, settingsOverride) {
     const s = settingsOverride || (await currentSettings());
     // The client the caller verified, for every step: the fee, the anchor, the witnesses, the
     // broadcast and every retry. A transfer assembled from two nodes is not a transfer.
@@ -892,11 +936,13 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     // before the witnesses — a reply this wallet cannot use refuses the send while nothing has
     // been proved. The core refuses a non-empty memo on a chain that reports `null`, also before
     // proving (wallet-core's `envelope_format_for`).
-    const envelopeBytes = await envelopeBytesOf(client, signal);
+    const { envelopeBytes, maxProofBytes } = await chainLimitsOf(client, signal);
+    const hcBundle = await hcBundleOf(client, signal);
     const { anchor, paths } = await anchorAndWitnesses(client, [...inputs, ...feeInputs], signal);
-    onPhase?.('prove');
+    // A remote prover reports its own 'prove' phases (queued, proving); the device reports one.
+    if (typeof prove !== 'function') onPhase?.('prove');
     const provenChainId = provenChainIdOf(st, identity);
-    const res = await c.proveTransfer({
+    const request = {
       spend_key: spendKey,
       chain_id: provenChainId,
       to,
@@ -913,7 +959,24 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       // Sealed with the payment only; change and dummies carry an empty field of the same size.
       memo: String(memo ?? ''),
       envelope_bytes: envelopeBytes,
-    });
+      // The chain's guest, for the device's proof and the prover's alike: a proof of this build's
+      // default guest would be refused by a chain that pins another.
+      ...(hcBundle ? { hc_bundle: hcBundle } : {}),
+    };
+    const res = typeof prove === 'function'
+      ? await prove({ kind: 'transfer', request, maxProofBytes, hcBundle, meta: { to, memo: String(memo ?? '') }, onPhase, signal })
+      : await c.proveTransfer(request);
+    return completeSend(spendKey, res, { to, memo, wait, onPhase, signal, client }, s);
+  }
+
+  /**
+   * Everything a transfer does once its proof exists: submit, record, wait, re-scan. Split out of
+   * `send` so a proof finished by a remote prover after the popup that asked for it closed
+   * (`send.resume`, backend-shared.js) is submitted by exactly the same code.
+   */
+  async function completeSend(spendKey, res, { to, memo = '', wait = true, onPhase, signal, client: given }, settingsOverride) {
+    const s = settingsOverride || (await currentSettings());
+    const client = given || (await rpcFor(s));
     // The last point at which nothing has left this device. Past it a failure means the outcome is
     // unknown, not "not sent" (see ui/backend.js on `send.send`'s rejection fields).
     throwIfAborted(signal);
@@ -985,7 +1048,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    */
   async function burn(spendKey, {
     asset, amountUnits, relayerFeeUnits = '0', toChain, token, to, feeUnits,
-    wait = true, onPhase, signal, client: given, identity,
+    wait = true, onPhase, signal, client: given, identity, prove,
   }, settingsOverride) {
     const s = settingsOverride || (await currentSettings());
     const client = given || (await rpcFor(s));
@@ -1004,12 +1067,13 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     onPhase?.('witness');
     // A burn carries no memo, but its change and dummies are sealed at the chain's size all the
     // same (see `envelopeBytesOf`).
-    const envelopeBytes = await envelopeBytesOf(client, signal);
+    const { envelopeBytes, maxProofBytes } = await chainLimitsOf(client, signal);
+    const hcBundle = await hcBundleOf(client, signal);
     // One fetch for both groups, so the whole bundle is folded against the same root.
     const { anchor, paths } = await anchorAndWitnesses(client, [...assetInputs, ...feeInputs], signal);
-    onPhase?.('prove');
+    if (typeof prove !== 'function') onPhase?.('prove');
     const provenChainId = provenChainIdOf(st, identity);
-    const res = await c.proveBurn({
+    const request = {
       spend_key: spendKey,
       chain_id: provenChainId,
       asset: Number(asset),
@@ -1025,7 +1089,18 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       fee_inputs: feeInputs.map((note, i) => ({ note, path: paths[assetInputs.length + i] })),
       profile: 'production',
       envelope_bytes: envelopeBytes,
-    });
+      ...(hcBundle ? { hc_bundle: hcBundle } : {}),
+    };
+    const res = typeof prove === 'function'
+      ? await prove({ kind: 'burn', request, maxProofBytes, hcBundle, meta: {}, onPhase, signal })
+      : await c.proveBurn(request);
+    return completeBurn(spendKey, res, { wait, onPhase, signal, client }, s);
+  }
+
+  /** `completeSend` for a burn: submit, record, wait, re-scan. */
+  async function completeBurn(spendKey, res, { wait = true, onPhase, signal, client: given }, settingsOverride) {
+    const s = settingsOverride || (await currentSettings());
+    const client = given || (await rpcFor(s));
     // The last point at which nothing has left this device.
     throwIfAborted(signal);
     onPhase?.('submit');
@@ -1078,7 +1153,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
   }
 
   return {
-    scan, rescan, send, burn, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable,
+    scan, rescan, send, burn, completeSend, completeBurn, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable,
     // Exposed so a backend can prove the chain WITHOUT scanning — the gate in front of send and
     // faucet is two RPC calls, not a page of leaves.
     chainIdentity, chainVerdict,
