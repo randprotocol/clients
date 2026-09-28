@@ -3,14 +3,14 @@
 Wallets for the Rand Protocol RAND chain (the fully shielded pool served by
 [`rand-node`](https://github.com/randprotocol/fullnode)), one per platform, sharing one Rust core:
 
-| client | language | directory | ships as |
-|---|---|---|---|
-| iOS | Swift (SwiftUI) | `ios/` | TestFlight / App Store |
-| Android | Java | `android/` | Google Play (`.aab`) |
-| Chrome | JavaScript, Manifest V3 | `chrome/` + `extension/` | Chrome Web Store |
-| Firefox | JavaScript, Manifest V3 | `firefox/` + `extension/` | addons.mozilla.org |
-| Windows, Linux, macOS | Tauri (shared UI + Rust core) | `desktop/` | .msi / .deb / AppImage / .dmg |
-| Local web wallet | JavaScript (shared UI + WebAssembly core) | `web/wallet/` + `ui/` | nothing — served from a checkout |
+| client | language | directory | ships as | can send |
+|---|---|---|---|---|
+| iOS | Swift (SwiftUI) | `ios/` | TestFlight / App Store | on a device with about 8 GB of memory |
+| Android | Java | `android/` | Google Play (`.aab`) | on a device with about 8 GB of memory |
+| Chrome | JavaScript, Manifest V3 | `chrome/` + `extension/` | Chrome Web Store | through a paired prover |
+| Firefox | JavaScript, Manifest V3 | `firefox/` + `extension/` | addons.mozilla.org | through a paired prover |
+| Windows, Linux, macOS | Tauri (shared UI + Rust core) | `desktop/` | .msi / .deb / AppImage / .dmg | yes, and proves for your other wallets |
+| Local web wallet | JavaScript (shared UI + WebAssembly core) | `web/wallet/` + `ui/` | nothing — served from a checkout | through a paired prover |
 
 The two extensions, the desktop app and the local web wallet share more than the core: `ui/` is one
 copy of the whole interface — the screens, the app shell and router, the design tokens, and
@@ -23,8 +23,9 @@ commitment tree for its own notes, asks the testnet faucet, and hands the user t
 and per-transaction keys that [randscan.org](https://randscan.org) opens confidential
 transactions with. The shells that can fit a proof in memory — the desktop app and the mobile
 apps — also prove and submit shielded transfers of RAND and of any listed RPL token; the browser
-extension and the web wallet do all of it except the proof itself (see the known limitation
-below). Downloads are listed at https://randprotocol.org/clients (`web/`).
+extension and the web wallet build and submit the same transfers but have the proof made by a
+prover you pair — the desktop app on the same machine, or your own `rand-prover` (see the known
+limitation below and [`docs/prover.md`](docs/prover.md)). Downloads are listed at https://randprotocol.org/clients (`web/`).
 
 Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
@@ -81,8 +82,11 @@ cd core && cargo build --release --example prove_fixture
 ```
 
 Consequences today, per shell: the desktop app proves natively and sends everything; the browser
-extensions and the local web wallet cannot prove at all (WebAssembly is capped at 4 GB; the proof
-aborts with an out-of-memory error, which the Send screen explains); and phones with less than
+extensions and the local web wallet cannot prove for themselves (WebAssembly is capped at 4 GB), so
+they prove through a paired prover — the desktop app on the same machine (Settings → **Prove for
+my other devices**), or your own `rand-prover` on a server — and without one the Send screen
+explains the wall. A prover in this release receives the wallet's spend key with every job, so pair
+only a machine you run yourself; [`docs/prover.md`](docs/prover.md) is the whole guide. Phones with less than
 about 8 GB of RAM will have the app terminated mid-proof (the review step warns with the device's
 numbers). Every other feature — creating and importing wallets, receiving, scanning, the faucet,
 activity, viewing keys and per-transaction keys for randscan.org — works on all five shells
@@ -91,7 +95,8 @@ path is implemented and tested against the chain's own verifier in the core. The
 prover (`randprotocol-zkvm`: it materialises every table's low-degree extension at once); when
 its peak drops, update `PROVER_PEAK_MEMORY_BYTES` in `core/crates/wallet-core/src/lib.rs` and
 the two mirrored constants in the mobile apps, rebuild, and the Send flows light up unchanged.
-Until then, send from the `rand` command-line wallet using the key file every client exports.
+Until then, a phone without the memory sends from the desktop app or from the `rand`
+command-line wallet using the key file every client exports.
 
 ## Build
 
@@ -130,11 +135,13 @@ web/             the /clients page for randprotocol.org
 web/wallet/      the local web wallet: index.html and main.js (the shell), worker.js (the wasm core
                  off the UI thread), idb.js (IndexedDB, and a Map for what must never be written),
                  and serve.mjs — a loopback-only static server. Built and served by serve.sh from a
-                 checkout; it is not deployed anywhere, and it cannot send (see web/wallet/README.md)
+                 checkout; it is not deployed anywhere, and it sends only through a paired prover
+                 (docs/prover.md)
 design/          tokens.json, make-icons.py, generated icons
-docs/            design spec
+docs/            prover.md (proving through your own prover), rpc-endpoints.md, design specs
 desktop/         Tauri app for Windows, Linux and macOS: ui/ in a webview, wallet-core linked
-                 directly — the one client that can prove a transfer locally
+                 directly — the one client that can prove a transfer locally, and a prover for
+                 the extension and the web wallet on the same machine
 linux/ macosx/ windows/   per-OS packaging notes pointing at desktop/
 ```
 

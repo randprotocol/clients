@@ -32,20 +32,23 @@ git-ignored, and nothing in it is ever edited by hand.
   and tells you what a send would cost before it tells you it cannot make one.
 - **The faucet, settings, the viewing key, the spend-key export**, and a wipe.
 
-## What it cannot do: send
+## Sending: through a prover you pair
 
 A transfer on this chain is a STARK proof of a 2-in-2-out bundle. The prover peaks at about
 **5.7 GB** of memory (`wallet-core`'s `PROVER_PEAK_MEMORY_BYTES`, re-measured on chain 14's
 constraint set) and a browser gives WebAssembly a **4 GiB** address space. There is no way to fit one in the
-other, so this shell does not try: `send.canProve()` answers `false`, and the Send flow walks you
-through recipient, amount and review and then explains the wall instead of offering a Prove
-button. Nothing is half-started and no proof is attempted — in wasm it would grind for minutes and
-then abort with an out-of-memory trap.
+other, so this shell never proves for itself: it builds the transaction, has a prover you pair make
+the proof, checks the proof locally and submits it. Pair the **Rand Wallet desktop app** on the same
+machine (its Settings → **Prove for my other devices**, then paste its link into this wallet's
+Settings → **Prover**), or your own `rand-prover`. The prover receives your spend key with every job,
+so pair only a machine you run yourself — [`docs/prover.md`](../../docs/prover.md) is the guide.
 
-To actually send: export your spend key from Settings and import it into the **Rand Wallet desktop
-app**, which proves natively. The key is the wallet; the notes are the same notes.
+Without a paired prover, `send.canProve()` answers `false`, and the Send flow walks you through
+recipient, amount and review and then explains the wall instead of offering a Prove button. Nothing
+is half-started and no proof is attempted. A pending proof lives only in this tab's memory: reloading
+the page mid-proof forgets it, and nothing is sent.
 
-The same limit applies to the browser extension. It is not a property of this shell.
+The same holds for the browser extension. It is not a property of this shell.
 
 ## Security model
 
