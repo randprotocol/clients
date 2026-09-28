@@ -129,7 +129,7 @@ pub async fn prover_status(state: State<'_, ProverState>) -> Result<prover::Stat
 
 #[tauri::command]
 pub async fn prover_start(state: State<'_, ProverState>, store: State<'_, Storage>) -> Result<prover::Status, String> {
-    prover::start(&state, &prover::dir(), &store, prover::DEFAULT_ADDR, randprotocol_prover::memory::check).await
+    prover::start(&state, &prover::dir(), &store, prover::DEFAULT_ADDR, prover::memory_check).await
 }
 
 #[tauri::command]

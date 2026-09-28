@@ -10,7 +10,8 @@
 //!     would silently break every wallet already paired;
 //!   * **what it accepts** — spend-key witnesses (this is the owner's own machine: the link is
 //!     marked `own`), one proof at a time, and not at all on a machine without the memory for one
-//!     (`memory::check(1)`: one tier-14 bundle's peak plus a gigabyte, the spec's "8 GB");
+//!     (`memory_check(1)`, over `randprotocol_prover::memory`: one tier-14 bundle's peak plus a
+//!     gigabyte, the spec's "8 GB");
 //!   * **the one pairing** — labelled `desktop`, minted the first time the prover starts.
 //!
 //! The pairing token is a bearer secret the prover itself keeps only as a hash, yet the link must
@@ -240,8 +241,27 @@ pub async fn status(state: &ProverState, dir: &Path) -> Status {
     status_of(g.as_ref(), state.draining().as_ref(), dir)
 }
 
+/// The app's memory gate: `randprotocol_prover::memory`'s numbers, but the refusal is worded for
+/// the GUI — the library's own advice names `rand-prover` command-line flags a desktop user has no
+/// way to pass.
+pub fn memory_check(slots: usize) -> Result<(), String> {
+    use randprotocol_prover::memory::{available_bytes, required_bytes};
+    let (need, have) = (required_bytes(slots), available_bytes());
+    if have < need { Err(memory_refusal(need, have)) } else { Ok(()) }
+}
+
+fn memory_refusal(need: u64, have: u64) -> String {
+    let gb = |b: u64| b as f64 / 1e9;
+    format!(
+        "proving needs {:.1} GB of available memory and this computer has {:.1} GB available — \
+         close other applications or use a machine with more memory",
+        gb(need),
+        gb(have)
+    )
+}
+
 /// `prover_start`: the memory gate, the key, the `desktop` pairing, the bind, the service. Already
-/// running is not an error — the current status is the answer. `memory` is `memory::check` in the
+/// running is not an error — the current status is the answer. `memory` is `memory_check` in the
 /// app and a stand-in under test (a CI box need not hold a proof's worth of free memory to test
 /// the plumbing).
 pub async fn start(
@@ -474,6 +494,14 @@ mod tests {
         let err = block_on(start(&state, &fx.dir, &fx.store, addr, enough_memory)).unwrap_err();
         assert!(err.contains(&addr.to_string()) && err.contains("already in use"), "{err}");
         assert!(!block_on(status(&state, &fx.dir)).running);
+    }
+
+    #[test]
+    fn the_memory_refusal_keeps_both_numbers_and_names_no_command_line_flag() {
+        let msg = memory_refusal(6_740_000_000, 3_210_000_000);
+        assert!(msg.contains("6.7 GB") && msg.contains("3.2 GB"), "{msg}");
+        assert!(msg.contains("close other applications or use a machine with more memory"), "{msg}");
+        assert!(!msg.contains("--"), "a GUI message names no CLI flag: {msg}");
     }
 
     #[test]
