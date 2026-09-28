@@ -42,8 +42,9 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 export const DEFAULT_POLL_MS = 1000;
 /**
  * How long a job may sit in the prover's QUEUE before the wallet stops waiting (the record stays,
- * so it can be resumed). The desktop host proves one job at a time with a queue of 8 at ~2 min a
- * proof, so position 8 alone is ~16 min of legitimate waiting before its own proof starts.
+ * so it can be resumed). The bound is sized for a shared `rand-prover` with many pairings: one
+ * worker and a queue of 8 at ~2 min a proof puts position 8 ~16 min from its own proof. (The
+ * desktop host holds at most 2 jobs per token, so one wallet paired with it never waits that long.)
  */
 export const MAX_QUEUE_WAIT_MS = 30 * 60 * 1000;
 /** How long one job may be PROVING — its clock restarts when it leaves the queue. */

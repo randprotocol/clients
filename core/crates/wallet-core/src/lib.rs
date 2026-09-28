@@ -50,15 +50,13 @@ pub const ADDRESS_HRP: &str = randprotocol_core::notes::ADDRESS_PREFIX;
 pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode's
-/// delegated-proving branch (`feat/delegated-proving`, v0.6 + constraint set 7), which adds
-/// `randprotocol-prover` — the sealed job wire a light client speaks to a prover — and, at
-/// `e6d1327`, CORS on the prover listener and a service shutdown. Earlier: `109f47d` (the same
-/// branch before that follow-up), `1a13359` (`feat/address-sharing` on v0.5.9: the address
+/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode's tag
+/// `v0.6.2` (`98d1ff6`, v0.6 + constraint set 7), the delegated-proving release, which adds
+/// `randprotocol-prover` — the sealed job wire a light client speaks to a prover — with CORS on
+/// the prover listener under an origin allow-list and a service shutdown. Earlier: `e6d1327` (the
+/// delegated-proving branch before the tag), `109f47d` (that branch before its CORS follow-up), `1a13359` (`feat/address-sharing` on v0.5.9: the address
 /// fingerprint, `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-// TODO(v0.6.2): re-pin the submodule and this constant to fullnode's v0.6.2 tag when it is
-// released; the tag does not exist yet.
-pub const CHAIN_BUILD: &str = "e6d1327";
+pub const CHAIN_BUILD: &str = "98d1ff6";
 /// The chain the defaults below describe: chain 16, the next testnet cut (not live yet on
 /// 2026-09-28; chain 15, genesis `cc30e085…`, is). A wallet built against it refuses a chain-15
 /// node until 16 is up, then adopts 16's genesis on its first scan. Chain 14 (genesis
@@ -4302,7 +4300,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 16);
-            assert_eq!(v["chain_build"], "e6d1327");
+            assert_eq!(v["chain_build"], "98d1ff6");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
