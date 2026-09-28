@@ -44,6 +44,12 @@ export const METHODS = {
   getLimits: { params: [] },
   getMempoolInfo: { params: [] },
   getEmission: { params: [] },
+  // The genesis vesting register (fullnode v0.5.11, docs/rpc.md §rand_getVesting…); nothing in the
+  // wallet calls these yet. Each lists only the parameters the node requires: `rand_getVesting`'s
+  // `at_ms` is optional.
+  getVesting: { params: ['id'] },
+  getVestingSummary: { params: [] },
+  getVestingSchedule: { params: ['fromMs', 'toMs', 'stepMs'] },
 
   // -- the commitment tree & notes -----------------------------------------------------------
   getTreeInfo: { params: [] },
