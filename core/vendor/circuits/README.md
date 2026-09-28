@@ -3,6 +3,8 @@
 `guests-compiled/evm-core` and `guests-compiled/sbpf-core` are copied verbatim from the
 RandProtocol `circuits` repository at commit `b9ffc39` (constraint set 7, the set the vendored
 fullnode `109f47d` carries; earlier `7ef3220`); `rand-zkvm-cuda` is a hand-written stub.
+The copy before `b9ffc39` was not byte-identical to the commit it named (rustfmt had reformatted
+it and two `license` lines had been added by hand); the `b9ffc39` copy is verbatim.
 They are here because the vendored node's `randprotocol-zkvm` crate depends on them by path
 (`../../../circuits/guests-compiled/…`) and the workspace cannot resolve without them. They are
 compiled into every binary this repository ships.
