@@ -9,7 +9,8 @@ app/src/main/java/org/randprotocol/wallet/
   core/       NativeCore (JNI), Core (typed JSON wrapper), CoreException
   rpc/        RpcClient: JSON-RPC 2.0 over HttpURLConnection
   store/      NoteStore (JSON cache of notes, sent rows, submissions), OwnedNote, SentRow, Submission
-  wallet/     WalletService (scan / send / faucet), ProvingService (foreground service), SendMonitor
+  wallet/     WalletService (scan / send / faucet), ProvingService (foreground service), SendMonitor,
+              ProverClient / RemoteProver / RemoteSend / ProverPairing (a paired prover)
   security/   KeyVault (EncryptedSharedPreferences), Unlock (BiometricPrompt window), Prefs
   ui/         Launch, Welcome, CreateWallet, Import, Lock, Home, Receive, Send, Detail, Settings
   util/       Amounts
@@ -30,7 +31,7 @@ ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/27.2.12479018 ../core/scripts/bui
 
 # 2. The app
 ./gradlew assembleDebug            # app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest        # NoteStore + Amounts unit tests (no device, no .so needed)
+./gradlew testDebugUnitTest        # unit tests, the prover client included (no device, no .so needed)
 ```
 
 ## Run on the emulator
@@ -75,7 +76,8 @@ the transaction key on randscan.org.
 ## What the app stores
 
 - The spend key, in `EncryptedSharedPreferences` (AES-256-GCM, Keystore-backed master key).
-  Never the viewing key: it is derived on demand.
+  Never the viewing key: it is derived on demand. Beside it, a paired prover's token (Settings →
+  Prover, `../docs/prover.md` §6); the pairing's public fields are in plain preferences.
 - `files/notes.json`: the note cache (plaintext notes, nullifiers, leaf indices) and the
   submissions list with each payment's transaction key. App-private; rebuilt by a rescan.
 - Settings (RPC URL, chain id, auto-lock, theme) in plain preferences.

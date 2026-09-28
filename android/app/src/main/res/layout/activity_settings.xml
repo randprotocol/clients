@@ -16,6 +16,25 @@
     </LinearLayout>
     <TextView android:id="@+id/test_result" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Caption" />
 
+    <!-- Delegated proving, Phase 1 (spec 2026-09-28 §4.4): pair a prover you run yourself. -->
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/settings_prover" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" style="@style/Text.Caption" android:text="@string/settings_prover_by" />
+    <TextView android:id="@+id/prover_by" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textStyle="bold" android:textColor="@color/text" />
+    <TextView android:id="@+id/prover_fingerprint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" style="@style/Text.Mono" android:textSize="12sp" android:visibility="gone" />
+    <TextView android:id="@+id/prover_probe" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" style="@style/Text.Caption" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/prover_forget" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="@color/negative" android:text="@string/settings_prover_forget" android:visibility="gone" />
+    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:hint="@string/settings_prover_link">
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/prover_link" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textUri|textNoSuggestions" android:typeface="monospace" android:textSize="13sp" android:maxLines="3" />
+    </com.google.android.material.textfield.TextInputLayout>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" style="@style/Text.Caption" android:text="@string/settings_prover_link_hint" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textStyle="bold" android:textColor="@color/negative" android:text="@string/settings_prover_warning_title" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" style="@style/Text.Body" android:textColor="@color/negative" android:text="@string/settings_prover_warning" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+        <com.google.android.material.button.MaterialButton android:id="@+id/prover_save" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/settings_save" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/prover_scan" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="@string/settings_prover_scan" />
+    </LinearLayout>
+    <TextView android:id="@+id/prover_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Caption" />
+
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/settings_keys" />
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textStyle="bold" android:textColor="@color/text" android:text="@string/settings_viewing" />
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" style="@style/Text.Body" android:text="@string/settings_viewing_body" />

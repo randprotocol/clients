@@ -132,6 +132,35 @@ public class RpcClient {
         throw new RpcException(0, "rand_getLimits: envelope_bytes is not a positive size");
     }
 
+    /**
+     * The chain's proof-size cap, {@code rand_getLimits.max_proof_bytes} — what a remote prover's
+     * proof is held to ({@code finish_proof}). Null (not reported, or a node without the method)
+     * means the core's own vendored {@code MAX_PROOF_BYTES}, never "unbounded".
+     */
+    public Integer maxProofBytes() throws RpcException {
+        Object reply;
+        try {
+            reply = call("rand_getLimits", null);
+        } catch (RpcException e) {
+            if (e.code == -32601) return null;
+            throw e;
+        }
+        return maxProofBytesOf(reply);
+    }
+
+    /** {@code rand_getLimits}' reply → its {@code max_proof_bytes}: null when absent or null, else a size in 1..2^30. */
+    public static Integer maxProofBytesOf(Object reply) throws RpcException {
+        if (!(reply instanceof JSONObject)) throw new RpcException(0, "rand_getLimits: not an object");
+        JSONObject o = (JSONObject) reply;
+        if (!o.has("max_proof_bytes") || o.isNull("max_proof_bytes")) return null;
+        Object v = o.opt("max_proof_bytes");
+        if (v instanceof Integer || v instanceof Long) {
+            long n = ((Number) v).longValue();
+            if (n > 0 && n <= (1L << 30)) return (int) n;
+        }
+        throw new RpcException(0, "rand_getLimits: max_proof_bytes is not a positive size");
+    }
+
     public long chainId() throws RpcException {
         return ((Number) call("rand_chainId", null)).longValue();
     }

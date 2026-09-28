@@ -1,13 +1,21 @@
 package org.randprotocol.wallet.ui;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
+
+import com.journeyapps.barcodescanner.ScanContract;
+import com.journeyapps.barcodescanner.ScanOptions;
 
 import org.json.JSONObject;
 import org.randprotocol.wallet.App;
@@ -17,9 +25,16 @@ import org.randprotocol.wallet.core.Core;
 import org.randprotocol.wallet.databinding.ActivitySettingsBinding;
 import org.randprotocol.wallet.rpc.RpcClient;
 import org.randprotocol.wallet.security.Prefs;
+import org.randprotocol.wallet.wallet.ProverCore;
+import org.randprotocol.wallet.wallet.ProverPairing;
 
 public class SettingsActivity extends BaseActivity {
     private ActivitySettingsBinding b;
+    private ActivityResultLauncher<ScanOptions> proverScanner;
+    private ActivityResultLauncher<String> cameraPermission;
+    /** One Save at a time; the latest probe only may paint. */
+    private boolean pairing;
+    private int probeRun;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,6 +72,26 @@ public class SettingsActivity extends BaseActivity {
                 runOnUiThread(() -> b.testResult.setText(r));
             });
         });
+
+        // Prover
+        proverScanner = registerForActivityResult(new ScanContract(), result -> {
+            if (result.getContents() != null) b.proverLink.setText(result.getContents().trim());
+        });
+        cameraPermission = registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+            if (granted) launchProverScanner();
+            else toast(getString(R.string.send_camera_denied));
+        });
+        b.proverScan.setOnClickListener(v -> {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) launchProverScanner();
+            else cameraPermission.launch(Manifest.permission.CAMERA);
+        });
+        b.proverSave.setOnClickListener(v -> saveProver());
+        b.proverForget.setOnClickListener(v -> {
+            wallet().forgetProver();
+            paintProver();
+            b.proverStatus.setText(R.string.settings_prover_forgotten);
+        });
+        paintProver();
 
         // Keys
         String viewing = wallet().viewingKey();
@@ -123,6 +158,82 @@ public class SettingsActivity extends BaseActivity {
         } catch (Exception ignored) {
         }
         b.about.setText(getString(R.string.settings_about_body, BuildConfig.VERSION_NAME, coreVersion, chainBuild));
+    }
+
+    private void launchProverScanner() {
+        proverScanner.launch(new ScanOptions()
+                .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                .setPrompt(getString(R.string.settings_prover_scan_prompt))
+                .setBeepEnabled(false)
+                .setOrientationLocked(false));
+    }
+
+    /** Who makes this wallet's proofs, and — for a pairing — whether the prover answers. */
+    private void paintProver() {
+        ProverPairing p = wallet().prefs().prover();
+        int run = ++probeRun;
+        if (p == null) {
+            b.proverBy.setText(R.string.settings_prover_device);
+            b.proverFingerprint.setVisibility(View.GONE);
+            b.proverForget.setVisibility(View.GONE);
+            b.proverProbe.setText(R.string.settings_prover_device_body);
+            return;
+        }
+        b.proverBy.setText(getString(R.string.settings_prover_remote, p.name));
+        b.proverFingerprint.setText(getString(R.string.settings_prover_fingerprint, p.fingerprint));
+        b.proverFingerprint.setVisibility(View.VISIBLE);
+        b.proverForget.setVisibility(View.VISIBLE);
+        b.proverProbe.setText(R.string.settings_prover_asking);
+        wallet().runInBackground(() -> {
+            String line = wallet().probeProver(p).line();
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed() || run != probeRun) return;
+                b.proverProbe.setText(line);
+            });
+        });
+    }
+
+    /**
+     * Save = preview (the core reads the link; the URL rule) → the prover's own key, which must be
+     * the link's → the token into the KeyVault, the rest into Prefs. The link leaves the field
+     * once it is paired: it carries the token.
+     */
+    private void saveProver() {
+        if (pairing) return;
+        String link = String.valueOf(b.proverLink.getText()).trim();
+        if (link.isEmpty()) {
+            b.proverStatus.setText(R.string.settings_prover_no_link);
+            return;
+        }
+        pairing = true;
+        b.proverSave.setEnabled(false);
+        b.proverStatus.setText(R.string.settings_prover_pairing);
+        wallet().runInBackground(() -> {
+            String status;
+            boolean paired = false;
+            try {
+                ProverPairing.Preview seen = ProverPairing.preview(ProverCore.NATIVE, link);
+                ProverPairing.Paired done = wallet().pairProver(link);
+                paired = true;
+                status = seen.warning != null
+                        ? getString(R.string.settings_prover_saved_not_own, seen.warning)
+                        : getString(R.string.settings_prover_paired, done.pairing.name, done.pairing.fingerprint);
+            } catch (Exception e) {
+                status = getString(R.string.settings_prover_not_paired, e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            }
+            String s = status;
+            boolean ok = paired;
+            runOnUiThread(() -> {
+                pairing = false;
+                if (isFinishing() || isDestroyed()) return;
+                b.proverSave.setEnabled(true);
+                if (ok) {
+                    b.proverLink.setText(""); // the token goes with it
+                    paintProver();
+                }
+                b.proverStatus.setText(s);
+            });
+        });
     }
 
     private interface Pick {

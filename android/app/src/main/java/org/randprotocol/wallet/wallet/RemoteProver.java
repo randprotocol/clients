@@ -1,0 +1,137 @@
+package org.randprotocol.wallet.wallet;
+
+import org.json.JSONObject;
+
+/**
+ * One remote proof — the Java twin of {@code ui/engine/prover.js}'s {@code remoteProve}: submit
+ * the sealed job, poll until the prover answers, and hand the reply to the core's
+ * {@code finish_proof}, which opens it, checks the digest and the size, and verifies the proof. A
+ * reply that fails any of that never reaches the node. Transport failures are retried until
+ * {@code maxWaitMs} (the prover may be restarting); a JSON-RPC error stops.
+ *
+ * <p>No resume on mobile in Phase 1: the job lives in this call, on the {@link ProvingService}'s
+ * thread. A process the system kills loses it, and nothing is sent.
+ */
+public final class RemoteProver {
+    public interface Finisher {
+        JSONObject finish(Object pending, String replyHex) throws Exception;
+    }
+
+    /** {@code position} is the queue position while waiting, null while handed over or proving. */
+    public interface PhaseListener {
+        void phase(Integer position);
+    }
+
+    public interface Clock {
+        long nowMs();
+    }
+
+    public interface Sleeper {
+        void sleep(long ms) throws InterruptedException;
+    }
+
+    public static final long DEFAULT_POLL_MS = 1_000;
+    public static final long DEFAULT_MAX_WAIT_MS = 20 * 60 * 1000L;
+
+    private final ProverClient client;
+    public long pollMs = DEFAULT_POLL_MS;
+    public long maxWaitMs = DEFAULT_MAX_WAIT_MS;
+    public Clock clock = System::currentTimeMillis;
+    public Sleeper sleeper = Thread::sleep;
+
+    public RemoteProver(ProverClient client) {
+        this.client = client;
+    }
+
+    public JSONObject prove(String sealedHex, Object pending, Finisher finisher, PhaseListener onPhase) throws Exception {
+        onPhase.phase(null);
+        String job;
+        try {
+            job = client.submit(sealedHex);
+        } catch (ProverClient.ProverError e) {
+            ProverClient.Refusal r = ProverClient.refusal(e);
+            throw r != null ? r : new ProverClient.Refusal("Could not hand the proof to your prover: " + e.getMessage());
+        }
+        long started = clock.nowMs();
+        long minutes = Math.round(maxWaitMs / 60000.0);
+        // What was last reported: null = "proving" (announced before the submit), else a position.
+        Integer last = null;
+        while (true) {
+            if (Thread.currentThread().isInterrupted()) {
+                cancel(job);
+                throw new InterruptedException();
+            }
+            JSONObject st;
+            try {
+                st = client.status(job);
+            } catch (ProverClient.ProverError e) {
+                ProverClient.Refusal r = ProverClient.refusal(e);
+                if (r != null) throw r;
+                if (clock.nowMs() - started >= maxWaitMs) {
+                    cancel(job);
+                    throw new ProverClient.Refusal("Your prover has not answered for " + minutes + " minutes, so nothing was sent. Send again.");
+                }
+                pause(job);
+                continue;
+            }
+            String state = st.optString("state", "");
+            switch (state) {
+                case "queued": {
+                    int p = st.optInt("position", 1);
+                    Integer pos = p > 0 ? p : 1;
+                    if (!pos.equals(last)) {
+                        last = pos;
+                        onPhase.phase(pos);
+                    }
+                    break;
+                }
+                case "proving":
+                    if (last != null) {
+                        last = null;
+                        onPhase.phase(null);
+                    }
+                    break;
+                case "done": {
+                    String reply = st.optString("reply", "");
+                    if (reply.isEmpty() || st.isNull("reply")) throw new ProverClient.Refusal("The prover finished but sent no proof.");
+                    try {
+                        return finisher.finish(pending, reply);
+                    } catch (Exception e) {
+                        throw new ProverClient.Refusal("The prover's proof was refused by this wallet: " + e.getMessage());
+                    }
+                }
+                case "failed":
+                case "expired": {
+                    String err = st.optString("error", "");
+                    String why = err.isEmpty() || st.isNull("error") ? "" : ": " + err;
+                    throw new ProverClient.Refusal("The prover could not make this proof (" + state + why + ").");
+                }
+                default:
+                    throw new ProverClient.Refusal("The prover answered with an unknown state ("
+                            + state.substring(0, Math.min(32, state.length())) + ").");
+            }
+            if (clock.nowMs() - started >= maxWaitMs) {
+                cancel(job);
+                throw new ProverClient.Refusal("Your prover has not finished after " + minutes + " minutes, so nothing was sent. Send again.");
+            }
+            pause(job);
+        }
+    }
+
+    private void pause(String job) throws InterruptedException {
+        try {
+            sleeper.sleep(pollMs);
+        } catch (InterruptedException e) {
+            cancel(job);
+            throw e;
+        }
+    }
+
+    /** Best effort: the job expires on the prover anyway. */
+    private void cancel(String job) {
+        try {
+            client.cancel(job);
+        } catch (Exception ignored) {
+        }
+    }
+}

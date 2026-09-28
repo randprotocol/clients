@@ -39,6 +39,20 @@ import java.util.concurrent.Executors;
  * <p>The spend key is read from the {@link KeyVault} for each operation and dropped afterwards.
  */
 public final class WalletService {
+    /**
+     * Peak memory of a bundle proof: mirrors {@code wallet_core::PROVER_PEAK_MEMORY_BYTES}
+     * (measured 2026-09-20, chain 14).
+     */
+    public static final long PROVER_PEAK_MEMORY_BYTES = 5_700_000_000L;
+
+    /** Android lets a foreground app use well under the whole of RAM; two thirds is generous. */
+    public static boolean deviceCanProve(Context c) {
+        android.app.ActivityManager am = (android.app.ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
+        android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+        am.getMemoryInfo(mi);
+        return mi.totalMem / 3 * 2 >= PROVER_PEAK_MEMORY_BYTES;
+    }
+
     /** How long a send waits for its bundle to be committed. */
     public static final long COMMIT_TIMEOUT_MS = 180_000;
     private static final long POLL_MS = 1_000;
@@ -164,7 +178,8 @@ public final class WalletService {
     }
 
     public void removeWallet() {
-        vault.erase();
+        vault.erase(); // the prover's token with it
+        prefs.setProver(null);
         prefs.setBackedUp(false);
         contacts().clear();
         synchronized (store) {
@@ -376,6 +391,49 @@ public final class WalletService {
         return out;
     }
 
+    // ------------------------------------------------------------------ the prover
+
+    /** Checks the link and the prover's key, then stores the pairing (token first). Blocking. */
+    public ProverPairing.Paired pairProver(String link) throws Exception {
+        ProverPairing.Paired paired = ProverPairing.pair(ProverCore.NATIVE, link, ProverClient.HTTP);
+        vault.setProverToken(paired.token);
+        prefs.setProver(paired.pairing);
+        return paired;
+    }
+
+    public void forgetProver() {
+        prefs.setProver(null);
+        vault.eraseProverToken();
+    }
+
+    /** Blocking. */
+    public ProverPairing.Probe probeProver(ProverPairing pairing) {
+        return ProverPairing.probe(ProverCore.NATIVE, pairing, ProverClient.HTTP);
+    }
+
+    /**
+     * Null when this device proves — it has the memory, or no prover is paired as the user's own
+     * (then the review step's memory warning stands, as before). A paired own prover that does not
+     * answer, answers with another key, or takes no spend-key job refuses the send here, before
+     * anything is built: nothing is sent. Blocking.
+     */
+    public RemoteSend.Route proveRoute() throws ProverClient.Refusal {
+        if (deviceCanProve(app)) return null;
+        ProverPairing p = prefs.prover();
+        if (p == null || !p.own) return null;
+        String reason = "This device does not have the memory for this proof.";
+        ProverPairing.Probe probe = probeProver(p);
+        if (!probe.ok()) throw new ProverClient.Refusal(reason + " Your paired prover is not available: " + probe.reason + ".");
+        if (!probe.info.witnessKinds.contains("spend_key")) {
+            throw new ProverClient.Refusal(reason + " Your paired prover is not available: it does not take a spend-key job.");
+        }
+        String token = vault.proverToken();
+        if (token == null || token.isEmpty()) {
+            throw new ProverClient.Refusal("Your prover's pairing could not be opened. Pair the prover again in Settings.");
+        }
+        return new RemoteSend.Route(p, token);
+    }
+
     // ------------------------------------------------------------------ sending
 
     /** Amount + fee, for the review screen and for coin selection. */
@@ -405,6 +463,9 @@ public final class WalletService {
             return;
         }
         try {
+            // Where the proof is made, decided before any work: this device, or a prover the user
+            // paired as their own (delegated proving, Phase 1).
+            RemoteSend.Route route = proveRoute();
             RpcClient rpc = rpc();
             scan();
             JSONObject selection;
@@ -459,8 +520,25 @@ public final class WalletService {
             req.put("memo", memo);
             req.put("envelope_bytes", envelopeBytes == null ? JSONObject.NULL : envelopeBytes);
 
-            SendMonitor.post(st.with(SendState.Phase.PROVING, "Proving your transfer"));
-            JSONObject proved = Core.proveTransfer(req);
+            JSONObject proved;
+            if (route == null) {
+                SendMonitor.post(st.with(SendState.Phase.PROVING, "Proving your transfer"));
+                proved = Core.proveTransfer(req);
+            } else {
+                final SendState base = st;
+                final String name = route.pairing.name;
+                SendMonitor.post(base.remote(name, null));
+                Integer maxProofBytes = rpc.maxProofBytes();
+                JSONObject status = null;
+                try {
+                    status = rpc.status();
+                } catch (RpcException e) {
+                    if (e.code != -32601) throw e;
+                }
+                req.put("profile", RemoteSend.profileOf(status));
+                proved = RemoteSend.prove(ProverCore.NATIVE, new RemoteProver(new ProverClient(route.pairing.url)), req, route,
+                        maxProofBytes, RemoteSend.hcBundleOf(status), pos -> SendMonitor.post(base.remote(name, pos)));
+            }
             req = null; // the spend key was in it
 
             // The receipt's key is the PAYMENT output's own, named by the core — never a slot

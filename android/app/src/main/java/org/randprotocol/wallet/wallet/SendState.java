@@ -11,8 +11,17 @@ public final class SendState {
     public final String amount;
     public final String to;
     public final long startedAtMs;
+    /** The paired prover making this proof (its name), or null when this device proves. */
+    public final String prover;
+    /** The job's position in the prover's queue while it waits, else null. */
+    public final Integer queuePosition;
 
     public SendState(Phase phase, String message, String hash, String txKey, String amount, String to, long startedAtMs) {
+        this(phase, message, hash, txKey, amount, to, startedAtMs, null, null);
+    }
+
+    private SendState(Phase phase, String message, String hash, String txKey, String amount, String to, long startedAtMs,
+                      String prover, Integer queuePosition) {
         this.phase = phase;
         this.message = message;
         this.hash = hash;
@@ -20,6 +29,17 @@ public final class SendState {
         this.amount = amount;
         this.to = to;
         this.startedAtMs = startedAtMs;
+        this.prover = prover;
+        this.queuePosition = queuePosition;
+    }
+
+    /**
+     * Proving on a paired prover: "Waiting at position N on NAME" while the job waits in its
+     * queue, "Proving on NAME…" while it is handed over or proved — the shared UI's words.
+     */
+    public SendState remote(String name, Integer position) {
+        String msg = position != null ? "Waiting at position " + position + " on " + name : "Proving on " + name + "…";
+        return new SendState(Phase.PROVING, msg, hash, txKey, amount, to, startedAtMs, name, position);
     }
 
     public static SendState idle() {

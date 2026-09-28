@@ -11,13 +11,13 @@ import java.security.GeneralSecurityException;
 
 /**
  * The spend key at rest: an {@link EncryptedSharedPreferences} whose AES-GCM key lives in the
- * Android Keystore. Nothing else is stored here — the viewing key and the address are derived
- * from the spend key on demand by the core — so a leaked file discloses nothing the spend key
- * does not already.
+ * Android Keystore. Beside it, and nothing else, a paired prover's token (delegated proving,
+ * Phase 1) — the viewing key and the address are derived from the spend key on demand by the core.
  */
 public final class KeyVault {
     private static final String FILE = "rand_wallet_vault";
     private static final String KEY_SPEND = "spend_key";
+    private static final String KEY_PROVER_TOKEN = "prover_token";
 
     private final SharedPreferences prefs;
 
@@ -53,6 +53,22 @@ public final class KeyVault {
     }
 
     public void erase() {
-        prefs.edit().remove(KEY_SPEND).commit();
+        prefs.edit().remove(KEY_SPEND).remove(KEY_PROVER_TOKEN).commit();
+    }
+
+    /**
+     * The paired prover's bearer token (64 hex), or null. It travels only inside a job the core
+     * sealed to the prover's key; never in {@link Prefs}, never in a log.
+     */
+    public String proverToken() {
+        return prefs.getString(KEY_PROVER_TOKEN, null);
+    }
+
+    public void setProverToken(String hex) {
+        prefs.edit().putString(KEY_PROVER_TOKEN, hex).commit();
+    }
+
+    public void eraseProverToken() {
+        prefs.edit().remove(KEY_PROVER_TOKEN).commit();
     }
 }

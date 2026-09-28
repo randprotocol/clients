@@ -28,7 +28,9 @@ import org.randprotocol.wallet.databinding.ActivitySendBinding;
 import org.randprotocol.wallet.store.Contacts;
 import org.randprotocol.wallet.util.Amounts;
 import org.randprotocol.wallet.wallet.ProvingService;
+import org.randprotocol.wallet.wallet.ProverPairing;
 import org.randprotocol.wallet.wallet.SendMonitor;
+import org.randprotocol.wallet.wallet.WalletService;
 import org.randprotocol.wallet.wallet.SendState;
 
 import java.math.BigInteger;
@@ -371,17 +373,23 @@ public class SendActivity extends BaseActivity {
         b.flipper.setDisplayedChild(REVIEW);
     }
 
-    /** Peak memory of a bundle proof: mirrors {@code wallet_core::PROVER_PEAK_MEMORY_BYTES} (measured 2026-09-20, chain 14). */
-    static final long PROVER_PEAK_MEMORY_BYTES = 5_700_000_000L;
+    /** Peak memory of a bundle proof: {@link WalletService#PROVER_PEAK_MEMORY_BYTES}. */
+    static final long PROVER_PEAK_MEMORY_BYTES = WalletService.PROVER_PEAK_MEMORY_BYTES;
 
-    /** Android lets a foreground app use well under the whole of RAM; two thirds is generous. */
+    /**
+     * Where this device cannot fit the proof: the prover that will make it (a pairing the user
+     * marked as their own), or the memory warning.
+     */
     private void showMemoryWarning() {
         android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
         android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
         am.getMemoryInfo(mi);
-        boolean enough = mi.totalMem / 3 * 2 >= PROVER_PEAK_MEMORY_BYTES;
+        boolean enough = WalletService.deviceCanProve(this);
         b.memoryWarning.setVisibility(enough ? android.view.View.GONE : android.view.View.VISIBLE);
-        if (!enough) {
+        ProverPairing prover = wallet().prefs().prover();
+        if (!enough && prover != null && prover.own) {
+            b.memoryWarning.setText(getString(R.string.review_remote_prover, prover.name));
+        } else if (!enough) {
             b.memoryWarning.setText(getString(R.string.review_memory_warning,
                     String.format(Locale.US, "%.1f", PROVER_PEAK_MEMORY_BYTES / 1e9),
                     String.format(Locale.US, "%.0f", mi.totalMem / 1e9)));

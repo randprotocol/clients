@@ -3,7 +3,7 @@ package org.randprotocol.wallet.security;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-/** Non-secret settings: network, lock timeout, theme. */
+/** Non-secret settings: network, lock timeout, theme, the paired prover's public fields. */
 public final class Prefs {
     private static final String FILE = "rand_wallet_prefs";
 
@@ -51,6 +51,19 @@ public final class Prefs {
 
     public void setTheme(String t) {
         p.edit().putString("theme", t).apply();
+    }
+
+    /**
+     * The paired prover (delegated proving, Phase 1), or null: proofs are made on this device.
+     * Its public fields only — the token is in the {@link KeyVault}.
+     */
+    public org.randprotocol.wallet.wallet.ProverPairing prover() {
+        return org.randprotocol.wallet.wallet.ProverPairing.fromJson(p.getString("prover", null));
+    }
+
+    public void setProver(org.randprotocol.wallet.wallet.ProverPairing pairing) {
+        if (pairing == null) p.edit().remove("prover").commit();
+        else p.edit().putString("prover", pairing.toJson().toString()).commit();
     }
 
     /** Set once the user has confirmed they saved the spend key shown at creation. */
