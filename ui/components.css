@@ -1126,6 +1126,9 @@ body.wide .toast-area { bottom: var(--s-6); }
   box-shadow: var(--shadow-1);
 }
 .qr img, .qr canvas, .qr svg { width: 100%; max-width: 220px; height: auto; image-rendering: pixelated; }
+/* A pairing link (~1 740 characters) is a ~150-module code: at 220 px its modules are under 1.5 px,
+   which no camera reads. It takes the whole width it is given. */
+.qr.qr-large canvas { max-width: 100%; }
 
 /* ======================================================================= address box ========= */
 /* A shielded address in full: over a thousand characters, so it wraps at any character and lives

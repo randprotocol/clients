@@ -1,4 +1,5 @@
-// Settings: Network, Prover (where the backend has the group), Appearance, Security, About.
+// Settings: Network, Prover (where the backend has the group, or the platform can host a prover),
+// Appearance, Security, About.
 //
 // Two rules run through the whole screen:
 //
@@ -18,6 +19,7 @@ import { registerScreen } from '../app.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { wireSecretReveal } from '../lib/reveal.js';
 import { urlRule } from '../lib/url-rule.js';
+import { encodeBytes, drawQr } from '../lib/qr.js';
 
 const THEMES = [
   { value: 'system', label: 'System' },
@@ -125,7 +127,7 @@ function proverStateMarkup(prover) {
 
 // Offered only where the backend has the (optional) `prover` group. The link is never put in
 // markup (it carries the pairing token): the field starts empty and is emptied after a pairing.
-function proverMarkup(settings, platform) {
+function proverMarkup(settings, platform, host = '') {
   const scan = typeof platform.scanQr === 'function'
     ? raw('<button class="btn" type="button" data-role="scan-prover">Scan QR code</button>')
     : '';
@@ -149,7 +151,34 @@ function proverMarkup(settings, platform) {
       </div>
       <div class="cluster"><button class="btn btn-primary" type="submit" data-role="save-prover">Save</button></div>
       <div data-role="prover-status"></div>
-    </form>`);
+    </form>
+    ${raw(host)}`);
+}
+
+// ---- the prover host ("Prove for my other devices", spec 2026-09-28 §5) ----
+// Only the desktop app has `platform.proverHost`: the fullnode's prover service run inside the app
+// on 127.0.0.1. The link it shows carries the pairing token, so it is written only into the one
+// text node and the QR while the prover is on, and taken off the page when it is turned off.
+function proverHostMarkup() {
+  return h`
+    <div class="stack" data-role="prover-host">
+      <label class="check">
+        <input type="checkbox" name="proverHost">
+        <span>Prove for my other devices</span>
+      </label>
+      <p class="caption">This computer makes the proofs for your browser extension or web wallet on this machine, one at a time. It listens on this computer only, and it receives the spend key of every wallet you pair with it.</p>
+      <p class="caption" data-role="prover-host-status">Off.</p>
+      <div class="stack" data-role="prover-host-link" hidden>
+        <div class="qr qr-large"><canvas data-role="prover-qr" data-ec-level="L" aria-label="QR code of the pairing link"></canvas></div>
+        <p class="caption" data-role="prover-qr-too-long" hidden>This link is too long for a QR code — copy it instead.</p>
+        <div class="address-box"><span class="mono" data-role="prover-host-link-text"></span></div>
+        <p class="caption">Paste this link into Settings → Prover on the wallet that should use this computer. It carries a secret: share it with nothing else.</p>
+        <div class="cluster">
+          <button class="btn" type="button" data-role="copy-prover-link">${raw(icons.copy())}Copy link</button>
+          <button class="btn" type="button" data-role="rotate-prover-link">Regenerate link</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 // Offered only where the backend has `sync.rescan` (optional in the contract). It is the
@@ -263,10 +292,13 @@ registerScreen('settings', {
     // Optional in the contract, feature-detected like `bridge`: a shell without it has no Prover
     // section at all.
     const proverGroup = ctx.backend.prover && typeof ctx.backend.prover.pair === 'function' ? ctx.backend.prover : null;
+    // The desktop app's own prover service (spec §5); every other shell lacks it.
+    const proverHost = platform.proverHost && typeof platform.proverHost.start === 'function' ? platform.proverHost : null;
     const body = root.querySelector('[data-role="body"]');
     body.innerHTML = h`
       ${raw(networkMarkup(settings))}
-      ${raw(proverGroup ? proverMarkup(settings, platform) : '')}
+      ${raw(proverGroup ? proverMarkup(settings, platform, proverHost ? proverHostMarkup() : '')
+    : proverHost ? sectionMarkup('Prover', proverHostMarkup()) : '')}
       ${raw(ctx.backend.contacts && typeof ctx.backend.contacts.list === 'function' ? contactsMarkup() : '')}
       ${raw(appearanceMarkup(settings))}
       ${raw(securityMarkup(settings))}
@@ -601,6 +633,135 @@ registerScreen('settings', {
       showStatus('positive', 'Forgotten', 'Proofs are made on this device again. The prover\'s pairing is gone from this wallet.', proverStatusEl);
     });
 
+    // ---- the prover host ----
+    const hostBox = body.querySelector('input[name=proverHost]');
+    const hostStatusEl = body.querySelector('[data-role="prover-host-status"]');
+    const hostLinkWrap = body.querySelector('[data-role="prover-host-link"]');
+    const hostLinkText = body.querySelector('[data-role="prover-host-link-text"]');
+    const hostCanvas = body.querySelector('[data-role="prover-qr"]');
+    let hostLink = ''; // the link on screen, for Copy; '' whenever the prover is off
+    let hostBusy = false;
+
+    /** The one status line. Every word of `status` is the app's, but it is still text. */
+    function paintHostStatus(status, error) {
+      if (!hostStatusEl) return;
+      if (error) { hostStatusEl.textContent = String(error); return; }
+      if (status && status.running) {
+        const work = status.proving ? 'Proving a transfer now.' : 'Waiting for a proof to make.';
+        hostStatusEl.textContent = `On · ${status.addr || ''} · fingerprint ${status.fingerprint || ''}. ${work}`;
+      } else {
+        const note = status && status.note ? ` ${status.note}` : '';
+        hostStatusEl.textContent = `Off.${note}`;
+      }
+    }
+
+    function hostCanvasContext() {
+      if (!hostCanvas || typeof hostCanvas.getContext !== 'function') return null;
+      try { return hostCanvas.getContext('2d') || null; } catch { return null; }
+    }
+
+    /** Shows `link` (text always, QR where it fits), or takes the link off the page when ''. */
+    function paintHostLink(link) {
+      hostLink = link || '';
+      if (!hostLinkWrap) return;
+      hostLinkText.textContent = hostLink;
+      const g = hostCanvasContext();
+      if (!hostLink) {
+        if (g) g.clearRect(0, 0, hostCanvas.width, hostCanvas.height);
+        hostLinkWrap.setAttribute('hidden', '');
+        return;
+      }
+      hostLinkWrap.removeAttribute('hidden');
+      let qr = null;
+      // Level L: ~1 740 characters is a dense code already, and this one is read off a screen.
+      try { qr = encodeBytes(new TextEncoder().encode(hostLink), 1, 'L'); } catch { qr = null; }
+      const tooLong = body.querySelector('[data-role="prover-qr-too-long"]');
+      const qrWrap = hostCanvas.closest('.qr');
+      if (!qr) {
+        qrWrap.setAttribute('hidden', '');
+        if (tooLong) tooLong.removeAttribute('hidden');
+        return;
+      }
+      qrWrap.removeAttribute('hidden');
+      if (tooLong) tooLong.setAttribute('hidden', '');
+      if (!g) return; // linkedom's canvas has no 2D context; a real webview always has one
+      // As large as the section allows: a ~150-module code at the usual 220 px is unreadable.
+      const width = (qrWrap.clientWidth || 320) * (globalThis.devicePixelRatio || 1);
+      drawQr(hostCanvas, qr, Math.max(2, Math.floor(width / (qr.size + 8))));
+    }
+
+    async function showHostLink(fetchLink) {
+      let link;
+      try { link = await fetchLink(); } catch (err) {
+        if (!live()) return;
+        paintHostLink('');
+        paintHostStatus(null, (err && err.message) || 'The pairing link could not be made.');
+        return;
+      }
+      if (!live() || !hostBox || !hostBox.checked) return;
+      paintHostLink(String(link || ''));
+    }
+
+    if (proverHost && hostBox) {
+      (async () => {
+        let status;
+        try { status = await proverHost.status(); } catch (err) {
+          if (live()) paintHostStatus(null, (err && err.message) || 'The prover could not be asked.');
+          return;
+        }
+        if (!live()) return;
+        hostBox.checked = Boolean(status && status.running);
+        paintHostStatus(status);
+        if (hostBox.checked) await showHostLink(() => proverHost.link());
+      })();
+    }
+
+    const offHostToggle = on(body, 'input[name=proverHost]', 'change', async (evt, box) => {
+      if (!proverHost || hostBusy) return;
+      hostBusy = true;
+      box.disabled = true;
+      const on_ = box.checked;
+      if (!on_) paintHostLink(''); // the link goes the moment the user says off
+      hostStatusEl.textContent = on_ ? 'Starting…' : 'Stopping…';
+      let status;
+      try {
+        status = on_ ? await proverHost.start() : await proverHost.stop();
+      } catch (err) {
+        hostBusy = false;
+        box.disabled = false;
+        if (!live()) return;
+        box.checked = false;
+        paintHostLink('');
+        paintHostStatus(null, (err && err.message) || 'The prover did not start.');
+        return;
+      }
+      hostBusy = false;
+      box.disabled = false;
+      if (!live()) return;
+      box.checked = Boolean(status && status.running);
+      paintHostStatus(status);
+      if (box.checked) await showHostLink(() => proverHost.link());
+    });
+
+    const offCopyHostLink = on(body, '[data-role="copy-prover-link"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (!hostLink || typeof platform.copy !== 'function') return;
+      try { await platform.copy(hostLink); } catch {
+        if (live()) ctx.toast('The link could not be copied.', { kind: 'negative' });
+        return;
+      }
+      if (live()) ctx.toast('Copied', { kind: 'positive' });
+    });
+
+    const offRotateHostLink = on(body, '[data-role="rotate-prover-link"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (!proverHost || typeof proverHost.rotate !== 'function' || hostBusy) return;
+      hostBusy = true;
+      await showHostLink(() => proverHost.rotate());
+      hostBusy = false;
+      if (live() && hostLink) ctx.toast('A new link: the old one no longer works.', { kind: 'positive' });
+    });
+
     // ---- appearance ----
     const offTheme = on(body, '[data-role="theme"] .seg', 'click', async (evt, btn) => {
       evt.preventDefault();
@@ -847,6 +1008,9 @@ registerScreen('settings', {
       if (proverPasswordInput) proverPasswordInput.value = '';
       offSaveNetwork(); offTest(); offRescan(); offTheme(); offAutoLock();
       offSaveProver(); offScanProver(); offForgetProver();
+      if (hostLinkText) hostLinkText.textContent = ''; // the pairing token leaves with the screen
+      hostLink = '';
+      offHostToggle(); offCopyHostLink(); offRotateHostLink();
       offViewingKey(); offSpendKey(); offUnderstand(); offDone();
       offWipeInput(); offWipe(); offExternal();
     };

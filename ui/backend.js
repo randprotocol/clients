@@ -375,6 +375,13 @@
  *    is one, and offer no scan button at all otherwise.
  *  - `platform.share?({title, text})` → the system share sheet, for the receive screen's payment
  *    link. Where it is missing no Share button is offered.
+ *  - `platform.proverHost?` — the desktop app only (spec 2026-09-28 §5): the fullnode's prover
+ *    service run inside the app on 127.0.0.1, one proof at a time, spend-key jobs accepted.
+ *    `start()` / `stop()` / `status()` → `{running, addr, fingerprint, proving, error?, note?}`
+ *    (`start` rejects with a sentence on too little memory or a busy port); `link()` → the
+ *    `randprover:` link of its one `own` pairing, the same until `rotate()` → a new link (the old
+ *    token stops working). The link carries the pairing token: show it, never store or log it.
+ *    Where it is missing Settings offers no "Prove for my other devices" toggle.
  *  - `dispose?()` — OPTIONAL, on the **backend itself**, not a group. Releases whatever it holds
  *    outside its own object (a BroadcastChannel, a port, a watcher). The shell calls it from
  *    `destroy()`, last, after the wallet session has ended; it must be idempotent and must not

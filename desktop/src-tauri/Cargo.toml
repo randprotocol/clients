@@ -37,6 +37,14 @@ tauri-plugin-deep-link = "2"
 # the running instance's deep-link plugin, which emits the same `deep-link://new-url` the UI
 # already listens on, and the second process exits.
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+# "Prove for my other devices" (delegated-proving spec 2026-09-28 §5): the fullnode's own prover
+# service — key, pairings, queue and `prover_*` listener — run inside this process on 127.0.0.1.
+# `service` is the half that is axum + tokio; `wallet-core` names the same crate codec-only and
+# cargo unifies the features. Not a second implementation: this app only starts and stops it.
+randprotocol-prover = { path = "../../core/vendor/fullnode/crates/randprotocol-prover", features = ["service"] }
+# The listener is bound here, before the service starts, so a busy port is a sentence rather than
+# an anyhow chain; and `ProverState`'s lock is held across that await. Already in the tree (Tauri).
+tokio = { version = "1", features = ["net", "sync"] }
 
 # Gone with the egui app this replaces: `eframe`/`egui` (the screens are ui/ now), `keyring` (the
 # spend key is in the shared password-derived vault, not the OS credential store — see

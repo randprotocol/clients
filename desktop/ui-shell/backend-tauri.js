@@ -75,6 +75,17 @@ async function makePlatform() {
     paste: () => navigator.clipboard.readText(),
   };
   try { platform.version = String(await invoke('app_version')); } catch { /* the Settings line is then simply absent */ }
+  // "Prove for my other devices" (spec 2026-09-28 §5, src-tauri/src/prover.rs): the fullnode's
+  // prover service inside this app, on 127.0.0.1. The Settings screen feature-detects it; no other
+  // shell has one. `link()`/`rotate()` resolve to the randprover: link, which carries the pairing
+  // token — for the screen to show, never to store or log.
+  platform.proverHost = {
+    start: () => invoke('prover_start'),
+    stop: () => invoke('prover_stop'),
+    status: () => invoke('prover_status'),
+    link: () => invoke('prover_pairing_link'),
+    rotate: () => invoke('prover_rotate_pairing'),
+  };
   return platform;
 }
 

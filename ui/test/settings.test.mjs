@@ -687,3 +687,117 @@ test('Forget returns proving to this device', async (t) => {
   assert.match(root.querySelector('[data-role="prover-state"]').textContent, /This device/);
   assertGone(root.querySelector('[data-role="forget-prover"]'), 'Forget after forgetting');
 });
+
+// ------------------------------------------------------------------------- prover host ---------
+// "Prove for my other devices" (spec 2026-09-28 §5): only the desktop app has `platform.proverHost`
+// — the fullnode's prover service run inside the app on 127.0.0.1. Turning it on shows the pairing
+// link (the text, always, and its QR); Regenerate retires the old link.
+
+const HOST_TOKEN = '5c'.repeat(32);
+// About the real length: a 1 184-byte key in base58 is ~1 615 characters, ~1 740 with the rest.
+const hostLink = (token = HOST_TOKEN) => `randprover:${'K'.repeat(1615)}?url=http%3A%2F%2F127.0.0.1%3A8600&token=${token}&own=1`;
+
+/** A fake `platform.proverHost` that records its calls in `calls` and keeps its own running flag. */
+function fakeHost({ running = false, startError = null } = {}) {
+  const calls = [];
+  const state = { running, token: HOST_TOKEN };
+  const status = () => (state.running
+    ? { running: true, addr: '127.0.0.1:8600', fingerprint: 'WXYZ-2345-6789-ABCD', proving: false }
+    : { running: false, addr: null, fingerprint: 'WXYZ-2345-6789-ABCD', proving: false });
+  return {
+    calls,
+    host: {
+      start: async () => { calls.push('start'); if (startError) throw new Error(startError); state.running = true; return status(); },
+      stop: async () => { calls.push('stop'); state.running = false; return status(); },
+      status: async () => { calls.push('status'); return status(); },
+      link: async () => { calls.push('link'); return hostLink(state.token); },
+      rotate: async () => { calls.push('rotate'); state.token = '6d'.repeat(32); return hostLink(state.token); },
+    },
+  };
+}
+
+function toggleHost(root, checked) {
+  const box = root.querySelector('input[name=proverHost]');
+  box.checked = checked;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+test('the "Prove for my other devices" toggle is there only when the platform can host a prover', async (t) => {
+  const { root } = await settings(t);
+  assertGone(root.querySelector('input[name=proverHost]'), 'the host toggle without platform.proverHost');
+
+  const { host } = fakeHost();
+  const withHost = await settings(t, unlockedBackend({ platform: { proverHost: host } }));
+  const box = withHost.root.querySelector('input[name=proverHost]');
+  assert.ok(box, 'the host toggle');
+  assert.match(box.closest('label').textContent, /Prove for my other devices/);
+  assert.equal(box.checked, false);
+  assertGone(withHost.root.querySelector('[data-role="prover-host-link"]:not([hidden])'), 'a link while the prover is off');
+});
+
+test('turning it on starts the prover and shows its link, as text and as a QR; off stops it', async (t) => {
+  const { host, calls } = fakeHost();
+  const { app, root } = await settings(t, unlockedBackend({ platform: { proverHost: host } }));
+
+  toggleHost(root, true);
+  await app.idle();
+  assert.deepEqual(calls.filter((c) => c !== 'status'), ['start', 'link']);
+  const wrap = root.querySelector('[data-role="prover-host-link"]');
+  assert.equal(wrap.hasAttribute('hidden'), false);
+  assert.equal(root.querySelector('[data-role="prover-host-link-text"]').textContent, hostLink());
+  assert.ok(root.querySelector('[data-role="prover-qr"]'), 'the QR code');
+  const status = root.querySelector('[data-role="prover-host-status"]').textContent;
+  assert.match(status, /127\.0\.0\.1:8600/);
+  assert.match(status, /WXYZ-2345-6789-ABCD/);
+
+  toggleHost(root, false);
+  await app.idle();
+  assert.equal(calls.filter((c) => c === 'stop').length, 1);
+  assert.ok(wrap.hasAttribute('hidden'), 'the link stays up after the prover stopped');
+  assert.equal(root.innerHTML.includes(HOST_TOKEN), false, 'the token is still in the page after stopping');
+  assert.match(root.querySelector('[data-role="prover-host-status"]').textContent, /Off/);
+});
+
+test('a prover already running when Settings opens is shown on, with its link', async (t) => {
+  const { host, calls } = fakeHost({ running: true });
+  const { root } = await settings(t, unlockedBackend({ platform: { proverHost: host } }));
+  assert.equal(root.querySelector('input[name=proverHost]').checked, true);
+  assert.equal(root.querySelector('[data-role="prover-host-link-text"]').textContent, hostLink());
+  assert.equal(calls.includes('start'), false, 'opening Settings started nothing');
+});
+
+test('a refused start (too little memory, a busy port) leaves the toggle off and says why, as text', async (t) => {
+  const { host } = fakeHost({ startError: 'This computer cannot prove for other devices right now: <b>6.7 GB</b> needed' });
+  const { app, root } = await settings(t, unlockedBackend({ platform: { proverHost: host } }));
+  toggleHost(root, true);
+  await app.idle();
+  assert.equal(root.querySelector('input[name=proverHost]').checked, false);
+  const status = root.querySelector('[data-role="prover-host-status"]');
+  assert.match(status.textContent, /<b>6\.7 GB<\/b> needed/, 'the reason is text, not markup');
+  assert.ok(root.querySelector('[data-role="prover-host-link"]').hasAttribute('hidden'));
+});
+
+test('Copy copies the link, and Regenerate replaces it with a new one', async (t) => {
+  const { host, calls } = fakeHost({ running: true });
+  const b = unlockedBackend({ platform: { proverHost: host } });
+  const { app, root } = await settings(t, b);
+
+  root.querySelector('[data-role="copy-prover-link"]').click();
+  await app.idle();
+  assert.deepEqual(b.calls.filter((c) => c[0] === 'platform.copy').map((c) => c[1]), [hostLink()]);
+
+  root.querySelector('[data-role="rotate-prover-link"]').click();
+  await app.idle();
+  assert.equal(calls.filter((c) => c === 'rotate').length, 1);
+  assert.equal(root.querySelector('[data-role="prover-host-link-text"]').textContent, hostLink('6d'.repeat(32)));
+  assert.equal(root.innerHTML.includes(HOST_TOKEN), false, 'the retired link is still on the page');
+});
+
+test('the host toggle is offered even where the backend has no prover group', async (t) => {
+  const { host } = fakeHost();
+  const b = unlockedBackend({ platform: { proverHost: host } });
+  delete b.prover;
+  const { root } = await settings(t, b);
+  assert.ok(root.querySelector('input[name=proverHost]'));
+  assertGone(root.querySelector('[data-role="prover-form"]'), 'the pairing form without the prover group');
+});

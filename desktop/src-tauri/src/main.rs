@@ -14,7 +14,9 @@
 //!     on the main thread);
 //!   * `system_memory_gib`, which is the whole of `send.canProve()`'s evidence;
 //!   * `storage_*` / `storage_session_*`, a JSON file and a `HashMap` (see `storage.rs`);
-//!   * a window, and `tauri-plugin-opener` for the two explorer links a screen may offer.
+//!   * a window, and `tauri-plugin-opener` for the two explorer links a screen may offer;
+//!   * `prover_*`, the fullnode's own prover service run on 127.0.0.1 when the user turns on
+//!     "Prove for my other devices" (see `prover.rs`).
 //!
 //! There is no native HTTP: `ui/engine/rpc.js` takes an injectable `fetch` and the webview's own
 //! satisfies it, so no node reply ever passes through Rust.
@@ -23,6 +25,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod commands;
+mod prover;
 mod storage;
 
 use tauri::Manager;
@@ -60,6 +63,8 @@ fn main() {
         // one lock, for the life of the process.
         .manage(storage::Storage::in_data_dir())
         .manage(storage::Session::default())
+        // "Prove for my other devices" (prover.rs): off until the Settings toggle starts it.
+        .manage(prover::ProverState::default())
         .setup(|app| {
             // Windows/Linux only (macOS/Android/iOS register the scheme from the bundle's own
             // config at build time and answer `Err(UnsupportedPlatform)` here — discarded, not
@@ -81,6 +86,11 @@ fn main() {
             commands::storage_session_get,
             commands::storage_session_set,
             commands::storage_session_remove,
+            commands::prover_status,
+            commands::prover_start,
+            commands::prover_stop,
+            commands::prover_pairing_link,
+            commands::prover_rotate_pairing,
         ])
         .run(tauri::generate_context!())
         .expect("Rand Wallet could not start");

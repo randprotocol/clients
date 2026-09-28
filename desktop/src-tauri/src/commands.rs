@@ -12,6 +12,7 @@
 //! goes straight from JavaScript, with no native code in the path. Nothing here interprets a
 //! node's reply, because nothing here ever sees one.
 
+use crate::prover::{self, ProverState};
 use crate::storage::{Session, Storage};
 use tauri::State;
 
@@ -114,6 +115,37 @@ pub fn storage_session_set(session: State<'_, Session>, key: String, value: Stri
 #[tauri::command]
 pub fn storage_session_remove(session: State<'_, Session>, key: String) -> Result<(), String> {
     session.remove(&key)
+}
+
+// ------------------------------------------------------------- the prover host (spec §5) ------
+// "Prove for my other devices": the logic is `prover.rs`, which takes a directory and an address so
+// it can be tested without a window; these only supply the app's own. `async` so they run on
+// Tauri's tokio runtime, where the vendored service spawns its listener and its worker.
+
+#[tauri::command]
+pub async fn prover_status(state: State<'_, ProverState>) -> Result<prover::Status, String> {
+    Ok(prover::status(&state, &prover::dir()).await)
+}
+
+#[tauri::command]
+pub async fn prover_start(state: State<'_, ProverState>, store: State<'_, Storage>) -> Result<prover::Status, String> {
+    prover::start(&state, &prover::dir(), &store, prover::DEFAULT_ADDR, randprotocol_prover::memory::check).await
+}
+
+#[tauri::command]
+pub async fn prover_stop(state: State<'_, ProverState>) -> Result<prover::Status, String> {
+    Ok(prover::stop(&state, &prover::dir()).await)
+}
+
+/// The `randprover:` link — it carries the pairing token, so it goes to the screen and nowhere else.
+#[tauri::command]
+pub async fn prover_pairing_link(state: State<'_, ProverState>, store: State<'_, Storage>) -> Result<String, String> {
+    prover::pairing_link(&state, &prover::dir(), &store, prover::DEFAULT_ADDR).await
+}
+
+#[tauri::command]
+pub async fn prover_rotate_pairing(state: State<'_, ProverState>, store: State<'_, Storage>) -> Result<String, String> {
+    prover::rotate_pairing(&state, &prover::dir(), &store, prover::DEFAULT_ADDR).await
 }
 
 #[cfg(test)]
