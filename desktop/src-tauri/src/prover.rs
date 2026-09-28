@@ -67,9 +67,10 @@ struct Running {
 ///
 /// `inner` is an async lock because `start` holds it across the bind and the service start, so two
 /// clicks cannot start two listeners. `draining` keeps a stopped service whose proof was still
-/// running: stopping aborts the listener, but a proof already on its blocking thread cannot be
-/// interrupted and finishes (its reply is never collected — nothing is listening). Until it does,
-/// the status says so, because the memory is still in use.
+/// running: stopping shuts the service down (every queued job dropped, every later submit refused)
+/// and aborts the listener, but the one proof already on its blocking thread cannot be interrupted
+/// and finishes (it ends `failed`, its reply discarded). Until it does, the status says so,
+/// because the memory is still in use.
 #[derive(Default)]
 pub struct ProverState {
     inner: tokio::sync::Mutex<Option<Running>>,
@@ -94,15 +95,14 @@ pub struct Status {
     pub note: Option<String>,
 }
 
-const DRAINING_NOTE: &str = "Proofs this computer had already accepted are finishing in the background; their results will not be served.";
+const DRAINING_NOTE: &str = "The proof this computer was making is finishing in the background; its result will not be served.";
 
 fn proving(svc: &Shared) -> bool {
     svc.info().queue.proving > 0
 }
 
-/// Accepted work not yet finished: proving, or queued behind it (a stopped service's worker still
-/// takes the next queued job: the vendored `Service` gained `shutdown` at fullnode `e6d1327`, but
-/// the stop path here does not call it yet — wiring it in is the final wave's job).
+/// Accepted work not yet finished: proving, or queued behind it. After [`stop`] (which calls
+/// `Service::shutdown`) the queue is empty, so this is the one proof that could not be interrupted.
 fn busy(svc: &Shared) -> bool {
     let q = svc.info().queue;
     q.proving + q.depth > 0
@@ -272,6 +272,19 @@ pub async fn start(
     addr: SocketAddr,
     memory: impl FnOnce(usize) -> Result<(), String>,
 ) -> Result<Status, String> {
+    start_with(state, dir, store, addr, memory, |_| {}).await
+}
+
+/// [`start`], with `configure` given the service's `Config` last — the tests' way in (a stub
+/// proof). The app passes nothing.
+async fn start_with(
+    state: &ProverState,
+    dir: &Path,
+    store: &Storage,
+    addr: SocketAddr,
+    memory: impl FnOnce(usize) -> Result<(), String>,
+    configure: impl FnOnce(&mut Config),
+) -> Result<Status, String> {
     let mut g = state.inner.lock().await;
     if g.is_none() {
         // One proof at a time (spec §5), so one slot's worth of memory.
@@ -290,6 +303,7 @@ pub async fn start(
         let mut cfg = Config::new(key, pairings);
         cfg.accept_spend_key = true; // the owner's own machine; the link is marked `own`
         cfg.max_parallel = 1;
+        configure(&mut cfg);
         let shared_pairings = cfg.pairings.clone();
         let (bound, svc, task) = http::serve_on(listener, cfg).await.map_err(|e| format!("the prover did not start: {e}"))?;
         *g = Some(Running { addr: bound, svc, task, pairings: shared_pairings, fingerprint });
@@ -297,8 +311,10 @@ pub async fn start(
     Ok(status_of(g.as_ref(), state.draining().as_ref(), dir))
 }
 
-/// `prover_stop`: aborts the listener and waits until its socket is closed. A proof already
-/// running cannot be interrupted; it finishes on its blocking thread and the status says so.
+/// `prover_stop`: shuts the service down — `Service::shutdown`: every queued job is dropped (its
+/// witness zeroized) and forgotten, every later submit is refused "shutting down" — then aborts the
+/// listener and waits until its socket is closed. The one proof already running cannot be
+/// interrupted; it finishes on its blocking thread, ends `failed`, and the status says so.
 ///
 /// Aborting the listener task does not end a connection it already accepted (axum runs each on
 /// its own task), so the stopped service's pairings are also emptied in memory — not on disk — and
@@ -306,14 +322,16 @@ pub async fn start(
 pub async fn stop(state: &ProverState, dir: &Path) -> Status {
     let mut g = state.inner.lock().await;
     if let Some(r) = g.take() {
+        // First, so no queued job starts proving between here and the abort, and a request on a
+        // connection that outlives the listener is refused rather than queued.
+        r.svc.shutdown();
         r.task.abort();
         let _ = r.task.await; // the listener (and the port) is released when the task is dropped
         r.pairings.write().unwrap_or_else(|p| p.into_inner()).pairings.clear();
         if busy(&r.svc) {
             *state.draining.lock().unwrap_or_else(|p| p.into_inner()) = Some(r.svc);
         }
-        // The service's idle workers keep a reference to it until the process exits (the vendored
-        // `Service::start` does not hand back their handles): a few kilobytes per start, no port.
+        // The service's workers exit once idle after `shutdown`.
     }
     status_of(g.as_ref(), state.draining().as_ref(), dir)
 }
@@ -535,6 +553,68 @@ mod tests {
         // It is kept under its own key, which the engine's `settings` never reads.
         assert!(fx.store.get(TOKEN_KEY).unwrap().unwrap().contains(&token));
         assert_eq!(fx.store.get("settings").unwrap(), None);
+    }
+
+    #[test]
+    fn stopping_drops_the_queue_and_refuses_new_jobs_while_the_running_proof_drains() {
+        use randprotocol_prover::service::{Refusal, State};
+        use randprotocol_prover::wire::{fresh_reply_key, seal_job, ProveJob, WitnessKind, WIRE_VERSION};
+        use randprotocol_zkvm::executor::ZkExecutor;
+        use randprotocol_zkvm::hidden::hidden_input;
+        use std::sync::atomic::AtomicBool;
+
+        let fx = Fixture::new();
+        let state = ProverState::default();
+        // A proof that blocks until released: one job proving, the rest queued behind it.
+        let release = Arc::new(AtomicBool::new(false));
+        let gate = release.clone();
+        block_on(start_with(&state, &fx.dir, &fx.store, any_port(), enough_memory, move |cfg| {
+            cfg.per_token = 8;
+            cfg.prove = Arc::new(move |_, _, _, _, _| {
+                while !gate.load(Ordering::SeqCst) { std::thread::sleep(std::time::Duration::from_millis(10)); }
+                Ok((vec![1], [0; 8], 14))
+            });
+        }))
+        .unwrap();
+        let token = decode_hex32(parse_link(&block_on(pairing_link(&state, &fx.dir, &fx.store, DEFAULT_ADDR)).unwrap())["token"].as_str().unwrap()).unwrap();
+        let ek = ProverKey::load(&fx.dir.join(KEY_FILE)).unwrap().kem_ek().to_vec();
+        let sealed = || {
+            let job = ProveJob {
+                version: WIRE_VERSION, token, witness_kind: WitnessKind::SpendKey, hc_bundle: ZkExecutor::hc_bundle(),
+                profile: "test".into(), binding: [5; 8], inputs: vec![7; hidden_input::COUNT], reply_key: fresh_reply_key(),
+            };
+            seal_job(&ek, &job).unwrap()
+        };
+        let svc = block_on(state.inner.lock()).as_ref().unwrap().svc.clone();
+        let first = svc.submit(&sealed()).unwrap();
+        for _ in 0..500 {
+            if svc.status(&first).unwrap().state == State::Proving { break; }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(svc.status(&first).unwrap().state, State::Proving);
+        let queued = [svc.submit(&sealed()).unwrap(), svc.submit(&sealed()).unwrap()];
+        assert_eq!(svc.info().queue.depth, 2);
+
+        let stopped = block_on(stop(&state, &fx.dir));
+        for id in &queued {
+            assert!(svc.status(id).is_none(), "a queued job outlived the stop and would still be proved");
+        }
+        assert_eq!(svc.info().queue.depth, 0);
+        assert!(matches!(svc.submit(&sealed()), Err(Refusal::Bad(ref m)) if m == "shutting down"), "a job was admitted after the stop");
+        // The one running proof cannot be interrupted: it drains, and the status says so.
+        assert!(!stopped.running && stopped.proving, "{stopped:?}");
+        assert!(stopped.note.is_some());
+
+        release.store(true, Ordering::SeqCst);
+        for _ in 0..500 {
+            if !block_on(status(&state, &fx.dir)).proving { break; }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!block_on(status(&state, &fx.dir)).proving, "the drained proof still counts");
+        let done = svc.status(&first).unwrap();
+        assert_eq!(done.state, State::Failed);
+        assert_eq!(done.error.as_deref(), Some("shutting down"));
+        assert!(done.reply.is_none(), "a proof finished after the stop was served");
     }
 
     #[test]

@@ -46,6 +46,11 @@ randprotocol-prover = { path = "../../core/vendor/fullnode/crates/randprotocol-p
 # an anyhow chain; and `ProverState`'s lock is held across that await. Already in the tree (Tauri).
 tokio = { version = "1", features = ["net", "sync"] }
 
+[dev-dependencies]
+# The prover tests seal a real job (the chain's bundle guest id, the witness length): the same
+# vendored crate wallet-core and randprotocol-prover already build, named directly for the tests.
+randprotocol-zkvm = { path = "../../core/vendor/fullnode/crates/randprotocol-zkvm" }
+
 # Gone with the egui app this replaces: `eframe`/`egui` (the screens are ui/ now), `keyring` (the
 # spend key is in the shared password-derived vault, not the OS credential store — see
 # storage.rs), `ureq` (JSON-RPC is the webview's own fetch, so no node reply passes through Rust),

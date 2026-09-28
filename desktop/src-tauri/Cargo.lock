@@ -3857,6 +3857,7 @@ version = "0.5.1"
 dependencies = [
  "dirs 6.0.0",
  "randprotocol-prover",
+ "randprotocol-zkvm",
  "serde",
  "serde_json",
  "sysinfo",
