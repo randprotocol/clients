@@ -13,7 +13,11 @@ import org.json.JSONObject;
 public final class RemoteSend {
     private RemoteSend() {}
 
-    /** Where a remote send's proof is made, from {@link WalletService#proveRoute}. */
+    /**
+     * Where a remote send's proof is made, from {@link WalletService#proveRoute}: {@code pairing}'s
+     * url, key and fingerprint are the vault record's, only its name and {@code own} the display
+     * copy's.
+     */
     public static final class Route {
         public final ProverPairing pairing;
         final String token;
@@ -26,26 +30,29 @@ public final class RemoteSend {
 
     /**
      * Where a send's proof is made. Null = this device: it can prove, or no prover is paired as
-     * the user's own (Phase 1 sends a spend-key job nowhere else). A paired own prover that does
-     * not answer, answers with another key, or takes no spend-key job — or whose token is gone —
-     * refuses the send here, before anything is built: nothing is sent.
+     * the user's own (Phase 1 sends a spend-key job nowhere else). A paired own prover whose vault
+     * record is gone, that does not answer, answers with another key, or takes no spend-key job
+     * refuses the send here, before anything is built: nothing is sent. The probe and the route use
+     * the vault record's URL and key ({@code secret}), never {@code display}'s — that is the
+     * plaintext copy in {@link org.randprotocol.wallet.security.Prefs}.
      */
-    public static Route route(boolean deviceCanProve, ProverPairing p,
+    public static Route route(boolean deviceCanProve, ProverPairing display,
                               java.util.function.Function<ProverPairing, ProverPairing.Probe> probe,
-                              java.util.function.Supplier<String> token) throws ProverClient.Refusal {
+                              java.util.function.Supplier<ProverSecret> secret) throws ProverClient.Refusal {
         if (deviceCanProve) return null;
-        if (p == null || !p.own) return null;
+        if (display == null || !display.own) return null;
+        ProverSecret s = secret.get();
+        if (s == null || s.token == null || s.token.isEmpty()) {
+            throw new ProverClient.Refusal("Your prover's pairing could not be opened. Pair the prover again in Settings.");
+        }
+        ProverPairing p = new ProverPairing(display.name, s.url, s.kemEk, s.fingerprint, true);
         String reason = "This device does not have the memory for this proof.";
         ProverPairing.Probe answer = probe.apply(p);
         if (!answer.ok()) throw new ProverClient.Refusal(reason + " Your paired prover is not available: " + answer.reason + ".");
         if (!answer.info.witnessKinds.contains("spend_key")) {
             throw new ProverClient.Refusal(reason + " Your paired prover is not available: it does not take a spend-key job.");
         }
-        String t = token.get();
-        if (t == null || t.isEmpty()) {
-            throw new ProverClient.Refusal("Your prover's pairing could not be opened. Pair the prover again in Settings.");
-        }
-        return new Route(p, t);
+        return new Route(p, s.token);
     }
 
     /**

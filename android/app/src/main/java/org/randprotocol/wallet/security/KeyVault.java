@@ -11,13 +11,16 @@ import java.security.GeneralSecurityException;
 
 /**
  * The spend key at rest: an {@link EncryptedSharedPreferences} whose AES-GCM key lives in the
- * Android Keystore. Beside it, and nothing else, a paired prover's token (delegated proving,
- * Phase 1) — the viewing key and the address are derived from the spend key on demand by the core.
+ * Android Keystore. Beside it, and nothing else, a paired prover's record (delegated proving,
+ * Phase 1: the token AND the key and URL a job is sealed and sent to) — the viewing key and the
+ * address are derived from the spend key on demand by the core.
  */
 public final class KeyVault {
     private static final String FILE = "rand_wallet_vault";
     private static final String KEY_SPEND = "spend_key";
-    private static final String KEY_PROVER_TOKEN = "prover_token";
+    private static final String KEY_PROVER_PAIRING = "prover_pairing";
+    /** A pre-release build's bare token: never read (it names no seal target), removed with the pairing. */
+    private static final String KEY_LEGACY_PROVER_TOKEN = "prover_token";
 
     private final SharedPreferences prefs;
 
@@ -53,22 +56,23 @@ public final class KeyVault {
     }
 
     public void erase() {
-        prefs.edit().remove(KEY_SPEND).remove(KEY_PROVER_TOKEN).commit();
+        prefs.edit().remove(KEY_SPEND).remove(KEY_PROVER_PAIRING).remove(KEY_LEGACY_PROVER_TOKEN).commit();
     }
 
     /**
-     * The paired prover's bearer token (64 hex), or null. It travels only inside a job the core
-     * sealed to the prover's key; never in {@link Prefs}, never in a log.
+     * The paired prover's record — token, key, URL, fingerprint — or null. The token travels only
+     * inside a job the core sealed to this record's key, which (not {@link Prefs}' display copy)
+     * decides where the job goes; never in {@link Prefs}, never in a log.
      */
-    public String proverToken() {
-        return prefs.getString(KEY_PROVER_TOKEN, null);
+    public org.randprotocol.wallet.wallet.ProverSecret proverSecret() {
+        return org.randprotocol.wallet.wallet.ProverSecret.fromJson(prefs.getString(KEY_PROVER_PAIRING, null));
     }
 
-    public void setProverToken(String hex) {
-        prefs.edit().putString(KEY_PROVER_TOKEN, hex).commit();
+    public void setProverSecret(org.randprotocol.wallet.wallet.ProverSecret secret) {
+        prefs.edit().putString(KEY_PROVER_PAIRING, secret.toJson()).remove(KEY_LEGACY_PROVER_TOKEN).commit();
     }
 
-    public void eraseProverToken() {
-        prefs.edit().remove(KEY_PROVER_TOKEN).commit();
+    public void eraseProverSecret() {
+        prefs.edit().remove(KEY_PROVER_PAIRING).remove(KEY_LEGACY_PROVER_TOKEN).commit();
     }
 }

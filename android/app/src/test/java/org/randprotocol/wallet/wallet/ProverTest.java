@@ -473,24 +473,68 @@ public class ProverTest {
             probed[0]++;
             return ok;
         };
-        assertNull(RemoteSend.route(true, own, probe, () -> TOKEN));
-        assertNull(RemoteSend.route(false, null, probe, () -> TOKEN));
-        assertNull("a pairing not marked own never gets a spend-key job", RemoteSend.route(false, notOwn, probe, () -> TOKEN));
+        assertNull(RemoteSend.route(true, own, probe, () -> SECRET));
+        assertNull(RemoteSend.route(false, null, probe, () -> SECRET));
+        assertNull("a pairing not marked own never gets a spend-key job", RemoteSend.route(false, notOwn, probe, () -> SECRET));
         assertEquals(0, probed[0]);
 
         ProverPairing.Probe viewingOnly = okProbe("viewing_key");
-        routeRefused(() -> RemoteSend.route(false, own, p -> viewingOnly, () -> TOKEN),
+        routeRefused(() -> RemoteSend.route(false, own, p -> viewingOnly, () -> SECRET),
                 "This device does not have the memory for this proof. Your paired prover is not available: it does not take a spend-key job.");
-        routeRefused(() -> RemoteSend.route(false, own, p -> new ProverPairing.Probe(null, "the prover at x did not answer (down)"), () -> TOKEN),
+        routeRefused(() -> RemoteSend.route(false, own, p -> new ProverPairing.Probe(null, "the prover at x did not answer (down)"), () -> SECRET),
                 "This device does not have the memory for this proof. Your paired prover is not available: the prover at x did not answer (down).");
         routeRefused(() -> RemoteSend.route(false, own, probe, () -> null),
                 "Your prover's pairing could not be opened. Pair the prover again in Settings.");
-        routeRefused(() -> RemoteSend.route(false, own, probe, () -> ""),
+        routeRefused(() -> RemoteSend.route(false, own, probe, () -> new ProverSecret("", KEM_EK, URL_OK, FINGERPRINT)),
                 "Your prover's pairing could not be opened. Pair the prover again in Settings.");
 
-        RemoteSend.Route r = RemoteSend.route(false, own, probe, () -> TOKEN);
-        assertEquals(own, r.pairing);
+        RemoteSend.Route r = RemoteSend.route(false, own, probe, () -> SECRET);
+        assertEquals(own.toJson().toString(), r.pairing.toJson().toString());
         assertEquals(TOKEN, r.token);
+    }
+
+    static final ProverSecret SECRET = new ProverSecret(TOKEN, KEM_EK, URL_OK, FINGERPRINT);
+
+    /**
+     * {@link org.randprotocol.wallet.security.Prefs} is plaintext: anything that can write it could
+     * name another key and URL. The probe, the route and the sealed job's target come from the
+     * vault's record instead; only the name and {@code own} are read from Prefs.
+     */
+    @Test
+    public void aTamperedPrefsKemEkDoesNotMoveTheSealTarget() throws Exception {
+        String evilEk = "66".repeat(1184);
+        ProverPairing tampered = new ProverPairing("p:1", "https://evil.example", evilEk, "EVIL-EVIL-EVIL-EVIL", true);
+        ProverPairing.Probe ok = okProbe("spend_key");
+        ProverPairing[] probedAt = {null};
+        RemoteSend.Route r = RemoteSend.route(false, tampered, p -> { probedAt[0] = p; return ok; }, () -> SECRET);
+        assertEquals("the probe asked the tampered URL", URL_OK, probedAt[0].url);
+        assertEquals(KEM_EK, probedAt[0].kemEk);
+        assertEquals("the route took the tampered key", KEM_EK, r.pairing.kemEk);
+        assertEquals(URL_OK, r.pairing.url);
+        assertEquals("p:1", r.pairing.name);
+
+        FakeProver prover = new FakeProver((m, p) -> m.equals("prover_submit")
+                ? Reply.result(new JSONObject().put("job", "j"))
+                : Reply.result(new JSONObject().put("state", "failed").put("error", "stub")));
+        FakeCore core = new FakeCore();
+        try {
+            RemoteSend.prove(core, fastProver(new ProverClient(r.pairing.url, prover)), new JSONObject(), r, null, pos -> { });
+            fail();
+        } catch (ProverClient.Refusal expected) {
+            // the stub fails the job; what matters is what was sealed
+        }
+        assertEquals("the job was sealed to the tampered key", KEM_EK, core.prepared.getJSONObject("prover").getString("kem_ek"));
+    }
+
+    @Test
+    public void theVaultRecordRoundTripsAndABareTokenIsNoPairing() {
+        ProverSecret back = ProverSecret.fromJson(SECRET.toJson());
+        assertEquals(TOKEN, back.token);
+        assertEquals(KEM_EK, back.kemEk);
+        assertEquals(URL_OK, back.url);
+        assertEquals(FINGERPRINT, back.fingerprint);
+        assertNull("a pre-release bare token names no seal target", ProverSecret.fromJson(TOKEN));
+        assertNull(ProverSecret.fromJson("{\"token\":\"\",\"kemEk\":\"a\",\"url\":\"b\",\"fingerprint\":\"c\"}"));
     }
 
     interface RouteCall {

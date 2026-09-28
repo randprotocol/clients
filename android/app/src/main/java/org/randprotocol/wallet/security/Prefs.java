@@ -55,7 +55,8 @@ public final class Prefs {
 
     /**
      * The paired prover (delegated proving, Phase 1), or null: proofs are made on this device.
-     * Its public fields only — the token is in the {@link KeyVault}.
+     * DISPLAY ONLY — the token, and the key and URL a job is sealed and sent to, are the
+     * {@link KeyVault}'s record, so a tampered copy here cannot redirect a job.
      */
     public org.randprotocol.wallet.wallet.ProverPairing prover() {
         return org.randprotocol.wallet.wallet.ProverPairing.fromJson(p.getString("prover", null));

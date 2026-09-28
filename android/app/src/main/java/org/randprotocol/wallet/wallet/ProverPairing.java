@@ -7,8 +7,9 @@ import java.net.URI;
 import java.util.Locale;
 
 /**
- * A paired prover as {@link org.randprotocol.wallet.security.Prefs} keeps it — public fields only;
- * the token is in the {@link org.randprotocol.wallet.security.KeyVault} — and the pairing rules,
+ * A paired prover as {@link org.randprotocol.wallet.security.Prefs} keeps it — public fields only,
+ * for display; the token, key and URL a job is sealed and sent to are the
+ * {@link org.randprotocol.wallet.security.KeyVault}'s {@link ProverSecret} — and the pairing rules,
  * the Java twin of {@code ui/engine/backend-shared.js}'s {@code prover} group. The link is read by
  * the core ({@code parse_prover_link}); the prover's key is asked of the prover itself and must be
  * the one the link names, the fingerprint recomputed by the core from that key (the prover's own

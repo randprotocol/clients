@@ -393,17 +393,20 @@ public final class WalletService {
 
     // ------------------------------------------------------------------ the prover
 
-    /** Checks the link and the prover's key, then stores the pairing (token first). Blocking. */
+    /**
+     * Checks the link and the prover's key, then stores the pairing: the vault's record (token, key,
+     * URL — what a send seals to) first, then the display copy in {@link Prefs}. Blocking.
+     */
     public ProverPairing.Paired pairProver(String link) throws Exception {
         ProverPairing.Paired paired = ProverPairing.pair(ProverCore.NATIVE, link, ProverClient.HTTP);
-        vault.setProverToken(paired.token);
+        vault.setProverSecret(ProverSecret.of(paired.pairing, paired.token));
         prefs.setProver(paired.pairing);
         return paired;
     }
 
     public void forgetProver() {
         prefs.setProver(null);
-        vault.eraseProverToken();
+        vault.eraseProverSecret();
     }
 
     /** Blocking. */
@@ -418,7 +421,7 @@ public final class WalletService {
      * anything is built: nothing is sent. Blocking.
      */
     public RemoteSend.Route proveRoute() throws ProverClient.Refusal {
-        return RemoteSend.route(deviceCanProve(app), prefs.prover(), this::probeProver, vault::proverToken);
+        return RemoteSend.route(deviceCanProve(app), prefs.prover(), this::probeProver, vault::proverSecret);
     }
 
     // ------------------------------------------------------------------ sending
