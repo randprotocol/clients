@@ -25,13 +25,50 @@ public final class RemoteSend {
     }
 
     /**
-     * {@code request} is the {@code prove_transfer} request (spend key inside — never logged).
-     * {@code maxProofBytes} ({@code rand_getLimits}) and {@code hcBundle} ({@code rand_status})
-     * may be null: the core's defaults.
+     * Where a send's proof is made. Null = this device: it can prove, or no prover is paired as
+     * the user's own (Phase 1 sends a spend-key job nowhere else). A paired own prover that does
+     * not answer, answers with another key, or takes no spend-key job — or whose token is gone —
+     * refuses the send here, before anything is built: nothing is sent.
+     */
+    public static Route route(boolean deviceCanProve, ProverPairing p,
+                              java.util.function.Function<ProverPairing, ProverPairing.Probe> probe,
+                              java.util.function.Supplier<String> token) throws ProverClient.Refusal {
+        if (deviceCanProve) return null;
+        if (p == null || !p.own) return null;
+        String reason = "This device does not have the memory for this proof.";
+        ProverPairing.Probe answer = probe.apply(p);
+        if (!answer.ok()) throw new ProverClient.Refusal(reason + " Your paired prover is not available: " + answer.reason + ".");
+        if (!answer.info.witnessKinds.contains("spend_key")) {
+            throw new ProverClient.Refusal(reason + " Your paired prover is not available: it does not take a spend-key job.");
+        }
+        String t = token.get();
+        if (t == null || t.isEmpty()) {
+            throw new ProverClient.Refusal("Your prover's pairing could not be opened. Pair the prover again in Settings.");
+        }
+        return new Route(p, t);
+    }
+
+    /**
+     * The chain's proof parameters on a {@code prove_transfer} request, for either route:
+     * {@code profile} from {@code rand_status.fri_profile} and {@code hc_bundle} when the node
+     * reports a valid one (else left out: this build's default guest).
+     */
+    public static void applyProofParams(JSONObject request, JSONObject status) throws org.json.JSONException {
+        request.put("profile", profileOf(status));
+        String hc = hcBundleOf(status);
+        if (hc != null) request.put("hc_bundle", hc);
+        else request.remove("hc_bundle");
+    }
+
+    /**
+     * {@code request} is the {@code prove_transfer} request (spend key inside — never logged),
+     * its {@code profile} and {@code hc_bundle} already the chain's ({@link #applyProofParams});
+     * {@code maxProofBytes} ({@code rand_getLimits}) may be null: the core's default.
      */
     public static JSONObject prove(ProverCore core, RemoteProver prover, JSONObject request, Route route,
-                                   Integer maxProofBytes, String hcBundle, RemoteProver.PhaseListener onPhase) throws Exception {
+                                   Integer maxProofBytes, RemoteProver.PhaseListener onPhase) throws Exception {
         JSONObject params = new JSONObject(request.toString());
+        String hcBundle = request.has("hc_bundle") ? request.optString("hc_bundle", null) : null;
         JSONObject target = new JSONObject()
                 .put("kem_ek", route.pairing.kemEk)
                 .put("token", route.token)

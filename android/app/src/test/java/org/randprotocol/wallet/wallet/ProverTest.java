@@ -74,6 +74,7 @@ public class ProverTest {
         Handler handler;
         final List<String> bodies = new ArrayList<>();
         final List<String> methods = new ArrayList<>();
+        final List<Boolean> followRedirects = new ArrayList<>();
 
         FakeProver(Handler handler) {
             this.handler = handler;
@@ -109,6 +110,7 @@ public class ProverTest {
 
                 @Override
                 public int getResponseCode() throws IOException {
+                    followRedirects.add(getInstanceFollowRedirects());
                     return answer().status;
                 }
 
@@ -338,14 +340,15 @@ public class ProverTest {
             }
         });
         FakeCore core = new FakeCore();
-        JSONObject request = new JSONObject().put("spend_key", SPEND_KEY).put("to", "rand1x").put("profile", "production");
+        JSONObject request = new JSONObject().put("spend_key", SPEND_KEY).put("to", "rand1x");
+        RemoteSend.applyProofParams(request, new JSONObject().put("fri_profile", "test").put("hc_bundle", "ab".repeat(32)));
         RemoteSend.Route route = new RemoteSend.Route(new ProverPairing("prover.example:8600", URL_OK, KEM_EK, FINGERPRINT, true), TOKEN);
         List<Integer> phases = new ArrayList<>();
         SendState base = new SendState(SendState.Phase.PREPARING, "", null, null, "1", "rand1x", 0);
         List<String> shown = new ArrayList<>();
 
         JSONObject proved = RemoteSend.prove(core, fastProver(new ProverClient(URL_OK, prover)), request, route, 2_000_000,
-                "ab".repeat(32), pos -> {
+                pos -> {
                     phases.add(pos);
                     shown.add(base.remote(route.pairing.name, pos).message);
                 });
@@ -362,6 +365,8 @@ public class ProverTest {
         assertEquals("spend_key", target.getString("witness_kind"));
         assertEquals("ab".repeat(32), target.getString("hc_bundle"));
         assertEquals(2_000_000, core.prepared.getInt("max_proof_bytes"));
+        assertEquals("test", core.prepared.getString("profile"));
+        assertEquals("ab".repeat(32), core.prepared.getString("hc_bundle"));
         assertEquals(SPEND_KEY, core.prepared.getString("spend_key"));
         assertFalse("the caller's request is not changed", request.has("prover"));
         // What went on the wire: the sealed job and job ids — never the spend key or the token.
@@ -380,7 +385,7 @@ public class ProverTest {
         FakeCore core = new FakeCore();
         RemoteSend.Route route = new RemoteSend.Route(new ProverPairing("p", URL_OK, KEM_EK, FINGERPRINT, true), TOKEN);
         try {
-            RemoteSend.prove(core, fastProver(new ProverClient(URL_OK, prover)), new JSONObject(), route, null, null, pos -> { });
+            RemoteSend.prove(core, fastProver(new ProverClient(URL_OK, prover)), new JSONObject(), route, null, pos -> { });
             fail();
         } catch (ProverClient.Refusal e) {
             assertEquals("The prover's proof was refused by this wallet: the proof does not verify", e.getMessage());
@@ -391,14 +396,14 @@ public class ProverTest {
                 ? Reply.result(new JSONObject().put("job", "j"))
                 : Reply.result(new JSONObject().put("state", "failed").put("error", "out of memory"));
         try {
-            RemoteSend.prove(core, fastProver(new ProverClient(URL_OK, prover)), new JSONObject(), route, null, null, pos -> { });
+            RemoteSend.prove(core, fastProver(new ProverClient(URL_OK, prover)), new JSONObject(), route, null, pos -> { });
             fail();
         } catch (ProverClient.Refusal e) {
             assertEquals("The prover could not make this proof (failed: out of memory).", e.getMessage());
         }
         prover.handler = (m, p) -> Reply.error(-32005, "busy", new JSONObject().put("depth", 8));
         try {
-            RemoteSend.prove(core, fastProver(new ProverClient(URL_OK, prover)), new JSONObject(), route, null, null, pos -> { });
+            RemoteSend.prove(core, fastProver(new ProverClient(URL_OK, prover)), new JSONObject(), route, null, pos -> { });
             fail();
         } catch (ProverClient.Refusal e) {
             assertEquals("The prover is full (8 waiting). Try again in a few minutes.", e.getMessage());
@@ -435,5 +440,81 @@ public class ProverTest {
         assertEquals("production", RemoteSend.profileOf(null));
         assertEquals(Integer.valueOf(2_000_000), org.randprotocol.wallet.rpc.RpcClient.maxProofBytesOf(new JSONObject().put("max_proof_bytes", 2_000_000)));
         assertNull(org.randprotocol.wallet.rpc.RpcClient.maxProofBytesOf(new JSONObject()));
+    }
+
+    // ------------------------------------------------------------------ fix round 1
+
+    @Test
+    public void theLocalRequestCarriesTheChainsProfileAndGuest() throws Exception {
+        String v2 = "ab".repeat(32);
+        JSONObject req = new JSONObject().put("spend_key", SPEND_KEY).put("profile", "production");
+        RemoteSend.applyProofParams(req, new JSONObject().put("height", 5).put("fri_profile", "test").put("hc_bundle", v2.toUpperCase()));
+        assertEquals("test", req.getString("profile"));
+        assertEquals(v2, req.getString("hc_bundle"));
+        // A node that reports neither (or predates rand_status): production, and no hc_bundle key.
+        RemoteSend.applyProofParams(req, null);
+        assertEquals("production", req.getString("profile"));
+        assertFalse(req.has("hc_bundle"));
+    }
+
+    private static ProverPairing.Probe okProbe(String... kinds) throws Exception {
+        JSONArray k = new JSONArray();
+        for (String s : kinds) k.put(s);
+        return new ProverPairing.Probe(new ProverClient.Info(new JSONObject().put("kem_ek", KEM_EK).put("witness_kinds", k)), null);
+    }
+
+    @Test
+    public void theRouteGatesOnOwnSpendKeyJobsAndTheToken() throws Exception {
+        ProverPairing own = new ProverPairing("p:1", URL_OK, KEM_EK, FINGERPRINT, true);
+        ProverPairing notOwn = new ProverPairing("p:1", URL_OK, KEM_EK, FINGERPRINT, false);
+        ProverPairing.Probe ok = okProbe("spend_key");
+        int[] probed = {0};
+        java.util.function.Function<ProverPairing, ProverPairing.Probe> probe = p -> {
+            probed[0]++;
+            return ok;
+        };
+        assertNull(RemoteSend.route(true, own, probe, () -> TOKEN));
+        assertNull(RemoteSend.route(false, null, probe, () -> TOKEN));
+        assertNull("a pairing not marked own never gets a spend-key job", RemoteSend.route(false, notOwn, probe, () -> TOKEN));
+        assertEquals(0, probed[0]);
+
+        ProverPairing.Probe viewingOnly = okProbe("viewing_key");
+        routeRefused(() -> RemoteSend.route(false, own, p -> viewingOnly, () -> TOKEN),
+                "This device does not have the memory for this proof. Your paired prover is not available: it does not take a spend-key job.");
+        routeRefused(() -> RemoteSend.route(false, own, p -> new ProverPairing.Probe(null, "the prover at x did not answer (down)"), () -> TOKEN),
+                "This device does not have the memory for this proof. Your paired prover is not available: the prover at x did not answer (down).");
+        routeRefused(() -> RemoteSend.route(false, own, probe, () -> null),
+                "Your prover's pairing could not be opened. Pair the prover again in Settings.");
+        routeRefused(() -> RemoteSend.route(false, own, probe, () -> ""),
+                "Your prover's pairing could not be opened. Pair the prover again in Settings.");
+
+        RemoteSend.Route r = RemoteSend.route(false, own, probe, () -> TOKEN);
+        assertEquals(own, r.pairing);
+        assertEquals(TOKEN, r.token);
+    }
+
+    interface RouteCall {
+        RemoteSend.Route run() throws Exception;
+    }
+
+    private static void routeRefused(RouteCall call, String message) throws Exception {
+        try {
+            call.run();
+            fail("routed");
+        } catch (ProverClient.Refusal e) {
+            assertEquals(message, e.getMessage());
+        }
+    }
+
+    @Test
+    public void aRedirectIsNotFollowed() throws Exception {
+        FakeProver prover = new FakeProver((m, p) -> new Reply(307, ""));
+        try {
+            new ProverClient(URL_OK, prover).info();
+            fail();
+        } catch (ProverClient.ProverError e) {
+            assertEquals("http", e.failure);
+        }
+        assertEquals(java.util.Collections.singletonList(false), prover.followRedirects);
     }
 }

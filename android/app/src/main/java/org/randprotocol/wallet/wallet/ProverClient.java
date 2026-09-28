@@ -146,6 +146,9 @@ public class ProverClient {
         try {
             c = transport.open(new URL(url));
             c.setRequestMethod("POST");
+            // A 307 would carry the POST to a host the URL rule never saw: a redirect is an answer
+            // that is not JSON-RPC, never a place to follow.
+            c.setInstanceFollowRedirects(false);
             c.setConnectTimeout(TIMEOUT_MS);
             c.setReadTimeout(TIMEOUT_MS);
             c.setDoOutput(true);

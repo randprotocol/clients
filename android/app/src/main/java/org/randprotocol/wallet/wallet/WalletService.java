@@ -418,20 +418,7 @@ public final class WalletService {
      * anything is built: nothing is sent. Blocking.
      */
     public RemoteSend.Route proveRoute() throws ProverClient.Refusal {
-        if (deviceCanProve(app)) return null;
-        ProverPairing p = prefs.prover();
-        if (p == null || !p.own) return null;
-        String reason = "This device does not have the memory for this proof.";
-        ProverPairing.Probe probe = probeProver(p);
-        if (!probe.ok()) throw new ProverClient.Refusal(reason + " Your paired prover is not available: " + probe.reason + ".");
-        if (!probe.info.witnessKinds.contains("spend_key")) {
-            throw new ProverClient.Refusal(reason + " Your paired prover is not available: it does not take a spend-key job.");
-        }
-        String token = vault.proverToken();
-        if (token == null || token.isEmpty()) {
-            throw new ProverClient.Refusal("Your prover's pairing could not be opened. Pair the prover again in Settings.");
-        }
-        return new RemoteSend.Route(p, token);
+        return RemoteSend.route(deviceCanProve(app), prefs.prover(), this::probeProver, vault::proverToken);
     }
 
     // ------------------------------------------------------------------ sending
@@ -514,7 +501,15 @@ public final class WalletService {
             req.put("anchor_height", anchor.getLong("height"));
             req.put("anchor_root", anchor.getString("root"));
             req.put("inputs", inputs);
-            req.put("profile", "production");
+            // The chain's guest and FRI profile, read once for either route: a proof on another
+            // guest or profile is refused by the chain, whoever makes it.
+            JSONObject status = null;
+            try {
+                status = rpc.status();
+            } catch (RpcException e) {
+                if (e.code != -32601) throw e;
+            }
+            RemoteSend.applyProofParams(req, status);
             // Sealed with the payment only; null (sent as JSON null, never left out) is the
             // legacy envelope, where the core refuses a non-empty memo before proving.
             req.put("memo", memo);
@@ -529,15 +524,8 @@ public final class WalletService {
                 final String name = route.pairing.name;
                 SendMonitor.post(base.remote(name, null));
                 Integer maxProofBytes = rpc.maxProofBytes();
-                JSONObject status = null;
-                try {
-                    status = rpc.status();
-                } catch (RpcException e) {
-                    if (e.code != -32601) throw e;
-                }
-                req.put("profile", RemoteSend.profileOf(status));
                 proved = RemoteSend.prove(ProverCore.NATIVE, new RemoteProver(new ProverClient(route.pairing.url)), req, route,
-                        maxProofBytes, RemoteSend.hcBundleOf(status), pos -> SendMonitor.post(base.remote(name, pos)));
+                        maxProofBytes, pos -> SendMonitor.post(base.remote(name, pos)));
             }
             req = null; // the spend key was in it
 
