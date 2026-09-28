@@ -12,6 +12,7 @@ name = "wallet_core"
 [dependencies]
 randprotocol-core = { workspace = true }
 randprotocol-zkvm = { workspace = true }
+randprotocol-prover = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 hex = { workspace = true }

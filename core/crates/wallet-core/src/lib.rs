@@ -1956,6 +1956,9 @@ pub fn constants() -> Value {
         "anchor_window": randprotocol_core::ledger::ANCHOR_WINDOW,
         "tree_depth": DEPTH,
         "hc_bundle": word8_to_hex(&randprotocol_zkvm::executor::ZkExecutor::hc_bundle()),
+        // The delegated-proving job wire this build seals and opens (randprotocol-prover); a
+        // client pairs only with a prover that speaks the same version.
+        "prover_wire": randprotocol_prover::wire::WIRE_VERSION,
         "prover_peak_memory_bytes": PROVER_PEAK_MEMORY_BYTES,
     })
 }
@@ -2798,6 +2801,13 @@ mod tests {
         assert_eq!(req["inputs"][0]["path"].as_array().unwrap().len(), DEPTH);
         // And it deserializes as the request `prove_burn` takes.
         let _: BurnRequest = serde_json::from_value(req.clone()).unwrap();
+    }
+
+    #[test]
+    fn version_reports_prover_wire_1() {
+        let v: Value = serde_json::from_str(&call("version", "{}")).unwrap();
+        assert_eq!(v["value"]["prover_wire"], 1);
+        assert_eq!(v["value"]["prover_wire"], randprotocol_prover::wire::WIRE_VERSION);
     }
 
     #[test]

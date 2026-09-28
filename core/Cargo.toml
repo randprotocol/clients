@@ -16,6 +16,9 @@ authors = ["RandProtocol Contributors"]
 # job wire; earlier 1a13359, `feat/address-sharing` on v0.5.9, and 9c142c1, v0.5.1). Bump the submodule to move the wallet to a new chain build.
 randprotocol-core = { path = "vendor/fullnode/crates/randprotocol-core" }
 randprotocol-zkvm = { path = "vendor/fullnode/crates/randprotocol-zkvm" }
+# The delegated-proving wire (sealed jobs a light client sends a prover). Only the codec: the
+# `service` feature (axum, tokio, sysinfo) is the prover's own and never builds for a wallet.
+randprotocol-prover = { path = "vendor/fullnode/crates/randprotocol-prover", default-features = false }
 wallet-core = { path = "crates/wallet-core" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
