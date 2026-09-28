@@ -15,6 +15,33 @@
   },
   "side_panel": { "default_path": "sidepanel.html" },
   "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://randbridge.org/*",
+        "https://*.randbridge.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "inpage.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://randbridge.org/*",
+        "https://*.randbridge.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
   "options_ui": { "page": "app.html#settings", "open_in_tab": true },
   "permissions": ["storage", "alarms", "sidePanel"],
   "host_permissions": ["https://rpc.randprotocol.org/*", "https://rpc1.randprotocol.org/*", "https://rpc2.randprotocol.org/*", "https://rpc3.randprotocol.org/*"],

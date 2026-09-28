@@ -88,3 +88,21 @@ node --test extension/test/idle-lock.test.mjs
 Load `dist/chrome` as an unpacked extension (chrome://extensions, Developer mode) or
 `dist/firefox` via about:debugging → "Load Temporary Add-on…" (pick `manifest.json`).
 Point Settings → RPC URL at a node you can reach (a local `rand-node`, or an SSH tunnel).
+
+## The page provider (`window.rand`)
+
+A Rand site — randbridge.org, and a local build of it — sees this wallet as `window.rand`, the
+contract in randbridge.org/web/lib/rand/provider.ts. Three files, each in its own world:
+
+- `inpage.js` runs in the page's own world (`world: "MAIN"`, document_start) and defines the
+  object: `connect`, `getAddress`, `getRecipientHash`, `disconnect`, `on`, plus the
+  `rand:announceProvider` / `rand:requestProvider` handshake. It knows nothing and can reach nothing.
+- `content.js` relays those four method names — and none of the page's data — to the background.
+- `provider-host.js`, loaded by `background.js`, decides from the *sender's* origin: `connect`
+  needs a wallet, unlocked, and the user's yes in `connect.html` for that origin; the approval
+  (address plus its bridge recipient hash, `lib/recipient-hash.js`) is stored under `sites` in
+  storage.local, tied to the address it was given for. A site never learns more than the address
+  and that hash. `node --test extension/test/provider-host.test.mjs` is the policy's suite;
+  `recipient-hash.test.mjs` pins the hash to the bridge's own fixture.
+
+Firefox needs 128 or later for `world: "MAIN"` content scripts (the manifest's floor).

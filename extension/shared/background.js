@@ -65,3 +65,28 @@ ext.runtime.onInstalled.addListener(async (details) => {
 // A browser restart empties `storage.session`, so the wallet is already locked; the listener is
 // here only so the event has an owner and the worker starts cleanly.
 ext.runtime.onStartup?.addListener(() => {});
+
+// ---- the page provider (`window.rand`) ----
+//
+// inpage.js/content.js relay a Rand site's requests here; provider-host.js decides. Chrome's
+// service worker pulls that file in with importScripts; Firefox's event page lists it before this
+// one in the manifest's `background.scripts`, so the factory is already on the global there.
+if (typeof importScripts === 'function' && typeof globalThis.makeRandProviderHost !== 'function') importScripts('provider-host.js');
+
+const providerHost = globalThis.makeRandProviderHost({
+  ext,
+  // The consent window: a small popup of our own page, sized like the toolbar popup. The verdict
+  // comes back as a `rand:decision` message from that page (see connect.js).
+  openConsent: async ({ id, origin, tabId }) => {
+    const query = new URLSearchParams({ id, origin, tab: Number.isInteger(tabId) ? String(tabId) : '' });
+    await ext.windows.create({ url: ext.runtime.getURL(`connect.html?${query}`), type: 'popup', width: 380, height: 600 });
+  },
+});
+
+ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('rand:')) return false;
+  providerHost.handle(msg, sender).then(
+    (res) => sendResponse(res ?? { ok: false, error: { code: 'UNKNOWN_METHOD', message: 'Rand Wallet does not know that request.' } }),
+    (err) => sendResponse({ ok: false, error: { code: 'INTERNAL', message: (err && err.message) || String(err) } }));
+  return true; // the answer is asynchronous
+});

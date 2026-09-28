@@ -9,7 +9,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "wallet@randprotocol.org",
-      "strict_min_version": "121.0",
+      "strict_min_version": "128.0",
       "data_collection_permissions": {
         "required": [
           "none"
@@ -44,9 +44,37 @@
   },
   "background": {
     "scripts": [
+      "provider-host.js",
       "background.js"
     ]
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://randbridge.org/*",
+        "https://*.randbridge.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "inpage.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://randbridge.org/*",
+        "https://*.randbridge.org/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
   "options_ui": {
     "page": "app.html#settings",
     "open_in_tab": true
