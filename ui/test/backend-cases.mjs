@@ -21,7 +21,7 @@ import { unlockDelayMs } from '../engine/backend-shared.js';
 import {
   SPEND_KEY, VIEWING_KEY, PASSWORD, PK, ADDRESS, GENESIS, URL_A, URL_B, URL_C,
   mapStorage, casStorage, drain, stubCore, stubFetch, stubPlatform, chainFetch, nodeWithout,
-  nodeFarm, node, unreachable, coreOn, withKdfSpy, assertKeyNeverLeaked, capturingMapWrites,
+  nodeFarm, node, unreachable, coreOn, withKdfSpy, assertKeyNeverLeaked, capturingMapWrites, CORE_VERSION,
   tokenRegistry, zusd, backing, assetRows, USDT_ETH, USDC_ETH, USDT_BSC, NO_SPENDABLE_RAND,
 } from './backend-fixtures.mjs';
 
@@ -2123,6 +2123,22 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     // The next write does not carry it back either.
     await backend.settings.set({ theme: 'light' });
     assert.equal(Object.prototype.hasOwnProperty.call(storage.local.get('settings'), 'rpcUrls'), false);
+  });
+
+  scoped('the chain id is the core-s, never one a settings write pinned in storage', async () => {
+    // `settings.set` writes the whole object back, so every wallet that changed its theme on a
+    // chain-14 build had `chainId: 14` saved — and a core moved to chain 16 moved none of them.
+    const storage = mapStorage();
+    storage.local.set('settings', { theme: 'dark', chainId: 14 });
+    const on16 = () => stubCore({ version: () => ({ ...CORE_VERSION, default_chain_id: 16 }) });
+    const { backend } = build({ storage, core: on16() });
+    const s = await backend.settings.get();
+    assert.equal(s.chainId, 16, 'a chain id saved by an older build won over the core');
+    assert.equal(s.theme, 'dark');
+    await backend.settings.set({ theme: 'light', chainId: 14 });
+    assert.equal(Object.prototype.hasOwnProperty.call(storage.local.get('settings'), 'chainId'), false,
+      'a settings write persisted the chain id');
+    assert.equal((await backend.settings.get()).chainId, 16);
   });
 
   scoped('FAILOVER: a stored rpc.randprotocol.org is honoured — it IS the default endpoint', async () => {

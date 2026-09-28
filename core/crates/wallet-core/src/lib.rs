@@ -52,12 +52,14 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// fingerprint, `randpay:` links and the encrypted memo (spec 2026-09-26). Earlier: `9c142c1`
 /// (v0.5.1).
 pub const CHAIN_BUILD: &str = "1a13359";
-/// The chain the defaults below describe: chain 14, the testnet this wallet was first built for
-/// (`deploy/README.md`, genesis `1cff3b7d…`, cut 2026-09-20) — the shielded pool on the
+/// The chain the defaults below describe: chain 16, the next testnet cut (not live yet on
+/// 2026-09-28; chain 15, genesis `cc30e085…`, is). A wallet built against it refuses a chain-15
+/// node until 16 is up, then adopts 16's genesis on its first scan. Chain 14 (genesis
+/// `1cff3b7d…`, cut 2026-09-20) is where this wallet was first built: the shielded pool on the
 /// **hidden-asset bundle** (one 4-in/4-out proof for RAND, a bridged coin or an RPL token alike),
 /// transaction binding, RPL tokens, staking and the call limits, zkVM constraint set 6,
 /// production FRI profile.
-pub const DEFAULT_CHAIN_ID: u64 = 14;
+pub const DEFAULT_CHAIN_ID: u64 = 16;
 pub const DEFAULT_RPC_URL: &str = "https://rpc.randprotocol.org";
 pub const EXPLORER_URL: &str = "https://randscan.org";
 /// Peak resident memory of one bundle proof, measured on this crate's own fixture
@@ -3088,7 +3090,7 @@ mod tests {
         assert_eq!(ADDRESS_HRP, "rand1");
         // The wire names come from upstream, not from a second literal here.
         assert_eq!(ADDRESS_HRP, randprotocol_core::notes::ADDRESS_PREFIX);
-        assert_eq!(v["default_chain_id"], 14);
+        assert_eq!(v["default_chain_id"], 16);
         assert!(v.get("units_per_rand").is_some());
     }
 
@@ -3102,7 +3104,7 @@ mod tests {
     fn json_entry_point_reports_errors_as_json() {
         let v: Value = serde_json::from_str(&call("version", "{}")).unwrap();
         assert_eq!(v["ok"], true);
-        assert_eq!(v["value"]["default_chain_id"], 14);
+        assert_eq!(v["value"]["default_chain_id"], 16);
         assert_eq!(v["value"]["bundle_base_fee"], "1000000");
         let v: Value = serde_json::from_str(&call("wallet_info", r#"{"spend_key":"zz"}"#)).unwrap();
         assert_eq!(v["ok"], false);
@@ -3833,11 +3835,11 @@ mod tests {
             assert!(v["error"].as_str().unwrap().contains("decimal strings"), "{v}");
         }
 
-        /// `version` reports chain 14's own constants.
+        /// `version` reports the chain-14 bundle's constants, on a build aimed at chain 16.
         #[test]
         fn version_reports_chain_fourteen() {
             let v = constants();
-            assert_eq!(v["default_chain_id"], 14);
+            assert_eq!(v["default_chain_id"], 16);
             assert_eq!(v["chain_build"], "1a13359");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);

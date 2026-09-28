@@ -134,7 +134,7 @@ const FALLBACK = Object.freeze({
     'https://rpc.randprotocol.org',
   ]),
   explorerUrl: 'https://randscan.org',
-  chainId: 14,
+  chainId: 16,
   decimals: 9,
   autoLockMin: 15,
   theme: 'system',
@@ -428,7 +428,10 @@ export function makeSharedBackend({
     // could ever move it — the same staleness trap the retired-`rpcUrl` migration below exists to
     // undo, one level up. `setSettings` refuses to write it in the first place; this is the other
     // half, for storage that already has one.
-    const merged = { ...base, ...stored, rpcUrls: base.rpcUrls };
+    // `chainId` likewise: no screen sets it, it is the chain this build's core was made for, and
+    // `setSettings` used to write it back with everything else — so every wallet that ever changed
+    // its theme had chain 14 pinned in storage, and moving the core to chain 16 moved nobody.
+    const merged = { ...base, ...stored, rpcUrls: base.rpcUrls, chainId: base.chainId };
     // Migration (task 5.0). `setSettings` writes the WHOLE settings object back, defaults
     // included, so anyone who ever changed their theme while `rpc.randprotocol.org` was the
     // single default has it sitting in storage as `rpcUrl`. Read as an override it would pin
@@ -452,8 +455,8 @@ export function makeSharedBackend({
     // the default endpoint set of that build into storage, where it would win every future merge
     // for ever. A screen that tried to write one simply cannot; `ui/backend.js`'s contract says
     // as much, and now the implementation says it too.
-    const { rpcUrls: readOnly, ...persisted } = next;
-    void readOnly;
+    const { rpcUrls: readOnly, chainId: fromCore, ...persisted } = next;
+    void readOnly; void fromCore;
     await storage.set(K.settings, persisted);
     // A new node is a new question — but only about *that* node: `chainState` is keyed by URL and
     // each entry stands on its own. `behindUrls` is deliberately NOT cleared here: "two different
