@@ -532,3 +532,146 @@ test('a copied key is dropped a minute later, and the panel goes with it', async
   assert.ok(root.querySelector('[data-role="show-viewing-key"]'), 'the password gate is back');
   t.mock.timers.reset();
 });
+
+// ------------------------------------------------------------------------------ prover ---------
+// Delegated proving, Phase 1 (spec 2026-09-28 §4.4). The pairing link carries a secret token and
+// the save carries the wallet's password: neither may reach the page's markup or `ctx.state`.
+
+const PROVER_WARNING = 'This prover will receive your spend key each time it makes a proof. Anyone who '
+  + 'controls it can spend your funds. Pair only a machine you run yourself.';
+const PROVER_TOKEN = '7a'.repeat(32);
+const proverLink = ({ url = 'https://prover.example', own = true } = {}) =>
+  `randprover:KEY?url=${encodeURIComponent(url)}&token=${PROVER_TOKEN}${own ? '&own=1' : ''}`;
+
+function submitProver(root, { link = proverLink(), password = PASSWORD } = {}) {
+  root.querySelector('[name=proverLink]').value = link;
+  root.querySelector('[name=proverPassword]').value = password;
+  root.querySelector('[data-role="prover-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
+const pairedSetting = { mode: 'remote', name: 'prover.example', url: 'https://prover.example', kemEk: 'ek', fingerprint: 'ABCD-EFGH-JKMN-PQRS', own: true };
+
+test('the Prover section is there only when the backend has the prover group', async (t) => {
+  const b = unlockedBackend();
+  delete b.prover;
+  const { root } = await settings(t, b);
+  assertGone(root.querySelector('[data-role="prover-form"]'), 'the prover form');
+  assert.equal([...root.querySelectorAll('.section-title')].some((el) => el.textContent === 'Prover'), false);
+});
+
+test('the Prover section says the device proves, and shows the Phase 1 warning verbatim above the password', async (t) => {
+  const { root } = await settings(t);
+  const section = root.querySelector('[data-role="prover-form"]').closest('.card');
+  assert.match(section.querySelector('[data-role="prover-state"]').textContent, /This device/);
+  const warning = section.querySelector('[data-role="prover-warning"]');
+  assert.ok(warning.textContent.includes(PROVER_WARNING), 'the warning is verbatim');
+  // Part of the form, before the password: there is no way to reach Save without passing it.
+  const html = section.innerHTML;
+  assert.ok(html.indexOf('data-role="prover-warning"') < html.indexOf('name="proverPassword"'));
+  assertGone(warning.querySelector('button'), 'a dismiss button on the warning');
+  assertGone(section.querySelector('[data-role="scan-prover"]'), 'a scan button without platform.scanQr');
+});
+
+test('a paired prover shows its name, fingerprint and whether it answers', async (t) => {
+  const b = unlockedBackend({
+    settings: { get: () => ({ ...defaultish(), prover: pairedSetting }) },
+    prover: { probe: () => ({ ok: true, queue: { depth: 1, max: 4, proving: 1 }, witnessKinds: ['spend_key'], fee: null, hcBundles: [] }) },
+  });
+  const { root } = await settings(t, b);
+  const state = root.querySelector('[data-role="prover-state"]');
+  assert.match(state.textContent, /prover\.example/);
+  assert.match(state.textContent, /ABCD-EFGH-JKMN-PQRS/);
+  assert.match(root.querySelector('[data-role="prover-probe"]').textContent, /Answering · 1 of 4/);
+  assert.ok(b.calls.some((c) => c[0] === 'prover.probe'));
+
+  const down = unlockedBackend({
+    settings: { get: () => ({ ...defaultish(), prover: pairedSetting }) },
+    prover: { probe: () => ({ ok: false, reason: 'the prover at https://prover.example did not answer (<b>x</b>)' }) },
+  });
+  const second = await settings(t, down);
+  const probe = second.root.querySelector('[data-role="prover-probe"]');
+  assert.match(probe.textContent, /did not answer \(<b>x<\/b>\)/, 'the reason is text, not markup');
+});
+
+function defaultish() {
+  return { rpcUrl: '', rpcUrls: ['https://rpc.randprotocol.org'], theme: 'system', autoLockMin: 15, explorerUrl: 'https://randscan.org', chainId: 14 };
+}
+
+test('a bad pairing link shows the engine\'s sentence and pairs nothing', async (t) => {
+  const b = unlockedBackend({ platform: { ensureHostPermission: async () => true } });
+  const { app, root } = await settings(t, b);
+  submitProver(root, { link: 'randprover:KEY?url=http%3A%2F%2F10.0.0.2%3A8546&token=' + PROVER_TOKEN });
+  await app.idle();
+  assert.match(root.querySelector('[data-role="prover-status"]').textContent, /Use https for a prover/);
+  assert.equal(b.calls.filter((c) => c[0] === 'prover.pair').length, 0);
+  assert.equal(b.calls.filter((c) => c[0] === 'platform.ensureHostPermission').length, 0);
+});
+
+test('Save asks for the prover\'s host inside the click, then pairs with the typed password', async (t) => {
+  const b = unlockedBackend({ platform: { ensureHostPermission: async () => true } });
+  const { app, root } = await settings(t, b);
+  submitProver(root);
+  await app.idle();
+
+  const order = b.calls.map((c) => c[0]).filter((m) => ['prover.preview', 'platform.ensureHostPermission', 'prover.pair'].includes(m));
+  assert.deepEqual(order, ['prover.preview', 'platform.ensureHostPermission', 'prover.pair']);
+  assert.equal(b.calls.find((c) => c[0] === 'platform.ensureHostPermission')[1], 'https://prover.example');
+  const pair = b.calls.find((c) => c[0] === 'prover.pair');
+  assert.equal(pair[1], proverLink());
+  assert.equal(pair[2], PASSWORD);
+
+  assert.match(root.querySelector('[data-role="prover-status"]').textContent, /Paired/);
+  assert.match(root.querySelector('[data-role="prover-state"]').textContent, /prover\.example/);
+  // Both secrets are gone from the form, and neither is anywhere in the page.
+  assert.equal(root.querySelector('[name=proverPassword]').value, '');
+  assert.equal(root.querySelector('[name=proverLink]').value, '');
+  assert.equal(root.innerHTML.includes(PROVER_TOKEN), false, 'the token is in the DOM');
+  assert.equal(root.innerHTML.includes(PASSWORD), false, 'the password is in the DOM');
+});
+
+test('a refused host permission pairs nothing', async (t) => {
+  const b = unlockedBackend({ platform: { ensureHostPermission: async () => false } });
+  const { app, root } = await settings(t, b);
+  submitProver(root);
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'prover.pair').length, 0);
+  assert.match(root.querySelector('[data-role="prover-status"]').textContent, /Not paired/);
+});
+
+test('a wrong password is the engine\'s refusal, and the password field is emptied', async (t) => {
+  const { app, root } = await settings(t);
+  submitProver(root, { password: 'not-the-password-9' });
+  await app.idle();
+  assert.match(root.querySelector('[data-role="prover-status"]').textContent, /wrong password/);
+  assert.equal(root.querySelector('[name=proverPassword]').value, '');
+  assert.match(root.querySelector('[data-role="prover-state"]').textContent, /This device/);
+});
+
+test('a link that is not marked own relays the engine\'s Phase 1 warning', async (t) => {
+  const { app, root } = await settings(t);
+  submitProver(root, { link: proverLink({ own: false }) });
+  await app.idle();
+  const status = root.querySelector('[data-role="prover-status"]').textContent;
+  assert.match(status, /does not mark the prover as your own/);
+});
+
+test('Scan fills the pairing link where the platform has a camera', async (t) => {
+  const b = unlockedBackend({ platform: { scanQr: async () => ` ${proverLink()} ` } });
+  const { app, root } = await settings(t, b);
+  root.querySelector('[data-role="scan-prover"]').click();
+  await app.idle();
+  assert.equal(root.querySelector('[name=proverLink]').value, proverLink());
+});
+
+test('Forget returns proving to this device', async (t) => {
+  const b = unlockedBackend();
+  b.calls.length = 0;
+  await b.prover.pair(proverLink(), PASSWORD);
+  const { app, root } = await settings(t, b);
+  assert.match(root.querySelector('[data-role="prover-state"]').textContent, /prover\.example/);
+  root.querySelector('[data-role="forget-prover"]').click();
+  await app.idle();
+  assert.ok(b.calls.some((c) => c[0] === 'prover.forget'));
+  assert.match(root.querySelector('[data-role="prover-state"]').textContent, /This device/);
+  assertGone(root.querySelector('[data-role="forget-prover"]'), 'Forget after forgetting');
+});

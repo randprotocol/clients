@@ -538,3 +538,99 @@ test('an empty estimate fee is never passed on as one', async (t) => {
   await turns();
   assert.equal(ctl.req.fee, undefined, 'an absent fee lets the backend supply the chain’s own');
 });
+
+// ---------------------------------------------------------------- delegated proving ------------
+
+async function toProving(t, b) {
+  const { app, root } = await review(t, b);
+  const confirm = root.querySelector('input[name=confirm]');
+  confirm.value = EVM.slice(-4);
+  confirm.dispatchEvent(new Event('input', { bubbles: true }));
+  await app.idle();
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  return { app, root };
+}
+
+test('a withdrawal proved by the paired prover says where it waits and who proves it', async (t) => {
+  const ctl = { emit: null };
+  const b = unlockedBackend({
+    bridge: {
+      withdraw: (_req, onPhase) => {
+        ctl.emit = (phase, detail) => onPhase(phase, detail);
+        return new Promise(() => {});
+      },
+    },
+  });
+  const { root } = await toProving(t, b);
+  ctl.emit('proving', { position: 1, prover: 'my-desktop' });
+  await turns();
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Waiting at position 1 on my-desktop');
+  ctl.emit('proving', { prover: 'my-desktop' });
+  await turns();
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Proving on my-desktop…');
+  assert.doesNotMatch(text(root), /runs on this device/);
+  assert.match(text(root), /my-desktop/);
+});
+
+/** A pending remote burn whose `resume` never settles on its own. */
+function pendingBurn({ kind = 'burn' } = {}) {
+  const ctl = { resumes: 0, options: null, emit: null, settle: null, cancelled: 0 };
+  const b = unlockedBackend({
+    send: {
+      pending: async () => ({ job: 'job-9', name: 'my-desktop', kind, startedAt: Date.now() - 1000 }),
+      resume: (onPhase, options) => {
+        ctl.resumes += 1;
+        ctl.options = options;
+        ctl.emit = (phase, detail) => onPhase(phase, detail);
+        return new Promise((resolve, reject) => {
+          ctl.settle = resolve;
+          options.signal.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          }, { once: true });
+        });
+      },
+      cancelPending: async () => { ctl.cancelled += 1; return true; },
+    },
+  });
+  return { b, ctl };
+}
+
+test('a pending withdrawal proof is resumed on mount and lands on its receipt', async (t) => {
+  const { b, ctl } = pendingBurn();
+  const { root } = await mountApp(t, b, { hash: '#withdraw/1' });
+  await turns(8);
+  assert.equal(ctl.resumes, 1);
+  assert.equal(calls(b, 'bridge.withdraw').length, 0);
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Proving on my-desktop…');
+  ctl.emit('proving', { position: 2, prover: 'my-desktop' });
+  await turns();
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Waiting at position 2 on my-desktop');
+  ctl.settle({ hash: 'be'.repeat(32) });
+  await turns(8);
+  assert.equal(location.hash, `#withdrawn/${'be'.repeat(32)}`);
+  await turns(8);
+  assert.match(text(root), /Withdrawal submitted/);
+  assert.doesNotMatch(text(root), /NaN|undefined|null/, 'the receipt invents nothing it does not know');
+  assertGone(root.querySelector('.stage .amount'), 'an amount the resumed proof never knew');
+});
+
+test('Cancel on a resumed withdrawal cancels the pending job', async (t) => {
+  const { b, ctl } = pendingBurn();
+  const { root } = await mountApp(t, b, { hash: '#withdraw/1' });
+  await turns(8);
+  root.querySelector('[data-role="cancel"]').click();
+  await turns(6);
+  assert.equal(ctl.cancelled, 1);
+  assert.equal(ctl.options.signal.aborted, true);
+  assertGone(root.querySelector('[data-role="ring-bundle"]'), 'the proving ring after a cancel');
+});
+
+test('a pending transfer is not resumed by the withdraw screen', async (t) => {
+  const { b, ctl } = pendingBurn({ kind: 'transfer' });
+  await mountApp(t, b, { hash: '#withdraw/1' });
+  await turns(8);
+  assert.equal(ctl.resumes, 0);
+});

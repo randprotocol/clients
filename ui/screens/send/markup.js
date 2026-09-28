@@ -13,7 +13,7 @@ import { icons } from '../../lib/icons.js';
 import { formatUnits, shortAddress, elapsed } from '../../lib/format.js';
 import { avatarMarkup, listMarkup } from '../../lib/rows.js';
 import { UNLISTED_TEXT, canSendAsset, feeDecimals, feeSymbol } from '../../lib/assets.js';
-import { PHASE_LABELS, CANCELLABLE, UNKNOWN_NOTICE, UNKNOWN_CONFIRM, MEMO_MAX_BYTES, NO_MEMO_NOTICE, proveCost } from './state.js';
+import { phaseLabel, provingBanner, CANCELLABLE, UNKNOWN_NOTICE, UNKNOWN_CONFIRM, MEMO_MAX_BYTES, NO_MEMO_NOTICE, proveCost } from './state.js';
 
 export function shellMarkup() {
   return h`
@@ -249,7 +249,8 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
 }
 
 export function provingStepMarkup(store) {
-  const label = PHASE_LABELS[store.phase] || 'Working';
+  const label = phaseLabel(store.phase, store.detail);
+  const banner = provingBanner(store);
   const cancel = store.controller && CANCELLABLE.includes(store.phase)
     ? raw(h`<button class="btn block" type="button" data-role="cancel">Cancel</button>`)
     : '';
@@ -267,7 +268,7 @@ export function provingStepMarkup(store) {
     </div>
     <div class="banner">
       <span class="ic">${raw(icons.shield())}</span>
-      <span><span class="banner-title">Keep this window open</span>The proof runs on this device. You can look at other screens — it keeps going — but closing the wallet stops it.</span>
+      <span><span class="banner-title" data-role="proving-banner-title">${banner.title}</span><span data-role="proving-banner">${banner.text}</span></span>
     </div>
     <div data-role="prove-actions">${cancel}</div>`;
 }

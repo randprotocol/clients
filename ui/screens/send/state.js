@@ -7,13 +7,63 @@ import { formatUnits, parseUnits, elapsed } from '../../lib/format.js';
 import { TX_HASH_RE } from '../../lib/explorer.js';
 import { displayMemo } from '../../lib/memo.js';
 
+/** What `'proving'` says when this device makes the proof. */
+export const DEVICE_PROVING_LABEL = 'Proving the bundle';
+
+/**
+ * `'proving'`'s label from its `detail` (ui/backend.js, R3): on a paired prover, where the job
+ * waits in its queue, then that the prover is working on it; otherwise the device sentence. The
+ * prover's name is the user's own pairing label — shown as text, never markup.
+ */
+export function provingLabel(detail = {}) {
+  const d = detail || {};
+  const name = typeof d.prover === 'string' && d.prover ? d.prover : '';
+  const position = Number(d.position);
+  if (name && Number.isInteger(position) && position >= 1) return `Waiting at position ${position} on ${name}`;
+  if (name) return `Proving on ${name}…`;
+  return DEVICE_PROVING_LABEL;
+}
+
 export const PHASE_LABELS = {
   selecting: 'Selecting notes',
   witness: 'Building the witness',
-  proving: 'Proving the bundle',
+  proving: provingLabel,
   submitting: 'Submitting to the node',
   confirming: 'Waiting for the block',
 };
+
+/** The label for `phase` with its `detail`, for any table shaped like `PHASE_LABELS`. */
+export function phaseLabel(phase, detail, labels = PHASE_LABELS) {
+  const label = labels[phase];
+  if (typeof label === 'function') return label(detail || {});
+  return label || 'Working';
+}
+
+/**
+ * The proving step's banner, `{title, text}`, from the store: a proof made by the paired prover
+ * survives this window closing (the wallet resumes it until it locks); one made here does not.
+ */
+export function provingBanner(store, deviceText = 'The proof runs on this device. You can look at other screens — it keeps going — but closing the wallet stops it.') {
+  const name = store && typeof store.proverName === 'string' ? store.proverName : '';
+  if (!name) return { title: 'Keep this window open', text: deviceText };
+  return {
+    title: 'Your prover is making the proof',
+    text: `The proof is being made by ${name}. You can look at other screens — it keeps going — and if the wallet closes, opening it again before it locks picks the proof up where it was.`,
+  };
+}
+
+/**
+ * Records a phase and its detail on a send-shaped store; false for a phase `labels` does not know
+ * (the caller keeps the last one). The prover's name sticks once reported, so the banner and the
+ * later phases keep saying where the proof is.
+ */
+export function recordPhase(store, phase, detail, labels = PHASE_LABELS) {
+  if (!labels[phase]) return false;
+  store.phase = phase;
+  store.detail = detail && typeof detail === 'object' ? { ...detail } : null;
+  if (store.detail && typeof store.detail.prover === 'string' && store.detail.prover) store.proverName = store.detail.prover;
+  return true;
+}
 // Cancel is offered up to, but not including, the moment the transaction leaves this device: once
 // the node has it, "cancel" would be a lie.
 export const CANCELLABLE = ['selecting', 'witness', 'proving'];
@@ -224,12 +274,42 @@ export function clearFinishedSend(ctx, hash) {
  * wallet session. Returns the store; the caller attaches to `store.promise` for the result.
  */
 export function startSend(ctx, req, asset) {
+  return launchSend(ctx, {
+    req,
+    asset,
+    run: (onPhase, options) => ctx.backend.send.send(req, onPhase, options),
+  });
+}
+
+/**
+ * Carries on a remote proof left pending (`send.pending()` → `pending`, a popup closed mid-proof)
+ * through `send.resume`, on the same store a fresh send uses — so the chip, Cancel and the receipt
+ * all work as they do for one. Nothing about the transfer's amount or recipient is known here (the
+ * engine keeps them); the receipt shows what it can.
+ */
+export function resumeSend(ctx, pending) {
+  const startedAt = Number(pending && pending.startedAt);
+  return launchSend(ctx, {
+    req: { asset: null, amount: null, to: null },
+    asset: { symbol: '', decimals: 0 },
+    phase: 'proving',
+    detail: pending && pending.name ? { prover: String(pending.name) } : null,
+    startedMs: Number.isFinite(startedAt) && startedAt > 0 && startedAt <= Date.now() ? startedAt : Date.now(),
+    resumed: true,
+    run: (onPhase, options) => ctx.backend.send.resume(onPhase, options),
+  });
+}
+
+function launchSend(ctx, { req, asset, run, phase = 'selecting', detail = null, startedMs = Date.now(), resumed = false }) {
   const session = ctx.session;
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
   const store = {
     sessionId: session.id,
-    phase: 'selecting',
-    startedMs: Date.now(),
+    phase,
+    detail: null,
+    proverName: null,
+    resumed,
+    startedMs,
     listeners: new Set(),
     // `controller` is also how the UI knows whether cancelling is possible at all: without an
     // AbortController there is no signal to hand the backend, so no Cancel is offered.
@@ -243,6 +323,7 @@ export function startSend(ctx, req, asset) {
     symbol: asset.symbol,
     decimals: asset.decimals,
   };
+  if (detail) recordPhase(store, phase, detail);
   ctx.state.send = store;
 
   const fan = () => {
@@ -274,10 +355,10 @@ export function startSend(ctx, req, asset) {
     }, { once: true });
   }
 
-  const onPhase = (phase) => {
+  const onPhase = (phase, phaseDetail) => {
     if (ctx.session.id !== session.id) return;
-    if (!PHASE_LABELS[phase]) return; // a phase this build does not know: keep the last one
-    store.phase = phase;
+    // A phase this build does not know: keep the last one.
+    if (!recordPhase(store, phase, phaseDetail)) return;
     fan();
   };
 
@@ -288,7 +369,7 @@ export function startSend(ctx, req, asset) {
 
   // The settle handler runs whatever screen happens to be mounted — including none of this flow's
   // — so everything that must happen exactly once happens here, not in a screen's listener.
-  const p = Promise.resolve(ctx.backend.send.send(req, onPhase, controller ? { signal: controller.signal } : undefined))
+  const p = new Promise((resolve) => { resolve(run(onPhase, controller ? { signal: controller.signal } : undefined)); })
     .then(
       (result) => {
         const hash = safeHash(result && result.hash);

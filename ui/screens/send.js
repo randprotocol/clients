@@ -34,8 +34,8 @@ import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink } from '../lib/explorer.js';
 import { nativeAsset, isUnlisted, feeDecimals, feeSymbol } from '../lib/assets.js';
 import {
-  PHASE_LABELS, CANCELLABLE, ADDRESS_DEBOUNCE_MS, SELF_SEND_QUESTION,
-  explainProvingError, outcomeOf, safeHash, draftFor, currentSend, startSend,
+  phaseLabel, provingBanner, CANCELLABLE, ADDRESS_DEBOUNCE_MS, SELF_SEND_QUESTION,
+  explainProvingError, outcomeOf, safeHash, draftFor, currentSend, startSend, resumeSend,
   unknownOutcome, plainUnits, checkAmount,
   MEMO_MAX_BYTES, NOT_A_RECIPIENT, utf8Length, recipientKind, confirmationLine, memoLine,
   memoSupportedFor,
@@ -72,14 +72,21 @@ registerScreen('send', {
     // `send.limits` all get no memo field — sealing a memo the chain cannot carry is refused by
     // the core anyway, after the user has written it.
     let memoSupported = false;
+    // A remote proof left pending (a popup closed mid-proof — ui/backend.js `send.pending?`): OPTIONAL
+    // in the contract, and a failure to read it is the same as there being none.
+    let pendingJob = null;
     try {
-      const [list, info, prove, cfg, sync, limits] = await Promise.all([
+      const [list, info, prove, cfg, sync, limits, pending] = await Promise.all([
         ctx.backend.assets.list(), ctx.backend.wallet.info(), ctx.backend.send.canProve(),
         ctx.backend.settings.get(), ctx.backend.sync.cached(),
         typeof ctx.backend.send.limits === 'function'
           ? Promise.resolve(ctx.backend.send.limits()).catch(() => null)
           : null,
+        typeof ctx.backend.send.pending === 'function'
+          ? Promise.resolve(ctx.backend.send.pending()).catch(() => null)
+          : null,
       ]);
+      pendingJob = pending && typeof pending === 'object' ? pending : null;
       assets = list;
       ownAddress = (info && info.address) || '';
       if (prove) canProve = prove;
@@ -521,11 +528,18 @@ registerScreen('send', {
     }
 
     function paintPhase(store) {
-      const label = PHASE_LABELS[store.phase] || 'Working';
+      const label = phaseLabel(store.phase, store.detail);
       const phaseEl = stepEl.querySelector('[data-role="phase"]');
       const ring = stepEl.querySelector('[data-role="ring"]');
       if (phaseEl) phaseEl.textContent = label;
       if (ring) ring.setAttribute('aria-label', label);
+      // Where the proof is being made can change under a phase (the prover names itself with its
+      // first report), so the banner follows the store too. Text only.
+      const banner = provingBanner(store);
+      const bannerTitle = stepEl.querySelector('[data-role="proving-banner-title"]');
+      const bannerText = stepEl.querySelector('[data-role="proving-banner"]');
+      if (bannerTitle) bannerTitle.textContent = banner.title;
+      if (bannerText) bannerText.textContent = banner.text;
       const actions = stepEl.querySelector('[data-role="prove-actions"]');
       if (actions) {
         const wanted = !!store.controller && CANCELLABLE.includes(store.phase) && !store.cancelling;
@@ -544,7 +558,11 @@ registerScreen('send', {
       if (store.error) {
         const outcome = outcomeOf(store);
         if (outcome === 'cancelled') {
-          // Cancelled, by the user or by the session ending: back to review, nothing lost.
+          // Cancelled, by the user or by the session ending: back to review, nothing lost. The
+          // attempt is over, so it stops being "the one transfer in flight" — otherwise Prove
+          // would find it and refuse to start the next one.
+          if (ctx.state.send === store) ctx.state.send = null;
+          if (attached === store) { store.listeners.delete(onStoreChange); attached = null; }
           if (ctx.session.id === mySession) goStep('review');
           return;
         }
@@ -579,7 +597,20 @@ registerScreen('send', {
 
     // A send already running (or finished while the user was elsewhere) always wins: whatever
     // route asked for this screen, there is one transfer at a time and this is it.
-    const running = currentSend(ctx);
+    let running = currentSend(ctx);
+    // A remote transfer proof left pending is carried on — the same job, through the same store a
+    // fresh send uses, so Cancel and the receipt work exactly as they do for one. A pending
+    // WITHDRAWAL is the withdraw screen's to resume; the engine refuses a new transfer meanwhile
+    // (with its own sentence), and this says so up front.
+    if (!running && pendingJob && pendingJob.kind !== 'burn' && typeof ctx.backend.send.resume === 'function') {
+      running = resumeSend(ctx, pendingJob);
+    } else if (!running && pendingJob && pendingJob.kind === 'burn') {
+      stepEl.insertAdjacentHTML('beforebegin', h`
+        <div class="banner warn" data-role="pending-elsewhere">
+          <span class="ic">${raw(icons.warning())}</span>
+          <span><span class="banner-title">A withdrawal is still being proved</span>Its proof is pending on ${String(pendingJob.name || 'your prover')}. Open Withdraw to let it finish or cancel it; a new transfer waits until then.</span>
+        </div>`);
+    }
     if (running) {
       attach(running);
     } else {
@@ -974,6 +1005,11 @@ registerScreen('send', {
       if (!store || !store.controller || !CANCELLABLE.includes(store.phase)) return;
       store.cancelling = true;
       try { store.controller.abort(); } catch { /* already aborted */ }
+      // A proof on the paired prover is also cancelled there and forgotten (best effort — the
+      // abort already asks the engine to), so it is not picked up again on the next mount.
+      if (store.proverName && typeof ctx.backend.send.cancelPending === 'function') {
+        Promise.resolve(ctx.backend.send.cancelPending()).catch(() => {});
+      }
       paintPhase(store);
     });
 

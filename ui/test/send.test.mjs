@@ -1457,3 +1457,131 @@ test('only a chain whose envelope is exactly 1860 bytes gets a memo field', asyn
   await app.idle();
   assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0, 'blocked while the memo stands');
 });
+
+// ---------------------------------------------------------------- delegated proving ------------
+// `onPhase('proving', detail)` on a paired prover (ui/backend.js, R3): the screen says where the
+// proof is being made and where the job waits, and a proof left pending (a popup closed
+// mid-proof) is picked up on mount through `send.resume`, cancellable through `send.cancelPending`.
+
+/** A backend whose send.send forwards `detail` with each phase. */
+function detailedSend() {
+  const ctl = { emit: null, settle: null };
+  const b = unlockedBackend({
+    send: {
+      canProve: async () => ({ ok: true, via: 'prover' }),
+      send: (_req, onPhase) => {
+        ctl.emit = (phase, detail) => onPhase(phase, detail);
+        return new Promise((resolve) => { ctl.settle = resolve; });
+      },
+    },
+  });
+  return { b, ctl };
+}
+
+test('a paired prover\'s queue position and name are what the proving step says', async (t) => {
+  const { b, ctl } = detailedSend();
+  const { root } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  ctl.emit('proving', { position: 3, prover: 'my-desktop' });
+  await turns();
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Waiting at position 3 on my-desktop');
+  assert.equal(root.querySelector('[data-role="ring"]').getAttribute('aria-label'), 'Waiting at position 3 on my-desktop');
+
+  ctl.emit('proving', { prover: 'my-desktop' });
+  await turns();
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Proving on my-desktop…');
+  // The banner names the prover rather than claiming this device is proving.
+  assert.match(root.textContent, /my-desktop/);
+  assert.doesNotMatch(root.textContent, /runs on this device/);
+});
+
+test('without a prover the proving step keeps the device sentence', async (t) => {
+  const { b, ctl } = detailedSend();
+  const { root } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  ctl.emit('proving');
+  await turns();
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Proving the bundle');
+  assert.match(root.textContent, /runs on this device/);
+});
+
+/** A backend with a pending remote transfer whose `resume` never settles on its own. */
+function pendingSend({ kind = 'transfer' } = {}) {
+  const ctl = { resumes: 0, options: null, emit: null, settle: null, fail: null, cancelled: 0 };
+  const b = unlockedBackend({
+    send: {
+      canProve: async () => ({ ok: true, via: 'prover' }),
+      pending: async () => ({ job: 'job-1', name: 'my-desktop', kind, startedAt: Date.now() - 5000 }),
+      resume: (onPhase, options) => {
+        ctl.resumes += 1;
+        ctl.options = options;
+        ctl.emit = (phase, detail) => onPhase(phase, detail);
+        return new Promise((resolve, reject) => {
+          ctl.settle = resolve;
+          ctl.fail = reject;
+          if (options && options.signal) {
+            options.signal.addEventListener('abort', () => {
+              const err = new Error('The operation was aborted.');
+              err.name = 'AbortError';
+              reject(err);
+            }, { once: true });
+          }
+        });
+      },
+      cancelPending: async () => { ctl.cancelled += 1; return true; },
+    },
+  });
+  return { b, ctl };
+}
+
+test('a pending remote proof is resumed on mount and lands on the receipt', async (t) => {
+  const { b, ctl } = pendingSend();
+  const { app, root } = await mountApp(t, b, { hash: '#send' });
+  await turns(6);
+  assert.equal(ctl.resumes, 1, 'send.resume was called on mount');
+  assert.ok(ctl.options && ctl.options.signal, 'with a signal');
+  assert.ok(root.querySelector('.ring[role="progressbar"]'), 'the proving step is shown');
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Proving on my-desktop…', 'named from the pending job before any phase');
+  assert.equal(b.calls.filter((c) => c[0] === 'send.send').length, 0);
+
+  ctl.emit('proving', { position: 2, prover: 'my-desktop' });
+  await turns();
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Waiting at position 2 on my-desktop');
+
+  // Going away and back re-attaches rather than resuming twice.
+  await app.go('#home');
+  await turns();
+  await app.go('#send');
+  await turns(6);
+  assert.equal(ctl.resumes, 1);
+
+  ctl.emit('submitting');
+  ctl.settle({ hash: 'ab'.repeat(32), txKey: 'cd'.repeat(32) });
+  await turns(8);
+  assert.equal(location.hash, `#sent/${'ab'.repeat(32)}`);
+  await turns(8);
+  assert.doesNotMatch(root.textContent, /NaN|undefined|null/, 'the receipt invents nothing it does not know');
+  assertGone(root.querySelector('.stage .amount'), 'an amount the resumed proof never knew');
+  assert.ok(root.querySelector('[data-role="txkey"]'), 'the transaction key is offered');
+});
+
+test('Cancel on a resumed proof cancels the pending job', async (t) => {
+  const { b, ctl } = pendingSend();
+  const { root } = await mountApp(t, b, { hash: '#send' });
+  await turns(6);
+  root.querySelector('[data-role="cancel"]').click();
+  await turns(6);
+  assert.equal(ctl.cancelled, 1, 'send.cancelPending was called');
+  assert.equal(ctl.options.signal.aborted, true);
+  assertGone(root.querySelector('.ring[role="progressbar"]'), 'the proving ring after a cancel');
+});
+
+test('a pending withdrawal is not resumed by the send screen', async (t) => {
+  const { b, ctl } = pendingSend({ kind: 'burn' });
+  const { root } = await mountApp(t, b, { hash: '#send' });
+  await turns(6);
+  assert.equal(ctl.resumes, 0);
+  assert.match(root.textContent, /withdrawal/i, 'the screen says a withdrawal proof is pending');
+});

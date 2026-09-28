@@ -45,10 +45,13 @@ registerScreen('sent', {
     const asset = assets.find((a) => a.index === (result ? result.assetIndex : 0)) || { symbol: 'RAND', decimals: 9 };
     const explorer = explorerLink(settings.explorerUrl, hash);
 
-    const amountLine = result
+    // A resumed remote proof (screens/send/state.js `resumeSend`) knows its hash and key but not
+    // its amount or recipient — the engine kept those — so those rows are left out rather than
+    // invented.
+    const amountLine = result && result.amount != null
       ? raw(h`<span class="amount">${formatUnits(result.amount, 9, asset.decimals)}<span class="unit">${asset.symbol}</span></span>`)
       : '';
-    const toRow = result
+    const toRow = result && result.to
       ? raw(h`<div class="kv"><span class="k">To</span><span class="v mono truncate">${shortAddress(result.to)}</span></div>`)
       : '';
     const keyBlock = txKey

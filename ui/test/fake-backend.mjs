@@ -43,6 +43,7 @@ function defaultSettings() {
     rpcUrl: 'http://127.0.0.1:8899',
     rpcUrls: ['https://rpc.randprotocol.org'],
     theme: 'system', autoLockMin: 15, explorerUrl: 'https://randscan.org', chainId: 14,
+    prover: { mode: 'device' },
   };
 }
 
@@ -119,6 +120,10 @@ function createBackend(initial = {}, overrides = {}) {
     // that carries no memo.
     envelopeBytes: 1860,
     contacts: new Map(),
+    // Delegated proving: the remote proof still in flight (`send.pending`), `{job, name, kind,
+    // startedAt}` or null, and what `prover.probe` answers for a paired prover.
+    pendingProof: null,
+    proverProbe: { ok: true, queue: { depth: 0, max: 4, proving: 0 }, witnessKinds: ['spend_key'], fee: null, hcBundles: [] },
     ...initial,
   };
 
@@ -283,6 +288,25 @@ function createBackend(initial = {}, overrides = {}) {
       }
       return { hash: `0x${'ab'.repeat(32)}`, txKey: `tk-${'cd'.repeat(16)}` };
     },
+    // OPTIONAL in the contract: a remote proof left in flight (a popup closed mid-proof). A test
+    // seeds `pendingProof` (initial state) to have the screens find one on mount.
+    pending: () => (state.pendingProof ? { ...state.pendingProof } : null),
+    resume: async (onPhase, options) => {
+      const signal = options && options.signal;
+      if (signal && signal.aborted) throw abortError();
+      const rec = state.pendingProof;
+      if (!rec) { const err = new Error('No proof is pending.'); err.definite = true; throw err; }
+      if (typeof onPhase === 'function') {
+        onPhase('proving', { prover: rec.name });
+        onPhase('submitting');
+        onPhase('confirming');
+      }
+      state.pendingProof = null;
+      return rec.kind === 'burn'
+        ? { hash: `0x${'be'.repeat(32)}` }
+        : { hash: `0x${'ab'.repeat(32)}`, txKey: `tk-${'cd'.repeat(16)}` };
+    },
+    cancelPending: () => { const had = !!state.pendingProof; state.pendingProof = null; return had; },
   };
 
   const faucetDefs = {
@@ -386,6 +410,42 @@ function createBackend(initial = {}, overrides = {}) {
     addressOf: (name) => (state.contacts.has(name) ? state.contacts.get(name) : null),
   };
 
+  // OPTIONAL in the contract: delegated proving's `prover` group, over the stub link grammar
+  // `randprover:<KEY>?url=<url>&token=<64 hex>[&own=1]`. A test deletes `backend.prover` to cover
+  // a shell without it.
+  const PROVER_NOT_OWN = 'This link does not mark the prover as your own, so this version of the '
+    + 'wallet will never send it a job: pair only a prover you run yourself, from a link it made with own=1.';
+  const readProverLink = (link) => {
+    const m = /^randprover:([A-Za-z0-9]+)\?(.*)$/.exec(String(link || '').trim());
+    if (!m) throw new Error('not a randprover: link');
+    const q = {};
+    for (const pair of m[2].split('&')) { const [k, v = ''] = pair.split('='); q[k] = decodeURIComponent(v); }
+    if (!/^[0-9a-f]{64}$/.test(q.token || '')) throw new Error('the link\'s token is not 64 hex digits');
+    let url;
+    try { url = new URL(q.url); } catch { throw new Error('The pairing link\'s prover address is not a URL.'); }
+    const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) {
+      throw new Error('Use https for a prover — plain http is only allowed for a prover on this machine.');
+    }
+    return { key: m[1], url: String(q.url).replace(/\/+$/, ''), host: url.host, own: q.own === '1', fingerprint: fakeFingerprint(`prover:${m[1]}`) };
+  };
+  const proverDefs = {
+    preview: (link) => {
+      const r = readProverLink(link);
+      return { url: r.url, fingerprint: r.fingerprint, own: r.own, ...(r.own ? {} : { warning: PROVER_NOT_OWN }) };
+    },
+    pair: (link, password) => {
+      if (!state.wallet || password !== state.wallet.password) throw new Error('wrong password');
+      const r = readProverLink(link);
+      state.settings.prover = { mode: 'remote', name: r.host, url: r.url, kemEk: `ek-${r.key}`, fingerprint: r.fingerprint, own: r.own };
+      return { ...state.settings.prover };
+    },
+    probe: () => (state.settings.prover && state.settings.prover.mode === 'remote'
+      ? state.proverProbe
+      : { ok: false, reason: 'No prover is paired.' }),
+    forget: () => { state.settings.prover = { mode: 'device' }; },
+  };
+
   const rpcDefs = {
     // The two methods the settings screen's "Test connection" uses; anything else echoes, as
     // before, so a test can assert on a call without this fake pretending to be a whole node.
@@ -428,6 +488,7 @@ function createBackend(initial = {}, overrides = {}) {
     bridge: buildGroup('bridge', bridgeDefs, overrides.bridge, calls),
     address: buildGroup('address', addressDefs, overrides.address, calls),
     contacts: buildGroup('contacts', contactsDefs, overrides.contacts, calls),
+    prover: buildGroup('prover', proverDefs, overrides.prover, calls),
     rpc: buildGroup('rpc', rpcDefs, overrides.rpc, calls),
     settings: buildGroup('settings', settingsDefs, overrides.settings, calls),
     platform: buildGroup('platform', platformDefs, overrides.platform, calls),

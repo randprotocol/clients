@@ -31,7 +31,7 @@ import { parseUnits, formatUnits, shortHex, elapsed } from '../lib/format.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink, TX_HASH_RE } from '../lib/explorer.js';
 import { UNLISTED_TEXT, isUnlisted, backingsOf, feeDecimals, feeSymbol } from '../lib/assets.js';
-import { plainUnits, proveCost } from './send/state.js';
+import { plainUnits, proveCost, provingLabel, phaseLabel, recordPhase, provingBanner } from './send/state.js';
 
 // ============================================================================ the vocabulary ===
 
@@ -50,7 +50,9 @@ export const PHASE_LABELS = Object.freeze({
   // slots 2–3 of the same proof. `'proving-asset'` named the first of two and is gone from the
   // contract; a backend that reported it now would be reporting a phase nothing knows, and this
   // screen keeps the last one it recognised rather than labelling it.
-  proving: 'Proving the bundle',
+  // On a paired prover, where the job waits and who proves it (ui/backend.js, R3); the device
+  // sentence otherwise — the transfer's own rule, shared.
+  proving: provingLabel,
   submitting: 'Submitting to the node',
   confirming: 'Waiting for the block',
 });
@@ -130,12 +132,42 @@ function safeHash(hash) {
  * therefore no secret handoff here at all.
  */
 export function startWithdrawal(ctx, req, asset, display) {
+  return launchWithdrawal(ctx, {
+    req, asset, display,
+    run: (onPhase, options) => ctx.backend.bridge.withdraw(req, onPhase, options),
+  });
+}
+
+/**
+ * Carries on a remote burn proof left pending (`send.pending()` with `kind: 'burn'`) through
+ * `send.resume`, on the same store a fresh withdrawal uses. Its amount and destination stay with
+ * the engine; the receipt shows the hash. `index` is the asset this screen was opened on, only so
+ * the pinned chip leads back here.
+ */
+export function resumeWithdrawal(ctx, pending, index) {
+  const startedAt = Number(pending && pending.startedAt);
+  return launchWithdrawal(ctx, {
+    req: { asset: Number.isInteger(index) ? index : null, amount: null, relayerFee: null, toChain: null, token: null, to: null },
+    asset: { symbol: '', decimals: 0 },
+    display: '',
+    phase: 'proving',
+    detail: pending && pending.name ? { prover: String(pending.name) } : null,
+    startedMs: Number.isFinite(startedAt) && startedAt > 0 && startedAt <= Date.now() ? startedAt : Date.now(),
+    resumed: true,
+    run: (onPhase, options) => ctx.backend.send.resume(onPhase, options),
+  });
+}
+
+function launchWithdrawal(ctx, { req, asset, display, run, phase = 'selecting', detail = null, startedMs = Date.now(), resumed = false }) {
   const session = ctx.session;
   const controller = typeof AbortController === 'function' ? new AbortController() : null;
   const store = {
     sessionId: session.id,
-    phase: 'selecting',
-    startedMs: Date.now(),
+    phase,
+    detail: null,
+    proverName: null,
+    resumed,
+    startedMs,
     listeners: new Set(),
     controller,
     cancelling: false,
@@ -148,6 +180,7 @@ export function startWithdrawal(ctx, req, asset, display) {
     symbol: asset.symbol,
     decimals: asset.decimals,
   };
+  if (detail) recordPhase(store, phase, detail, PHASE_LABELS);
   ctx.state.withdrawal = store;
 
   const fan = () => {
@@ -172,16 +205,16 @@ export function startWithdrawal(ctx, req, asset, display) {
     }, { once: true });
   }
 
-  const onPhase = (phase) => {
+  const onPhase = (phase, phaseDetail) => {
     if (ctx.session.id !== session.id) return;
-    if (!PHASE_LABELS[phase]) return; // a phase this build does not know: keep the last one
-    store.phase = phase;
+    // A phase this build does not know: keep the last one.
+    if (!recordPhase(store, phase, phaseDetail, PHASE_LABELS)) return;
     fan();
   };
 
   const finish = () => { store.done = true; stopTicker(); };
 
-  const p = Promise.resolve(ctx.backend.bridge.withdraw(req, onPhase, controller ? { signal: controller.signal } : undefined))
+  const p = new Promise((resolve) => { resolve(run(onPhase, controller ? { signal: controller.signal } : undefined)); })
     .then(
       (result) => {
         store.hash = safeHash(result && result.hash);
@@ -393,7 +426,8 @@ function ringState(phase) {
 }
 
 function provingStepMarkup(store) {
-  const label = PHASE_LABELS[store.phase] || 'Working';
+  const label = phaseLabel(store.phase, store.detail, PHASE_LABELS);
+  const banner = provingBanner(store, 'One proof runs on this device — about two minutes. You can look at other screens; closing the wallet stops it.');
   const cancel = store.controller && CANCELLABLE.includes(store.phase)
     ? raw(h`<button class="btn block" type="button" data-role="cancel">Cancel</button>`)
     : '';
@@ -408,7 +442,7 @@ function provingStepMarkup(store) {
     </div>
     <div class="banner">
       <span class="ic">${raw(icons.shield())}</span>
-      <span><span class="banner-title">Keep this window open</span>One proof runs on this device — about two minutes. You can look at other screens; closing the wallet stops it.</span>
+      <span><span class="banner-title">${banner.title}</span>${banner.text}</span>
     </div>
     <div data-role="prove-actions">${cancel}</div>`;
 }
@@ -462,10 +496,18 @@ registerScreen('withdraw', {
     let assets = [];
     let can = { ok: false, reason: 'Withdrawals are not available here.' };
     let state = { enabled: false, chains: [] };
+    let pendingJob = null;
     try {
-      const [list, answer] = await Promise.all([ctx.backend.assets.list(), bridge.canWithdraw()]);
+      const [list, answer, pending] = await Promise.all([
+        ctx.backend.assets.list(), bridge.canWithdraw(),
+        // A remote burn proof left pending (ui/backend.js `send.pending?`, optional).
+        typeof ctx.backend.send.pending === 'function'
+          ? Promise.resolve(ctx.backend.send.pending()).catch(() => null)
+          : null,
+      ]);
       assets = list || [];
       if (answer) can = answer;
+      pendingJob = pending && typeof pending === 'object' ? pending : null;
     } catch (err) {
       if (!live()) return;
       endOfTheRoad(cannotMarkup('Could not start a withdrawal', (err && err.message) || 'Something went wrong.'));
@@ -612,6 +654,10 @@ registerScreen('withdraw', {
       if (store.error) {
         const outcome = outcomeOf(store);
         if (outcome === 'cancelled') {
+          // The attempt is over: it stops being "the one withdrawal in flight", or Prove would
+          // find it and refuse the next one.
+          if (ctx.state.withdrawal === store) ctx.state.withdrawal = null;
+          if (attached === store) { store.listeners.delete(onStoreChange); attached = null; }
           if (ctx.session.id === mySession) goStep('review');
           return;
         }
@@ -637,7 +683,13 @@ registerScreen('withdraw', {
       goStep('proving');
     }
 
-    const running = currentWithdrawal(ctx);
+    let running = currentWithdrawal(ctx);
+    // A pending remote burn proof is carried on — the same job, on the same store a fresh
+    // withdrawal uses, so Cancel and the receipt work as they do for one. A pending transfer is
+    // the send screen's to resume.
+    if (!running && pendingJob && pendingJob.kind === 'burn' && typeof ctx.backend.send.resume === 'function') {
+      running = resumeWithdrawal(ctx, pendingJob, index);
+    }
     if (running) attach(running);
     else goStep(draft.estimate ? 'review' : (draft.padded ? 'amount' : 'chain'), { focus: false });
 
@@ -786,6 +838,10 @@ registerScreen('withdraw', {
       if (!store || !store.controller || !CANCELLABLE.includes(store.phase)) return;
       store.cancelling = true;
       try { store.controller.abort(); } catch { /* already aborted */ }
+      // On the paired prover it is also cancelled there and forgotten (best effort).
+      if (store.proverName && typeof ctx.backend.send.cancelPending === 'function') {
+        Promise.resolve(ctx.backend.send.cancelPending()).catch(() => {});
+      }
       paintPhase();
     });
 
@@ -834,10 +890,11 @@ registerScreen('withdrawn', {
 
     const asset = assets.find((a) => a.index === (receipt ? receipt.assetIndex : -1)) || null;
     const explorer = explorerLink(settings.explorerUrl, hash);
-    const amountLine = receipt && asset
+    const amountLine = receipt && asset && receipt.amount != null
       ? raw(h`<span class="amount">${formatUnits(receipt.amount, 9, asset.decimals)}<span class="unit">${asset.symbol}</span></span>`)
       : '';
-    const toRow = receipt
+    // A resumed proof's receipt knows only its hash (see `resumeWithdrawal`).
+    const toRow = receipt && receipt.display
       ? raw(h`
         <div class="kv"><span class="k">To</span><span class="v mono truncate">${receipt.display}</span></div>
         <div class="kv"><span class="k">On</span><span class="v">${chainName(receipt.toChain)}</span></div>`)

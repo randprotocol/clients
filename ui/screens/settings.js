@@ -1,4 +1,4 @@
-// Settings: Network, Appearance, Security, About.
+// Settings: Network, Prover (where the backend has the group), Appearance, Security, About.
 //
 // Two rules run through the whole screen:
 //
@@ -101,6 +101,55 @@ function networkMarkup(settings) {
       <div data-role="network-status"></div>
     </form>
     <div data-role="rescan-slot"></div>`);
+}
+
+// ---- the prover (delegated proving, spec 2026-09-28 §4.4) ----
+// Verbatim from the spec, Phase 1: shown before a pairing is saved, as part of the form, above the
+// password — not a dismissible notice.
+export const PROVER_WARNING = 'This prover will receive your spend key each time it makes a proof. '
+  + 'Anyone who controls it can spend your funds. Pair only a machine you run yourself.';
+
+/** Who makes this wallet's proofs: this device, or the paired prover. Every field is text. */
+function proverStateMarkup(prover) {
+  if (prover && prover.mode === 'remote') {
+    return h`
+      <div class="kv"><span class="k">Proofs are made by</span><span class="v">My own prover · ${prover.name || prover.url || ''}</span></div>
+      <div class="kv"><span class="k">Fingerprint</span><span class="v mono">${prover.fingerprint || ''}</span></div>
+      <p class="caption" data-role="prover-probe">Asking the prover…</p>
+      <button class="btn block" type="button" data-role="forget-prover">Forget this prover</button>`;
+  }
+  return h`
+    <div class="kv"><span class="k">Proofs are made by</span><span class="v">This device</span></div>
+    <p class="caption">Where this device cannot make a proof, pair a prover you run yourself — the desktop app, or rand-prover on your own machine.</p>`;
+}
+
+// Offered only where the backend has the (optional) `prover` group. The link is never put in
+// markup (it carries the pairing token): the field starts empty and is emptied after a pairing.
+function proverMarkup(settings, platform) {
+  const scan = typeof platform.scanQr === 'function'
+    ? raw('<button class="btn" type="button" data-role="scan-prover">Scan QR code</button>')
+    : '';
+  return sectionMarkup('Prover', h`
+    <div data-role="prover-state" class="stack tight">${raw(proverStateMarkup(settings.prover))}</div>
+    <form data-role="prover-form" class="stack" novalidate>
+      <div class="field">
+        <label class="label" for="settings-prover-link">Pairing link</label>
+        <input id="settings-prover-link" name="proverLink" type="text" spellcheck="false" autocomplete="off" placeholder="randprover:…" aria-describedby="settings-prover-link-hint">
+        <span class="hint" id="settings-prover-link-hint">The randprover: link your prover shows. It carries a secret — paste it here and nowhere else.</span>
+      </div>
+      ${scan}
+      <div class="banner negative" data-role="prover-warning">
+        <span class="ic">${raw(icons.warning())}</span>
+        <span><span class="banner-title">Your spend key goes to this prover</span>${PROVER_WARNING}</span>
+      </div>
+      <div class="field">
+        <label class="label" for="settings-prover-password">Password</label>
+        <input id="settings-prover-password" name="proverPassword" type="password" autocomplete="current-password" aria-describedby="settings-prover-password-hint">
+        <span class="hint" id="settings-prover-password-hint">The password that unlocks this wallet — the pairing is sealed under it.</span>
+      </div>
+      <div class="cluster"><button class="btn btn-primary" type="submit" data-role="save-prover">Save</button></div>
+      <div data-role="prover-status"></div>
+    </form>`);
 }
 
 // Offered only where the backend has `sync.rescan` (optional in the contract). It is the
@@ -211,9 +260,13 @@ registerScreen('settings', {
     if (!live()) return;
 
     const platform = ctx.backend.platform;
+    // Optional in the contract, feature-detected like `bridge`: a shell without it has no Prover
+    // section at all.
+    const proverGroup = ctx.backend.prover && typeof ctx.backend.prover.pair === 'function' ? ctx.backend.prover : null;
     const body = root.querySelector('[data-role="body"]');
     body.innerHTML = h`
       ${raw(networkMarkup(settings))}
+      ${raw(proverGroup ? proverMarkup(settings, platform) : '')}
       ${raw(ctx.backend.contacts && typeof ctx.backend.contacts.list === 'function' ? contactsMarkup() : '')}
       ${raw(appearanceMarkup(settings))}
       ${raw(securityMarkup(settings))}
@@ -249,13 +302,13 @@ registerScreen('settings', {
 
     /** Every string in here is node-controlled, so it is interpolated, never `raw()`ed.
      *  `kind` is one of 'info' (nothing is known yet), 'positive', 'warn', 'negative'. */
-    function showStatus(kind, title, detail) {
+    function showStatus(kind, title, detail, target = statusEl) {
       const cls = kind === 'warn' ? 'banner warn'
         : kind === 'negative' ? 'banner negative'
         : kind === 'positive' ? 'banner positive'
         : 'banner';
       const icon = kind === 'positive' ? icons.check() : kind === 'info' ? icons.info() : icons.warning();
-      statusEl.innerHTML = h`
+      target.innerHTML = h`
         <div class="${cls}">
           <span class="ic">${raw(icon)}</span>
           <span><span class="banner-title">${title}</span>${detail}</span>
@@ -412,6 +465,137 @@ registerScreen('settings', {
         if (!live()) return;
         showStatus('positive', 'Rescanned', 'This wallet has re-read the chain from the start.');
       });
+    });
+
+    // ---- prover ----
+    const proverStateEl = body.querySelector('[data-role="prover-state"]');
+    const proverStatusEl = body.querySelector('[data-role="prover-status"]');
+    const proverLinkInput = body.querySelector('input[name=proverLink]');
+    const proverPasswordInput = body.querySelector('input[name=proverPassword]');
+    let pairing = false; // one Save at a time: a second submit is dropped, not queued
+    let probeRun = 0;    // only the latest probe may paint
+
+    /** Asks the paired prover whether it answers, and writes the one line that says so. */
+    async function probeProver() {
+      const line = () => proverStateEl && proverStateEl.querySelector('[data-role="prover-probe"]');
+      if (!proverGroup || !line() || typeof proverGroup.probe !== 'function') return;
+      const mine = ++probeRun;
+      let answer;
+      try { answer = await proverGroup.probe(); } catch (err) { answer = { ok: false, reason: (err && err.message) || 'it did not answer' }; }
+      if (!live() || mine !== probeRun || !line()) return;
+      // Text only: the reason and the queue are the prover's words.
+      if (answer && answer.ok) {
+        const q = answer.queue || {};
+        const depth = Number.isFinite(Number(q.depth)) ? Number(q.depth) : 0;
+        const max = Number.isFinite(Number(q.max)) ? ` of ${Number(q.max)}` : '';
+        line().textContent = `Answering · ${depth}${max} in its queue.`;
+      } else {
+        line().textContent = `Not answering: ${String((answer && answer.reason) || 'no reply').replace(/\.$/, '')}.`;
+      }
+    }
+
+    function paintProverState() {
+      if (!proverStateEl) return;
+      proverStateEl.innerHTML = proverStateMarkup(settings.prover);
+      probeProver();
+    }
+    if (proverGroup) probeProver();
+
+    const offSaveProver = on(body, '[data-role="prover-form"]', 'submit', async (evt) => {
+      evt.preventDefault();
+      if (!proverGroup || pairing) return;
+      // Read once, here: the password lives in this handler's scope and in the field until the
+      // field is emptied below — never on `ctx.state`, `settings` or an attribute.
+      const link = String(proverLinkInput.value || '').trim();
+      let password = proverPasswordInput.value;
+      proverStatusEl.innerHTML = '';
+      if (!link) { showStatus('negative', 'Not paired', 'Paste the randprover: link your prover shows.', proverStatusEl); return; }
+      if (!password) { showStatus('negative', 'Not paired', 'Enter this wallet\'s password — the pairing is sealed under it.', proverStatusEl); return; }
+      pairing = true;
+      const saveBtn = body.querySelector('[data-role="save-prover"]');
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.setAttribute('aria-busy', 'true'); }
+      const done = () => {
+        pairing = false;
+        password = '';
+        proverPasswordInput.value = '';
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.removeAttribute('aria-busy'); }
+      };
+      // The screen cannot read a randprover: link — the core does — so the engine is asked what it
+      // names first: the host to ask permission for, and whether it is the user's own.
+      let seen;
+      try {
+        seen = await proverGroup.preview(link);
+      } catch (err) {
+        done();
+        if (!live()) return;
+        showStatus('negative', 'Not paired', (err && err.message) || 'That is not a pairing link.', proverStatusEl);
+        return;
+      }
+      if (!live()) { done(); return; }
+      // The same rule as the node: an extension reaches no host it was not granted, and asks for
+      // one only inside the user's click.
+      if (typeof platform.ensureHostPermission === 'function') {
+        let granted = false;
+        try { granted = await platform.ensureHostPermission(seen.url); } catch { granted = false; }
+        if (!live()) { done(); return; }
+        if (!granted) {
+          done();
+          showStatus('negative', 'Not paired', 'Permission to reach that prover was not granted, so nothing was saved.', proverStatusEl);
+          return;
+        }
+      }
+      let paired;
+      try {
+        paired = await proverGroup.pair(link, password);
+      } catch (err) {
+        done();
+        if (!live()) return;
+        showStatus('negative', 'Not paired', (err && err.message) || 'The prover could not be paired.', proverStatusEl);
+        return;
+      }
+      done();
+      if (!live()) return;
+      proverLinkInput.value = ''; // the token goes with it
+      settings = { ...settings, prover: paired };
+      paintProverState();
+      showStatus('positive', 'Paired', `Proofs this device cannot make go to ${paired.name || seen.url}. Its fingerprint is ${paired.fingerprint || seen.fingerprint} — check that your prover shows the same.`, proverStatusEl);
+      // The engine's own sentence, relayed: Phase 1 never sends a job to a prover not marked own.
+      if (seen.warning) {
+        proverStatusEl.insertAdjacentHTML('beforeend', h`
+          <div class="banner warn">
+            <span class="ic">${raw(icons.warning())}</span>
+            <span><span class="banner-title">This pairing will not be used</span>${seen.warning}</span>
+          </div>`);
+      }
+    });
+
+    const offScanProver = on(body, '[data-role="scan-prover"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (typeof platform.scanQr !== 'function') return;
+      let text = '';
+      try { text = await platform.scanQr(); } catch (err) {
+        if (!live() || (err && err.name === 'AbortError')) return;
+        showStatus('negative', 'Nothing scanned', (err && err.message) || 'The camera could not read a code.', proverStatusEl);
+        return;
+      }
+      if (!live() || !text) return;
+      proverLinkInput.value = String(text).trim();
+    });
+
+    const offForgetProver = on(body, '[data-role="forget-prover"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (!proverGroup || typeof proverGroup.forget !== 'function') return;
+      try {
+        await proverGroup.forget();
+      } catch (err) {
+        if (!live()) return;
+        showStatus('negative', 'Not forgotten', (err && err.message) || 'The pairing could not be removed.', proverStatusEl);
+        return;
+      }
+      if (!live()) return;
+      settings = { ...settings, prover: { mode: 'device' } };
+      paintProverState();
+      showStatus('positive', 'Forgotten', 'Proofs are made on this device again. The prover\'s pairing is gone from this wallet.', proverStatusEl);
     });
 
     // ---- appearance ----
@@ -656,7 +840,10 @@ registerScreen('settings', {
     return () => {
       closePanel({ collapse: false });
       for (const mask of body.querySelectorAll('[data-role="mask"]')) mask.textContent = '';
+      if (proverLinkInput) proverLinkInput.value = '';
+      if (proverPasswordInput) proverPasswordInput.value = '';
       offSaveNetwork(); offTest(); offRescan(); offTheme(); offAutoLock();
+      offSaveProver(); offScanProver(); offForgetProver();
       offViewingKey(); offSpendKey(); offUnderstand(); offDone();
       offWipeInput(); offWipe(); offExternal();
     };
