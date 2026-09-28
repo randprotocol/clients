@@ -128,10 +128,37 @@ never in clear.
 ## 6. The mobile apps
 
 Phase 1 lets a phone use a prover you run, too — but it must be reachable from the phone over TLS
-(an `https://` address, §4), since the desktop app's prover listens on its own computer only. The
-iOS and Android apps do not have a Prover section in Settings yet; it is planned. Until it ships,
-a phone with enough memory proves for itself, and on one without, send from the desktop app or
-the `rand` command-line wallet.
+(an `https://` address, §4): the desktop app's prover listens on its own computer only
+(`127.0.0.1`), which a phone cannot reach, so a phone pairs with your own `rand-prover` behind a
+TLS-terminating proxy. Plain `http://` is accepted only for `localhost`/`127.0.0.1`, which on a
+phone means the phone itself (in practice, the simulator or emulator during development).
+
+1. **In the iOS or Android app**, open Settings → **Prover**. It reads "Proofs are made by: This
+   device" until something is paired.
+2. Paste the `randprover:` link into **Pairing link**, or press **Scan** (iOS: the QR button
+   beside the field; Android: **Scan QR code**) and point the camera at the prover's QR code. The
+   warning in §2 is shown under the field, before **Save**, every time.
+3. **Save** reads the link through the core, holds its address to the TLS rule, asks the prover
+   for its key and refuses one whose key is not the link's (the same checks as §3 step 4). On
+   success it says **Paired** with the fingerprint — check it against the one your prover shows.
+   The token is kept in the Keychain (iOS) or the encrypted key vault (Android), beside the spend
+   key, never in the app's settings; there is no password step, because those stores are already
+   locked to the device. A link without `own=1` is saved but never sent a job ("Saved; not usable
+   in this build").
+4. Settings then reads "Proofs are made by: My own prover · host:port", its fingerprint, and a
+   status line such as `Answering · 0 of 8 in its queue.` **Forget this prover** removes the
+   pairing and its token; removing the wallet from the phone removes them too.
+
+A phone with enough memory for a proof (about 8 GB) keeps proving for itself; the prover is used
+only when it cannot. Then the review step says the paired prover will make the proof, and
+**Send** checks that the prover answers with the paired key and takes a spend-key job before it
+builds anything — if not, the send stops with the reason and nothing is sent. While the proof is
+made the proving screen reads `Waiting at position N on host:port`, then `Proving on host:port…`;
+the reply is checked exactly as in §5 before the transaction is submitted. The mobile apps have
+no Withdraw screen, so only transfers go through the prover.
+
+The job lives only in the running app (on Android, in its proving service): if the system kills
+the app mid-proof, that job is lost and nothing is sent — send again.
 
 ## 7. Phase 2
 

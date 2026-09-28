@@ -5,8 +5,8 @@ Wallets for the Rand Protocol RAND chain (the fully shielded pool served by
 
 | client | language | directory | ships as | can send |
 |---|---|---|---|---|
-| iOS | Swift (SwiftUI) | `ios/` | TestFlight / App Store | on a device with about 8 GB of memory |
-| Android | Java | `android/` | Google Play (`.aab`) | on a device with about 8 GB of memory |
+| iOS | Swift (SwiftUI) | `ios/` | TestFlight / App Store | on a device with about 8 GB of memory; otherwise through a paired prover over TLS |
+| Android | Java | `android/` | Google Play (`.aab`) | on a device with about 8 GB of memory; otherwise through a paired prover over TLS |
 | Chrome | JavaScript, Manifest V3 | `chrome/` + `extension/` | Chrome Web Store | through a paired prover |
 | Firefox | JavaScript, Manifest V3 | `firefox/` + `extension/` | addons.mozilla.org | through a paired prover |
 | Windows, Linux, macOS | Tauri (shared UI + Rust core) | `desktop/` | .msi / .deb / AppImage / .dmg | yes, and proves for your other wallets |
@@ -25,7 +25,8 @@ transactions with. The shells that can fit a proof in memory — the desktop app
 apps — also prove and submit shielded transfers of RAND and of any listed RPL token; the browser
 extension and the web wallet build and submit the same transfers but have the proof made by a
 prover you pair — the desktop app on the same machine, or your own `rand-prover` (see the known
-limitation below and [`docs/prover.md`](docs/prover.md)). Downloads are listed at https://randprotocol.org/clients (`web/`).
+limitation below and [`docs/prover.md`](docs/prover.md)); a phone without the memory can pair your
+own `rand-prover` too, reached over https. Downloads are listed at https://randprotocol.org/clients (`web/`).
 
 Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
@@ -88,15 +89,16 @@ my other devices**), or your own `rand-prover` on a server — and without one t
 explains the wall. A prover in this release receives the wallet's spend key with every job, so pair
 only a machine you run yourself; [`docs/prover.md`](docs/prover.md) is the whole guide. Phones with less than
 about 8 GB of RAM will have the app terminated mid-proof (the review step warns with the device's
-numbers). Every other feature — creating and importing wallets, receiving, scanning, the faucet,
+numbers) unless they pair your own `rand-prover` over https (Settings → Prover,
+[`docs/prover.md`](docs/prover.md) §6). Every other feature — creating and importing wallets, receiving, scanning, the faucet,
 activity, viewing keys and per-transaction keys for randscan.org — works on all five shells
 (iOS, Android, the browser extension, the desktop app and the web wallet), and the whole send
 path is implemented and tested against the chain's own verifier in the core. The fix is in the
 prover (`randprotocol-zkvm`: it materialises every table's low-degree extension at once); when
 its peak drops, update `PROVER_PEAK_MEMORY_BYTES` in `core/crates/wallet-core/src/lib.rs` and
 the two mirrored constants in the mobile apps, rebuild, and the Send flows light up unchanged.
-Until then, a phone without the memory sends from the desktop app or from the `rand`
-command-line wallet using the key file every client exports.
+Until then, a phone without the memory sends through a paired prover of your own, or from the
+desktop app or the `rand` command-line wallet using the key file every client exports.
 
 ## Build
 
