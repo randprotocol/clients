@@ -329,6 +329,11 @@
  *  - `prover?` — a whole OPTIONAL GROUP, delegated proving (spec 2026-09-28, Phase 1): a prover
  *    the user runs (the desktop app's, or `rand-prover` on their own machine) proves for a device
  *    that cannot. Phase 1 sends a spend-key job only to a pairing whose link says `own`.
+ *     · `prover.preview(link)` → `{url, fingerprint, own, warning?}`: the link read by the core and
+ *       held to the URL rule, nothing saved, nobody asked, no password. A screen calls it first, to
+ *       learn the host to ask permission for (inside the same click) and to show the fingerprint.
+ *       `warning` — a sentence for the user — is there exactly when `own` is false: Phase 1 never
+ *       sends such a prover a job. Never carries the token. Rejects with the core's sentence.
  *     · `prover.pair(link, password, {name}?)` → the new `settings.prover`. The password is checked
  *       first (the token is sealed under it, as a second vault record); the `randprover:` link is
  *       parsed by the core; its URL must be https, or http to this machine only; the prover must

@@ -122,6 +122,28 @@ test('pairing refuses a wrong password, a prover with another key, and plain htt
   assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
 });
 
+test('preview reads a link without saving, asking, or needing the password', async () => {
+  const env = build();
+  await env.backend.wallet.create(PASSWORD);
+  const seen = await env.backend.prover.preview(proverLink());
+  assert.deepEqual(seen, { url: PROVER_URL, fingerprint: proverFingerprint(), own: true });
+  assert.equal(JSON.stringify(seen).includes(PROVER_TOKEN), false, 'the token came back from preview');
+
+  // Not own: the pairing is described, and the engine says why Phase 1 will not use it.
+  const other = await env.backend.prover.preview(proverLink({ own: false }));
+  assert.equal(other.own, false);
+  assert.match(other.warning, /own/);
+
+  // The core's refusal and the URL rule are the engine's sentences.
+  await assert.rejects(() => env.backend.prover.preview('randpay:nope'), /randprover/);
+  await assert.rejects(() => env.backend.prover.preview(proverLink({ url: 'http://192.168.1.9:8546' })), /https/);
+
+  // Nothing was stored and no prover was asked.
+  assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
+  assert.equal(env.storage.local.get('proverToken'), undefined);
+  assert.equal(count(env.fetch, 'prover_info'), 0);
+});
+
 test('re_pairing_replaces_the_token_everywhere', async () => {
   const second = '4b'.repeat(32);
   const env = await sendableWallet({

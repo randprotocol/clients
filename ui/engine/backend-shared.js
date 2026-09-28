@@ -1478,7 +1478,25 @@ export function makeSharedBackend({
    * one the link names; only then is anything stored — the token in the vault (never in
    * `settings`), the rest in `settings.prover`.
    */
+  // Phase 1 sends a spend-key job only to a prover the link marks as the user's own; a pairing
+  // without it is stored but never used, and a screen says so before the user saves it.
+  const NOT_OWN_WARNING = 'This link does not mark the prover as your own, so this version of the '
+    + 'wallet will never send it a job: pair only a prover you run yourself, from a link it made with own=1.';
+
   const prover = {
+    /**
+     * What a link names, read through the core and held to the URL rule, WITHOUT saving it or
+     * asking anybody: `{url, fingerprint, own, warning?}`. A screen calls it to learn the host it
+     * must ask permission for, and to show the fingerprint, before `pair`. Never the token.
+     */
+    async preview(link) {
+      const parsed = await c.parseProverLink(String(link || '').trim());
+      const checked = checkProverUrl(parsed.url);
+      if (checked.error) throw new Error(checked.error);
+      const own = parsed.own === true;
+      return { url: checked.url, fingerprint: String(parsed.fingerprint), own, ...(own ? {} : { warning: NOT_OWN_WARNING }) };
+    },
+
     async pair(link, password, { name } = {}) {
       // The password first, before any network: the token is sealed under it, and a token sealed
       // under a mistyped password would silently never open at the next unlock.
