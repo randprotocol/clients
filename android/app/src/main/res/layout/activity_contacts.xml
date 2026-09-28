@@ -11,7 +11,7 @@
         <com.google.android.material.textfield.TextInputEditText android:id="@+id/name" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textPersonName|textNoSuggestions" android:maxLines="1" />
     </com.google.android.material.textfield.TextInputLayout>
     <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="@string/contacts_address_hint">
-        <com.google.android.material.textfield.TextInputEditText android:id="@+id/address" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textMultiLine|textNoSuggestions" android:maxLines="3" android:typeface="monospace" android:textSize="12sp" />
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/address" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textMultiLine|textNoSuggestions" android:maxLines="3" android:fontFamily="@font/jetbrains_mono" android:textSize="12sp" />
     </com.google.android.material.textfield.TextInputLayout>
     <com.google.android.material.button.MaterialButton android:id="@+id/paste" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/send_paste" />
     <TextView android:id="@+id/fingerprint" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Mono" android:textSize="12sp" android:textColor="@color/text_soft" android:visibility="gone" />

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The brand as a screen's hero (welcome, lock): the same mark and wordmark at twice the topbar
+     size, 44dp and 44sp, four of the pixel face's 11px units. Read aloud as "Rand Wallet". -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content" android:layout_height="wrap_content"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:contentDescription="@string/app_name">
+    <ImageView android:layout_width="44dp" android:layout_height="44dp" android:src="@drawable/ic_mark" android:importantForAccessibility="no" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="16dp" style="@style/Text.Wordmark" android:textSize="44sp" android:text="@string/wordmark" android:importantForAccessibility="no" />
+</LinearLayout>

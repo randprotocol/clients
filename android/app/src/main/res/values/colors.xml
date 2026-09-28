@@ -22,6 +22,9 @@
     <color name="field_ink">#0E1220</color>
     <color name="field_grain">#ECE9E2</color>
     <color name="field_edge">#14ECE9E2</color>
+    <!-- Grain at 85% and 75%: the card's label, symbol and sync line. -->
+    <color name="field_grain_85">#D9ECE9E2</color>
+    <color name="field_grain_75">#BFECE9E2</color>
     <color name="white">#FFFFFF</color>
     <color name="ripple">#1FC8185F</color>
 </resources>

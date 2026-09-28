@@ -2,6 +2,8 @@
 <resources>
     <string name="app_name">Rand Wallet</string>
     <string name="symbol">RAND</string>
+    <!-- The wordmark: lowercase, in the pixel face. Never the accessible name; that is app_name. -->
+    <string name="wordmark" translatable="false">rand</string>
 
     <string name="welcome_title">Rand Wallet</string>
     <string name="welcome_subtitle">A shielded wallet for RAND. Balances and transfers are private by default; only your viewing key can open them.</string>

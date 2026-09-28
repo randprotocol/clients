@@ -1,0 +1,25 @@
+The faces in res/font/: the same three ui/fonts/ ships (see ui/fonts/SOURCES.txt at the repo root).
+Android resource names must be lowercase a-z0-9_, so the files are renamed; nothing inside them
+is changed. The licences sit here because res/font/ takes font files only, and assets ship in
+the APK, so the licence travels with the face.
+
+res/font/inter_variable.ttf
+  Inter v4.1 — https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip
+  `InterVariable.ttf` from that archive, verbatim. Reached through res/font/inter.xml, which
+  names the 400/500/600/700 instances of the wght axis so textStyle="bold" picks a real weight
+  rather than a synthetic bold.
+  Licence: Inter-OFL.txt (SIL Open Font License 1.1), the archive's LICENSE.txt.
+
+res/font/jetbrains_mono_variable.ttf
+  JetBrains Mono v2.304 —
+  https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip
+  `fonts/variable/JetBrainsMono[wght].ttf` from that archive, verbatim. Reached through
+  res/font/jetbrains_mono.xml (400/500/700). Addresses, hashes and keys only.
+  Licence: JetBrainsMono-OFL.txt (SIL Open Font License 1.1), the archive's OFL.txt.
+
+res/font/departure_mono_regular.otf
+  Departure Mono v1.500 (Helena Zhang) —
+  https://github.com/rektdeckard/departure-mono/releases/download/v1.500/DepartureMono-1.500.zip
+  `DepartureMono-Regular.otf` from that archive, verbatim. A pixel face on an 11 px grid: the
+  wordmark (22sp) and the balance figure (44sp) only, always at multiples of 11.
+  Licence: DepartureMono-OFL.txt (SIL Open Font License 1.1), the archive's LICENSE.

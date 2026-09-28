@@ -5,7 +5,7 @@
 
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="24dp" style="@style/Text.Section" android:text="@string/settings_network" />
     <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:hint="@string/settings_rpc">
-        <com.google.android.material.textfield.TextInputEditText android:id="@+id/rpc" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textUri" android:typeface="monospace" android:textSize="13sp" />
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/rpc" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textUri" android:fontFamily="@font/jetbrains_mono" android:textSize="13sp" />
     </com.google.android.material.textfield.TextInputLayout>
     <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="@string/settings_chain">
         <com.google.android.material.textfield.TextInputEditText android:id="@+id/chain" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" />

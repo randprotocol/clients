@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The brand mark: one 4x4 tile of the entropy field (ui/lib/entropy.js markSvg), ten 5-unit cells on
+     a 6-unit pitch in a 23-unit box. Cell 11 burns in the signal colour; the rest are grain in the
+     strong text colour, so the mark follows the day/night palette. Drawn at 22dp, two of the pixel
+     face's 11px units. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp" android:height="22dp" android:viewportWidth="23" android:viewportHeight="23">
+    <path android:fillColor="@color/text_strong" android:pathData="M0,0h5v5h-5z M6,0h5v5h-5z M12,0h5v5h-5z M6,6h5v5h-5z M18,6h5v5h-5z M0,12h5v5h-5z M12,12h5v5h-5z M6,18h5v5h-5z M18,18h5v5h-5z" />
+    <path android:fillColor="@color/accent" android:pathData="M18,12h5v5h-5z" />
+</vector>

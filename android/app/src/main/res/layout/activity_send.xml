@@ -7,7 +7,7 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Title" android:text="@string/send_title" />
         <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:hint="@string/send_to_hint" app:endIconMode="clear_text">
-            <com.google.android.material.textfield.TextInputEditText android:id="@+id/to" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textMultiLine|textNoSuggestions" android:maxLines="3" android:typeface="monospace" android:textSize="12sp" />
+            <com.google.android.material.textfield.TextInputEditText android:id="@+id/to" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="textMultiLine|textNoSuggestions" android:maxLines="3" android:fontFamily="@font/jetbrains_mono" android:textSize="12sp" />
         </com.google.android.material.textfield.TextInputLayout>
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
             <com.google.android.material.button.MaterialButton android:id="@+id/paste" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/send_paste" />

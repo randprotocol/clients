@@ -23,21 +23,41 @@
         <item name="android:textColorPrimary">@color/text</item>
         <item name="android:textColorSecondary">@color/text_soft</item>
         <item name="android:textColorHint">@color/text_mute</item>
+        <!-- Inter for every TextView and field (design/tokens.json `type.family`). Material's text
+             appearances name sans-serif outright, so the family is set on the widget styles, where
+             it wins over the appearance; the theme-level items cover anything that asks the theme. -->
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="fontFamily">@font/inter</item>
+        <item name="android:textViewStyle">@style/Widget.RandWallet.TextView</item>
+        <item name="android:editTextStyle">@style/Widget.RandWallet.EditText</item>
+        <item name="editTextStyle">@style/Widget.RandWallet.EditText</item>
         <item name="materialButtonStyle">@style/Widget.RandWallet.Button</item>
         <item name="textInputStyle">@style/Widget.Material3.TextInputLayout.OutlinedBox</item>
     </style>
 
+    <style name="Widget.RandWallet.TextView" parent="Widget.MaterialComponents.TextView">
+        <item name="android:fontFamily">@font/inter</item>
+    </style>
+
+    <!-- TextInputLayout takes its hint's typeface from the field, so this covers the hints too. -->
+    <style name="Widget.RandWallet.EditText" parent="Widget.Material3.TextInputEditText.OutlinedBox">
+        <item name="android:fontFamily">@font/inter</item>
+    </style>
+
+    <!-- Buttons: the tokens' md radius (12dp); the primary action is solid signal. -->
     <style name="Widget.RandWallet.Button" parent="Widget.Material3.Button">
-        <item name="cornerRadius">14dp</item>
+        <item name="cornerRadius">12dp</item>
         <item name="android:minHeight">52dp</item>
+        <item name="android:fontFamily">@font/inter</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">16sp</item>
         <item name="android:textStyle">bold</item>
     </style>
 
     <style name="Widget.RandWallet.Button.Secondary" parent="Widget.Material3.Button.TonalButton">
-        <item name="cornerRadius">14dp</item>
+        <item name="cornerRadius">12dp</item>
         <item name="android:minHeight">52dp</item>
+        <item name="android:fontFamily">@font/inter</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">16sp</item>
         <item name="backgroundTint">@color/surface_2</item>
@@ -45,16 +65,30 @@
     </style>
 
     <style name="Widget.RandWallet.Button.Text" parent="Widget.Material3.Button.TextButton">
+        <item name="android:fontFamily">@font/inter</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textColor">@color/accent</item>
     </style>
 
     <style name="Text" />
+    <!-- The balance figure: the pixel face at 44sp (4 x its 11px grid), regular, tabular
+         (tokens.json `type.balance`), in grain on the ink field. -->
     <style name="Text.Balance">
-        <item name="android:textSize">40sp</item>
-        <item name="android:textStyle">bold</item>
+        <item name="android:fontFamily">@font/departure_mono_regular</item>
+        <item name="android:textSize">44sp</item>
         <item name="android:textColor">@color/field_grain</item>
         <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+    <!-- The wordmark: `rand` in the pixel face at 22sp (ui/base.css .brand .name); layouts that
+         carry it as the hero set 44sp. -->
+    <style name="Text.Wordmark">
+        <item name="android:fontFamily">@font/departure_mono_regular</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textColor">@color/text_strong</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:maxLines">1</item>
     </style>
     <style name="Text.Title">
         <item name="android:textSize">22sp</item>
@@ -77,8 +111,9 @@
         <item name="android:textSize">12sp</item>
         <item name="android:textColor">@color/text_mute</item>
     </style>
+    <!-- Literal data: addresses, hashes, keys. Never labels. -->
     <style name="Text.Mono">
-        <item name="android:typeface">monospace</item>
+        <item name="android:fontFamily">@font/jetbrains_mono</item>
         <item name="android:textSize">13sp</item>
         <item name="android:textColor">@color/text</item>
     </style>
