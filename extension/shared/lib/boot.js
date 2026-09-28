@@ -10,6 +10,7 @@
 // to own the page rather than a box inside it.
 import { mount } from '../ui/app.js';
 import { extensionBackend } from '../backend-extension.js';
+import { pendingRoute } from '../ui/lib/resume-route.js';
 
 /**
  * The last resort, for the two failures that happen before there is any UI to report them in: the
@@ -32,7 +33,12 @@ function fatal(message) {
 
 export async function boot(mode) {
   try {
-    await mount(document.body, extensionBackend(), { mode });
+    const backend = extensionBackend();
+    // A remote proof left pending (the popup closed mid-proof): open the screen whose mount hook
+    // resumes it, rather than home. The job is in session storage, so it outlives the popup.
+    const resume = await pendingRoute(backend);
+    if (resume && location.hash !== resume) location.hash = resume;
+    await mount(document.body, backend, { mode });
   } catch (err) {
     fatal((err && err.message) || String(err));
   }
