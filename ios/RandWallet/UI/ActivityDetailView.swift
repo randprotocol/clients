@@ -42,7 +42,7 @@ struct ActivityDetailView: View {
                 }
             }
             Text("The sender's pk identifies who paid you to anyone holding your viewing key, and nobody else.")
-                .font(.system(size: 13)).foregroundColor(Theme.textMute)
+                .font(.ui(13)).foregroundColor(Theme.textMute)
             SecondaryButton(title: "View note on RandScan") {
                 openURL(Settings.explorerURL.appendingPathComponent("notes").appendingPathComponent(n.cm))
             }
@@ -64,9 +64,9 @@ struct ActivityDetailView: View {
             }
             Card {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Disclose this payment").font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.text)
+                    Text("Disclose this payment").font(.ui(15, .semibold)).foregroundColor(Theme.text)
                     Text("Copy the transaction key and paste it on the transaction's RandScan page to show exactly this payment — its amount and recipient — to whoever you hand the key to.")
-                        .font(.system(size: 13)).foregroundColor(Theme.textSoft)
+                        .font(.ui(13)).foregroundColor(Theme.textSoft)
                     CopyRow(label: "Transaction key", value: s.txKey)
                     SecondaryButton(title: "Open transaction on RandScan") { openURL(Settings.explorerTransactionURL(s.hash)) }
                 }
@@ -85,7 +85,7 @@ struct ActivityDetailView: View {
                 }
             }
             Text("This payment was made with your key from another device, so its transaction key is not stored here. Your viewing key opens it on RandScan.")
-                .font(.system(size: 13)).foregroundColor(Theme.textMute)
+                .font(.ui(13)).foregroundColor(Theme.textMute)
         }
     }
 
@@ -93,7 +93,7 @@ struct ActivityDetailView: View {
         HStack {
             Text(k).font(.body15).foregroundColor(Theme.textSoft)
             Spacer()
-            Text(v).font(.system(size: 15, weight: .medium).monospacedDigit()).foregroundColor(Theme.text)
+            Text(v).font(.ui(15, .medium).monospacedDigit()).foregroundColor(Theme.text)
         }
     }
 }

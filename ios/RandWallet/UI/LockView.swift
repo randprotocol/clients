@@ -8,15 +8,13 @@ struct LockView: View {
     var body: some View {
         VStack(spacing: 20) {
             Spacer()
-            ZStack {
-                RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.surface2).frame(width: 96, height: 96)
-                Image(systemName: "lock.fill").font(.system(size: 40, weight: .semibold)).foregroundColor(Theme.accent)
-            }
-            Text("Rand Wallet").font(.system(size: 26, weight: .bold)).foregroundColor(Theme.textStrong)
+            // The bare mark, bigger, as the shared UI's lock screen: no box around it.
+            Mark(size: 44)
+            Text("Rand Wallet").font(.ui(26, .bold)).foregroundColor(Theme.textStrong)
             Text("Locked").font(.body15).foregroundColor(Theme.textSoft)
             Spacer()
             if failed {
-                Text("Could not unlock. Try again.").font(.system(size: 13)).foregroundColor(Theme.negative)
+                Text("Could not unlock. Try again.").font(.ui(13)).foregroundColor(Theme.negative)
             }
             PrimaryButton(title: "Unlock with \(Keychain.biometryName)", busy: busy) { Task { await unlock() } }
                 .padding(.horizontal, 20).padding(.bottom, 24)

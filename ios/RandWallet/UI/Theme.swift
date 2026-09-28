@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// design/tokens.json as SwiftUI colours. Dark (ink) is the default look; light (paper) is a full
 /// theme. `accent` is the signal colour: the primary action, and nothing decorative.
@@ -44,16 +45,79 @@ enum Theme {
     /// Text on the field: bone, not white.
     static let fieldGrain = Color(hex: 0xECE9E2)
 
+    static let radiusSm: CGFloat = 8
     static let radiusMd: CGFloat = 12
     static let radiusLg: CGFloat = 16
     static let radiusXl: CGFloat = 24
 }
 
+/// The three faces the shared ui/ uses (ui/fonts/SOURCES.txt), bundled as TrueType/OpenType in
+/// RandWallet/Fonts and registered under UIAppFonts: Inter for all UI text, JetBrains Mono for
+/// addresses, hashes and keys, Departure Mono — a pixel face on an 11 pt grid — for the wordmark
+/// and the balance figure only. Inter and JetBrains Mono ship as variable fonts, so a weight is a
+/// point on their `wght` axis rather than a separate file.
+enum Typeface {
+    /// PostScript names, as the font files declare them.
+    static let interName = "InterVariable"
+    static let monoName = "JetBrainsMono-Regular"
+    static let displayName = "DepartureMono-Regular"
+
+    /// Inter at a fixed point size. Its optical-size axis follows the size (14–32).
+    static func inter(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        Font(variable(interName, size: size, weight: weight, opticalSize: min(max(size, 14), 32)))
+    }
+
+    /// JetBrains Mono at a fixed point size.
+    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        Font(variable(monoName, size: size, weight: weight))
+    }
+
+    /// Departure Mono: one weight, set at multiples of 11 so the pixels stay whole.
+    static func display(_ size: CGFloat) -> Font {
+        Font.custom(displayName, fixedSize: size)
+    }
+
+    private static let wghtAxis = 0x7767_6874 // 'wght'
+    private static let opszAxis = 0x6F70_737A // 'opsz'
+
+    private static func variable(_ name: String, size: CGFloat, weight: Font.Weight, opticalSize: CGFloat? = nil) -> UIFont {
+        var axes: [Int: CGFloat] = [wghtAxis: axisValue(weight)]
+        if let opticalSize { axes[opszAxis] = opticalSize }
+        let descriptor = UIFontDescriptor(fontAttributes: [
+            .name: name,
+            UIFontDescriptor.AttributeName(rawValue: kCTFontVariationAttribute as String): axes,
+        ])
+        return UIFont(descriptor: descriptor, size: size)
+    }
+
+    /// The CSS weight the variable axes are calibrated in.
+    private static func axisValue(_ weight: Font.Weight) -> CGFloat {
+        switch weight {
+        case .ultraLight: return 200
+        case .thin: return 100
+        case .light: return 300
+        case .regular: return 400
+        case .medium: return 500
+        case .semibold: return 600
+        case .bold: return 700
+        case .heavy: return 800
+        case .black: return 900
+        default: return 400
+        }
+    }
+}
+
 extension Font {
-    static let balance = Font.system(size: 40, weight: .bold, design: .rounded).monospacedDigit()
-    static let title = Font.system(size: 22, weight: .semibold)
-    static let body15 = Font.system(size: 15)
-    static let caption12 = Font.system(size: 12, weight: .medium)
-    static let mono = Font.system(size: 13, design: .monospaced)
-    static let monoSmall = Font.system(size: 11, design: .monospaced)
+    /// design/tokens.json `type.balance`: the display face at 44/400, tabular figures.
+    static let balance = Typeface.display(44).monospacedDigit()
+    static let title = Typeface.inter(22, .semibold)
+    static let body15 = Typeface.inter(15)
+    static let caption12 = Typeface.inter(12, .medium)
+    static let mono = Typeface.mono(13)
+    static let monoSmall = Typeface.mono(11)
+
+    /// UI text at any size: Inter.
+    static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { Typeface.inter(size, weight) }
+    /// Literal data at any size: JetBrains Mono.
+    static func code(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { Typeface.mono(size, weight) }
 }

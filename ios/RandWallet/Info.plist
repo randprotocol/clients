@@ -41,6 +41,12 @@
 	<string>Rand Wallet uses the camera to scan a recipient's address or payment-link QR code.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Rand Wallet uses Face ID to unlock your wallet.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>InterVariable.ttf</string>
+		<string>JetBrainsMono-Variable.ttf</string>
+		<string>DepartureMono-Regular.otf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -14,13 +14,13 @@ struct ContactsView: View {
             List {
                 if contacts.book.sorted.isEmpty {
                     Text("No contacts yet. A contact's name can be typed in Send's To field instead of the address.")
-                        .font(.system(size: 14)).foregroundColor(Theme.textMute)
+                        .font(.ui(14)).foregroundColor(Theme.textMute)
                 }
                 ForEach(contacts.book.sorted) { c in
                     VStack(alignment: .leading, spacing: 4) {
                         // A saved name is hostile text exactly as a memo is (final review, finding
                         // — this screen showed it raw): the same display rule every memo view uses.
-                        Text(Memo.display(c.name)).font(.system(size: 16, weight: .semibold)).foregroundColor(Theme.text)
+                        Text(Memo.display(c.name)).font(.ui(16, .semibold)).foregroundColor(Theme.text)
                         Text("fingerprint \((try? RandCore.addressFingerprint(c.address)) ?? "unavailable")")
                             .font(.monoSmall).foregroundColor(Theme.textSoft)
                         Text(c.address.shortened(head: 14, tail: 8)).font(.monoSmall).foregroundColor(Theme.textMute)
@@ -68,7 +68,7 @@ struct AddContactView: View {
                         Field(placeholder: "rand1… or randpay: link", text: $address, mono: true)
                         Button {
                             if let s = UIPasteboard.general.string { address = s.trimmingCharacters(in: .whitespacesAndNewlines) }
-                        } label: { Text("Paste").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.accent) }
+                        } label: { Text("Paste").font(.ui(14, .semibold)).foregroundColor(Theme.accent) }
                     }
                     if let fp = fingerprint { Text("fingerprint \(fp)").font(.mono).foregroundColor(Theme.textSoft) }
                     ErrorText(message: error)

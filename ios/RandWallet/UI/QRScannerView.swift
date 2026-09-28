@@ -15,7 +15,7 @@ struct QRScannerView: View {
                 ScannerRepresentable(onCode: onCode).ignoresSafeArea()
                 VStack {
                     Spacer()
-                    Text(prompt).font(.system(size: 14, weight: .medium))
+                    Text(prompt).font(.ui(14, .medium))
                         .foregroundColor(.white).padding(10).background(Color.black.opacity(0.5)).clipShape(Capsule()).padding(.bottom, 32)
                 }
             }

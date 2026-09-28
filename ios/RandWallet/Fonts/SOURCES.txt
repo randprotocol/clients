@@ -1,0 +1,23 @@
+The same three faces as ui/fonts, for the native app. iOS cannot load woff2, so these are the
+TrueType/OpenType files the same releases ship; they are registered under UIAppFonts in
+Info.plist and reached through Typeface / Font in UI/Theme.swift (PostScript names in brackets).
+
+InterVariable.ttf  [InterVariable]
+  Inter v4.1 — https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip
+  taken verbatim from `InterVariable.ttf` at the root of that archive (axes: opsz 14–32,
+  wght 100–900). All UI text.
+  Licence: Inter-OFL.txt (SIL Open Font License 1.1), the archive's LICENSE.txt.
+
+JetBrainsMono-Variable.ttf  [JetBrainsMono-Regular]
+  JetBrains Mono v2.304 —
+  https://github.com/JetBrains/JetBrainsMono/releases/download/v2.304/JetBrainsMono-2.304.zip
+  taken verbatim from `fonts/variable/JetBrainsMono[wght].ttf` inside that archive, renamed only
+  (axis: wght 100–800). Addresses, hashes and keys.
+  Licence: JetBrainsMono-OFL.txt (SIL Open Font License 1.1), the archive's OFL.txt.
+
+DepartureMono-Regular.otf  [DepartureMono-Regular]
+  Departure Mono v1.500 (Helena Zhang) —
+  https://github.com/rektdeckard/departure-mono/releases/download/v1.500/DepartureMono-1.500.zip
+  taken verbatim from `DepartureMono-Regular.otf` inside that archive. A pixel face on an 11 pt
+  grid: used only for the wordmark and the balance figure, at multiples of 11 pt.
+  Licence: DepartureMono-OFL.txt (SIL Open Font License 1.1), the archive's LICENSE.

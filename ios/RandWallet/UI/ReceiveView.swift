@@ -25,7 +25,7 @@ struct ReceiveView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     Text("Anyone can pay this address. It reveals nothing about what you hold.")
-                        .font(.system(size: 14)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
+                        .font(.ui(14)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
                     if let img = QR.image(for: link) {
                         Image(uiImage: img)
                             .interpolation(.none)
@@ -38,17 +38,17 @@ struct ReceiveView: View {
                             .accessibilityLabel("QR code of your payment link")
                     } else if !link.isEmpty {
                         Text("This link is too long for a QR code; share or copy it instead.")
-                            .font(.system(size: 13)).foregroundColor(Theme.warning).multilineTextAlignment(.center)
+                            .font(.ui(13)).foregroundColor(Theme.warning).multilineTextAlignment(.center)
                     }
                     if let fp = fingerprint {
                         VStack(spacing: 4) {
                             Text("Fingerprint").font(.caption12).foregroundColor(Theme.textMute)
-                            Text(fp).font(.system(size: 18, weight: .semibold, design: .monospaced)).foregroundColor(Theme.textStrong)
+                            Text(fp).font(.code(18, .semibold)).foregroundColor(Theme.textStrong)
                                 .textSelection(.enabled)
                         }
                     }
                     Text("Whoever pays you sees this fingerprint on their confirmation; if it does not match, it is not your address.")
-                        .font(.system(size: 13)).foregroundColor(Theme.textMute).multilineTextAlignment(.center)
+                        .font(.ui(13)).foregroundColor(Theme.textMute).multilineTextAlignment(.center)
                     Card {
                         ScrollView {
                             Text(wallet.address).font(.monoSmall).foregroundColor(Theme.text).textSelection(.enabled)
@@ -60,7 +60,7 @@ struct ReceiveView: View {
                         SecondaryButton(title: copied == "link" ? "Copied" : "Copy link") { copy(link, as: "link") }
                     }
                     ShareLink(item: link) {
-                        Text("Share payment link").font(.system(size: 16, weight: .semibold))
+                        Text("Share payment link").font(.ui(16, .semibold))
                             .frame(maxWidth: .infinity).frame(height: 52)
                             .foregroundColor(Theme.onAccent).background(Theme.accent)
                             .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLg, style: .continuous))
@@ -91,10 +91,10 @@ struct ReceiveView: View {
             Text(ReceiveLinkRules.showsMemo(envelopeBytes: envelopeBytes)
                  ? "Optional: ask for an amount, and add a note the payer’s wallet fills in for them."
                  : "Optional: ask for an amount the payer’s wallet fills in for them.")
-                .font(.system(size: 13)).foregroundColor(Theme.textMute)
+                .font(.ui(13)).foregroundColor(Theme.textMute)
             HStack {
                 Field(placeholder: "Amount — the payer decides", text: $amountText, keyboard: .decimalPad)
-                Text("RAND").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.textSoft)
+                Text("RAND").font(.ui(14, .semibold)).foregroundColor(Theme.textSoft)
             }
             if ReceiveLinkRules.showsMemo(envelopeBytes: envelopeBytes) {
                 HStack {

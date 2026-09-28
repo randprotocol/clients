@@ -118,7 +118,7 @@ struct SendView: View {
                         Button {
                             if let s = UIPasteboard.general.string { recipient = s.trimmingCharacters(in: .whitespacesAndNewlines) }
                         } label: {
-                            Text("Paste").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.accent)
+                            Text("Paste").font(.ui(14, .semibold)).foregroundColor(Theme.accent)
                         }
                     }
                     if let r = resolved {
@@ -146,7 +146,7 @@ struct SendView: View {
                 }
                 memoSection
                 Text("A transfer is proved on this phone, which takes a minute or two. Keep the app open while it runs.")
-                    .font(.system(size: 13)).foregroundColor(Theme.textMute)
+                    .font(.ui(13)).foregroundColor(Theme.textMute)
                 PrimaryButton(title: "Review", enabled: formValid) { step = .review }
             }
             .padding(20)
@@ -180,9 +180,9 @@ struct SendView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Theme.warning)
-                    Text(Memo.noMemoNotice).font(.system(size: 13)).foregroundColor(Theme.text)
+                    Text(Memo.noMemoNotice).font(.ui(13)).foregroundColor(Theme.text)
                 }
-                Button("Clear memo") { memo = "" }.font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.accent)
+                Button("Clear memo") { memo = "" }.font(.ui(14, .semibold)).foregroundColor(Theme.accent)
             }
         }
     }
@@ -238,15 +238,15 @@ struct SendView: View {
                 }
             }
             Text("Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.")
-                .font(.system(size: 13)).foregroundColor(Theme.textMute).multilineTextAlignment(.center)
+                .font(.ui(13)).foregroundColor(Theme.textMute).multilineTextAlignment(.center)
             if let p = remoteProver {
                 // Delegated proving, Phase 1: this device cannot fit the proof, and a prover the
                 // user paired as their own will make it.
                 Text("This device does not have the memory for this proof, so your prover, \(p.name), will make it. Your spend key goes to it inside a sealed job; this phone checks the proof before anything is sent.")
-                    .font(.system(size: 13)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
+                    .font(.ui(13)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
             } else if !ProverRequirements.deviceHasEnoughMemory {
                 Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Pair a prover you run yourself in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.")
-                    .font(.system(size: 13)).foregroundColor(Theme.warning).multilineTextAlignment(.center)
+                    .font(.ui(13)).foregroundColor(Theme.warning).multilineTextAlignment(.center)
             }
             Spacer()
             PrimaryButton(title: "Confirm and prove") { Task { await run() } }
@@ -315,7 +315,7 @@ struct SendView: View {
         HStack {
             Text(k).font(.body15).foregroundColor(Theme.textSoft)
             Spacer()
-            Text(v).font(.system(size: 15, weight: .semibold).monospacedDigit()).foregroundColor(Theme.text)
+            Text(v).font(.ui(15, .semibold).monospacedDigit()).foregroundColor(Theme.text)
         }
     }
 
@@ -366,9 +366,9 @@ struct SentView: View {
                 }
                 Card {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Disclose this payment").font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.text)
+                        Text("Disclose this payment").font(.ui(15, .semibold)).foregroundColor(Theme.text)
                         Text("The transaction key opens exactly this payment on RandScan — the amount and the recipient — and nothing else you ever did.")
-                            .font(.system(size: 13)).foregroundColor(Theme.textSoft)
+                            .font(.ui(13)).foregroundColor(Theme.textSoft)
                         CopyRow(label: "Transaction key", value: outcome.txKey)
                     }
                 }

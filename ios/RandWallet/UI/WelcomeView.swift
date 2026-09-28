@@ -9,11 +9,17 @@ struct WelcomeView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 Spacer()
-                ZStack {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Theme.surface2).frame(width: 96, height: 96)
-                    Image(systemName: "shield.lefthalf.filled").font(.system(size: 44, weight: .semibold)).foregroundColor(Theme.accent)
-                }
-                Text("Rand Wallet").font(.system(size: 30, weight: .bold)).foregroundColor(Theme.textStrong).padding(.top, 24)
+                // The welcome plate, as the shared UI's: the brand in bone on clean ink. There is
+                // no wallet yet, so it is the network's face rather than any one wallet's.
+                Brand(size: 44, grain: Theme.fieldGrain, hot: Theme.accent)
+                    .frame(maxWidth: 420)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 176)
+                    .background(Theme.field)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.radiusLg, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.radiusLg, style: .continuous).stroke(Theme.fieldGrain.opacity(0.08)))
+                    .padding(.horizontal, 20)
+                Text("Rand Wallet").font(.ui(30, .bold)).foregroundColor(Theme.textStrong).padding(.top, 24)
                 Text("A shielded wallet for RAND.\nYour balance and payments are private; the chain sees only proofs.")
                     .font(.body15).foregroundColor(Theme.textSoft).multilineTextAlignment(.center).padding(.top, 8).padding(.horizontal, 32)
                 Spacer()

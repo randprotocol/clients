@@ -26,13 +26,13 @@ struct HomeView: View {
                         RoundAction(icon: "drop.fill", label: "Faucet") { Task { await faucet() } }
                     }
                     if let m = faucetMessage {
-                        Text(m).font(.system(size: 13)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
+                        Text(m).font(.ui(13)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
                     }
                     if !settings.hasBackedUpKey {
                         Card {
                             HStack {
                                 Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Theme.warning)
-                                Text("Back up your spend key in Settings.").font(.system(size: 13)).foregroundColor(Theme.text)
+                                Text("Back up your spend key in Settings.").font(.ui(13)).foregroundColor(Theme.text)
                             }
                         }
                     }
@@ -45,6 +45,9 @@ struct HomeView: View {
             .navigationTitle("Rand Wallet")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // The brand where the shared UI's topbar carries it; the title stays for the back
+                // button of pushed screens and for VoiceOver.
+                ToolbarItem(placement: .principal) { Brand() }
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { showContacts = true } label: { Image(systemName: "person.2") }
                         .accessibilityLabel("Contacts")
@@ -89,16 +92,16 @@ struct HomeView: View {
     private var balanceCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Balance").font(.caption12).foregroundColor(.white.opacity(0.8))
+                Text("Balance").font(.caption12).foregroundColor(Theme.fieldGrain.opacity(0.8))
                 Spacer()
                 syncLine
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(Amount.format(wallet.balance)).font(.balance).foregroundColor(Theme.fieldGrain).lineLimit(1).minimumScaleFactor(0.5)
-                Text("RAND").font(.system(size: 15, weight: .semibold)).foregroundColor(.white.opacity(0.85))
+                Text("RAND").font(.ui(15, .semibold)).foregroundColor(Theme.fieldGrain.opacity(0.85))
             }
             if wallet.store.pendingOut > 0 {
-                Text("\(Amount.format(wallet.store.pendingOut)) RAND pending").font(.caption12).foregroundColor(.white.opacity(0.8))
+                Text("\(Amount.format(wallet.store.pendingOut)) RAND pending").font(.caption12).foregroundColor(Theme.fieldGrain.opacity(0.8))
             }
             Button {
                 UIPasteboard.general.string = wallet.address
@@ -109,9 +112,9 @@ struct HomeView: View {
                     Text(wallet.address.shortened()).font(.monoSmall)
                     Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.system(size: 11))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(Theme.fieldGrain)
                 .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(Color.white.opacity(0.18))
+                .background(Theme.fieldGrain.opacity(0.18))
                 .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -126,7 +129,7 @@ struct HomeView: View {
     private var syncLine: some View {
         HStack(spacing: 6) {
             if wallet.isSyncing {
-                ProgressView().tint(.white).scaleEffect(0.7)
+                ProgressView().tint(Theme.fieldGrain).scaleEffect(0.7)
                 Text("Syncing").font(.caption12)
             } else if let e = wallet.lastSyncError {
                 Image(systemName: "wifi.exclamationmark").font(.system(size: 11))
@@ -135,7 +138,7 @@ struct HomeView: View {
                 Text("Synced \(t, style: .relative) ago").font(.caption12)
             }
         }
-        .foregroundColor(.white.opacity(0.85))
+        .foregroundColor(Theme.fieldGrain.opacity(0.85))
     }
 
     private func faucet() async {
@@ -192,7 +195,7 @@ struct ActivityList: View {
             if items.isEmpty {
                 Card {
                     Text("No activity yet. Tap Faucet to get 100 testnet RAND, or share your address to receive.")
-                        .font(.system(size: 14)).foregroundColor(Theme.textSoft)
+                        .font(.ui(14)).foregroundColor(Theme.textSoft)
                 }
             }
             ForEach(items) { item in
@@ -213,11 +216,11 @@ struct ActivityRow: View {
                     Image(systemName: icon).foregroundColor(color)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 15, weight: .semibold)).foregroundColor(Theme.text)
+                    Text(title).font(.ui(15, .semibold)).foregroundColor(Theme.text)
                     Text(subtitle).font(.caption12).foregroundColor(Theme.textMute)
                 }
                 Spacer()
-                Text(amountText).font(.system(size: 15, weight: .semibold).monospacedDigit()).foregroundColor(color)
+                Text(amountText).font(.ui(15, .semibold).monospacedDigit()).foregroundColor(color)
             }
         }
     }

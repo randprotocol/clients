@@ -33,7 +33,7 @@ struct SettingsView: View {
                     TextField("RPC URL", text: $rpcDraft).font(.mono).keyboardType(.URL).autocorrectionDisabled().textInputAutocapitalization(.never)
                     TextField("Chain id", text: $chainDraft).font(.mono).keyboardType(.numberPad)
                     Button(testing ? "Testing…" : "Save and test connection") { Task { await saveAndTest() } }.disabled(testing)
-                    if let c = connection { Text(c).font(.system(size: 13)).foregroundColor(Theme.textSoft) }
+                    if let c = connection { Text(c).font(.ui(13)).foregroundColor(Theme.textSoft) }
                 }
 
                 proverSection
@@ -123,12 +123,12 @@ struct SettingsView: View {
             if let p = settings.prover {
                 row("Proofs are made by", "My own prover · \(p.name)")
                 row("Fingerprint", p.fingerprint)
-                Text(probeLine).font(.system(size: 13)).foregroundColor(Theme.textSoft)
+                Text(probeLine).font(.ui(13)).foregroundColor(Theme.textSoft)
                 Button("Forget this prover", role: .destructive) { forgetProver() }
             } else {
                 row("Proofs are made by", "This device")
                 Text("Where this device cannot make a proof, pair a prover you run yourself — rand-prover on your own machine, reachable from this phone over https.")
-                    .font(.system(size: 13)).foregroundColor(Theme.textSoft)
+                    .font(.ui(13)).foregroundColor(Theme.textSoft)
             }
             HStack(spacing: 8) {
                 TextField("randprover:…", text: $proverLink).font(.mono).autocorrectionDisabled().textInputAutocapitalization(.never)
@@ -140,15 +140,15 @@ struct SettingsView: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Theme.negative)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Your spend key goes to this prover").font(.system(size: 14, weight: .semibold)).foregroundColor(Theme.text)
-                    Text(ProverPairingService.warning).font(.system(size: 13)).foregroundColor(Theme.text)
+                    Text("Your spend key goes to this prover").font(.ui(14, .semibold)).foregroundColor(Theme.text)
+                    Text(ProverPairingService.warning).font(.ui(13)).foregroundColor(Theme.text)
                 }
             }
             Button(pairing ? "Pairing…" : "Save") { Task { await saveProver() } }.disabled(pairing)
             if let s = proverStatus {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(s.title).font(.system(size: 14, weight: .semibold)).foregroundColor(s.ok ? Theme.positive : Theme.negative)
-                    Text(s.message).font(.system(size: 13)).foregroundColor(Theme.textSoft)
+                    Text(s.title).font(.ui(14, .semibold)).foregroundColor(s.ok ? Theme.positive : Theme.negative)
+                    Text(s.message).font(.ui(13)).foregroundColor(Theme.textSoft)
                 }
             }
         } header: { Text("Prover") } footer: {
@@ -226,7 +226,7 @@ struct RevealView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Theme.warning)
-                    Text("Never share this. Anyone who has it controls your funds.").font(.system(size: 14)).foregroundColor(Theme.text)
+                    Text("Never share this. Anyone who has it controls your funds.").font(.ui(14)).foregroundColor(Theme.text)
                 }
                 Card {
                     Text(value).font(.mono).foregroundColor(Theme.text).textSelection(.enabled)

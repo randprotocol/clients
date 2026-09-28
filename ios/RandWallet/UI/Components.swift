@@ -12,7 +12,7 @@ struct PrimaryButton: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 if busy { ProgressView().tint(Theme.onAccent) }
-                Text(title).font(.system(size: 16, weight: .semibold))
+                Text(title).font(.ui(16, .semibold))
             }
             .frame(maxWidth: .infinity)
             .frame(height: 52)
@@ -33,7 +33,7 @@ struct SecondaryButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.ui(16, .semibold))
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .foregroundColor(destructive ? Theme.negative : Theme.text)
@@ -103,10 +103,12 @@ struct CopyRow: View {
     }
 }
 
+/// The heading over a group of rows: sentence case at body size, as the shared UI's
+/// `.section-title`. It names the group, it does not decorate it — no eyebrows.
 struct SectionLabel: View {
     let text: String
     var body: some View {
-        Text(text.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.8).foregroundColor(Theme.textMute)
+        Text(text).font(.ui(15, .semibold)).foregroundColor(Theme.textStrong)
     }
 }
 
@@ -114,7 +116,7 @@ struct ErrorText: View {
     let message: String?
     var body: some View {
         if let m = message, !m.isEmpty {
-            Text(m).font(.system(size: 13)).foregroundColor(Theme.negative).fixedSize(horizontal: false, vertical: true)
+            Text(m).font(.ui(13)).foregroundColor(Theme.negative).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
