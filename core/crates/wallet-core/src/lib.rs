@@ -25,13 +25,16 @@ use serde_json::{json, Value};
 use randprotocol_core::gas;
 use randprotocol_core::ledger::TIME_WINDOW;
 use randprotocol_core::notes::{
-    word8_from_hex, word8_to_hex, Bundle, Envelope, EnvelopeFormat, ShieldedAddress, Word8, DEPTH, MEMO_TEXT_MAX_BYTES,
+    word8_from_hex, word8_to_hex, Bundle, Envelope, EnvelopeFormat, ShieldedAddress, Word8, DEPTH, KEM_EK_BYTES,
+    MEMO_TEXT_MAX_BYTES,
 };
 use randprotocol_core::payment_uri::PaymentUri;
 use randprotocol_core::types::TX_BINDING_WORDS;
 use randprotocol_core::{format_amount, parse_amount, Action, Transaction, FAUCET_MAX_UNITS};
 use randprotocol_zkvm::address::{address_of, envelope_from_core, seal_note_as};
-use randprotocol_zkvm::executor::prove_bundle;
+use randprotocol_core::confidential::ConfidentialExecutor;
+use randprotocol_prover::wire::{fresh_reply_key, open_reply, seal_job, ProveJob, WitnessKind, WIRE_VERSION};
+use randprotocol_zkvm::executor::{prove_bundle, ZkExecutor};
 use randprotocol_zkvm::hidden::{self, HiddenDigestInput, HiddenOutput, A_SLOTS, SLOTS};
 use randprotocol_zkvm::machine::{Backend, FriProfile};
 use randprotocol_zkvm::notes::{Note, SpendKey, ViewingKey};
@@ -1379,36 +1382,74 @@ fn build_transfer_unproven(req: &ProveRequest) -> Result<(Wallet, TransferBuild)
 pub fn prove_transfer(req: &ProveRequest) -> Result<ProveResult> {
     let (_w, mut b) = build_transfer_unproven(req)?;
     let (tier, proof_bytes) = prove_transaction(&mut b.tx, &b.prepared, b.profile)?;
+    Ok(transfer_result(&transfer_scalars(&b), &b.tx, tier, proof_bytes))
+}
 
-    let bundle = &b.prepared.bundle;
-    let nullifiers = std::array::from_fn(|k| word8_to_hex(&bundle.nullifiers[k]));
-    let commitments = std::array::from_fn(|k| word8_to_hex(&bundle.commitments[k]));
-    let tx_keys = std::array::from_fn(|k| hex::encode(b.prepared.tx_keys[k].0));
+/// The per-slot arrays of a built bundle, as hex, in slot order: nullifiers, commitments and the
+/// per-transaction disclosure keys.
+fn slot_hex(prepared: &Prepared) -> ([String; BUNDLE_SLOTS], [String; BUNDLE_SLOTS], [String; BUNDLE_SLOTS]) {
+    let bundle = &prepared.bundle;
+    (
+        std::array::from_fn(|k| word8_to_hex(&bundle.nullifiers[k])),
+        std::array::from_fn(|k| word8_to_hex(&bundle.commitments[k])),
+        std::array::from_fn(|k| hex::encode(prepared.tx_keys[k].0)),
+    )
+}
+
+/// Everything a [`ProveResult`] says that the proof does not decide, taken from a transfer's build.
+/// [`prove_transfer`] and [`finish_proof`] both assemble their result from this, so a delegated
+/// proof and a local one cannot answer differently.
+fn transfer_scalars(b: &TransferBuild) -> PendingScalars {
+    let (nullifiers, commitments, tx_keys) = slot_hex(&b.prepared);
     let (payment_slot, payment_tx_key, payment_commitment) = payment_of(&b.plan, &b.prepared);
     let (change, fee_change) =
         if b.asset == 0 { (b.prepared.change_r, 0) } else { (b.prepared.change_a, b.prepared.change_r) };
-    let encoded = b.tx.encode();
-    Ok(ProveResult {
-        hash: b.tx.hash().to_hex(),
-        tx_bytes: encoded.len(),
-        tx_hex: hex::encode(encoded),
+    PendingScalars {
         time: b.time,
         asset: b.asset,
         amount: b.amount.to_string(),
         change: change.to_string(),
         fee_change: fee_change.to_string(),
         fee: b.fee.to_string(),
-        tier,
-        proof_bytes,
         nullifiers,
         commitments,
         tx_keys,
         payment_slot,
         payment_tx_key,
         payment_commitment,
-        spent_indices: b.spent_indices,
+        spent_indices: b.spent_indices.clone(),
         proofs: b.proofs,
-    })
+        relayer_fee: None,
+        to_chain: None,
+        token: None,
+        to: None,
+    }
+}
+
+/// A [`ProveResult`] from a transfer's scalars and its proved transaction.
+fn transfer_result(s: &PendingScalars, tx: &Transaction, tier: u8, proof_bytes: usize) -> ProveResult {
+    let encoded = tx.encode();
+    ProveResult {
+        hash: tx.hash().to_hex(),
+        tx_bytes: encoded.len(),
+        tx_hex: hex::encode(encoded),
+        time: s.time,
+        asset: s.asset,
+        amount: s.amount.clone(),
+        change: s.change.clone(),
+        fee_change: s.fee_change.clone(),
+        fee: s.fee.clone(),
+        tier,
+        proof_bytes,
+        nullifiers: s.nullifiers.clone(),
+        commitments: s.commitments.clone(),
+        tx_keys: s.tx_keys.clone(),
+        payment_slot: s.payment_slot,
+        payment_tx_key: s.payment_tx_key.clone(),
+        payment_commitment: s.payment_commitment.clone(),
+        spent_indices: s.spent_indices.clone(),
+        proofs: s.proofs,
+    }
 }
 
 // ------------------------------------------------------------------ proving a bridge burn
@@ -1636,39 +1677,358 @@ fn build_burn_unproven(req: &BurnRequest) -> Result<(Wallet, BurnBuild)> {
 pub fn prove_burn(req: &BurnRequest) -> Result<BurnResult> {
     let (_w, mut b) = build_burn_unproven(req)?;
     let (tier, proof_bytes) = prove_transaction(&mut b.tx, &b.prepared, b.profile)?;
+    burn_result(&burn_scalars(&b, req.to_chain), &b.tx, tier, proof_bytes)
+}
 
-    let bundle = &b.prepared.bundle;
-    let nullifiers = std::array::from_fn(|k| word8_to_hex(&bundle.nullifiers[k]));
-    let commitments = std::array::from_fn(|k| word8_to_hex(&bundle.commitments[k]));
-    let tx_keys = std::array::from_fn(|k| hex::encode(b.prepared.tx_keys[k].0));
+/// [`transfer_scalars`] for a burn: the same slot arrays, plus the far side's destination.
+fn burn_scalars(b: &BurnBuild, to_chain: u16) -> PendingScalars {
+    let (nullifiers, commitments, tx_keys) = slot_hex(&b.prepared);
     // A burn's plan has `to: None`, so all three come back `None` — structurally, not by a literal
     // written here that a later edit could get wrong.
     let (payment_slot, payment_tx_key, payment_commitment) = payment_of(&b.plan, &b.prepared);
-    let encoded = b.tx.encode();
-    Ok(BurnResult {
-        hash: b.tx.hash().to_hex(),
-        tx_bytes: encoded.len(),
-        tx_hex: hex::encode(encoded),
+    PendingScalars {
         time: b.time,
         asset: b.asset,
         amount: b.amount.to_string(),
-        relayer_fee: b.relayer_fee.to_string(),
-        to_chain: req.to_chain,
-        token: hex::encode(b.token),
-        to: hex::encode(b.to),
         change: b.prepared.change_a.to_string(),
-        fee: b.fee.to_string(),
         fee_change: b.prepared.change_r.to_string(),
-        tier,
-        proof_bytes,
+        fee: b.fee.to_string(),
         nullifiers,
         commitments,
         tx_keys,
         payment_slot,
         payment_tx_key,
         payment_commitment,
-        spent_indices: b.spent_indices,
+        spent_indices: b.spent_indices.clone(),
         proofs: b.proofs,
+        relayer_fee: Some(b.relayer_fee.to_string()),
+        to_chain: Some(to_chain),
+        token: Some(hex::encode(b.token)),
+        to: Some(hex::encode(b.to)),
+    }
+}
+
+/// A [`BurnResult`] from a burn's scalars and its proved transaction. Fails only on scalars that
+/// lack a burn's four fields — a `Pending` that says `"burn"` but was not built as one.
+fn burn_result(s: &PendingScalars, tx: &Transaction, tier: u8, proof_bytes: usize) -> Result<BurnResult> {
+    let missing = |what: &str| format!("the pending burn has no {what}");
+    let encoded = tx.encode();
+    Ok(BurnResult {
+        hash: tx.hash().to_hex(),
+        tx_bytes: encoded.len(),
+        tx_hex: hex::encode(encoded),
+        time: s.time,
+        asset: s.asset,
+        amount: s.amount.clone(),
+        relayer_fee: s.relayer_fee.clone().ok_or_else(|| missing("relayer_fee"))?,
+        to_chain: s.to_chain.ok_or_else(|| missing("to_chain"))?,
+        token: s.token.clone().ok_or_else(|| missing("token"))?,
+        to: s.to.clone().ok_or_else(|| missing("to"))?,
+        change: s.change.clone(),
+        fee: s.fee.clone(),
+        fee_change: s.fee_change.clone(),
+        tier,
+        proof_bytes,
+        nullifiers: s.nullifiers.clone(),
+        commitments: s.commitments.clone(),
+        tx_keys: s.tx_keys.clone(),
+        payment_slot: s.payment_slot,
+        payment_tx_key: s.payment_tx_key.clone(),
+        payment_commitment: s.payment_commitment.clone(),
+        spent_indices: s.spent_indices.clone(),
+        proofs: s.proofs,
+    })
+}
+
+// ------------------------------------------------------------------ delegated proving (light client)
+
+/// The witness kind a prover is sent when the request does not name one — the only kind this
+/// build's guests take.
+fn spend_key_kind() -> String {
+    WitnessKind::SpendKey.as_str().to_string()
+}
+
+/// The prover a light client hands its proof to: what it read off a pairing (`rand-prover`'s
+/// ML-KEM-768 encapsulation key and the bearer token it issued) plus the chain's bundle guest.
+#[derive(Deserialize)]
+pub struct ProverTarget {
+    /// The prover's ML-KEM-768 encapsulation key, hex (1 184 bytes).
+    pub kem_ek: String,
+    /// The pairing's bearer token, 64 hex characters. Sealed inside the job, never sent in clear.
+    pub token: String,
+    /// `"spend_key"` (the default and, in this build, the only kind accepted).
+    #[serde(default = "spend_key_kind")]
+    pub witness_kind: String,
+    /// The chain's bundle guest, `rand_status.hc_bundle` (64 hex). Absent means this build's
+    /// default guest ([`ZkExecutor::hc_bundle`]); a guest this build does not carry is refused
+    /// before anything is built.
+    #[serde(default)]
+    pub hc_bundle: Option<String>,
+}
+
+/// What `prepare_transfer` takes: a [`ProveRequest`], flattened, plus the prover and the chain's
+/// proof-size cap (`rand_getLimits.max_proof_bytes`; absent means the vendored
+/// `gas::MAX_PROOF_BYTES`).
+#[derive(Deserialize)]
+pub struct PrepareTransferRequest {
+    #[serde(flatten)]
+    pub req: ProveRequest,
+    pub prover: ProverTarget,
+    #[serde(default)]
+    pub max_proof_bytes: Option<u32>,
+}
+
+/// [`PrepareTransferRequest`] for a bridge burn.
+#[derive(Deserialize)]
+pub struct PrepareBurnRequest {
+    #[serde(flatten)]
+    pub req: BurnRequest,
+    pub prover: ProverTarget,
+    #[serde(default)]
+    pub max_proof_bytes: Option<u32>,
+}
+
+/// A transaction waiting for its proof. **No spend key, no witness**: everything here is either
+/// public once the transaction is submitted, or a one-time reply key that opens only this job's
+/// reply. It is everything [`finish_proof`] needs to produce the result `prove_transfer` or
+/// `prove_burn` would have, so a client may store it while the prover works.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Pending {
+    /// `"transfer"` or `"burn"`.
+    pub kind: String,
+    /// `bincode(Transaction)` as hex, its bundle's proof empty.
+    pub tx_hex: String,
+    /// The digest this wallet computed from its own plaintext, which the proof must publish.
+    pub expected: String,
+    /// The job's one-time reply key, hex.
+    pub reply_key: String,
+    pub max_proof_bytes: u32,
+    /// `"production"` or `"test"`: the FRI profile the proof is verified under.
+    pub profile: String,
+    /// The bundle guest the proof is verified against, 64 hex.
+    pub hc_bundle: String,
+    pub scalars: PendingScalars,
+}
+
+/// Every field of a [`ProveResult`] or [`BurnResult`] the proof does not decide, as the result
+/// spells it. The last four are a burn's and `null` on a transfer.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PendingScalars {
+    pub time: u32,
+    pub asset: u32,
+    pub amount: String,
+    pub change: String,
+    pub fee_change: String,
+    pub fee: String,
+    pub nullifiers: [String; BUNDLE_SLOTS],
+    pub commitments: [String; BUNDLE_SLOTS],
+    pub tx_keys: [String; BUNDLE_SLOTS],
+    pub payment_slot: Option<usize>,
+    pub payment_tx_key: Option<String>,
+    pub payment_commitment: Option<String>,
+    pub spent_indices: Vec<u64>,
+    pub proofs: u8,
+    pub relayer_fee: Option<String>,
+    pub to_chain: Option<u16>,
+    pub token: Option<String>,
+    pub to: Option<String>,
+}
+
+/// What `prepare_*` returns: the sealed job for `prover_submit`, and the pending transaction the
+/// client keeps until the reply arrives.
+#[derive(Serialize)]
+pub struct PrepareResult {
+    /// The sealed job, hex — the parameter of the prover's `prover_submit`.
+    pub sealed_hex: String,
+    pub pending: Pending,
+    /// The digest the proof must publish (also `pending.expected`).
+    pub expected: String,
+}
+
+/// What `finish_proof` takes: the pending transaction and the prover's sealed reply (hex).
+#[derive(Deserialize)]
+pub struct FinishRequest {
+    pub pending: Pending,
+    pub reply_hex: String,
+}
+
+fn profile_name(p: FriProfile) -> &'static str {
+    match p {
+        FriProfile::Test => "test",
+        FriProfile::Production => "production",
+    }
+}
+
+fn hex32(s: &str, what: &str) -> Result<[u8; 32]> {
+    let bytes = hex::decode(s.trim()).map_err(|_| format!("{what} is not hex"))?;
+    bytes.try_into().map_err(|v: Vec<u8>| format!("{what} must be 32 bytes (64 hex characters), got {}", v.len()))
+}
+
+/// A [`ProverTarget`] checked: the key's length, the token, the witness kind and the guest, all
+/// before anything is built.
+struct Target {
+    kem_ek: Vec<u8>,
+    token: [u8; 32],
+    hc_bundle: Word8,
+}
+
+fn check_target(t: &ProverTarget) -> Result<Target> {
+    match WitnessKind::parse(&t.witness_kind) {
+        Some(WitnessKind::SpendKey) => {}
+        Some(WitnessKind::ViewingKey) => {
+            return bad("this build's guests take a spend key: a viewing-key witness cannot prove a spend yet")
+        }
+        None => return bad(format!("unknown witness_kind {:?}; use \"spend_key\"", t.witness_kind)),
+    }
+    let kem_ek = hex::decode(t.kem_ek.trim()).map_err(|_| "the prover's kem_ek is not hex".to_string())?;
+    if kem_ek.len() != KEM_EK_BYTES {
+        return bad(format!("the prover's kem_ek is {} bytes, expected {KEM_EK_BYTES}", kem_ek.len()));
+    }
+    let token = hex32(&t.token, "the prover's token")?;
+    let hc_bundle = match &t.hc_bundle {
+        None => ZkExecutor::hc_bundle(),
+        Some(h) => word8_from_hex(h.trim()).ok_or("hc_bundle is not 64 hex characters")?,
+    };
+    if ZkExecutor::bundle_program_for(&hc_bundle).is_none() {
+        return bad(format!(
+            "this build does not carry the chain's bundle guest {}: update the wallet",
+            word8_to_hex(&hc_bundle)
+        ));
+    }
+    Ok(Target { kem_ek, token, hc_bundle })
+}
+
+/// Seal the job for `tx` to the prover and write the pending transaction. `words` is the witness;
+/// it moves into the job, which zeroizes it when dropped here.
+#[allow(clippy::too_many_arguments)]
+fn seal_pending(
+    kind: &str,
+    target: &Target,
+    tx: &Transaction,
+    words: Vec<u32>,
+    expected: &Word8,
+    profile: FriProfile,
+    max_proof_bytes: Option<u32>,
+    scalars: PendingScalars,
+) -> Result<PrepareResult> {
+    let reply_key = fresh_reply_key();
+    let sealed = {
+        let job = ProveJob {
+            version: WIRE_VERSION,
+            token: target.token,
+            witness_kind: WitnessKind::SpendKey,
+            hc_bundle: target.hc_bundle,
+            profile: profile_name(profile).to_string(),
+            binding: tx.binding(),
+            inputs: words,
+            reply_key,
+        };
+        seal_job(&target.kem_ek, &job).map_err(|e| format!("sealing the job to the prover (kem_ek): {e}"))?
+        // `job` — the witness, the token, the reply key — is zeroized here.
+    };
+    let expected = word8_to_hex(expected);
+    Ok(PrepareResult {
+        sealed_hex: hex::encode(sealed),
+        pending: Pending {
+            kind: kind.to_string(),
+            tx_hex: hex::encode(tx.encode()),
+            expected: expected.clone(),
+            reply_key: hex::encode(reply_key),
+            max_proof_bytes: max_proof_bytes.unwrap_or(gas::MAX_PROOF_BYTES as u32),
+            profile: profile_name(profile).to_string(),
+            hc_bundle: word8_to_hex(&target.hc_bundle),
+            scalars,
+        },
+        expected,
+    })
+}
+
+/// Build a transfer exactly as [`prove_transfer`] does and seal its witness to a prover instead of
+/// proving it here. The returned `pending` carries no spend key and no witness; hand
+/// `sealed_hex` to the prover's `prover_submit` and its reply to [`finish_proof`].
+pub fn prepare_transfer(r: &PrepareTransferRequest) -> Result<PrepareResult> {
+    let target = check_target(&r.prover)?;
+    let (_w, mut b) = build_transfer_unproven(&r.req)?;
+    prepare_transfer_with(&mut b, &target, r.max_proof_bytes)
+}
+
+fn prepare_transfer_with(b: &mut TransferBuild, target: &Target, max_proof_bytes: Option<u32>) -> Result<PrepareResult> {
+    let words = std::mem::take(&mut b.prepared.words);
+    let scalars = transfer_scalars(b);
+    seal_pending("transfer", target, &b.tx, words, &b.prepared.expected, b.profile, max_proof_bytes, scalars)
+}
+
+/// [`prepare_transfer`] for a bridge burn: [`prove_burn`]'s build, sealed to a prover.
+pub fn prepare_burn(r: &PrepareBurnRequest) -> Result<PrepareResult> {
+    let target = check_target(&r.prover)?;
+    let (_w, mut b) = build_burn_unproven(&r.req)?;
+    let words = std::mem::take(&mut b.prepared.words);
+    let scalars = burn_scalars(&b, r.req.to_chain);
+    seal_pending("burn", &target, &b.tx, words, &b.prepared.expected, b.profile, r.max_proof_bytes, scalars)
+}
+
+/// Open the prover's reply, check it, put the proof into the pending transaction and assemble the
+/// result `prove_transfer` or `prove_burn` would have returned (by `pending.kind`).
+///
+/// The checks run in the order the fullnode wallet's remote arm runs them
+/// (`randprotocol_client::prover`): the reply opens under this job's key; the proof is within the
+/// chain's `max_proof_bytes`; the digest **read off the proof** is the one this wallet built; the
+/// digest the reply claims is that one; and the proof verifies against the chain's bundle guest
+/// and this transaction's binding. Only then is it used.
+pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
+    let p = &r.pending;
+    if p.kind != "transfer" && p.kind != "burn" {
+        return bad(format!("unknown pending kind {:?}; expected \"transfer\" or \"burn\"", p.kind));
+    }
+    let reply_key = hex32(&p.reply_key, "pending.reply_key")?;
+    let expected = word8_from_hex(&p.expected).ok_or("pending.expected is not 64 hex characters")?;
+    let hc = word8_from_hex(&p.hc_bundle).ok_or("pending.hc_bundle is not 64 hex characters")?;
+    let profile = profile_from_str(&p.profile)?;
+    let mut tx = Transaction::decode(&hex::decode(&p.tx_hex).map_err(|_| "pending.tx_hex is not hex")?)
+        .map_err(|e| format!("pending.tx_hex is not a transaction: {e}"))?;
+    let sealed = hex::decode(r.reply_hex.trim()).map_err(|_| "the prover's reply is not hex".to_string())?;
+
+    let reply = open_reply(&reply_key, &sealed).map_err(|e| format!("the prover's reply does not open: {e}"))?;
+    if reply.proof.len() > p.max_proof_bytes as usize {
+        return bad(format!(
+            "the prover's bundle proof is {} bytes, over this chain's {}-byte cap (max_proof_bytes); not using it",
+            reply.proof.len(),
+            p.max_proof_bytes
+        ));
+    }
+    let exec = ZkExecutor::new(profile);
+    let published = exec
+        .bundle_proof_digest(&reply.proof)
+        .map_err(|e| format!("the prover's proof does not decode as a bundle proof, so its digest cannot be read: {e}"))?;
+    if published != expected {
+        return bad(format!(
+            "the proof published a digest this wallet did not build ({} for {}); not using it",
+            word8_to_hex(&published),
+            word8_to_hex(&expected)
+        ));
+    }
+    if reply.digest != published {
+        return bad(format!(
+            "the prover claimed digest {} but its proof publishes {}; not using it",
+            word8_to_hex(&reply.digest),
+            word8_to_hex(&published)
+        ));
+    }
+    let binding: [u32; TX_BINDING_WORDS] = tx.binding();
+    exec.verify_bundle(&hc, &reply.proof, &binding).map_err(|e| format!("the proof does not verify: {e}"))?;
+
+    let proof_bytes = reply.proof.len();
+    let bundle = tx.bundle.as_mut().ok_or("the pending transaction has no bundle")?;
+    if !bundle.proof.is_empty() {
+        return bad("the pending transaction already carries a proof");
+    }
+    bundle.proof = reply.proof;
+    debug_assert_eq!(tx.binding(), binding, "filling the proof in never moves the binding");
+    let ser = |v: &dyn erased::Ser| v.to_value();
+    Ok(if p.kind == "transfer" {
+        ser(&transfer_result(&p.scalars, &tx, reply.tier, proof_bytes))
+    } else {
+        ser(&burn_result(&p.scalars, &tx, reply.tier, proof_bytes)?)
     })
 }
 
@@ -2094,6 +2454,18 @@ fn asset_param(p: &Value) -> Result<u32> {
 /// - `prove_transfer` `{…ProveRequest}` → ProveResult (slow — one bundle proof). `memo` (default
 ///   `""`) is sealed with the payment only; `envelope_bytes` (default `null`) is the chain's, from
 ///   `rand_getLimits` — `null` seals the legacy envelope and refuses a non-empty memo up front
+/// - `prepare_transfer` `{…ProveRequest, prover: {kem_ek, token, witness_kind?, hc_bundle?},
+///   max_proof_bytes?}` → `{sealed_hex, pending, expected}` (fast — no proof). The transfer
+///   `prove_transfer` would build, its witness sealed to a paired prover (ML-KEM-768 `kem_ek`, the
+///   pairing's `token`) for `prover_submit`; `witness_kind` is `"spend_key"`, the only kind this
+///   build takes; `hc_bundle` is the chain's `rand_status.hc_bundle` (default: this build's
+///   guest); `max_proof_bytes` is `rand_getLimits`' (default `gas::MAX_PROOF_BYTES`). `pending`
+///   carries **no spend key and no witness** — a client may store it while the prover works
+/// - `prepare_burn` `{…BurnRequest, prover, max_proof_bytes?}` → the same, for a burn
+/// - `finish_proof` `{pending, reply_hex}` → the ProveResult or BurnResult `prove_transfer` /
+///   `prove_burn` would have returned (by `pending.kind`), once the prover's sealed reply opens
+///   under the job's key, its proof is within `max_proof_bytes`, publishes the digest this wallet
+///   built, and verifies here against the chain's guest and the transaction's binding
 /// - `open_with_tx_key` `{cm, envelope, tx_key}` → note (with its `memo`, or `null`) or null. `cm`/`tx_key` are
 ///   `payment_commitment`/`payment_tx_key` from a `prove_transfer` reply — never index 0 of the
 ///   four-wide arrays, which on a RAND transfer is a dummy slot
@@ -2193,6 +2565,18 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
         "prove_transfer" => {
             let req: ProveRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
             Ok(ser(&prove_transfer(&req)?))
+        }
+        "prepare_transfer" => {
+            let req: PrepareTransferRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
+            Ok(ser(&prepare_transfer(&req)?))
+        }
+        "prepare_burn" => {
+            let req: PrepareBurnRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
+            Ok(ser(&prepare_burn(&req)?))
+        }
+        "finish_proof" => {
+            let req: FinishRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
+            finish_proof(&req)
         }
         "open_with_tx_key" => {
             let env: EnvelopeHex = serde_json::from_value(params.get("envelope").cloned().unwrap_or(Value::Null)).map_err(|e| format!("envelope: {e}"))?;
@@ -4048,6 +4432,253 @@ mod tests {
             v.as_object_mut().unwrap().remove("memo");
             let n: OwnedNote = serde_json::from_value(v).unwrap();
             assert_eq!(n.memo, None);
+        }
+    }
+
+    /// Delegated proving, Phase 1: the proof split for a light client (`prepare_*` builds and
+    /// seals, a prover proves, `finish_proof` checks and assembles).
+    mod delegated {
+        use super::*;
+        use randprotocol_prover::key::ProverKey;
+        use randprotocol_prover::wire::{open_job, seal_reply, ProveReply, WitnessKind};
+        use randprotocol_zkvm::executor::ZkExecutor;
+
+        fn prover_key() -> ProverKey {
+            ProverKey::from_seed([7u8; 64])
+        }
+
+        fn target(ek: &[u8]) -> Value {
+            json!({ "kem_ek": hex::encode(ek), "token": hex::encode([9u8; 32]) })
+        }
+
+        fn transfer_request(prover: Value) -> (Value, PrepareTransferRequest) {
+            let mut v = fixture_prove_request("test", 0).unwrap();
+            v["prover"] = prover;
+            let r = serde_json::from_value(v.clone()).unwrap();
+            (v, r)
+        }
+
+        fn burn_request(prover: Value) -> PrepareBurnRequest {
+            let mut v = fixture_burn_request("test").unwrap();
+            v["prover"] = prover;
+            serde_json::from_value(v).unwrap()
+        }
+
+        fn reply_key(p: &Pending) -> [u8; 32] {
+            hex::decode(&p.reply_key).unwrap().try_into().unwrap()
+        }
+
+        #[test]
+        fn prepare_transfer_seals_a_job_the_prover_key_opens_and_pending_carries_no_secret() {
+            let key = prover_key();
+            let (v, r) = transfer_request(target(key.kem_ek()));
+            let out = prepare_transfer(&r).unwrap();
+            let job = open_job(key.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
+            assert_eq!(job.inputs.len(), 1204);
+            assert_eq!(job.inputs.len(), randprotocol_zkvm::hidden::hidden_input::COUNT);
+            assert_eq!(job.witness_kind, WitnessKind::SpendKey);
+            assert_eq!(job.hc_bundle, ZkExecutor::hc_bundle());
+            assert_eq!(job.profile, "test");
+            assert_eq!(job.token, [9u8; 32]);
+            assert_eq!(hex::encode(job.reply_key), out.pending.reply_key);
+            assert_eq!(out.pending.kind, "transfer");
+            assert_eq!(out.expected, out.pending.expected);
+            assert_eq!(out.pending.hc_bundle, word8_to_hex(&ZkExecutor::hc_bundle()));
+            let tx = Transaction::decode(&hex::decode(&out.pending.tx_hex).unwrap()).unwrap();
+            assert!(tx.bundle.as_ref().unwrap().proof.is_empty(), "pending carries the unproven transaction");
+            assert_eq!(job.binding, tx.binding(), "the job proves this very transaction");
+
+            let s = serde_json::to_string(&out.pending).unwrap();
+            let sk = v["spend_key"].as_str().unwrap();
+            assert!(!s.contains(sk), "pending carries the spend key");
+            assert!(!s.contains(&sk[..16]), "pending carries a piece of the spend key");
+            assert!(!s.contains("spend_key") && !s.contains("inputs") && !s.contains("words"), "{s}");
+            // The witness's first eight words are the spend key's; none of them in decimal either.
+            // (A word of fewer than nine digits could turn up by chance inside a hex string, so
+            // only those long enough to mean something are asserted.)
+            let mut checked = 0;
+            for w in &job.inputs[..8] {
+                let d = w.to_string();
+                if d.len() >= 9 {
+                    assert!(!s.contains(&d), "pending carries witness word {d}");
+                    checked += 1;
+                }
+            }
+            assert!(checked >= 1, "at least one witness word was long enough to check");
+            // The whole reply a client gets, through `dispatch`, carries no spend key either.
+            let whole = dispatch("prepare_transfer", &v).unwrap();
+            let whole = serde_json::to_string(&whole["pending"]).unwrap();
+            assert!(!whole.contains(sk) && !whole.contains("spend_key"));
+        }
+
+        #[test]
+        fn prepare_burn_seals_a_burn_and_pending_names_its_destination() {
+            let key = prover_key();
+            let r = burn_request(target(key.kem_ek()));
+            let out = prepare_burn(&r).unwrap();
+            let job = open_job(key.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
+            assert_eq!(job.inputs.len(), 1204);
+            assert_eq!(out.pending.kind, "burn");
+            assert_eq!(out.pending.scalars.to_chain, Some(FIXTURE_BURN_TO_CHAIN));
+            assert_eq!(out.pending.scalars.token.as_deref(), Some(hex::encode(FIXTURE_BURN_TOKEN).as_str()));
+            assert_eq!(out.pending.scalars.payment_slot, None, "a burn pays nobody");
+            let tx = Transaction::decode(&hex::decode(&out.pending.tx_hex).unwrap()).unwrap();
+            assert!(matches!(tx.action, Action::BridgeBurn { .. }));
+            assert_eq!(job.binding, tx.binding());
+            assert!(!serde_json::to_string(&out.pending).unwrap().contains(&r.req.spend_key));
+        }
+
+        #[test]
+        fn prepare_refuses_a_viewing_key_witness_in_this_build() {
+            let key = prover_key();
+            let mut t = target(key.kem_ek());
+            t["witness_kind"] = json!("viewing_key");
+            let (_, r) = transfer_request(t.clone());
+            let e = prepare_transfer(&r).err().unwrap();
+            assert!(e.contains("spend key"), "{e}");
+            let e = prepare_burn(&burn_request(t)).err().unwrap();
+            assert!(e.contains("spend key"), "{e}");
+            let mut t = target(key.kem_ek());
+            t["witness_kind"] = json!("both");
+            let (_, r) = transfer_request(t);
+            assert!(prepare_transfer(&r).err().unwrap().contains("witness_kind"));
+            // Explicit "spend_key" is the default spelled out.
+            let mut t = target(key.kem_ek());
+            t["witness_kind"] = json!("spend_key");
+            let (_, r) = transfer_request(t);
+            prepare_transfer(&r).unwrap();
+        }
+
+        #[test]
+        fn prepare_refuses_a_bad_kem_ek() {
+            let key = prover_key();
+            let (_, r) = transfer_request(json!({ "kem_ek": "zz", "token": hex::encode([9u8; 32]) }));
+            assert!(prepare_transfer(&r).err().unwrap().contains("kem_ek"));
+            let (_, r) = transfer_request(json!({ "kem_ek": hex::encode([1u8; 10]), "token": hex::encode([9u8; 32]) }));
+            let e = prepare_transfer(&r).err().unwrap();
+            assert!(e.contains("kem_ek") && e.contains("1184"), "{e}");
+            // The right length but not a valid ML-KEM-768 key (every coefficient 0xfff > q).
+            let (_, r) = transfer_request(json!({ "kem_ek": hex::encode([0xffu8; 1184]), "token": hex::encode([9u8; 32]) }));
+            assert!(prepare_transfer(&r).is_err());
+            // A token that is not 32 bytes, and a bundle guest this build does not carry.
+            let (_, r) = transfer_request(json!({ "kem_ek": hex::encode(key.kem_ek()), "token": "abcd" }));
+            assert!(prepare_transfer(&r).err().unwrap().contains("token"));
+            let mut t = target(key.kem_ek());
+            t["hc_bundle"] = json!(word8_to_hex(&[5u32; 8]));
+            let (_, r) = transfer_request(t);
+            assert!(prepare_transfer(&r).err().unwrap().contains("bundle guest"));
+        }
+
+        #[test]
+        fn prepare_carries_the_chains_bundle_guest() {
+            let key = prover_key();
+            let v2 = ZkExecutor::hc_hidden_bundle_v2();
+            let mut t = target(key.kem_ek());
+            t["hc_bundle"] = json!(word8_to_hex(&v2));
+            let (_, r) = transfer_request(t);
+            let out = prepare_transfer(&r).unwrap();
+            let job = open_job(key.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
+            assert_eq!(job.hc_bundle, v2);
+            assert_eq!(out.pending.hc_bundle, word8_to_hex(&v2));
+        }
+
+        #[test]
+        fn prepare_defaults_max_proof_bytes_to_the_vendored_cap() {
+            let key = prover_key();
+            let (_, r) = transfer_request(target(key.kem_ek()));
+            assert!(r.max_proof_bytes.is_none());
+            assert_eq!(prepare_transfer(&r).unwrap().pending.max_proof_bytes as usize, gas::MAX_PROOF_BYTES);
+            assert_eq!(prepare_burn(&burn_request(target(key.kem_ek()))).unwrap().pending.max_proof_bytes as usize, gas::MAX_PROOF_BYTES);
+            let (mut v, _) = transfer_request(target(key.kem_ek()));
+            v["max_proof_bytes"] = json!(1_500_000);
+            let r: PrepareTransferRequest = serde_json::from_value(v).unwrap();
+            assert_eq!(prepare_transfer(&r).unwrap().pending.max_proof_bytes, 1_500_000);
+        }
+
+        #[test]
+        fn finish_proof_refuses_a_foreign_reply() {
+            let key = prover_key();
+            let (_, r) = transfer_request(target(key.kem_ek()));
+            let pending = prepare_transfer(&r).unwrap().pending;
+            let rk = reply_key(&pending);
+            let expected = word8_from_hex(&pending.expected).unwrap();
+            let finish = |p: &Pending, reply: Vec<u8>| finish_proof(&FinishRequest { pending: p.clone(), reply_hex: hex::encode(reply) });
+
+            // The wrong digest (and a proof that is not one).
+            let mut wrong = expected;
+            wrong[0] ^= 1;
+            let e = finish(&pending, seal_reply(&rk, &ProveReply { proof: vec![0; 64], digest: wrong, tier: 14 })).err().unwrap();
+            assert!(e.contains("digest"), "{e}");
+            // Sealed under another key.
+            let e = finish(&pending, seal_reply(&[3u8; 32], &ProveReply { proof: vec![0; 64], digest: expected, tier: 14 }))
+                .err()
+                .unwrap();
+            assert!(e.contains("does not open"), "{e}");
+            // Not hex at all.
+            let e = finish_proof(&FinishRequest { pending: pending.clone(), reply_hex: "zz".into() }).err().unwrap();
+            assert!(e.contains("hex"), "{e}");
+            // One byte over the cap, the right digest: refused on its size, before anything decodes it.
+            let over = vec![0u8; pending.max_proof_bytes as usize + 1];
+            let e = finish(&pending, seal_reply(&rk, &ProveReply { proof: over, digest: expected, tier: 14 })).err().unwrap();
+            assert!(e.contains("bytes") && e.contains(&pending.max_proof_bytes.to_string()), "{e}");
+            assert!(!e.contains("digest") && !e.contains("verify"), "the size cap comes first: {e}");
+            // A pending of a kind this build does not assemble.
+            let mut odd = pending.clone();
+            odd.kind = "swap".into();
+            let e = finish(&odd, seal_reply(&rk, &ProveReply { proof: vec![0; 64], digest: expected, tier: 14 })).err().unwrap();
+            assert!(e.contains("kind"), "{e}");
+        }
+
+        /// The one real proof: made here on the build's own witness, sealed as a prover would
+        /// seal it, and handed to `finish_proof` — whose result must be `prove_transfer`'s own
+        /// assembly over the same build and proof, field for field.
+        #[test]
+        #[ignore = "one real Test-profile bundle proof (~100 s); run with --ignored"]
+        fn finish_proof_matches_prove_transfer_field_for_field() {
+            let key = prover_key();
+            let (_, r) = transfer_request(target(key.kem_ek()));
+            let (_w, mut b) = build_transfer_unproven(&r.req).unwrap();
+            let words = b.prepared.words.clone();
+            let out = prepare_transfer_with(&mut b, &check_target(&r.prover).unwrap(), r.max_proof_bytes).unwrap();
+            assert!(b.prepared.words.is_empty(), "the witness moved into the job, which zeroizes it");
+            let binding = b.tx.binding();
+            let (proof, digest, tier) = prove_bundle(FriProfile::Test, &words, &binding, Backend::Cpu).unwrap();
+            assert_eq!(word8_to_hex(&digest), out.expected);
+
+            // `prove_transfer`'s path: `prove_transaction` fills the proof in, then the result is
+            // assembled from the build's scalars.
+            let proof_bytes = proof.len();
+            b.tx.bundle.as_mut().unwrap().proof = proof.clone();
+            let want = serde_json::to_value(transfer_result(&transfer_scalars(&b), &b.tx, tier, proof_bytes)).unwrap();
+
+            let rk = reply_key(&out.pending);
+            let finish = |p: &Pending, reply: &ProveReply| {
+                finish_proof(&FinishRequest { pending: p.clone(), reply_hex: hex::encode(seal_reply(&rk, reply)) })
+            };
+            let good = ProveReply { proof: proof.clone(), digest, tier };
+            let got = finish(&out.pending, &good).unwrap();
+            assert_eq!(got, want);
+            // Through `dispatch`, as a client calls it.
+            let via = dispatch(
+                "finish_proof",
+                &json!({ "pending": out.pending, "reply_hex": hex::encode(seal_reply(&rk, &good)) }),
+            )
+            .unwrap();
+            assert_eq!(via, want);
+
+            // A real proof whose reply claims another digest.
+            let mut lie = digest;
+            lie[3] ^= 1;
+            let e = finish(&out.pending, &ProveReply { proof: proof.clone(), digest: lie, tier }).err().unwrap();
+            assert!(e.contains("claimed digest"), "{e}");
+            // The same proof against another transaction (the chain id moved): the digest still
+            // matches — it covers the bundle, not the chain — so only the verify refuses it.
+            let mut other = out.pending.clone();
+            let mut tx = Transaction::decode(&hex::decode(&other.tx_hex).unwrap()).unwrap();
+            tx.chain_id += 1;
+            other.tx_hex = hex::encode(tx.encode());
+            let e = finish(&other, &good).err().unwrap();
+            assert!(e.contains("does not verify"), "{e}");
         }
     }
 }
