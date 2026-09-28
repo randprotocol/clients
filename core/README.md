@@ -4,8 +4,8 @@ The one implementation of the chain's cryptography every client shares: the Pose
 hierarchy (spend key → viewing key → address), ML-KEM-768 + ChaCha20-Poly1305 envelopes, note
 commitments and nullifiers, coin selection, and the STARK proof of one **hidden-asset bundle** —
 four input and four output slots, tier 14. It is the fullnode's own crates (`randprotocol-core`,
-`randprotocol-zkvm`, vendored as the submodule `vendor/fullnode` at commit `109f47d`, fullnode's `feat/delegated-proving`
-branch on v0.6.1) behind one JSON entry point.
+`randprotocol-zkvm`, vendored as the submodule `vendor/fullnode` at commit `e6d1327`, fullnode's delegated-proving branch
+(v0.6 + constraint set 7); re-pinned to the v0.6.2 tag at release) behind one JSON entry point.
 
 ```
 crates/wallet-core   the library and its tests; `wallet_core::call(method, params_json) -> reply_json`
