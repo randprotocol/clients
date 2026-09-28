@@ -245,7 +245,7 @@ test('the artefact this wallet loads is built for chain 16 on the hidden-asset b
   const core = await realCore();
   const k = await core.call('version');
   assert.equal(k.default_chain_id, 16, 'the core has described chain 16 since d3e3ada');
-  assert.equal(k.rpl_transfer, true, 'a token transfer is admitted on chain 14');
+  assert.equal(k.rpl_transfer, true, 'a token transfer is admitted (since chain 14)');
   assert.equal(k.transfer_proofs, 1);
   assert.equal(k.bridge_burn_proofs, 1, 'a burn was two proofs on chain 13 and is one now');
   assert.equal(k.bundle_slots, 4);

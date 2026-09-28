@@ -1852,6 +1852,12 @@ pub struct FinishRequest {
     pub reply_hex: String,
 }
 
+/// The tier every bundle proof is made and verified at: the vendored executor's private
+/// `BUNDLE_TIER` (`randprotocol-zkvm/src/executor.rs`), which `decode_and_check` pins for every
+/// bundle proof. `finish_proof` refuses a reply claiming any other, so the `tier` it reports is
+/// the verified one, never the prover's word.
+const BUNDLE_PROOF_TIER: u8 = 14;
+
 fn profile_name(p: FriProfile) -> &'static str {
     match p {
         FriProfile::Test => "test",
@@ -1986,6 +1992,9 @@ pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
     let profile = profile_from_str(&p.profile)?;
     let mut tx = Transaction::decode(&hex::decode(&p.tx_hex).map_err(|_| "pending.tx_hex is not hex")?)
         .map_err(|e| format!("pending.tx_hex is not a transaction: {e}"))?;
+    if !tx.bundle.as_ref().ok_or("the pending transaction has no bundle")?.proof.is_empty() {
+        return bad("the pending transaction already carries a proof");
+    }
     let sealed = hex::decode(r.reply_hex.trim()).map_err(|_| "the prover's reply is not hex".to_string())?;
 
     let reply = open_reply(&reply_key, &sealed).map_err(|e| format!("the prover's reply does not open: {e}"))?;
@@ -2014,15 +2023,17 @@ pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
             word8_to_hex(&published)
         ));
     }
+    if reply.tier != BUNDLE_PROOF_TIER {
+        return bad(format!(
+            "the prover reported tier {}, but a bundle proof is tier {BUNDLE_PROOF_TIER}; not using it",
+            reply.tier
+        ));
+    }
     let binding: [u32; TX_BINDING_WORDS] = tx.binding();
     exec.verify_bundle(&hc, &reply.proof, &binding).map_err(|e| format!("the proof does not verify: {e}"))?;
 
     let proof_bytes = reply.proof.len();
-    let bundle = tx.bundle.as_mut().ok_or("the pending transaction has no bundle")?;
-    if !bundle.proof.is_empty() {
-        return bad("the pending transaction already carries a proof");
-    }
-    bundle.proof = reply.proof;
+    tx.bundle.as_mut().ok_or("the pending transaction has no bundle")?.proof = reply.proof;
     debug_assert_eq!(tx.binding(), binding, "filling the proof in never moves the binding");
     let ser = |v: &dyn erased::Ser| v.to_value();
     Ok(if p.kind == "transfer" {
@@ -4596,7 +4607,7 @@ mod tests {
         }
 
         #[test]
-        fn finish_proof_refuses_a_foreign_reply() {
+        fn finish_proof_refuses_a_foreign_or_malformed_reply() {
             let key = prover_key();
             let (_, r) = transfer_request(target(key.kem_ek()));
             let pending = prepare_transfer(&r).unwrap().pending;
@@ -4604,11 +4615,19 @@ mod tests {
             let expected = word8_from_hex(&pending.expected).unwrap();
             let finish = |p: &Pending, reply: Vec<u8>| finish_proof(&FinishRequest { pending: p.clone(), reply_hex: hex::encode(reply) });
 
-            // The wrong digest (and a proof that is not one).
+            // A proof that is not one: refused where its digest is read. (The digest comparisons
+            // need a real proof; the ignored round trip below covers them.)
             let mut wrong = expected;
             wrong[0] ^= 1;
             let e = finish(&pending, seal_reply(&rk, &ProveReply { proof: vec![0; 64], digest: wrong, tier: 14 })).err().unwrap();
-            assert!(e.contains("digest"), "{e}");
+            assert!(e.contains("does not decode as a bundle proof"), "{e}");
+            // A pending that already carries a proof is refused before any reply is opened.
+            let mut proved = pending.clone();
+            let mut tx = Transaction::decode(&hex::decode(&proved.tx_hex).unwrap()).unwrap();
+            tx.bundle.as_mut().unwrap().proof = vec![1];
+            proved.tx_hex = hex::encode(tx.encode());
+            let e = finish(&proved, vec![]).err().unwrap();
+            assert!(e.contains("already carries a proof"), "{e}");
             // Sealed under another key.
             let e = finish(&pending, seal_reply(&[3u8; 32], &ProveReply { proof: vec![0; 64], digest: expected, tier: 14 }))
                 .err()
@@ -4671,6 +4690,17 @@ mod tests {
             lie[3] ^= 1;
             let e = finish(&out.pending, &ProveReply { proof: proof.clone(), digest: lie, tier }).err().unwrap();
             assert!(e.contains("claimed digest"), "{e}");
+            // A real proof whose published digest is not the one this pending expects.
+            let mut other_expected = out.pending.clone();
+            let mut exp = word8_from_hex(&other_expected.expected).unwrap();
+            exp[5] ^= 1;
+            other_expected.expected = word8_to_hex(&exp);
+            let e = finish(&other_expected, &good).err().unwrap();
+            assert!(e.contains("did not build"), "{e}");
+            // A reply claiming a tier other than the pinned bundle tier, before any verify.
+            assert_eq!(tier, BUNDLE_PROOF_TIER);
+            let e = finish(&out.pending, &ProveReply { proof: proof.clone(), digest, tier: 13 }).err().unwrap();
+            assert!(e.contains("tier 13"), "{e}");
             // The same proof against another transaction (the chain id moved): the digest still
             // matches — it covers the bundle, not the chain — so only the verify refuses it.
             let mut other = out.pending.clone();
