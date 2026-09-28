@@ -105,4 +105,9 @@ contract in randbridge.org/web/lib/rand/provider.ts. Three files, each in its ow
   and that hash. `node --test extension/test/provider-host.test.mjs` is the policy's suite;
   `recipient-hash.test.mjs` pins the hash to the bridge's own fixture.
 
-Firefox needs 128 or later for `world: "MAIN"` content scripts (the manifest's floor).
+Firefox needs 128 or later for `world: "MAIN"` content scripts; the manifest's floor is 140, the
+release that introduced `data_collection_permissions`, which the manifest also declares (AMO's
+linter warns when the floor predates a key the manifest uses). In Firefox an MV3 add-on's host
+permissions are granted by the install prompt; a user who declined them there sees the bridge fall
+back to "Install Rand Wallet" until the site is granted in the extension's permissions panel.
+
