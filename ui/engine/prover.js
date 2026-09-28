@@ -40,7 +40,16 @@ export const PROVER_BUSY = -32005;
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 export const DEFAULT_POLL_MS = 1000;
-export const DEFAULT_MAX_WAIT_MS = 20 * 60 * 1000;
+/**
+ * How long a job may sit in the prover's QUEUE before the wallet stops waiting (the record stays,
+ * so it can be resumed). The desktop host proves one job at a time with a queue of 8 at ~2 min a
+ * proof, so position 8 alone is ~16 min of legitimate waiting before its own proof starts.
+ */
+export const MAX_QUEUE_WAIT_MS = 30 * 60 * 1000;
+/** How long one job may be PROVING — its clock restarts when it leaves the queue. */
+export const MAX_PROVING_MS = 20 * 60 * 1000;
+/** Kept for callers of the old name: the proving bound. */
+export const DEFAULT_MAX_WAIT_MS = MAX_PROVING_MS;
 
 /** A prover's refusal or silence. `failure` is set only where no JSON-RPC reply existed at all. */
 export class ProverError extends Error {
@@ -226,7 +235,15 @@ async function claimRecord(storage, job, locks) {
   const verdict = await exclusively(locks, async () => {
     const current = await readRecord(storage);
     if (current && current.job === job) {
-      try { await storage.session.set(CLAIMED_PROOF_KEY, job); } catch { /* the removal is the claim */ }
+      // The marker FIRST, and confirmed, before the record goes: a window that later finds the
+      // record gone reads the marker to tell "someone submitted it" from "nothing was sent". A
+      // removal without a marker would tell it "nothing was sent" while this window submits.
+      let marked = false;
+      try {
+        await storage.session.set(CLAIMED_PROOF_KEY, job);
+        marked = (await storage.session.get(CLAIMED_PROOF_KEY)) === job;
+      } catch { marked = false; }
+      if (!marked) return 'unmarked';
       await storage.session.remove(PENDING_PROOF_KEY);
       return 'mine';
     }
@@ -235,15 +252,23 @@ async function claimRecord(storage, job, locks) {
     return claimed === job ? 'taken' : 'gone';
   });
   if (verdict === 'mine') return;
+  if (verdict === 'unmarked') {
+    // The record is left where it was, so Resume can try again. Not definite: this window could
+    // not tell whether another one is about to submit it.
+    const err = new Error('Could not claim the proof; check Activity before sending again.');
+    err.definite = false;
+    err.claimFailed = true;
+    throw err;
+  }
   if (verdict === 'taken') {
     const err = new Error('This proof was already submitted from another window. Check Activity before sending again.');
     err.definite = false;
     err.alreadySubmitted = true;
     throw err;
   }
-  // Nobody claimed it: the record went with a lock (or a cancel) while the prover worked, and
-  // nothing was submitted by anyone.
-  const err = new Error('The wallet locked while your prover was working, so nothing was sent. Send again.');
+  // Nobody claimed it: the record went with a lock, a cancel from another window, or a newer
+  // record in its place while the prover worked, and nothing was submitted by anyone.
+  const err = new Error('The pending proof was cleared (the wallet locked, or it was cancelled elsewhere), so nothing was sent. Send again.');
   err.definite = true;
   err.pendingLost = true;
   throw err;
@@ -291,15 +316,33 @@ export async function startRemoteProof({ client, prepared, storage, meta = {}, s
  * past it, and every other rejects (`definite: false`) rather than submit a second time.
  *
  * `onPhase('prove', {position, prover})` while queued, `onPhase('prove', {prover})` while proving,
- * each only when it changes. Transport failures are retried until `maxWait` (the prover may be
- * restarting); a JSON-RPC error stops. `signal` aborts with `prover_cancel` and forgets the record.
+ * each only when it changes. Each state has its own clock: a job may wait `maxQueueWait` in the
+ * queue, and `maxWait` once it is proving (the clock restarts when it leaves the queue), so a deep
+ * but moving queue is not mistaken for a stuck prover. Transport failures are retried within the
+ * current state's bound (the prover may be restarting); a JSON-RPC error stops. Running out of
+ * either bound rejects `proverSilent` and KEEPS the record, so the job can be resumed or
+ * cancelled. `signal` aborts with `prover_cancel` and forgets the record.
  */
 export async function pollRemoteProof({
   client, core, record, storage, onPhase, signal, locks, announced,
-  poll = DEFAULT_POLL_MS, maxWait = DEFAULT_MAX_WAIT_MS, now = Date.now, sleep = defaultSleep,
+  poll = DEFAULT_POLL_MS, maxWait = MAX_PROVING_MS, maxQueueWait = MAX_QUEUE_WAIT_MS,
+  now = Date.now, sleep = defaultSleep,
 }) {
   const { job, name } = record;
-  const started = now();
+  // `stage` is what the prover last said: 'queued' until it says 'proving'. The clock is the
+  // stage's own, restarted on the move.
+  let stage = 'queued';
+  let started = now();
+  const bound = () => (stage === 'proving' ? maxWait : maxQueueWait);
+  const minutes = (ms) => Math.round(ms / 60000);
+  const outOfTime = (silent) => definite(
+    silent
+      ? `Your prover has not answered for ${minutes(bound())} minutes. Resume later, or cancel.`
+      : stage === 'proving'
+        ? `Your prover has not finished after ${minutes(maxWait)} minutes of proving. Resume later, or cancel.`
+        : `Your prover has not started this proof after ${minutes(maxQueueWait)} minutes in its queue. Resume later, or cancel.`,
+    { proverSilent: true },
+  );
   // `announced` is the detail the caller already reported, so it is not reported twice.
   let last = announced === undefined ? '' : JSON.stringify(announced);
   const say = (detail) => {
@@ -322,9 +365,9 @@ export async function pollRemoteProof({
     } catch (err) {
       if (err && err.name === 'AbortError') { await cancel(); throw err; }
       if (err instanceof ProverError && err.failure) {
-        if (now() - started >= maxWait) {
+        if (now() - started >= bound()) {
           // The record stays: the job may still finish, and `send.resume` can pick it up.
-          throw definite(`Your prover has not answered for ${Math.round(maxWait / 60000)} minutes. Resume later, or cancel.`, { proverSilent: true });
+          throw outOfTime(true);
         }
         try { await sleep(poll, signal); } catch (e) { await cancel(); throw e; }
         continue;
@@ -336,6 +379,7 @@ export async function pollRemoteProof({
       const p = Number(st.position);
       say({ position: Number.isSafeInteger(p) && p > 0 ? p : 1, prover: name });
     } else if (state === 'proving') {
+      if (stage !== 'proving') { stage = 'proving'; started = now(); }
       say({ prover: name });
     } else if (state === 'done') {
       if (typeof st.reply !== 'string' || !st.reply) throw await giveUp(definite('The prover finished but sent no proof.'));
@@ -355,20 +399,18 @@ export async function pollRemoteProof({
     } else {
       throw await giveUp(definite(`The prover answered with an unknown state (${String(state).slice(0, 32)}).`));
     }
-    if (now() - started >= maxWait) {
-      throw definite(`Your prover has not finished after ${Math.round(maxWait / 60000)} minutes. Resume later, or cancel.`, { proverSilent: true });
-    }
+    if (now() - started >= bound()) throw outOfTime(false);
     try { await sleep(poll, signal); } catch (e) { await cancel(); throw e; }
   }
 }
 
 /** `startRemoteProof` then `pollRemoteProof`: the whole remote proof for a fresh send. */
-export async function remoteProve({ client, core, prepared, storage, meta = {}, onPhase, signal, locks, poll, maxWait, now, sleep }) {
+export async function remoteProve({ client, core, prepared, storage, meta = {}, onPhase, signal, locks, poll, maxWait, maxQueueWait, now, sleep }) {
   // Reported before the submit, so even a job the prover answers `done` at once shows the phase.
   const announced = { prover: meta.name };
   if (typeof onPhase === 'function') onPhase('prove', announced);
   const record = await startRemoteProof({ client, prepared, storage, meta, signal, now });
-  return pollRemoteProof({ client, core, record, storage, onPhase, signal, locks, announced, poll, maxWait, now, sleep });
+  return pollRemoteProof({ client, core, record, storage, onPhase, signal, locks, announced, poll, maxWait, maxQueueWait, now, sleep });
 }
 
 /** The pending record, or `null`. */

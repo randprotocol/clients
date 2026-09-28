@@ -9,6 +9,9 @@ import { makeWasmBackend, CANNOT_PROVE_REASON } from '../engine/backend-wasm.js'
 import { makeNativeBackend } from '../engine/backend-native.js';
 import { decryptSecret } from '../engine/crypto.js';
 import {
+  pollRemoteProof, PENDING_PROOF_KEY, CLAIMED_PROOF_KEY, MAX_QUEUE_WAIT_MS, MAX_PROVING_MS,
+} from '../engine/prover.js';
+import {
   stubCore, stubFetch, mapStorage, stubPlatform, assertKeyNeverLeaked,
   PASSWORD, ADDRESS, SPEND_KEY, PROVER_URL, PROVER_TOKEN, PROVER_REPLY, PROVED_TX_HASH, SEALED_JOB,
   proverLink, proverInfo, proverEk, proverFingerprint,
@@ -92,8 +95,10 @@ test('pairing_stores_the_token_in_the_vault_not_in_settings', async () => {
   const vault = env.storage.local.get('proverToken');
   assert.equal(vault.kdf, 'pbkdf2-sha256');
   assert.equal(vault.iter, 600000);
-  assert.equal(await decryptSecret(PASSWORD, vault), PROVER_TOKEN);
-  assert.equal(env.storage.sessionMap.get('unlocked').prover_token, PROVER_TOKEN, 'the unlocked session carries the token');
+  assert.deepEqual(JSON.parse(await decryptSecret(PASSWORD, vault)), {
+    token: PROVER_TOKEN, kemEk: proverEk(), url: PROVER_URL, fingerprint: proverFingerprint(),
+  }, 'the vault record holds the token, the key and the URL together');
+  assert.equal(env.storage.sessionMap.get('unlocked').prover.token, PROVER_TOKEN, 'the unlocked session carries the token');
 
   // Only the prover's info was asked, and neither secret went anywhere but the core.
   assert.deepEqual(methodsOf(env.fetch).filter((m) => m.startsWith('prover_')), ['prover_info']);
@@ -104,7 +109,7 @@ test('pairing_stores_the_token_in_the_vault_not_in_settings', async () => {
   await env.backend.wallet.lock();
   assert.equal(env.storage.sessionMap.get('unlocked'), undefined);
   await env.backend.wallet.unlock(PASSWORD);
-  assert.equal(env.storage.sessionMap.get('unlocked').prover_token, PROVER_TOKEN);
+  assert.equal(env.storage.sessionMap.get('unlocked').prover.token, PROVER_TOKEN);
 
   // `settings.set` cannot write a prover past the pairing's checks.
   await env.backend.settings.set({ prover: { mode: 'remote', url: 'https://evil.example', own: true }, theme: 'dark' });
@@ -154,12 +159,12 @@ test('re_pairing_replaces_the_token_everywhere', async () => {
   env.infoKey = 'NEXT';
   await env.backend.prover.pair(proverLink({ key: 'NEXT', url: 'https://prover.example', token: second }), PASSWORD);
 
-  assert.equal(await decryptSecret(PASSWORD, env.storage.local.get('proverToken')), second);
-  assert.equal(env.storage.sessionMap.get('unlocked').prover_token, second);
+  assert.equal(JSON.parse(await decryptSecret(PASSWORD, env.storage.local.get('proverToken'))).token, second);
+  assert.equal(env.storage.sessionMap.get('unlocked').prover.token, second);
   assert.equal((await env.backend.settings.get()).prover.url, 'https://prover.example');
   await env.backend.wallet.lock();
   await env.backend.wallet.unlock(PASSWORD);
-  assert.equal(env.storage.sessionMap.get('unlocked').prover_token, second);
+  assert.equal(env.storage.sessionMap.get('unlocked').prover.token, second);
 
   // The next send seals to the new prover's key with the new token.
   await env.backend.send.send(SEND, () => {});
@@ -170,6 +175,28 @@ test('re_pairing_replaces_the_token_everywhere', async () => {
   assertKeyNeverLeaked(env, second);
 });
 
+test('a_tampered_settings_kem_ek_does_not_move_the_seal_target', async () => {
+  // `settings.prover` is plaintext: anything that can write local storage can rewrite it. The
+  // seal target is the vault's pairing (copied into the session on unlock), so the job still goes
+  // to the key the user paired, at the URL the user paired — not to the tampered copy's.
+  const env = await sendableWallet({ fetch: sendableFetch({ prover_status: () => ({ state: 'done', reply: PROVER_REPLY }) }) });
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  const settings = env.storage.local.get('settings');
+  settings.prover = { ...settings.prover, kemEk: proverEk('EVIL'), url: 'https://evil.example' };
+  env.storage.local.set('settings', settings);
+  // Across a lock too: the unlock re-reads the vault, never the settings.
+  await env.backend.wallet.lock();
+  await env.backend.wallet.unlock(PASSWORD);
+
+  await env.backend.send.send(SEND, () => {});
+  const [[, prepared]] = coreCalled(env, 'prepare_transfer');
+  assert.equal(prepared.prover.kem_ek, proverEk(), 'the job was sealed to the tampered key');
+  assert.notEqual(prepared.prover.kem_ek, proverEk('EVIL'));
+  const urls = env.fetch.requests.filter((r) => String(r.body.method).startsWith('prover_')).map((r) => r.url);
+  assert.ok(urls.length > 0);
+  assert.equal(urls.some((u) => String(u).includes('evil.example')), false, 'a prover request went to the tampered URL');
+});
+
 test('forget_removes_settings_vault_and_session_copies', async () => {
   const env = build();
   await env.backend.wallet.create(PASSWORD);
@@ -177,7 +204,7 @@ test('forget_removes_settings_vault_and_session_copies', async () => {
   await env.backend.prover.forget();
   assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
   assert.equal(env.storage.local.has('proverToken'), false);
-  assert.equal('prover_token' in env.storage.sessionMap.get('unlocked'), false);
+  assert.equal('prover' in env.storage.sessionMap.get('unlocked'), false);
   assert.equal(env.storage.sessionMap.get('unlocked').spend_key, SPEND_KEY, 'forgetting the prover kept the wallet unlocked');
   assert.deepEqual(await env.backend.send.canProve(), { ok: false, reason: CANNOT_PROVE_REASON });
   assert.equal((await env.backend.prover.probe()).ok, false);
@@ -464,7 +491,7 @@ test('a pending record removed by a lock under a live poll says nothing was sent
   await env.backend.wallet.lock();
   wake({ state: 'done', reply: PROVER_REPLY });
   await assert.rejects(sending, (err) => {
-    assert.match(err.message, /locked while your prover was working, so nothing was sent/);
+    assert.match(err.message, /pending proof was cleared \(the wallet locked, or it was cancelled elsewhere\), so nothing was sent/);
     assert.equal(err.definite, true);
     return true;
   });
@@ -502,4 +529,79 @@ test('the claim is taken under the Web Lock the backend was given', async () => 
   await env.backend.prover.pair(proverLink(), PASSWORD);
   await env.backend.send.send(SEND, () => {});
   assert.deepEqual(taken.filter(([n]) => n === 'rand-pending-proof'), [['rand-pending-proof', 'exclusive']]);
+});
+
+// ------------------------------------------------------------- final review: claim and clocks --
+
+test('a_claim_whose_marker_did_not_persist_fails_not_definite_and_keeps_the_record', async () => {
+  // If the claim marker cannot be written, removing the record anyway would let a second window
+  // read "gone" — "nothing was sent" — while this one submits. The claim fails instead, not
+  // definite, and the record stays so Resume can try again.
+  const env = await sendableWallet({ fetch: sendableFetch({ prover_status: () => ({ state: 'done', reply: PROVER_REPLY }) }) });
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  const set = env.storage.session.set;
+  let thrown = 0;
+  env.storage.session.set = async (key, value) => {
+    if (key === CLAIMED_PROOF_KEY && thrown === 0) { thrown += 1; throw new Error('quota'); }
+    return set.call(env.storage.session, key, value);
+  };
+  await assert.rejects(() => env.backend.send.send(SEND, () => {}), (err) => {
+    assert.match(err.message, /could not claim the proof; check Activity before sending again/i);
+    assert.equal(err.definite, false);
+    return true;
+  });
+  assert.equal(thrown, 1);
+  assert.equal(count(env.fetch, 'rand_sendTransaction'), 0, 'an unclaimed proof was submitted');
+  assert.ok(env.storage.sessionMap.has(PENDING_PROOF_KEY), 'the pending record was removed without a claim');
+});
+
+/** A prover client scripted by the fake clock, and the clock. */
+function clocked(script) {
+  let t = 0;
+  const calls = [];
+  const client = {
+    url: PROVER_URL,
+    status: async () => { calls.push('status'); return script(t); },
+    cancel: async () => { calls.push('cancel'); },
+  };
+  return { client, calls, now: () => t, sleep: async (ms) => { t += ms; } };
+}
+
+async function pendingStore(job = 'job-1') {
+  const storage = mapStorage();
+  await storage.session.set(PENDING_PROOF_KEY, { job, pending: { p: 1 }, url: PROVER_URL, name: 'mine', startedAt: 0 });
+  return storage;
+}
+
+test('a_job_queued_25_minutes_then_proved_is_accepted', async () => {
+  const MIN = 60_000;
+  const { client, now, sleep } = clocked((t) => (t < 25 * MIN ? { state: 'queued', position: 8 } : t < 40 * MIN ? { state: 'proving' } : { state: 'done', reply: 'aa' }));
+  const storage = await pendingStore();
+  const core = { call: async (m) => (m === 'finish_proof' ? 'PROVED' : null) };
+  const record = await storage.session.get(PENDING_PROOF_KEY);
+  const res = await pollRemoteProof({ client, core, record, storage, poll: MIN, now, sleep });
+  assert.equal(res, 'PROVED');
+  assert.ok(MAX_QUEUE_WAIT_MS >= 25 * MIN && MAX_PROVING_MS >= 15 * MIN);
+});
+
+test('each_state_has_its_own_bound_and_running_out_keeps_the_record', async () => {
+  const MIN = 60_000;
+  // Proving for ever: stopped MAX_PROVING_MS after it LEFT the queue, not after the submit.
+  const a = clocked((t) => (t < 10 * MIN ? { state: 'queued', position: 1 } : { state: 'proving' }));
+  const sa = await pendingStore();
+  await assert.rejects(
+    () => pollRemoteProof({ client: a.client, core: {}, record: { job: 'job-1', name: 'mine' }, storage: sa, poll: MIN, now: a.now, sleep: a.sleep }),
+    (err) => { assert.equal(err.proverSilent, true); assert.equal(err.definite, true); assert.match(err.message, /20 minutes of proving/); return true; },
+  );
+  assert.equal(a.now(), 10 * MIN + MAX_PROVING_MS);
+  assert.ok(sa.sessionMap.has(PENDING_PROOF_KEY));
+  // Queued for ever: stopped at MAX_QUEUE_WAIT_MS.
+  const b = clocked(() => ({ state: 'queued', position: 3 }));
+  const sb = await pendingStore();
+  await assert.rejects(
+    () => pollRemoteProof({ client: b.client, core: {}, record: { job: 'job-1', name: 'mine' }, storage: sb, poll: MIN, now: b.now, sleep: b.sleep }),
+    (err) => { assert.equal(err.proverSilent, true); assert.match(err.message, /30 minutes in its queue/); return true; },
+  );
+  assert.equal(b.now(), MAX_QUEUE_WAIT_MS);
+  assert.ok(sb.sessionMap.has(PENDING_PROOF_KEY));
 });

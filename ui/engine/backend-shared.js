@@ -120,10 +120,12 @@ const K = Object.freeze({
   contacts: CONTACTS_KEY,
   failures: 'unlockFailures',
   unlocked: UNLOCKED_SESSION_KEY,
-  // Delegated proving (plan 2026-09-28, ruling R2): the pairing token, as a second vault record
-  // (`encryptSecret(password, token)`) beside the spend key's. Never in `settings`: a token is a
-  // bearer credential for a machine that receives the spend key. Decrypted on unlock into the
-  // session record (`prover_token`), where the spend key already is.
+  // Delegated proving (plan 2026-09-28, ruling R2): the pairing, as a second vault record
+  // (`encryptSecret(password, JSON {token, kemEk, url, fingerprint})`) beside the spend key's.
+  // Never in `settings`: a token is a bearer credential for a machine that receives the spend key,
+  // and the key and URL decide where the spend key is SEALED — so they are under the password
+  // too, and `settings.prover` is display only (a tampered plaintext copy cannot redirect a job).
+  // Decrypted on unlock into the session record (`prover`), where the spend key already is.
   proverToken: 'proverToken',
   // SESSION, not persistent (ruling R1): the one remote proof in flight, `{job, pending, url, name,
   // startedAt, kind, to?, memo?}` — `pending` is the core's, and carries no spend key. It is what
@@ -763,15 +765,28 @@ export function makeSharedBackend({
   }
 
   /**
-   * The paired prover's token, opened with the password that just opened the vault, or
-   * `undefined` when there is none. A token record that will not open (damaged, or written under
+   * `{token, kemEk, url, fingerprint}` from a decrypted pairing record, or `undefined` when it is
+   * not one (a pre-release record holding the bare token included: that pairing must be made again).
+   */
+  function pairingOf(value) {
+    let v = value;
+    if (typeof v === 'string') { try { v = JSON.parse(v); } catch { return undefined; } }
+    if (!v || typeof v !== 'object') return undefined;
+    const { token, kemEk, url, fingerprint } = v;
+    if (![token, kemEk, url, fingerprint].every((x) => typeof x === 'string' && x)) return undefined;
+    return { token, kemEk, url, fingerprint };
+  }
+
+  /**
+   * The paired prover's vault record (`pairingOf`), opened with the password that just opened the
+   * vault, or `undefined` when there is none. A record that will not open (damaged, or written under
    * a password since changed) costs the prover, never the unlock: the wallet opens, and a send
    * through the prover says to pair it again.
    */
-  async function openProverToken(password) {
+  async function openProverPairing(password) {
     const rec = await storage.get(K.proverToken);
     if (!rec) return undefined;
-    try { return await decryptSecret(password, rec); } catch { return undefined; }
+    try { return pairingOf(await decryptSecret(password, rec)); } catch { return undefined; }
   }
 
   // ------------------------------------------------------------------- unlock attempt throttle --
@@ -875,12 +890,14 @@ export function makeSharedBackend({
   }
 
   /**
-   * Records a freshly created/imported/unlocked wallet. The vault is written first. `proverToken`
-   * is the paired prover's token, decrypted with the same password (ruling R2), when there is one.
+   * Records a freshly created/imported/unlocked wallet. The vault is written first. `pairing` is
+   * the paired prover's `{token, kemEk, url, fingerprint}`, decrypted with the same password
+   * (ruling R2), when there is one.
    */
-  async function startSession(info, proverToken) {
+  async function startSession(info, pairing) {
     const record = { spend_key: info.spend_key, viewing_key: info.viewing_key };
-    if (typeof proverToken === 'string' && proverToken) record.prover_token = proverToken;
+    const p = pairingOf(pairing);
+    if (p) record.prover = p;
     await storage.session.set(K.unlocked, record);
     // A wallet wiped and created again in the same page had no multi-tab coordination at all
     // until a reload, because `wipe()` closed the channel for good.
@@ -932,7 +949,7 @@ export function makeSharedBackend({
       if (!key) throw new Error('wrong password');
       const info = await c.walletInfo(key);
       await storage.set(K.wallet, { ...((await storage.get(K.wallet)) || {}), address: info.address, pk: info.pk });
-      await startSession(info, await openProverToken(password));
+      await startSession(info, await openProverPairing(password));
       return { address: info.address, pk: info.pk };
     },
 
@@ -1469,19 +1486,36 @@ export function makeSharedBackend({
   const proverTiming = {
     ...(proverOptions && Number.isFinite(proverOptions.poll) ? { poll: proverOptions.poll } : {}),
     ...(proverOptions && Number.isFinite(proverOptions.maxWait) ? { maxWait: proverOptions.maxWait } : {}),
+    ...(proverOptions && Number.isFinite(proverOptions.maxQueueWait) ? { maxQueueWait: proverOptions.maxQueueWait } : {}),
   };
 
   /**
    * OPTIONAL in the contract: the `prover` group. Pairing reads the link through the core
    * (`parse_prover_link` — the key, the URL, the token, `own`, the fingerprint), holds the URL to
    * the node's rule, asks the prover itself for its key and refuses a prover whose key is not the
-   * one the link names; only then is anything stored — the token in the vault (never in
-   * `settings`), the rest in `settings.prover`.
+   * one the link names; only then is anything stored — the token, key and URL together in the vault
+   * (never in `settings`), and a display copy in `settings.prover`.
    */
   // Phase 1 sends a spend-key job only to a prover the link marks as the user's own; a pairing
   // without it is stored but never used, and a screen says so before the user saves it.
   const NOT_OWN_WARNING = 'This link does not mark the prover as your own, so this version of the '
     + 'wallet will never send it a job: pair only a prover you run yourself, from a link it made with own=1.';
+
+  async function probeAt(p) {
+    if (!p || typeof p.url !== 'string' || !p.url || (p.mode !== undefined && p.mode !== 'remote')) {
+      return { ok: false, reason: 'No prover is paired.' };
+    }
+    let info;
+    try {
+      info = readInfo(await proverClientFor(p.url).info());
+    } catch (err) {
+      return { ok: false, reason: `the prover at ${p.url} did not answer (${(err && err.message) || err})` };
+    }
+    if (!(await sameProverKey(info, String(p.kemEk || '').toLowerCase(), p.fingerprint))) {
+      return { ok: false, reason: 'the prover at that address now has a different key; pair it again' };
+    }
+    return { ok: true, queue: info.queue, witnessKinds: info.witnessKinds, fee: info.fee, hcBundles: info.hcBundles };
+  }
 
   const prover = {
     /**
@@ -1515,43 +1549,41 @@ export function makeSharedBackend({
       if (!(await sameProverKey(info, kemEk, parsed.fingerprint))) {
         throw new Error('The prover at that address has a different key from the one the link names. Do not pair it.');
       }
-      const vault = await encryptSecret(password, String(parsed.token));
+      // Everything that decides where the spend key goes is sealed under the password together;
+      // `settings.prover` below is what a screen shows, and nothing reads a seal target from it.
+      const pairing = { token: String(parsed.token), kemEk, url: checked.url, fingerprint: String(parsed.fingerprint) };
+      const vault = await encryptSecret(password, JSON.stringify(pairing));
       await storage.set(K.proverToken, vault);
       const label = typeof name === 'string' && name.trim() ? name.trim().slice(0, 64) : new URL(checked.url).host;
       const setting = {
         mode: 'remote', name: label, url: checked.url, kemEk, fingerprint: parsed.fingerprint, own: parsed.own === true,
       };
       await writeProverSetting(setting);
-      // Re-pairing replaces the token everywhere it lives: the vault above, and the unlocked
+      // Re-pairing replaces the pairing everywhere it lives: the vault above, and the unlocked
       // session, where a send reads it.
       const session = await unlockedSession();
-      if (session) await storage.session.set(K.unlocked, { ...session, prover_token: String(parsed.token) });
+      if (session) await storage.session.set(K.unlocked, { ...session, prover: pairing });
       return { ...setting };
     },
 
-    /** `{ok: true, queue, witnessKinds, fee, hcBundles}` from the paired prover, or `{ok: false, reason}`. */
+    /**
+     * `{ok: true, queue, witnessKinds, fee, hcBundles}` from the paired prover, or `{ok: false,
+     * reason}`. While unlocked it asks the vault's pairing (the one a send seals to); locked, the
+     * display copy in `settings.prover`.
+     */
     async probe() {
-      const { prover: p } = await getSettings();
-      if (!p || p.mode !== 'remote' || typeof p.url !== 'string') return { ok: false, reason: 'No prover is paired.' };
-      let info;
-      try {
-        info = readInfo(await proverClientFor(p.url).info());
-      } catch (err) {
-        return { ok: false, reason: `the prover at ${p.url} did not answer (${(err && err.message) || err})` };
-      }
-      if (!(await sameProverKey(info, String(p.kemEk || '').toLowerCase(), p.fingerprint))) {
-        return { ok: false, reason: 'the prover at that address now has a different key; pair it again' };
-      }
-      return { ok: true, queue: info.queue, witnessKinds: info.witnessKinds, fee: info.fee, hcBundles: info.hcBundles };
+      const session = await unlockedSession();
+      const p = (session && pairingOf(session.prover)) || (await getSettings()).prover;
+      return probeAt(p);
     },
 
-    /** Forget the pairing: `settings.prover`, the vault's token record and the session's copy. */
+    /** Forget the pairing: `settings.prover`, the vault's pairing record and the session's copy. */
     async forget() {
       await writeProverSetting(null);
       await storage.remove(K.proverToken);
       const session = await unlockedSession();
-      if (session && 'prover_token' in session) {
-        const { prover_token: gone, ...rest } = session;
+      if (session && 'prover' in session) {
+        const { prover: gone, ...rest } = session;
         void gone;
         await storage.session.set(K.unlocked, rest);
       }
@@ -1576,26 +1608,32 @@ export function makeSharedBackend({
     return { answer: { ok: true, via: 'prover' }, route: p };
   }
 
-  /** The engine's `prove` hook for one send or withdrawal through `route`, or `undefined` for the device. */
+  /**
+   * The engine's `prove` hook for one send or withdrawal through `route`, or `undefined` for the
+   * device. The seal target — the prover's key and URL — and the token come from the SESSION's
+   * copy of the vault record, never from `route` (= `settings.prover`, plaintext, display only):
+   * `route` contributes the name a screen shows and nothing else.
+   */
   async function proveHookFor(route) {
     if (!route) return undefined;
     let session;
     try { session = await requireUnlocked(); } catch (err) { err.definite = true; throw err; }
-    const token = session.prover_token;
-    if (typeof token !== 'string' || !token) {
+    const pairing = pairingOf(session.prover);
+    if (!pairing) {
       const err = new Error('Your prover\'s pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.');
       err.definite = true;
       throw err;
     }
+    const { token, kemEk, url } = pairing;
     return async ({ kind, request, maxProofBytes, hcBundle, meta, onPhase, signal }) => {
       const params = {
         ...request,
-        prover: { kem_ek: route.kemEk, token, witness_kind: 'spend_key', ...(hcBundle ? { hc_bundle: hcBundle } : {}) },
+        prover: { kem_ek: kemEk, token, witness_kind: 'spend_key', ...(hcBundle ? { hc_bundle: hcBundle } : {}) },
         ...(maxProofBytes ? { max_proof_bytes: maxProofBytes } : {}),
       };
       const prepared = kind === 'burn' ? await c.prepareBurn(params) : await c.prepareTransfer(params);
       return remoteProve({
-        client: proverClientFor(route.url), core, prepared, storage,
+        client: proverClientFor(url), core, prepared, storage,
         meta: { kind, name: route.name, ...(meta || {}) },
         onPhase, signal, locks: locksApi, ...proverTiming,
       });

@@ -810,7 +810,7 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assertKeyNeverLeaked(env);
     assertKeyNeverLeaked(env, PROVER_TOKEN);
     assertKeyNeverLeaked(env, PASSWORD);
-    assert.equal((await storage.session.get('unlocked')).prover_token, PROVER_TOKEN);
+    assert.equal((await storage.session.get('unlocked')).prover.token, PROVER_TOKEN);
   });
 
   // =============================================================== fix round 1 ====================

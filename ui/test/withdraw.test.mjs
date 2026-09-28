@@ -575,7 +575,7 @@ test('a withdrawal proved by the paired prover says where it waits and who prove
 
 /** A pending remote burn whose `resume` never settles on its own. */
 function pendingBurn({ kind = 'burn' } = {}) {
-  const ctl = { resumes: 0, options: null, emit: null, settle: null, cancelled: 0 };
+  const ctl = { resumes: 0, options: null, emit: null, settle: null, fail: null, cancelled: 0 };
   const b = unlockedBackend({
     send: {
       pending: async () => ({ job: 'job-9', name: 'my-desktop', kind, startedAt: Date.now() - 1000 }),
@@ -585,6 +585,7 @@ function pendingBurn({ kind = 'burn' } = {}) {
         ctl.emit = (phase, detail) => onPhase(phase, detail);
         return new Promise((resolve, reject) => {
           ctl.settle = resolve;
+          ctl.fail = reject;
           options.signal.addEventListener('abort', () => {
             const err = new Error('aborted');
             err.name = 'AbortError';
@@ -626,6 +627,27 @@ test('Cancel on a resumed withdrawal cancels the pending job', async (t) => {
   assert.equal(ctl.cancelled, 1);
   assert.equal(ctl.options.signal.aborted, true);
   assertGone(root.querySelector('[data-role="ring-bundle"]'), 'the proving ring after a cancel');
+});
+
+test('a prover that ran out of time on a withdrawal offers Resume and Cancel', async (t) => {
+  const { b, ctl } = pendingBurn();
+  const { root } = await mountApp(t, b, { hash: '#withdraw/1' });
+  await turns(8);
+  assert.equal(ctl.resumes, 1);
+  const silent = () => Object.assign(new Error('Your prover has not started this proof after 30 minutes in its queue. Resume later, or cancel.'), { definite: true, proverSilent: true });
+  ctl.fail(silent());
+  await turns(8);
+  assert.match(text(root), /30 minutes in its queue/);
+  assertGone(root.querySelector('[data-role="retry"]'), 'Back to review for a job still pending');
+  root.querySelector('[data-role="resume-proof"]').click();
+  await turns(6);
+  assert.equal(ctl.resumes, 2, 'Resume called send.resume again');
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Proving on my-desktop…');
+  ctl.fail(silent());
+  await turns(8);
+  root.querySelector('[data-role="cancel-proof"]').click();
+  await turns(6);
+  assert.equal(ctl.cancelled, 1, 'Cancel called send.cancelPending');
 });
 
 test('a pending transfer is not resumed by the withdraw screen', async (t) => {

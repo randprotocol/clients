@@ -35,7 +35,7 @@ import { explorerLink } from '../lib/explorer.js';
 import { nativeAsset, isUnlisted, feeDecimals, feeSymbol } from '../lib/assets.js';
 import {
   phaseLabel, provingBanner, CANCELLABLE, ADDRESS_DEBOUNCE_MS, SELF_SEND_QUESTION,
-  explainProvingError, outcomeOf, safeHash, draftFor, currentSend, startSend, resumeSend,
+  explainProvingError, outcomeOf, safeHash, draftFor, currentSend, startSend, resumeSend, resumableFailure,
   unknownOutcome, plainUnits, checkAmount,
   MEMO_MAX_BYTES, NOT_A_RECIPIENT, utf8Length, recipientKind, confirmationLine, memoLine,
   memoSupportedFor,
@@ -495,7 +495,10 @@ registerScreen('send', {
         });
         stepEl.querySelector('[data-role="confirm-memo"]').textContent = memoLine(memoSupported ? draft.memo : '');
       } else if (next === 'proving') paintProving();
-      else if (next === 'failed') stepEl.innerHTML = failedStepMarkup(explainProvingError(attached && attached.error));
+      else if (next === 'failed') {
+        const err = attached && attached.error;
+        stepEl.innerHTML = failedStepMarkup(explainProvingError(err), { resumable: resumableFailure(err) });
+      }
       else if (next === 'unknown') paintUnknown();
       paintIndicator();
       if (focus) focusStepTitle();
@@ -861,6 +864,30 @@ registerScreen('send', {
       goStep('review');
     });
 
+    // A paired prover that ran out of time left its job pending: Resume polls the SAME job again
+    // (the engine's `send.resume`), Cancel cancels it there and forgets it.
+    const offResumeProof = on(root, '[data-role="resume-proof"]', 'click', (evt) => {
+      evt.preventDefault();
+      if (typeof ctx.backend.send.resume !== 'function') return;
+      const previous = attached;
+      if (previous) previous.listeners.delete(onStoreChange);
+      ctx.state.send = null;
+      attached = null;
+      attach(resumeSend(ctx, { name: (previous && previous.proverName) || '', startedAt: previous && previous.startedMs }));
+    });
+
+    const offCancelProof = on(root, '[data-role="cancel-proof"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (attached) attached.listeners.delete(onStoreChange);
+      ctx.state.send = null;
+      attached = null;
+      if (typeof ctx.backend.send.cancelPending === 'function') {
+        try { await ctx.backend.send.cancelPending(); } catch { /* best effort: it expires on the prover */ }
+      }
+      if (!live()) return;
+      goStep(draft.recipient ? 'review' : steps[0]);
+    });
+
     function confirmSelfSend() {
       const dialog = ctx.sheet(h`
         <h3 class="sheet-title">That is your own address</h3>
@@ -1031,7 +1058,7 @@ registerScreen('send', {
       if (attached) attached.listeners.delete(onStoreChange);
       backBtn.removeEventListener('click', onBack);
       offAsset(); offPaste(); offInput(); offAmountInput(); offMax(); offExpand();
-      offEdit(); offRetry(); offSubmit(); offProve(); offCancel();
+      offEdit(); offRetry(); offResumeProof(); offCancelProof(); offSubmit(); offProve(); offCancel();
       offGate(); offCheckActivity(); offExplorerUnknown();
     };
   },

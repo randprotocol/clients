@@ -273,15 +273,24 @@ export function provingStepMarkup(store) {
     <div data-role="prove-actions">${cancel}</div>`;
 }
 
-/** A failure that happened before anything was broadcast: nothing moved, so a retry is safe. */
-export function failedStepMarkup(message) {
+/**
+ * A failure that happened before anything was broadcast: nothing moved, so a retry is safe.
+ * `resumable` is a paired prover that ran out of time (`err.proverSilent`): its job is still
+ * pending there, so the ways on are Resume (the same job) and Cancel (forget it), not a new send
+ * — which the engine would refuse while the job is pending.
+ */
+export function failedStepMarkup(message, { resumable = false } = {}) {
+  const actions = resumable
+    ? raw(h`<button class="btn btn-primary block" type="button" data-role="resume-proof">Resume</button>
+    <button class="btn block" type="button" data-role="cancel-proof">Cancel the proof</button>`)
+    : raw(h`<button class="btn btn-primary block" type="button" data-role="retry">Back to review</button>`);
   return h`
     <h2 class="title" data-role="step-title" tabindex="-1">Not sent</h2>
     <div class="banner negative">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">The transfer was not sent</span>${message}</span>
+      <span><span class="banner-title">${resumable ? 'Not sent yet' : 'The transfer was not sent'}</span>${message}</span>
     </div>
-    <button class="btn btn-primary block" type="button" data-role="retry">Back to review</button>
+    ${actions}
     <button class="btn btn-ghost block" type="button" data-go="home">Back to home</button>`;
 }
 

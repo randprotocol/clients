@@ -97,7 +97,8 @@
  * `prover` is `{mode: 'device'}` until a prover is paired, then `{mode: 'remote', name, url, kemEk,
  * fingerprint, own}` (delegated proving, spec 2026-09-28 §4.1). It is **read-only** through
  * `settings.set` — only the optional `prover` group writes it — and it never carries the pairing
- * token, which lives in the vault.
+ * token. It is DISPLAY ONLY: the token, key and URL a job is sealed to and sent to live together in
+ * the vault (and, unlocked, the session), so a tampered `settings.prover` cannot redirect a job.
  *
  * The node is two fields, not one (task 5.0). `rpcUrls` is the **default endpoint set** the
  * wallet moves between on its own when one of them is unreachable; `rpcUrl` is the user's single
@@ -335,10 +336,10 @@
  *       `warning` — a sentence for the user — is there exactly when `own` is false: Phase 1 never
  *       sends such a prover a job. Never carries the token. Rejects with the core's sentence.
  *     · `prover.pair(link, password, {name}?)` → the new `settings.prover`. The password is checked
- *       first (the token is sealed under it, as a second vault record); the `randprover:` link is
+ *       first (the token, key and URL are sealed under it together, as a second vault record); the `randprover:` link is
  *       parsed by the core; its URL must be https, or http to this machine only; the prover must
  *       answer `prover_info` with the key the link names, or nothing is stored. Re-pairing
- *       replaces the token in the vault and in the unlocked session. Rejects with a sentence.
+ *       replaces the pairing in the vault and in the unlocked session. Rejects with a sentence.
  *       Before calling it a screen must show the spec §4.4 warning (this prover receives the spend
  *       key each time it proves; pair only a machine you run yourself).
  *     · `prover.probe()` → `{ok: true, queue: {depth, max, proving}, witnessKinds, fee, hcBundles}`

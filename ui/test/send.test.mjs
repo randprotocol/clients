@@ -1578,6 +1578,30 @@ test('Cancel on a resumed proof cancels the pending job', async (t) => {
   assertGone(root.querySelector('.ring[role="progressbar"]'), 'the proving ring after a cancel');
 });
 
+test('a prover that ran out of time offers Resume and Cancel, which resume and cancel the job', async (t) => {
+  const { b, ctl } = pendingSend();
+  const { root } = await mountApp(t, b, { hash: '#send' });
+  await turns(6);
+  assert.equal(ctl.resumes, 1);
+  const silent = () => Object.assign(new Error('Your prover has not finished after 20 minutes of proving. Resume later, or cancel.'), { definite: true, proverSilent: true });
+  ctl.fail(silent());
+  await turns(8);
+  assert.match(root.textContent, /20 minutes of proving/);
+  assertGone(root.querySelector('[data-role="retry"]'), 'Back to review for a job still pending');
+  root.querySelector('[data-role="resume-proof"]').click();
+  await turns(6);
+  assert.equal(ctl.resumes, 2, 'Resume called send.resume again');
+  assert.ok(root.querySelector('.ring[role="progressbar"]'), 'the proving step is back');
+  assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Proving on my-desktop…');
+
+  ctl.fail(silent());
+  await turns(8);
+  root.querySelector('[data-role="cancel-proof"]').click();
+  await turns(6);
+  assert.equal(ctl.cancelled, 1, 'Cancel called send.cancelPending');
+  assertGone(root.querySelector('[data-role="cancel-proof"]'), 'the failed step after a cancel');
+});
+
 test('a pending withdrawal is not resumed by the send screen', async (t) => {
   const { b, ctl } = pendingSend({ kind: 'burn' });
   const { root } = await mountApp(t, b, { hash: '#send' });

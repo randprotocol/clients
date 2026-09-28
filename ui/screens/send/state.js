@@ -159,6 +159,14 @@ export function outcomeOf(store) {
   return AFTER_BROADCAST.includes(store.phase) ? 'unknown' : 'not-sent';
 }
 
+/**
+ * Whether a failure left a remote proof pending that the user can Resume or Cancel: a paired
+ * prover that ran out of time (`err.proverSilent`, the record kept — `engine/prover.js`).
+ */
+export function resumableFailure(err) {
+  return !!err && err.proverSilent === true;
+}
+
 /** A hash from a rejection is node-controlled text: only 32 bytes of hex ever gets further. */
 export function safeHash(hash) {
   return TX_HASH_RE.test(String(hash || '')) ? String(hash) : null;

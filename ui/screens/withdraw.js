@@ -447,14 +447,19 @@ function provingStepMarkup(store) {
     <div data-role="prove-actions">${cancel}</div>`;
 }
 
-function failedStepMarkup(message) {
+/** As the send screen's: `resumable` offers Resume/Cancel for a prover job still pending. */
+function failedStepMarkup(message, { resumable = false } = {}) {
+  const actions = resumable
+    ? raw(h`<button class="btn btn-primary block" type="button" data-role="resume-proof">Resume</button>
+    <button class="btn block" type="button" data-role="cancel-proof">Cancel the proof</button>`)
+    : raw(h`<button class="btn btn-primary block" type="button" data-role="retry">Back to review</button>`);
   return h`
     <h2 class="title" data-role="step-title" tabindex="-1">Not withdrawn</h2>
     <div class="banner negative">
       <span class="ic">${raw(icons.warning())}</span>
       <span><span class="banner-title">Nothing left the pool</span>${message}</span>
     </div>
-    <button class="btn btn-primary block" type="button" data-role="retry">Back to review</button>
+    ${actions}
     <button class="btn btn-ghost block" type="button" data-go="home">Back to home</button>`;
 }
 
@@ -624,7 +629,10 @@ registerScreen('withdraw', {
           asset, display: draft.display, toChain: draft.toChain, units: reviewUnits, estimate: draft.estimate, assets,
         });
       } else if (next === 'proving') paintProving();
-      else if (next === 'failed') stepEl.innerHTML = failedStepMarkup((attached && attached.error && attached.error.message) || 'The withdrawal could not be proved.');
+      else if (next === 'failed') {
+        const err = attached && attached.error;
+        stepEl.innerHTML = failedStepMarkup((err && err.message) || 'The withdrawal could not be proved.', { resumable: !!err && err.proverSilent === true });
+      }
       else if (next === 'unknown') stepEl.innerHTML = unknownStepMarkup((attached && attached.error && attached.error.message) || '');
       paintIndicator();
       if (focus) focusStepTitle();
@@ -819,6 +827,30 @@ registerScreen('withdraw', {
       goStep('review');
     });
 
+    // A paired prover that ran out of time left its burn job pending: Resume polls the SAME job
+    // (`send.resume`), Cancel cancels it there and forgets it.
+    const offResumeProof = on(root, '[data-role="resume-proof"]', 'click', (evt) => {
+      evt.preventDefault();
+      if (typeof ctx.backend.send.resume !== 'function') return;
+      const previous = attached;
+      if (previous) previous.listeners.delete(onStoreChange);
+      ctx.state.withdrawal = null;
+      attached = null;
+      attach(resumeWithdrawal(ctx, { name: (previous && previous.proverName) || '', startedAt: previous && previous.startedMs }, index));
+    });
+
+    const offCancelProof = on(root, '[data-role="cancel-proof"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (attached) attached.listeners.delete(onStoreChange);
+      ctx.state.withdrawal = null;
+      attached = null;
+      if (typeof ctx.backend.send.cancelPending === 'function') {
+        try { await ctx.backend.send.cancelPending(); } catch { /* best effort: it expires on the prover */ }
+      }
+      if (!live()) return;
+      goStep('review');
+    });
+
     const offProve = on(root, '[data-action="prove"]', 'click', (evt) => {
       evt.preventDefault();
       // Re-checked from this flow's own state at the moment of the click, never from the DOM: a
@@ -866,7 +898,7 @@ registerScreen('withdraw', {
       if (attached) attached.listeners.delete(onStoreChange);
       backBtn.removeEventListener('click', onBack);
       offChain(); offAddress(); offMax(); offAmountInput(); offRelayerInput(); offAmount();
-      offConfirm(); offEdit(); offRetry(); offProve(); offCancel();
+      offConfirm(); offEdit(); offRetry(); offResumeProof(); offCancelProof(); offProve(); offCancel();
     };
   },
 });
