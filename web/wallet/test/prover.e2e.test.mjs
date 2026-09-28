@@ -155,6 +155,27 @@ function stop(child) {
   if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
 }
 
+const running = (child) => !!child && child.exitCode === null && child.signalCode === null;
+
+/** Resolves when `child` has exited, or after `ms` — whichever is first; `true` if it exited. */
+function exited(child, ms) {
+  if (!running(child)) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { child.off('exit', done); resolve(false); }, ms);
+    function done() { clearTimeout(timer); resolve(true); }
+    child.once('exit', done);
+  });
+}
+
+/** SIGTERM, wait up to `ms` for the exit, then SIGKILL and wait for that exit too. */
+async function stopAndWait(child, ms = 10_000) {
+  if (!running(child)) return;
+  stop(child);
+  if (await exited(child, ms)) return;
+  child.kill('SIGKILL');
+  await exited(child, 5_000);
+}
+
 const spendableRand = (scan) => (scan.notes || []).filter((n) => !n.spent && !n.pending && Number(n.asset) === 0);
 
 // ------------------------------------------------------------------------------ the fixture ---
@@ -211,9 +232,9 @@ before(async () => {
 });
 
 after(async () => {
-  for (const child of [env.prover, env.node]) stop(child);
-  // Give them a moment to exit before the data directory goes.
-  await sleep(500);
+  // The data directory goes only once both have actually exited (a SIGKILL after a bounded wait),
+  // never while RocksDB may still be writing into it.
+  await Promise.all([env.prover, env.node].map((child) => stopAndWait(child)));
   if (env.dir) rmSync(env.dir, { recursive: true, force: true });
 });
 

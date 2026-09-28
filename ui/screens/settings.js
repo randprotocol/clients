@@ -114,8 +114,13 @@ export const PROVER_WARNING = 'This prover will receive your spend key each time
 /** Who makes this wallet's proofs: this device, or the paired prover. Every field is text. */
 function proverStateMarkup(prover) {
   if (prover && prover.mode === 'remote') {
+    // A pairing whose link was not marked own is stored but never sent a job in Phase 1: it is
+    // not "my own prover", and this line must not say it makes the proofs.
+    const who = prover.own === true
+      ? h`My own prover · ${prover.name || prover.url || ''}`
+      : h`Paired prover (not usable in this build) · ${prover.name || prover.url || ''}`;
     return h`
-      <div class="kv"><span class="k">Proofs are made by</span><span class="v">My own prover · ${prover.name || prover.url || ''}</span></div>
+      <div class="kv"><span class="k">Proofs are made by</span><span class="v">${raw(who)}</span></div>
       <div class="kv"><span class="k">Fingerprint</span><span class="v mono">${prover.fingerprint || ''}</span></div>
       <p class="caption" data-role="prover-probe">Asking the prover…</p>
       <button class="btn block" type="button" data-role="forget-prover">Forget this prover</button>`;

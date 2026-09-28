@@ -58,7 +58,8 @@ certificate is needed.
    `On · 127.0.0.1:8600 · fingerprint XXXX-XXXX-XXXX-XXXX. Waiting for a proof to make.`, and a
    `randprover:` pairing link appears with its QR code. **Copy link** copies it; **Regenerate
    link** retires the old link (a wallet paired with it stops working) and shows a new one. The
-   link carries a secret: paste it into your wallet and nowhere else.
+   link carries a secret: paste it into your wallet and nowhere else. Regenerating invalidates
+   every wallet paired with the old token at once — each must be paired again with the new link.
 2. **In the extension or the web wallet**, open Settings → **Prover**, paste the link into
    **Pairing link**, read the warning, enter the wallet's **Password** (the pairing is sealed
    under it) and press **Save**.
@@ -75,13 +76,16 @@ From then on, **Send** and **Withdraw** work in the browser. While the proof is 
 proving step reads `Waiting at position N on 127.0.0.1:8600` while the job waits behind others
 in the prover's queue, then `Proving on 127.0.0.1:8600…` while the prover works on it (the name
 is the prover's address). The desktop app proves one job at a time. **Cancel** stops waiting and
-cancels the job on the prover too.
+cancels the job on the prover too. The wallet waits up to 30 minutes for a job to leave the
+prover's queue and up to 20 minutes for it to be proved; past either it stops waiting, keeps the
+job, and offers **Resume** (wait for the same job again) and **Cancel**.
 
 **A closed popup loses nothing.** The job waits in the extension's session storage: reopen the
 popup or the side panel and it opens on Send (or Withdraw, for a burn) and carries on polling
 where it left off. Locking the wallet while the prover works forgets the job, and nothing is sent
-("The wallet locked while your prover was working, so nothing was sent. Send again."). The web
-wallet keeps nothing across a reload, so reloading its tab mid-proof is the same as locking it.
+("The pending proof was cleared (the wallet locked, or it was cancelled elsewhere), so nothing was
+sent. Send again."). The web wallet keeps nothing across a reload, so reloading its tab mid-proof
+is the same as locking it.
 
 To stop using the prover, press **Forget this prover** in Settings; proofs go back to this device
 (which, in a browser, means sending is unavailable again).

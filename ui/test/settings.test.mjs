@@ -655,6 +655,9 @@ test('a link that is not marked own relays the engine\'s Phase 1 warning', async
   assert.match(status, /does not mark the prover as your own/);
   assert.match(status, /Saved; not usable in this build/);
   assert.doesNotMatch(status, /Paired|go to/, 'no banner says proofs now go to this prover');
+  const state = root.querySelector('[data-role="prover-state"]').textContent;
+  assert.match(state, /Paired prover \(not usable in this build\)/);
+  assert.doesNotMatch(state, /My own prover/, 'a pairing not marked own is called the user\'s own');
 });
 
 test('an empty link empties the password field too', async (t) => {

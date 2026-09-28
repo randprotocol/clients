@@ -28,7 +28,7 @@
 import {
   checkHead, checkTreeInfo, checkCommitments, checkNullifiers, checkAnchor, checkWitness,
   checkBlockHeader, checkBridgeState, checkSubmitted, checkGenesisHash, checkBlockActions,
-  checkTransaction, checkLimits, intField,
+  checkTransaction, checkLimits, intField, NodeReplyError,
 } from './validate.js';
 import { isTransportFailure } from './rpc.js';
 
@@ -88,7 +88,8 @@ const HC_BUNDLE_RE = /^[0-9a-f]{64}$/;
  * The chain's proof parameters from ONE `rand_status` on the verified client — what a proof must
  * be made with:
  *  - `hcBundle`: the chain's bundle guest, `rand_status.hc_bundle` (64 hex). `null` (a node that
- *    does not report it, or predates `rand_status`) leaves the core on this build's default guest.
+ *    does not report it, or predates `rand_status`) leaves the core on this build's default guest;
+ *    a value that is there but is not 64 hex rejects with a `NodeReplyError`.
  *  - `profile`: the FRI profile its validators verify, `rand_status.fri_profile`. Only `'test'`
  *    (a Test-profile chain — fast, insecure, tests only) is taken from the node; anything else,
  *    absent included, is `'production'`, which is every live chain.
@@ -106,9 +107,21 @@ export async function proofParamsOf(client, signal) {
     if (err && err.code === -32601) return { hcBundle: null, profile: 'production' };
     throw err;
   }
-  const hc = st && typeof st.hc_bundle === 'string' ? st.hc_bundle.trim().toLowerCase() : '';
+  // Absent is an older node: the build's default guest. PRESENT but malformed is a node this
+  // wallet cannot read, refused up front like a bad `rand_getLimits` — never silently replaced by
+  // the default guest, which on a chain that moved guests is a proof its validators refuse.
+  const raw = st && typeof st === 'object' ? st.hc_bundle : undefined;
+  let hcBundle = null;
+  if (raw !== undefined && raw !== null) {
+    const hc = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+    if (!HC_BUNDLE_RE.test(hc)) {
+      const shown = typeof raw === 'string' ? raw.slice(0, 80) : typeof raw;
+      throw new NodeReplyError(`rand_status: hc_bundle is not 64 hex characters (${shown})`);
+    }
+    hcBundle = hc;
+  }
   return {
-    hcBundle: HC_BUNDLE_RE.test(hc) ? hc : null,
+    hcBundle,
     profile: st && st.fri_profile === 'test' ? 'test' : 'production',
   };
 }

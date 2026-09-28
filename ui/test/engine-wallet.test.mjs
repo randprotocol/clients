@@ -908,3 +908,22 @@ test('a node’s OWN error code -1 is an answer, not an unreachable node', async
   const nothing = await wallet.chainIdentity(dead);
   assert.equal(nothing.reachable, false, 'a node that was never reached was recorded as having answered');
 });
+
+test('proofParamsOf refuses a malformed hc_bundle instead of falling back to the default guest', async () => {
+  const { proofParamsOf } = await import('../engine/wallet.js');
+  const { NodeReplyError } = await import('../engine/validate.js');
+  const on = (st) => ({ status: async () => st });
+  // Absent: an older node, the build's default guest.
+  assert.deepEqual(await proofParamsOf(on({ height: 1 })), { hcBundle: null, profile: 'production' });
+  assert.deepEqual(await proofParamsOf(on({ hc_bundle: null })), { hcBundle: null, profile: 'production' });
+  // Present and well formed: taken, lower-cased.
+  assert.equal((await proofParamsOf(on({ hc_bundle: 'AB'.repeat(32) }))).hcBundle, 'ab'.repeat(32));
+  // Present and malformed: refused, not replaced.
+  for (const bad of ['zz'.repeat(32), 'ab'.repeat(31), '', 42, { x: 1 }]) {
+    await assert.rejects(() => proofParamsOf(on({ hc_bundle: bad })), (err) => {
+      assert.ok(err instanceof NodeReplyError, `${JSON.stringify(bad)} → ${err && err.name}`);
+      assert.match(err.message, /rand_status: hc_bundle/);
+      return true;
+    });
+  }
+});
