@@ -238,13 +238,13 @@ test('BUNDLE_INPUTS matches what the real core will actually select', { skip }, 
 
 // ------------------------------------------------------------------------- the chain-14 core ---
 
-test('the artefact this wallet loads is built for chain 16 on the hidden-asset bundle', { skip }, async () => {
+test('the artefact this wallet loads is built for chain 18 on the hidden-asset bundle', { skip }, async () => {
   // The wasm is git-ignored build output, so "is it the current one" is a real question: a stale
   // artefact would answer every offline call above perfectly while proving against a guest the
   // chain no longer runs. These are the constants that moved, and a stale build fails here.
   const core = await realCore();
   const k = await core.call('version');
-  assert.equal(k.default_chain_id, 16, 'the core has described chain 16 since d3e3ada');
+  assert.equal(k.default_chain_id, 18, 'the core has described chain 18 since 2026-09-29 (16 from d3e3ada before that)');
   assert.equal(k.rpl_transfer, true, 'a token transfer is admitted (since chain 14)');
   assert.equal(k.transfer_proofs, 1);
   assert.equal(k.bridge_burn_proofs, 1, 'a burn was two proofs on chain 13 and is one now');
