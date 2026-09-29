@@ -133,7 +133,8 @@ android/         Gradle project; Java app
 extension/       the extension's code, one copy for both browsers
 chrome/          Chrome manifest, packaging, store notes
 firefox/         Firefox manifest, packaging, store notes
-web/             the /clients page for randprotocol.org
+web/             the icon for the randprotocol.org /clients pages (the pages themselves live in
+                 that repository: web/README.md), and wallet/ below
 web/wallet/      the local web wallet: index.html and main.js (the shell), worker.js (the wasm core
                  off the UI thread), idb.js (IndexedDB, and a Map for what must never be written),
                  and serve.mjs — a loopback-only static server. Built and served by serve.sh from a
