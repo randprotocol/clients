@@ -4,8 +4,12 @@ The one implementation of the chain's cryptography every client shares: the Pose
 hierarchy (spend key → viewing key → address), ML-KEM-768 + ChaCha20-Poly1305 envelopes, note
 commitments and nullifiers, coin selection, and the STARK proof of one **hidden-asset bundle** —
 four input and four output slots, tier 14. It is the fullnode's own crates (`randprotocol-core`,
-`randprotocol-zkvm`, vendored as the submodule `vendor/fullnode` at fullnode's tag `v0.6.2`, commit `98d1ff6`
-— the delegated-proving release, v0.6 + constraint set 7) behind one JSON entry point.
+`randprotocol-zkvm`, vendored as the submodule `vendor/fullnode` at fullnode's tag `v0.6.6`, commit `d742a9b`
+— the gas release: v0.6.2's delegated prover + constraint set 8, the chain-18 build) behind one JSON entry
+point. Constraint set 8 adds one public value to every proof (`pv::GAS`, the declared gas limit) and
+moves every verifier key: a bundle this core proves declares the guest's ceiling, 20 479 gas, which
+chain 18's genesis pins as `bundle_gas_limit` (`version.bundle_gas_limit`; a chain naming another
+value is refused before proving), and verifies on no chain before 18.
 
 ```
 crates/wallet-core   the library and its tests; `wallet_core::call(method, params_json) -> reply_json`

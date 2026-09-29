@@ -37,7 +37,7 @@ STARK proof, keys are Poseidon2 hashes, envelopes are ML-KEM-768 + ChaCha20-Poly
 primitives exist only in the fullnode's Rust crates, and a wallet that re-implemented them in
 Swift, Java or JavaScript would have to be byte-identical to the node or every transfer is
 refused. So `core/` vendors the fullnode crates (`core/vendor/fullnode`,
-a submodule at fullnode's `v0.6.2` tag, `98d1ff6` — the delegated-proving release, v0.6 + constraint set 7) and exposes one JSON entry point, `call(method, params)`, that each
+a submodule at fullnode's `v0.6.6` tag, `d742a9b` — the gas release: v0.6.2's delegated prover + **constraint set 8**, the chain-18 build, whose proofs carry a declared gas limit and verify on no earlier chain) and exposes one JSON entry point, `call(method, params)`, that each
 client wraps: an XCFramework on iOS, a `.so` on Android, WebAssembly in the browser. Everything
 above that line — the RPC client, note store, scan and send flow, key storage and the UI — is
 Swift, Java and JavaScript.
@@ -103,7 +103,7 @@ desktop app or the `rand` command-line wallet using the key file every client ex
 ## Build
 
 ```bash
-git submodule update --init                    # core/vendor/fullnode @ v0.6.2 (98d1ff6)
+git submodule update --init                    # core/vendor/fullnode @ v0.6.6 (d742a9b)
 cd core && cargo test --release                # the core, including a real proof (~1 min)
 
 core/scripts/build-wasm.sh                     # → extension/shared/core/   (installs wasm-bindgen-cli)

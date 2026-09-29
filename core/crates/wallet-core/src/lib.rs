@@ -51,12 +51,16 @@ pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode's tag
-/// `v0.6.2` (`98d1ff6`, v0.6 + constraint set 7), the delegated-proving release, which adds
-/// `randprotocol-prover` — the sealed job wire a light client speaks to a prover — with CORS on
-/// the prover listener under an origin allow-list and a service shutdown. Earlier: `e6d1327` (the
-/// delegated-proving branch before the tag), `109f47d` (that branch before its CORS follow-up), `1a13359` (`feat/address-sharing` on v0.5.9: the address
-/// fingerprint, `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "98d1ff6";
+/// `v0.6.6` (`d742a9b`, v0.6.2 + gas: **constraint set 8**, circuits `18c2627`), the chain-18
+/// build — one more public value on every proof (`pv::GAS`, the declared gas limit; 35 in all),
+/// the `GAS` column in the cpu AIR, the genesis `gas` section whose `bundle_gas_limit` every
+/// bundle proof must declare exactly ([`check_bundle_gas_limit`]). Every verifier key moved, so
+/// a proof made by an earlier build verifies on no chain-18 node and one made by this build on no
+/// earlier chain. Earlier: `98d1ff6` (v0.6.2, constraint set 7 — the delegated prover,
+/// `randprotocol-prover`'s sealed job wire, unchanged here), `e6d1327`, `109f47d`, `1a13359`
+/// (`feat/address-sharing` on v0.5.9: the address fingerprint, `randpay:` links and the encrypted
+/// memo), `9c142c1` (v0.5.1).
+pub const CHAIN_BUILD: &str = "d742a9b";
 /// The chain the defaults below describe: chain 18, the next cut (not live on 2026-09-29; the
 /// public node answered chain 17, genesis `d1afefc3…`, that morning; chain 16 was the aim from
 /// 2026-09-28). A wallet built against it refuses a node on any other chain until 18 is up, then
@@ -1215,6 +1219,13 @@ pub struct ProveRequest {
     /// refused before anything is built.
     #[serde(default)]
     pub hc_bundle: Option<String>,
+    /// The chain's `bundle_gas_limit`, from `rand_getLimits` (constraint set 8, spec 2026-09-28
+    /// §4.3): the gas every bundle proof on a chain with a `gas` section must declare, exactly.
+    /// `null` (the default) is a chain without the section, or a node that predates the field.
+    /// A value other than this build's guest ceiling is refused before anything is built
+    /// ([`check_bundle_gas_limit`]).
+    #[serde(default)]
+    pub bundle_gas_limit: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -1262,14 +1273,64 @@ pub struct ProveResult {
     pub proofs: u8,
 }
 
-/// The envelope format a transaction is sealed in (spec 2026-09-26 §2.4), from the chain's
-/// `envelope_bytes` (`rand_getLimits`; `None` on a chain that does not declare it), and the memo
-/// checked against it — both before any witness is built or proof paid for. A chain without the
-/// field seals the legacy envelope, which has no room for a memo, so a non-empty one is refused
-/// rather than silently dropped.
-fn envelope_format_for(envelope_bytes: Option<u32>, memo: &str) -> Result<EnvelopeFormat> {
-    let format = EnvelopeFormat::for_chain(envelope_bytes);
+/// The chain ids of every public chain whose genesis carries no `envelope_bytes` (fullnode issue
+/// #64): chains 14–17, every chain that ran a build able to seal the memo form. Chains before 14
+/// are retired and their data deleted fleet-wide, so nothing admits a transaction for them; chain
+/// 18 is cut with `envelope_bytes` 1860, so it is not here. The same list as
+/// `randprotocol_client::LEGACY_ENVELOPE_CHAIN_IDS`; every chain cut without the field is added
+/// here, and to the shells' copies (`ui/lib/memo.js`, iOS `SendLinkRules`, Android `Memo`), which
+/// gate their memo fields on it and read this build's list from `version`.
+pub const LEGACY_ENVELOPE_CHAIN_IDS: &[u64] = &[14, 15, 16, 17];
+
+/// The envelope format for a transaction on `chain_id` given the node's `envelope_bytes` claim
+/// (issue #64). `rand_getLimits` is the node's word and nothing in it is authenticated. On a chain
+/// whose genesis sets no `envelope_bytes` the ledger still admits any envelope up to 2 048 bytes,
+/// so a node — or anything between this wallet and it — answering `1860` there would have this
+/// wallet seal every output at 1 860 bytes among everyone else's 1 348: a permanent, public tag on
+/// each of its transactions. The node cannot serve its genesis file, so the claim cannot be
+/// checked against it; instead the memo form is refused outright on every id in
+/// [`LEGACY_ENVELOPE_CHAIN_IDS`], whatever the node says. The chain id is the one thing a lying
+/// node cannot move: it is bound into the transaction, and a transaction carrying the wrong one is
+/// refused `WrongChain` by the real chain — no admission, so no tag. The reverse lie (a memo chain
+/// answered as legacy) only gets the transaction refused `EnvelopeSize`: a nuisance, not a leak.
+pub fn envelope_format_on(chain_id: u64, envelope_bytes: Option<u32>) -> EnvelopeFormat {
+    if LEGACY_ENVELOPE_CHAIN_IDS.contains(&chain_id) {
+        return EnvelopeFormat::Legacy;
+    }
+    EnvelopeFormat::for_chain(envelope_bytes)
+}
+
+/// Constraint set 8 (spec 2026-09-28 §4.3): under a `gas` section every bundle proof must declare
+/// the chain's `bundle_gas_limit` as its `GAS_LIMIT`, exactly, or the ledger refuses it
+/// (`TxError::BundleGasLimit`, permanent). This build's bundle guest declares its header ceiling,
+/// `gas::bundle_gas_limit_pin()` = `gas_max(14, 0, 0)` = 20 479 — the prover's default and the one
+/// value genesis accepts. A chain naming any other value runs a bundle guest this wallet does not
+/// have: refused here, before a proof is paid for. `None` is a chain without the section (or a node
+/// that predates the field), on which no limit is checked.
+pub fn check_bundle_gas_limit(bundle_gas_limit: Option<u64>) -> Result<()> {
+    let ours = gas::bundle_gas_limit_pin();
+    match bundle_gas_limit {
+        Some(b) if b != ours => bad(format!(
+            "this chain pins every bundle at {b} gas, but this wallet's bundle guest declares {ours}; update the wallet"
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// The envelope format a transaction on `chain_id` is sealed in (spec 2026-09-26 §2.4), from the
+/// chain's `envelope_bytes` (`rand_getLimits`; `None` on a chain that does not declare it) through
+/// [`envelope_format_on`]'s issue-#64 pin, and the memo checked against it — both before any
+/// witness is built or proof paid for. A legacy envelope has no room for a memo, so a non-empty one
+/// is refused rather than silently dropped.
+fn envelope_format_for(chain_id: u64, envelope_bytes: Option<u32>, memo: &str) -> Result<EnvelopeFormat> {
+    let format = envelope_format_on(chain_id, envelope_bytes);
     if !memo.is_empty() && format == EnvelopeFormat::Legacy {
+        if EnvelopeFormat::for_chain(envelope_bytes) == EnvelopeFormat::Memo {
+            return bad(format!(
+                "chain {chain_id} carries no memo: its genesis sets no envelope size, whatever the node claims \
+                 (send again with an empty memo)"
+            ));
+        }
         return bad("this chain carries no memo: its envelopes predate it (send again with an empty memo)");
     }
     if memo.len() > MEMO_TEXT_MAX_BYTES {
@@ -1313,7 +1374,8 @@ fn build_transfer_unproven(req: &ProveRequest) -> Result<(Wallet, TransferBuild)
     let root = word8_from_hex(&req.anchor_root).ok_or("anchor_root is not 64 hex characters")?;
     let time = u32::try_from(req.anchor_height).map_err(|_| "anchor height does not fit a bundle's time field")?;
     let profile = profile_from_str(&req.profile)?;
-    let format = envelope_format_for(req.envelope_bytes, &req.memo)?;
+    let format = envelope_format_for(req.chain_id, req.envelope_bytes, &req.memo)?;
+    check_bundle_gas_limit(req.bundle_gas_limit)?;
 
     // Which group `inputs` belongs to is what `asset` decides — the whole difference between the
     // two shapes, and the reason a request with neither new field is still a RAND transfer.
@@ -1520,6 +1582,9 @@ pub struct BurnRequest {
     /// The chain's bundle guest, exactly as [`ProveRequest`]'s.
     #[serde(default)]
     pub hc_bundle: Option<String>,
+    /// The chain's `bundle_gas_limit`, exactly as [`ProveRequest`]'s.
+    #[serde(default)]
+    pub bundle_gas_limit: Option<u64>,
 }
 
 /// What [`prove_burn`] returns. One bundle, so every array is slot-ordered exactly as
@@ -1638,7 +1703,8 @@ fn build_burn_unproven(req: &BurnRequest) -> Result<(Wallet, BurnBuild)> {
     let profile = profile_from_str(&req.profile)?;
     // A burn pays nobody in the pool, so it carries no memo; its change and dummies still follow
     // the chain's envelope format.
-    let format = envelope_format_for(req.envelope_bytes, "")?;
+    let format = envelope_format_for(req.chain_id, req.envelope_bytes, "")?;
+    check_bundle_gas_limit(req.bundle_gas_limit)?;
 
     let (a_slots, a_spent, a_held) = group_slots(&w, &req.inputs, req.asset)?;
     let (r_slots, r_spent, r_held) = group_slots(&w, &req.fee_inputs, 0)?;
@@ -2058,6 +2124,13 @@ pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
             reply.tier
         ));
     }
+    // Constraint set 8: the limit the proof declares (`pv::GAS`) must be the chain's pin, which is
+    // this build's guest ceiling — a prover declaring anything else made a proof every validator
+    // refuses (`BundleGasLimit`). A decode, so it is read before the verify is paid for.
+    let declared = exec
+        .bundle_gas_limit(&reply.proof)
+        .map_err(|e| format!("the prover's proof does not decode as a bundle proof, so its gas limit cannot be read: {e}"))?;
+    check_bundle_gas_limit(declared).map_err(|e| format!("the prover's proof: {e}"))?;
     let binding: [u32; TX_BINDING_WORDS] = tx.binding();
     exec.verify_bundle(&hc, &reply.proof, &binding).map_err(|e| format!("the proof does not verify: {e}"))?;
 
@@ -2356,6 +2429,12 @@ pub fn constants() -> Value {
         "anchor_window": randprotocol_core::ledger::ANCHOR_WINDOW,
         "tree_depth": DEPTH,
         "hc_bundle": word8_to_hex(&randprotocol_zkvm::executor::ZkExecutor::hc_bundle()),
+        // Constraint set 8: the gas every bundle proof this build makes declares — the one value a
+        // chain's genesis `gas.bundle_gas_limit` may name for this guest (`check_bundle_gas_limit`).
+        "bundle_gas_limit": gas::bundle_gas_limit_pin(),
+        // Issue #64: the chains whose genesis sets no envelope size, on which a node's memo claim
+        // is never believed; the shells hide their memo fields there (`envelope_format_on`).
+        "legacy_envelope_chain_ids": LEGACY_ENVELOPE_CHAIN_IDS,
         // The delegated-proving job wire this build seals and opens (randprotocol-prover); a
         // client pairs only with a prover that speaks the same version.
         "prover_wire": randprotocol_prover::wire::WIRE_VERSION,
@@ -2493,7 +2572,10 @@ fn asset_param(p: &Value) -> Result<u32> {
 /// - `prove_burn` `{…BurnRequest}` → BurnResult (slow — one bundle proof)
 /// - `prove_transfer` `{…ProveRequest}` → ProveResult (slow — one bundle proof). `memo` (default
 ///   `""`) is sealed with the payment only; `envelope_bytes` (default `null`) is the chain's, from
-///   `rand_getLimits` — `null` seals the legacy envelope and refuses a non-empty memo up front
+///   `rand_getLimits` — `null` seals the legacy envelope and refuses a non-empty memo up front,
+///   and so does any value on a chain id in [`LEGACY_ENVELOPE_CHAIN_IDS`] (issue #64);
+///   `bundle_gas_limit` (default `null`) is the chain's, from `rand_getLimits` — a value other
+///   than this build's guest ceiling (`version.bundle_gas_limit`) is refused before building
 /// - `prepare_transfer` `{…ProveRequest, prover: {kem_ek, token, witness_kind?, hc_bundle?},
 ///   max_proof_bytes?}` → `{sealed_hex, pending, expected}` (fast — no proof). The transfer
 ///   `prove_transfer` would build, its witness sealed to a paired prover (ML-KEM-768 `kem_ek`, the
@@ -3605,6 +3687,7 @@ mod tests {
             memo: String::new(),
             envelope_bytes: None,
             hc_bundle: None,
+            bundle_gas_limit: None,
         };
         let res = prove_transfer(&req).unwrap();
         assert_eq!(res.change, (3_000_000_000u64 - 1_000_000_000 - gas::BUNDLE_BASE).to_string());
@@ -4301,7 +4384,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 18);
-            assert_eq!(v["chain_build"], "98d1ff6");
+            assert_eq!(v["chain_build"], "d742a9b");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
@@ -4439,6 +4522,80 @@ mod tests {
             let req: ProveRequest = serde_json::from_value(fixture_prove_request("test", 0).unwrap()).unwrap();
             assert_eq!(req.envelope_bytes, None);
             assert_eq!(req.memo, "");
+        }
+
+        /// Issue #64: `envelope_bytes` is the node's word, and nothing in `rand_getLimits` is
+        /// authenticated. On a chain whose genesis sets no `envelope_bytes` the ledger still admits
+        /// any envelope up to 2 048 bytes, so a node answering 1860 there would have this wallet
+        /// seal 1 860-byte envelopes among everyone else's 1 348 — a permanent public tag on each
+        /// of its transactions. Every such chain (14–17) is pinned legacy whatever the node says;
+        /// the chain id is the one input the node cannot move, since it is bound into the
+        /// transaction. Chain 18 is cut with `envelope_bytes` 1860, so there the claim stands.
+        #[test]
+        fn a_node_claiming_the_memo_format_on_a_pinned_chain_is_not_believed() {
+            assert_eq!(LEGACY_ENVELOPE_CHAIN_IDS, &[14, 15, 16, 17]);
+            for chain in LEGACY_ENVELOPE_CHAIN_IDS {
+                assert_eq!(envelope_format_on(*chain, Some(1860)), EnvelopeFormat::Legacy, "chain {chain}");
+                let (_req, b) = seal_outputs_on(*chain, Some(1860), "").unwrap();
+                assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == LEGACY_ENVELOPE_BYTES), "chain {chain}");
+                let e = seal_outputs_on(*chain, Some(1860), "hi").err().expect("a memo on a pinned chain is refused");
+                assert!(e.contains("no memo") && e.contains(&chain.to_string()), "{e}");
+            }
+            // Chain 18 declares the memo envelope in its genesis: the node's claim is taken.
+            assert_eq!(envelope_format_on(18, Some(1860)), EnvelopeFormat::Memo);
+            assert_eq!(envelope_format_on(18, None), EnvelopeFormat::Legacy);
+            let (_req, b) = seal_outputs_on(18, Some(1860), "coffee").unwrap();
+            assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == 1860));
+            // A burn on a pinned chain seals legacy too, whatever the node claimed.
+            let mut req = fixture_burn_request("test").unwrap();
+            req["chain_id"] = json!(15);
+            req["envelope_bytes"] = json!(1860);
+            let req: BurnRequest = serde_json::from_value(req).unwrap();
+            let (_w, b) = build_burn_unproven(&req).unwrap();
+            assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == LEGACY_ENVELOPE_BYTES));
+            // The list is published for the shells, which gate their memo fields on it.
+            assert_eq!(constants()["legacy_envelope_chain_ids"], json!([14, 15, 16, 17]));
+        }
+
+        /// [`seal_outputs_for`] on a chosen chain id.
+        fn seal_outputs_on(chain_id: u64, envelope_bytes: Option<u32>, memo: &str) -> Result<(ProveRequest, TransferBuild)> {
+            let mut req = fixture_prove_request("test", 0).unwrap();
+            req["chain_id"] = json!(chain_id);
+            req["memo"] = json!(memo);
+            req["envelope_bytes"] = json!(envelope_bytes);
+            let req: ProveRequest = serde_json::from_value(req).unwrap();
+            let (_w, b) = build_transfer_unproven(&req)?;
+            Ok((req, b))
+        }
+
+        /// Constraint set 8 (spec 2026-09-28 §4.3): under a `gas` section every bundle proof must
+        /// declare the chain's `bundle_gas_limit` exactly, and this wallet's guest declares its
+        /// header ceiling, 20 479. A chain pinning any other value runs a guest this build does not
+        /// have — refused before a proof is paid for, on both request shapes and the prover path.
+        #[test]
+        fn a_chain_pinning_another_bundle_gas_limit_is_refused_before_building() {
+            assert_eq!(gas::bundle_gas_limit_pin(), 20_479);
+            assert_eq!(constants()["bundle_gas_limit"], 20_479);
+            let refused = |e: String| {
+                assert!(e.contains("16383") && e.contains("20479") && e.contains("update the wallet"), "{e}");
+            };
+            let mut req = fixture_prove_request("test", 0).unwrap();
+            req["bundle_gas_limit"] = json!(16_383);
+            let r: ProveRequest = serde_json::from_value(req.clone()).unwrap();
+            refused(build_transfer_unproven(&r).err().unwrap());
+            req["prover"] = json!({ "kem_ek": hex::encode(randprotocol_prover::key::ProverKey::from_seed([7u8; 64]).kem_ek()), "token": hex::encode([9u8; 32]) });
+            let r: PrepareTransferRequest = serde_json::from_value(req.clone()).unwrap();
+            refused(prepare_transfer(&r).err().unwrap());
+            req["bundle_gas_limit"] = json!(20_479);
+            let r: ProveRequest = serde_json::from_value(req.clone()).unwrap();
+            assert!(build_transfer_unproven(&r).is_ok(), "the pin itself");
+            req["bundle_gas_limit"] = Value::Null;
+            let r: ProveRequest = serde_json::from_value(req).unwrap();
+            assert!(build_transfer_unproven(&r).is_ok(), "a chain without a gas section names none");
+            let mut burn = fixture_burn_request("test").unwrap();
+            burn["bundle_gas_limit"] = json!(16_383);
+            let r: BurnRequest = serde_json::from_value(burn).unwrap();
+            refused(build_burn_unproven(&r).err().unwrap());
         }
 
         #[test]
@@ -4810,6 +4967,8 @@ mod tests {
             let finish = |p: &Pending, reply: &ProveReply| {
                 finish_proof(&FinishRequest { pending: p.clone(), reply_hex: hex::encode(seal_reply(&rk, reply)) })
             };
+            // Constraint set 8: the proof declares the bundle guest's ceiling, the chain's pin.
+            assert_eq!(ZkExecutor::new(FriProfile::Test).bundle_gas_limit(&proof).unwrap(), Some(gas::bundle_gas_limit_pin()));
             let good = ProveReply { proof: proof.clone(), digest, tier };
             let got = finish(&out.pending, &good).unwrap();
             assert_eq!(got, want);

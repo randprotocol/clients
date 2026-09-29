@@ -5,7 +5,7 @@ A transfer on the Rand chain is authorised by a bundle proof, and making one pea
 stops at 4 GiB), and most phones cannot either. This page is for wallet users: how to let a
 machine you run make those proofs for you, and what that costs you in trust. The prover itself —
 its commands, options and wire — is documented once, in the fullnode's
-[`docs/prover.md`](https://github.com/randprotocol/fullnode/blob/v0.6.2/docs/prover.md)
+[`docs/prover.md`](https://github.com/randprotocol/fullnode/blob/v0.6.6/docs/prover.md)
 (`../fullnode/docs/prover.md` in a checkout beside this one); this page points there rather than
 repeating it.
 
@@ -87,7 +87,7 @@ is the same as locking it.
 
 **Which pages may talk to a prover.** A prover answers a browser page only from an origin on its
 allow-list, so that an arbitrary website cannot read its key and recognise your machine. By default
-(fullnode `v0.6.2`) the list is browser extensions (`chrome-extension://*`, `moz-extension://*`,
+(fullnode `v0.6.2`, unchanged in `v0.6.6`) the list is browser extensions (`chrome-extension://*`, `moz-extension://*`,
 `safari-web-extension://*`) and pages on this machine (`http://localhost:*`, `http://127.0.0.1:*`,
 `http://[::1]:*`); the desktop app uses that default. The extension and the local web wallet
 (served by `web/wallet/serve.sh` on `http://127.0.0.1:<port>`) are on it and need nothing more.
@@ -104,7 +104,7 @@ Anything else is refused with `-32007 origin not allowed`:
   list — put the prover behind an `https://` proxy (§4) for such a wallet.
 
 `prover_info` reports the list as `allowed_origins`
-([fullnode `docs/prover.md` §6.1](https://github.com/randprotocol/fullnode/blob/v0.6.2/docs/prover.md#61-transport)).
+([fullnode `docs/prover.md` §6.1](https://github.com/randprotocol/fullnode/blob/v0.6.6/docs/prover.md#61-transport)).
 
 To stop using the prover, press **Forget this prover** in Settings; proofs go back to this device
 (which, in a browser, means sending is unavailable again).
@@ -115,7 +115,7 @@ Any machine with 8 GB of memory or more can run the fullnode's `rand-prover` for
 home server proving for a laptop, say. Generate its key, mint a pairing **with `--own`** (a link
 without `own=1` is saved but never sent a job, because every job in this phase carries your spend
 key), and run it with `--accept-spend-key`. The commands, options, memory gate and service unit
-are in [the fullnode's `docs/prover.md`, §3](https://github.com/randprotocol/fullnode/blob/v0.6.2/docs/prover.md#3-run-your-own);
+are in [the fullnode's `docs/prover.md`, §3](https://github.com/randprotocol/fullnode/blob/v0.6.6/docs/prover.md#3-run-your-own);
 a validator can also host one inside `rand-node` (§4 there).
 
 Then pair it exactly as in §3 above, with the link `rand-prover pair` printed.
@@ -126,7 +126,7 @@ only for a prover on this machine (`localhost`, `127.0.0.1`). The wallet refuses
 sealed either way, but the pairing token travels inside it, and a network should not be able to
 see or rewrite a proof on its way to you. `rand-prover` itself speaks plain HTTP on
 `127.0.0.1:8600`, so to reach it from another machine put a TLS-terminating proxy in front of it
-and pair with the proxy's `https://` URL ([fullnode `docs/prover.md` §7](https://github.com/randprotocol/fullnode/blob/v0.6.2/docs/prover.md#7-tls)).
+and pair with the proxy's `https://` URL ([fullnode `docs/prover.md` §7](https://github.com/randprotocol/fullnode/blob/v0.6.6/docs/prover.md#7-tls)).
 The extension will ask for permission to reach that host when you save.
 
 ## 5. What the wallet checks on every reply

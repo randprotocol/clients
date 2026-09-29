@@ -11,9 +11,10 @@ license = "GPL-3.0-only"
 authors = ["RandProtocol Contributors"]
 
 [workspace.dependencies]
-# The chain's own crates, pinned by the submodule at core/vendor/fullnode (fullnode's tag v0.6.2,
-# commit 98d1ff6: the delegated-proving release, v0.6 + constraint set 7 — `randprotocol-prover`, the
-# sealed job wire; earlier e6d1327, the same branch before the tag, 109f47d, 1a13359, `feat/address-sharing` on v0.5.9, and 9c142c1, v0.5.1). Bump the submodule to move the wallet to a new chain build.
+# The chain's own crates, pinned by the submodule at core/vendor/fullnode (fullnode's tag v0.6.6,
+# commit d742a9b: the gas release — v0.6.2's delegated prover + constraint set 8, the chain-18 build,
+# circuits 18c2627; earlier 98d1ff6, v0.6.2, e6d1327, 109f47d, 1a13359, `feat/address-sharing` on
+# v0.5.9, and 9c142c1, v0.5.1). Bump the submodule to move the wallet to a new chain build.
 randprotocol-core = { path = "vendor/fullnode/crates/randprotocol-core" }
 randprotocol-zkvm = { path = "vendor/fullnode/crates/randprotocol-zkvm" }
 # The delegated-proving wire (sealed jobs a light client sends a prover). Only the codec: the
