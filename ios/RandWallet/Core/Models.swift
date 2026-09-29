@@ -15,6 +15,10 @@ struct CoreConstants: Decodable {
     let faucetMaxUnits: String
     let timeWindow: UInt64
     let anchorWindow: UInt64
+    /// Chain 18 (constraint set 8): the gas every bundle proof this core makes declares.
+    let bundleGasLimit: UInt64
+    /// Fullnode issue #64: the chains on which a node's memo claim is never believed.
+    let legacyEnvelopeChainIds: [UInt64]
 
     enum CodingKeys: String, CodingKey {
         case version
@@ -28,6 +32,8 @@ struct CoreConstants: Decodable {
         case faucetMaxUnits = "faucet_max_units"
         case timeWindow = "time_window"
         case anchorWindow = "anchor_window"
+        case bundleGasLimit = "bundle_gas_limit"
+        case legacyEnvelopeChainIds = "legacy_envelope_chain_ids"
     }
 }
 
@@ -120,11 +126,15 @@ struct ProveRequest: Encodable {
     /// The chain's bundle guest, `rand_status.hc_bundle` (64 hex); `nil` (omitted) leaves the core
     /// on this build's default guest. A proof of the wrong guest is refused by the chain.
     var hcBundle: String? = nil
+    /// The chain's `bundle_gas_limit` from `rand_getLimits` (chain 18, constraint set 8): the gas
+    /// every bundle proof must declare on a chain with a `gas` section; `nil` is a chain without
+    /// one. The core refuses a value its guest does not declare before building anything.
+    var bundleGasLimit: Int? = nil
 
     enum CodingKeys: String, CodingKey {
         case spendKey = "spend_key", chainId = "chain_id", to, amount, fee
         case anchorHeight = "anchor_height", anchorRoot = "anchor_root", inputs, profile
-        case memo, envelopeBytes = "envelope_bytes", hcBundle = "hc_bundle"
+        case memo, envelopeBytes = "envelope_bytes", hcBundle = "hc_bundle", bundleGasLimit = "bundle_gas_limit"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -142,6 +152,7 @@ struct ProveRequest: Encodable {
         // An explicit null, as the other clients send it.
         try c.encode(envelopeBytes, forKey: .envelopeBytes)
         try c.encodeIfPresent(hcBundle, forKey: .hcBundle)
+        try c.encode(bundleGasLimit, forKey: .bundleGasLimit)
     }
 }
 

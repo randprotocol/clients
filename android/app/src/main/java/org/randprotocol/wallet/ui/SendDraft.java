@@ -166,6 +166,11 @@ public final class SendDraft {
         return Memo.supported(envelopeBytes);
     }
 
+    /** {@link #memoSupported(Integer)} under the issue-#64 pin ({@link Memo#supported(Integer, long)}). */
+    public static boolean memoSupported(Integer envelopeBytes, long chainId) {
+        return Memo.supported(envelopeBytes, chainId);
+    }
+
     /** A memo on a chain that cannot carry one blocks Continue until it is cleared. */
     public static boolean memoBlocksContinue(boolean memoSupported, String memo) {
         return !memoSupported && memo != null && !memo.isEmpty();

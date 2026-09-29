@@ -156,10 +156,31 @@ enum SendLinkRules {
     /// 1860 (a 112-byte note plus the 512-byte memo field, sealed) and nothing else.
     static let memoEnvelopeBytes = 1860
 
+    /// The chain ids whose genesis sets no envelope size (fullnode issue #64): chains 14–17, every
+    /// chain that ran a build able to seal the memo form. `rand_getLimits.envelope_bytes` is the
+    /// node's word, and on such a chain the ledger admits any envelope up to 2 048 bytes, so a node
+    /// answering 1860 there would have this wallet seal 1 860-byte envelopes among everyone else's
+    /// 1 348 — a permanent public tag on its transactions. No memo is offered on these chains
+    /// whatever the node says; the core (`version.legacy_envelope_chain_ids`, the same list) seals
+    /// legacy and refuses a memo there regardless. Chain 18 is cut with `envelope_bytes` 1860.
+    static let legacyEnvelopeChainIds: [UInt64] = [14, 15, 16, 17]
+
+    /// The chain's `envelope_bytes` as the memo gate may believe it: `nil` on a chain in
+    /// `legacyEnvelopeChainIds`, whatever the node said; the node's answer elsewhere.
+    static func believedEnvelopeBytes(_ envelopeBytes: Int?, chainId: UInt64) -> Int? {
+        legacyEnvelopeChainIds.contains(chainId) ? nil : envelopeBytes
+    }
+
     /// A chain carries a memo only when its limits report exactly the 1860-byte envelope (final
     /// review, finding 6): any other size, and none, gets no memo field — the shared UI's and
     /// Android's gate.
     static func memoSupported(envelopeBytes: Int?) -> Bool { envelopeBytes == memoEnvelopeBytes }
+
+    /// `memoSupported(envelopeBytes:)` under the issue-#64 pin: never on a chain in
+    /// `legacyEnvelopeChainIds`.
+    static func memoSupported(envelopeBytes: Int?, chainId: UInt64) -> Bool {
+        memoSupported(envelopeBytes: believedEnvelopeBytes(envelopeBytes, chainId: chainId))
+    }
 
     /// A memo on a chain that cannot carry one blocks Continue until it is cleared.
     static func memoBlocksContinue(memoSupported: Bool, memo: String) -> Bool { !memoSupported && !memo.isEmpty }

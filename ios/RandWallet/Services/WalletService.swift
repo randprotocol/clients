@@ -238,15 +238,21 @@ final class WalletService: ObservableObject {
         }
 
         // Read from the node this send talks to, right before proving: every output is sealed at
-        // exactly this size, and a chain that declares none carries no memo.
-        let envelopeBytes = try await rpc.envelopeBytes()
-        if !SendLinkRules.memoSupported(envelopeBytes: envelopeBytes) && !memo.isEmpty { throw RpcClient.RpcError(code: 0, message: Memo.noMemoNotice) }
+        // exactly this size, and a chain that declares none carries no memo. On a chain pinned
+        // as pre-memo (issue #64) the node's claim is not believed; the core seals legacy there
+        // whatever `envelopeBytes` says, and refuses the memo first. `bundleGasLimit` is chain
+        // 18's pin, which the core checks against its own guest before building anything.
+        let limits = try await rpc.limits()
+        if !SendLinkRules.memoSupported(envelopeBytes: limits.envelopeBytes, chainId: chainId) && !memo.isEmpty {
+            throw RpcClient.RpcError(code: 0, message: Memo.noMemoNotice)
+        }
         // The chain's guest and FRI profile, read once for either route: a proof on another guest
         // or profile is refused by the chain, whoever makes it.
         let (hcBundle, profile) = try await rpc.proofParams()
         let request = ProveRequest(spendKey: sk, chainId: chainId, to: to, amount: String(amount), fee: String(fee),
                                    anchorHeight: anchor.height, anchorRoot: anchor.root, inputs: inputs, profile: profile,
-                                   memo: memo, envelopeBytes: envelopeBytes, hcBundle: hcBundle)
+                                   memo: memo, envelopeBytes: limits.envelopeBytes, hcBundle: hcBundle,
+                                   bundleGasLimit: limits.bundleGasLimit)
         let started = Date()
         let proof: ProveResult
         if let route {
@@ -340,8 +346,12 @@ final class WalletService: ObservableObject {
             })
     }
 
-    /// The connected chain's `envelope_bytes` (`nil`: no memo on this chain).
-    func envelopeBytes() async throws -> Int? { try await client().envelopeBytes() }
+    /// The connected chain's `envelope_bytes` as the memo gate may believe it (`nil`: no memo on
+    /// this chain) — `nil` on a chain pinned as pre-memo whatever the node claimed (issue #64,
+    /// `SendLinkRules.believedEnvelopeBytes`), so Send and Receive offer no memo field there.
+    func envelopeBytes() async throws -> Int? {
+        SendLinkRules.believedEnvelopeBytes(try await client().envelopeBytes(), chainId: chainId)
+    }
 
     // MARK: faucet
 

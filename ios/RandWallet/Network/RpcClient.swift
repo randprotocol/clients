@@ -41,45 +41,56 @@ final class RpcClient {
 
     // MARK: typed reads
 
-    /// The chain's `envelope_bytes` from `rand_getLimits` (spec 2026-09-26 §2.4): `nil` means the
-    /// legacy envelope and no memo — a chain that reports `null`, a reply without the field, or a
-    /// node that predates the method (`-32601`). Any other failure propagates: a node that did not
+    /// The three `rand_getLimits` fields a send needs (`ui/engine/wallet.js`'s `chainLimitsOf`):
+    /// `envelopeBytes` (spec 2026-09-26 §2.4; `nil` is the legacy envelope and no memo),
+    /// `maxProofBytes` (the proof cap a remote prover's proof is held to; `nil` is the core's
+    /// own vendored cap, never "unbounded") and `bundleGasLimit` (chain 18, constraint set 8: the
+    /// gas every bundle proof must declare on a chain with a `gas` section; `nil` is a chain
+    /// without one). Each `nil` where the field is `null` or absent; all three `nil` on a node
+    /// that predates the method (`-32601`). Any other failure propagates: a node that did not
     /// answer is not a node that said "no memo".
-    func envelopeBytes() async throws -> Int? {
+    struct ChainLimits: Equatable {
+        let envelopeBytes: Int?
+        let maxProofBytes: Int?
+        let bundleGasLimit: Int?
+        static let none = ChainLimits(envelopeBytes: nil, maxProofBytes: nil, bundleGasLimit: nil)
+    }
+
+    func limits() async throws -> ChainLimits {
         let reply: Any
         do {
             reply = try await call("rand_getLimits")
         } catch let e as RpcError where e.code == -32601 {
-            return nil
+            return .none
         }
-        return try Self.envelopeBytes(fromLimits: reply)
+        return try Self.limits(fromLimits: reply)
     }
 
+    static func limits(fromLimits reply: Any) throws -> ChainLimits {
+        guard reply is [String: Any] else { throw RpcError(code: 0, message: "rand_getLimits: not an object") }
+        return ChainLimits(envelopeBytes: try envelopeBytes(fromLimits: reply),
+                           maxProofBytes: try sizeField("max_proof_bytes", fromLimits: reply, max: 1 << 30),
+                           bundleGasLimit: try sizeField("bundle_gas_limit", fromLimits: reply, max: Int.max))
+    }
+
+    /// The chain's `envelope_bytes` alone (see `limits`).
+    func envelopeBytes() async throws -> Int? { try await limits().envelopeBytes }
+
     static func envelopeBytes(fromLimits reply: Any) throws -> Int? {
+        try sizeField("envelope_bytes", fromLimits: reply, max: 1 << 20)
+    }
+
+    /// The chain's proof-size cap alone (see `limits`).
+    func maxProofBytes() async throws -> Int? { try await limits().maxProofBytes }
+
+    /// A positive integer field of `rand_getLimits`, `nil` when `null` or absent, refused otherwise.
+    private static func sizeField(_ name: String, fromLimits reply: Any, max: Int) throws -> Int? {
         guard let obj = reply as? [String: Any] else {
             throw RpcError(code: 0, message: "rand_getLimits: not an object")
         }
-        guard let v = obj["envelope_bytes"], !(v is NSNull) else { return nil }
-        guard let n = v as? Int, n > 0, n <= 1 << 20 else {
-            throw RpcError(code: 0, message: "rand_getLimits: envelope_bytes is not a positive size")
-        }
-        return n
-    }
-
-    /// The chain's proof-size cap, `rand_getLimits.max_proof_bytes` — what a remote prover's proof
-    /// is held to (`finish_proof`). `nil` (not reported, or a node without the method) means the
-    /// core's own vendored `MAX_PROOF_BYTES`, never "unbounded".
-    func maxProofBytes() async throws -> Int? {
-        let reply: Any
-        do {
-            reply = try await call("rand_getLimits")
-        } catch let e as RpcError where e.code == -32601 {
-            return nil
-        }
-        guard let obj = reply as? [String: Any] else { throw RpcError(code: 0, message: "rand_getLimits: not an object") }
-        guard let v = obj["max_proof_bytes"], !(v is NSNull) else { return nil }
-        guard let n = v as? Int, n > 0, n <= 1 << 30 else {
-            throw RpcError(code: 0, message: "rand_getLimits: max_proof_bytes is not a positive size")
+        guard let v = obj[name], !(v is NSNull) else { return nil }
+        guard let n = v as? Int, n > 0, n <= max else {
+            throw RpcError(code: 0, message: "rand_getLimits: \(name) is not a positive size")
         }
         return n
     }

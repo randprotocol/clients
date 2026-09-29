@@ -124,11 +124,13 @@ public final class WalletService {
     }
 
     /**
-     * The connected chain's {@code envelope_bytes} (null: this chain carries no memo). Blocking;
-     * call off the main thread. Throws when the node did not answer.
+     * The connected chain's {@code envelope_bytes} as the memo gate may believe it (null: this
+     * chain carries no memo) — null on a chain pinned as pre-memo whatever the node claimed
+     * (issue #64, {@link Memo#believed}), so Send and Receive offer no memo field there.
+     * Blocking; call off the main thread. Throws when the node did not answer.
      */
     public Integer envelopeBytes() throws RpcException {
-        return rpc().envelopeBytes();
+        return Memo.believed(rpc().envelopeBytes(), prefs.chainId());
     }
 
     public LiveData<Snapshot> snapshot() {
@@ -491,9 +493,13 @@ public final class WalletService {
             }
 
             // Read from the node this send talks to, right before proving: every output is sealed
-            // at exactly this size, and only the 1860-byte envelope carries a memo.
-            Integer envelopeBytes = rpc.envelopeBytes();
-            if (!Memo.supported(envelopeBytes) && !memo.isEmpty()) throw new RpcException(0, Memo.NO_MEMO_NOTICE);
+            // at exactly this size, and only the 1860-byte envelope carries a memo. On a chain
+            // pinned as pre-memo (issue #64) the node's claim is not believed; the core seals
+            // legacy there whatever envelope_bytes says, and refuses the memo first.
+            // bundle_gas_limit is chain 18's pin, which the core checks against its own guest.
+            RpcClient.ChainLimits limits = rpc.limits();
+            Integer envelopeBytes = limits.envelopeBytes;
+            if (!Memo.supported(envelopeBytes, prefs.chainId()) && !memo.isEmpty()) throw new RpcException(0, Memo.NO_MEMO_NOTICE);
 
             JSONObject req = new JSONObject();
             req.put("spend_key", sk);
@@ -517,6 +523,7 @@ public final class WalletService {
             // legacy envelope, where the core refuses a non-empty memo before proving.
             req.put("memo", memo);
             req.put("envelope_bytes", envelopeBytes == null ? JSONObject.NULL : envelopeBytes);
+            req.put("bundle_gas_limit", limits.bundleGasLimit == null ? JSONObject.NULL : limits.bundleGasLimit);
 
             JSONObject proved;
             if (route == null) {

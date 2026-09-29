@@ -5,9 +5,13 @@ import XCTest
 final class CoreSmokeTests: XCTestCase {
     func testVersionReportsChainDefaults() throws {
         let c = try RandCore.constants()
-        XCTAssertEqual(c.defaultChainId, 16)
+        XCTAssertEqual(c.defaultChainId, 18)
+        XCTAssertEqual(c.chainBuild, "d742a9b", "fullnode v0.6.6: constraint set 8, the chain-18 build")
         XCTAssertEqual(c.tokenSymbol, "RAND")
         XCTAssertEqual(c.bundleBaseFee, "1000000")
+        // Constraint set 8: the gas every bundle proof declares — chain 18's genesis pin.
+        XCTAssertEqual(c.bundleGasLimit, 20479)
+        XCTAssertEqual(c.legacyEnvelopeChainIds, [14, 15, 16, 17])
         XCTAssertEqual(c.timeWindow, NoteStore.timeWindow)
         XCTAssertFalse(RandCore.version.isEmpty)
     }

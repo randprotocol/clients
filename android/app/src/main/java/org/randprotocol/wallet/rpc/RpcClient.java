@@ -102,63 +102,88 @@ public class RpcClient {
     // ---- the methods the wallet uses ----
 
     /**
-     * The chain's {@code envelope_bytes} from {@code rand_getLimits} (spec 2026-09-26 §2.4),
-     * mirroring {@code ui/engine/wallet.js}'s {@code envelopeBytesOf}: null means the legacy
-     * envelope and no memo — a chain that reports {@code null}, a reply without the field, or a
-     * node that predates the method ({@code -32601}). Any other failure propagates: a node that
-     * did not answer is not a node that said "no memo".
+     * The three {@code rand_getLimits} fields a send needs ({@code ui/engine/wallet.js}'s
+     * {@code chainLimitsOf}): {@code envelopeBytes} (spec 2026-09-26 §2.4; null is the legacy
+     * envelope and no memo), {@code maxProofBytes} (the proof cap a remote prover's proof is held
+     * to; null is the core's own vendored cap, never "unbounded") and {@code bundleGasLimit}
+     * (chain 18, constraint set 8: the gas every bundle proof must declare on a chain with a
+     * {@code gas} section; null is a chain without one). Each null where the field is null or
+     * absent; all three null on a node that predates the method ({@code -32601}).
      */
-    public Integer envelopeBytes() throws RpcException {
+    public static final class ChainLimits {
+        public final Integer envelopeBytes;
+        public final Integer maxProofBytes;
+        public final Long bundleGasLimit;
+
+        public ChainLimits(Integer envelopeBytes, Integer maxProofBytes, Long bundleGasLimit) {
+            this.envelopeBytes = envelopeBytes;
+            this.maxProofBytes = maxProofBytes;
+            this.bundleGasLimit = bundleGasLimit;
+        }
+
+        public static final ChainLimits NONE = new ChainLimits(null, null, null);
+    }
+
+    /**
+     * {@code rand_getLimits} in one read (see {@link ChainLimits}). Any failure but a missing
+     * method propagates: a node that did not answer is not a node that said "no memo".
+     */
+    public ChainLimits limits() throws RpcException {
         Object reply;
         try {
             reply = call("rand_getLimits", null);
         } catch (RpcException e) {
-            if (e.code == -32601) return null;
+            if (e.code == -32601) return ChainLimits.NONE;
             throw e;
         }
-        return envelopeBytesOf(reply);
+        return limitsOf(reply);
+    }
+
+    /** {@code rand_getLimits}' reply → its three fields, each null when absent or null, refused when not a positive integer. */
+    public static ChainLimits limitsOf(Object reply) throws RpcException {
+        if (!(reply instanceof JSONObject)) throw new RpcException(0, "rand_getLimits: not an object");
+        Long envelope = sizeField(reply, "envelope_bytes", 1L << 20);
+        Long proof = sizeField(reply, "max_proof_bytes", 1L << 30);
+        Long gas = sizeField(reply, "bundle_gas_limit", Long.MAX_VALUE);
+        return new ChainLimits(envelope == null ? null : (int) (long) envelope, proof == null ? null : (int) (long) proof, gas);
+    }
+
+    /**
+     * The chain's {@code envelope_bytes} alone (see {@link #limits()}), mirroring
+     * {@code ui/engine/wallet.js}'s {@code envelopeBytesOf}.
+     */
+    public Integer envelopeBytes() throws RpcException {
+        return limits().envelopeBytes;
     }
 
     /** {@code rand_getLimits}'s reply → its {@code envelope_bytes}: null when absent or null, else a size in 1..2^20. */
     public static Integer envelopeBytesOf(Object reply) throws RpcException {
-        if (!(reply instanceof JSONObject)) throw new RpcException(0, "rand_getLimits: not an object");
-        JSONObject o = (JSONObject) reply;
-        if (!o.has("envelope_bytes") || o.isNull("envelope_bytes")) return null;
-        Object v = o.opt("envelope_bytes");
-        if (v instanceof Integer || v instanceof Long) {
-            long n = ((Number) v).longValue();
-            if (n > 0 && n <= (1 << 20)) return (int) n;
-        }
-        throw new RpcException(0, "rand_getLimits: envelope_bytes is not a positive size");
+        Long n = sizeField(reply, "envelope_bytes", 1L << 20);
+        return n == null ? null : (int) (long) n;
     }
 
-    /**
-     * The chain's proof-size cap, {@code rand_getLimits.max_proof_bytes} — what a remote prover's
-     * proof is held to ({@code finish_proof}). Null (not reported, or a node without the method)
-     * means the core's own vendored {@code MAX_PROOF_BYTES}, never "unbounded".
-     */
+    /** The chain's proof-size cap alone (see {@link #limits()}). */
     public Integer maxProofBytes() throws RpcException {
-        Object reply;
-        try {
-            reply = call("rand_getLimits", null);
-        } catch (RpcException e) {
-            if (e.code == -32601) return null;
-            throw e;
-        }
-        return maxProofBytesOf(reply);
+        return limits().maxProofBytes;
     }
 
     /** {@code rand_getLimits}' reply → its {@code max_proof_bytes}: null when absent or null, else a size in 1..2^30. */
     public static Integer maxProofBytesOf(Object reply) throws RpcException {
+        Long n = sizeField(reply, "max_proof_bytes", 1L << 30);
+        return n == null ? null : (int) (long) n;
+    }
+
+    /** A positive integer field of {@code rand_getLimits}: null when absent or null, refused otherwise. */
+    private static Long sizeField(Object reply, String name, long max) throws RpcException {
         if (!(reply instanceof JSONObject)) throw new RpcException(0, "rand_getLimits: not an object");
         JSONObject o = (JSONObject) reply;
-        if (!o.has("max_proof_bytes") || o.isNull("max_proof_bytes")) return null;
-        Object v = o.opt("max_proof_bytes");
+        if (!o.has(name) || o.isNull(name)) return null;
+        Object v = o.opt(name);
         if (v instanceof Integer || v instanceof Long) {
             long n = ((Number) v).longValue();
-            if (n > 0 && n <= (1L << 30)) return (int) n;
+            if (n > 0 && n <= max) return n;
         }
-        throw new RpcException(0, "rand_getLimits: max_proof_bytes is not a positive size");
+        throw new RpcException(0, "rand_getLimits: " + name + " is not a positive size");
     }
 
     public long chainId() throws RpcException {

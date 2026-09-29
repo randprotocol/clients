@@ -29,6 +29,35 @@ public final class Memo {
     }
 
     /**
+     * The chain ids whose genesis sets no envelope size (fullnode issue #64): chains 14–17, every
+     * chain that ran a build able to seal the memo form. {@code rand_getLimits.envelope_bytes} is
+     * the node's word, and on such a chain the ledger admits any envelope up to 2 048 bytes, so a
+     * node answering 1860 there would have this wallet seal 1 860-byte envelopes among everyone
+     * else's 1 348 — a permanent public tag on its transactions. No memo is offered on these
+     * chains whatever the node says; the core ({@code version.legacy_envelope_chain_ids}, the same
+     * list) seals legacy and refuses a memo there regardless. Chain 18 is cut with
+     * {@code envelope_bytes} 1860, so it is not listed. The shared UI and iOS carry the same list.
+     */
+    public static final long[] LEGACY_ENVELOPE_CHAIN_IDS = {14, 15, 16, 17};
+
+    /** Whether {@code chainId} is pinned as pre-memo ({@link #LEGACY_ENVELOPE_CHAIN_IDS}). */
+    public static boolean pinnedLegacy(long chainId) {
+        for (long id : LEGACY_ENVELOPE_CHAIN_IDS) if (id == chainId) return true;
+        return false;
+    }
+
+    /** The chain's {@code envelope_bytes} as the memo gate may believe it: null on a pinned chain,
+     *  whatever the node said; the node's answer elsewhere. */
+    public static Integer believed(Integer envelopeBytes, long chainId) {
+        return pinnedLegacy(chainId) ? null : envelopeBytes;
+    }
+
+    /** {@link #supported(Integer)} under the issue-#64 pin: never on a pinned chain. */
+    public static boolean supported(Integer envelopeBytes, long chainId) {
+        return supported(believed(envelopeBytes, chainId));
+    }
+
+    /**
      * The memo — or any other stranger-chosen text, like a contact name — as it may be shown
      * (final reviews 1 and 2). Memos are live on chains 14 and 15: anyone can pay a dust note
      * carrying any memo to any public address, and a link carries any memo. One rule, the same as

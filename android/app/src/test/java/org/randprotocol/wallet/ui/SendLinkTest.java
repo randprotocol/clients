@@ -199,6 +199,54 @@ public class SendLinkTest {
     }
 
     /** {@code rand_getLimits}: the field's value, null when absent or null; anything else is an error. */
+    /**
+     * {@code rand_getLimits} in one read: the envelope size, the proof cap and chain 18's pinned
+     * bundle gas (constraint set 8), each null when absent or null; a value that is not a positive
+     * integer is refused.
+     */
+    @Test
+    public void limitsFromOneReply() throws Exception {
+        RpcClient.ChainLimits all = RpcClient.limitsOf(new JSONObject(
+                "{\"envelope_bytes\":1860,\"max_proof_bytes\":8388608,\"bundle_gas_limit\":20479,\"gas_metering\":\"circuit\",\"gas_price\":\"100\"}"));
+        assertEquals(Integer.valueOf(1860), all.envelopeBytes);
+        assertEquals(Integer.valueOf(8388608), all.maxProofBytes);
+        assertEquals(Long.valueOf(20479), all.bundleGasLimit);
+        RpcClient.ChainLimits none = RpcClient.limitsOf(new JSONObject("{\"max_block_bytes\":4194304}"));
+        assertNull(none.envelopeBytes);
+        assertNull(none.maxProofBytes);
+        assertNull(none.bundleGasLimit);
+        assertNull(RpcClient.limitsOf(new JSONObject("{\"bundle_gas_limit\":null}")).bundleGasLimit);
+        for (String bad : new String[]{"{\"bundle_gas_limit\":0}", "{\"bundle_gas_limit\":\"20479\"}", "{\"max_proof_bytes\":-1}"}) {
+            try {
+                RpcClient.limitsOf(new JSONObject(bad));
+                fail("accepted " + bad);
+            } catch (RpcException expected) {
+                // refused
+            }
+        }
+    }
+
+    /**
+     * Fullnode issue #64: on a chain whose genesis sets no envelope size (14–17) a node claiming
+     * the memo form is not believed — believing it would have this wallet seal 1 860-byte
+     * envelopes among everyone else's 1 348, a permanent public tag on each transaction it sent.
+     */
+    @Test
+    public void aMemoClaimOnAPinnedChainIsNotBelieved() {
+        assertEquals(4, Memo.LEGACY_ENVELOPE_CHAIN_IDS.length);
+        for (long chain : new long[]{14, 15, 16, 17}) {
+            assertTrue(Memo.pinnedLegacy(chain));
+            assertFalse("chain " + chain, SendDraft.memoSupported(1860, chain));
+            assertNull("chain " + chain, Memo.believed(1860, chain));
+        }
+        // Chain 18 is cut with envelope_bytes 1860: the claim is taken, there and after.
+        assertFalse(Memo.pinnedLegacy(18));
+        assertTrue(SendDraft.memoSupported(1860, 18));
+        assertEquals(Integer.valueOf(1860), Memo.believed(1860, 18));
+        assertFalse(SendDraft.memoSupported(null, 18));
+        assertFalse(SendDraft.memoSupported(1024, 19));
+    }
+
     @Test
     public void envelopeBytesFromLimits() throws Exception {
         assertEquals(Integer.valueOf(1024), RpcClient.envelopeBytesOf(new JSONObject("{\"envelope_bytes\":1024}")));

@@ -131,6 +131,39 @@ final class SendLinkTests: XCTestCase {
         XCTAssertThrowsError(try RpcClient.envelopeBytes(fromLimits: "nope"))
     }
 
+    /// `rand_getLimits` in one read: the envelope size, the proof cap and chain 18's pinned bundle
+    /// gas (constraint set 8), each `nil` when absent or null; a value that is not a positive
+    /// integer is refused.
+    func testLimitsFromOneReply() throws {
+        let all = try RpcClient.limits(fromLimits: ["envelope_bytes": 1860, "max_proof_bytes": 8388608, "bundle_gas_limit": 20479,
+                                                     "gas_metering": "circuit", "gas_price": "100"])
+        XCTAssertEqual(all, RpcClient.ChainLimits(envelopeBytes: 1860, maxProofBytes: 8388608, bundleGasLimit: 20479))
+        XCTAssertEqual(try RpcClient.limits(fromLimits: ["max_block_bytes": 4194304]), .none)
+        XCTAssertEqual(try RpcClient.limits(fromLimits: ["bundle_gas_limit": NSNull()]).bundleGasLimit, nil)
+        XCTAssertThrowsError(try RpcClient.limits(fromLimits: ["bundle_gas_limit": 0]))
+        XCTAssertThrowsError(try RpcClient.limits(fromLimits: ["bundle_gas_limit": "20479"]))
+        XCTAssertThrowsError(try RpcClient.limits(fromLimits: ["max_proof_bytes": -1]))
+        XCTAssertThrowsError(try RpcClient.limits(fromLimits: "nope"))
+    }
+
+    /// Fullnode issue #64: on a chain whose genesis sets no envelope size (14–17) a node claiming
+    /// the memo form is not believed — believing it would have this wallet seal 1 860-byte
+    /// envelopes among everyone else's 1 348, a permanent public tag on each transaction it sent.
+    func testAMemoClaimOnAPinnedChainIsNotBelieved() throws {
+        XCTAssertEqual(SendLinkRules.legacyEnvelopeChainIds, [14, 15, 16, 17])
+        for chain in SendLinkRules.legacyEnvelopeChainIds {
+            XCTAssertFalse(SendLinkRules.memoSupported(envelopeBytes: 1860, chainId: chain), "chain \(chain)")
+            XCTAssertNil(SendLinkRules.believedEnvelopeBytes(1860, chainId: chain), "chain \(chain)")
+        }
+        // Chain 18 is cut with envelope_bytes 1860: the claim is taken, there and after.
+        XCTAssertTrue(SendLinkRules.memoSupported(envelopeBytes: 1860, chainId: 18))
+        XCTAssertEqual(SendLinkRules.believedEnvelopeBytes(1860, chainId: 18), 1860)
+        XCTAssertFalse(SendLinkRules.memoSupported(envelopeBytes: nil, chainId: 18))
+        XCTAssertFalse(SendLinkRules.memoSupported(envelopeBytes: 1024, chainId: 19))
+        // The list is the core's own, so the gate and the sealing can never disagree.
+        XCTAssertEqual(try RandCore.constants().legacyEnvelopeChainIds, SendLinkRules.legacyEnvelopeChainIds)
+    }
+
     /// Through the real core: a link it formats parses back, with the fingerprint recomputed; a
     /// bare address parses as a link with no parameters; a bad link is an error.
     func testLinksThroughTheCore() throws {
