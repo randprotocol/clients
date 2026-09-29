@@ -105,6 +105,18 @@ contract in randbridge.org/web/lib/rand/provider.ts. Three files, each in its ow
   and that hash. `node --test extension/test/provider-host.test.mjs` is the policy's suite;
   `recipient-hash.test.mjs` pins the hash to the bridge's own fixture.
 
+When the extension itself is reloaded — a store update, or Reload at chrome://extensions on an
+unpacked build — the browser orphans `content.js` in every tab that has it and never puts a new
+one in, so every open bridge tab would answer "Rand Wallet did not respond" until reloaded. So
+`background.js` re-injects `inpage.js` and `content.js` into the open bridge tabs on install and
+on update (the `scripting` permission, and a host permission for randbridge.org), and a freshly
+injected relay retires the one already there (the takeover notice in `content.js`). The relay
+tells the page which half is stale when it cannot reach the background: `UNAVAILABLE` ("reload
+the page": the page's relay is the orphan) or `NO_BACKGROUND` ("reload the extension": Chrome is
+still running an older worker — an unpacked build whose files moved on since the last Reload).
+`content-relay.test.mjs` and `background.test.mjs` cover both, and keep the re-injected sites
+equal to both manifests' `content_scripts.matches`.
+
 Firefox needs 128 or later for `world: "MAIN"` content scripts; the manifest's floor is 140, the
 release that introduced `data_collection_permissions`, which the manifest also declares (AMO's
 linter warns when the floor predates a key the manifest uses). In Firefox an MV3 add-on's host

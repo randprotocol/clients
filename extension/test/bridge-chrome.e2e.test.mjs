@@ -124,6 +124,30 @@ test('an approved origin reconnects without a window; disconnect forgets', { ski
   assert.equal(code, 'NOT_CONNECTED');
 });
 
+test('a re-injected relay (what an extension update does to an open tab) takes over: one consent window, one answer', { skip, timeout: 60_000 }, async () => {
+  // The page already has a live relay from page load. background.js's re-injection — run here by
+  // hand, since a driver cannot reload an unpacked extension without losing it — puts a second
+  // one in, and the first must retire: the page still gets exactly one consent window and one
+  // answer, from the relay that is wired to the running background.
+  await env.page.reload({ waitUntil: 'networkidle' });
+  const worker = env.context.serviceWorkers()[0];
+  assert.ok(worker, 'the background is running');
+  await worker.evaluate(() => globalThis.reinjectRandProvider());
+  await env.page.waitForTimeout(500); // the takeover notice is a posted message
+  const windows = [];
+  const listen = (p) => windows.push(p);
+  env.context.on('page', listen);
+  const result = env.page.evaluate(() => window.rand.connect().then((r) => ({ ok: true, address: r.address }), (e) => ({ ok: false, code: e.code })));
+  const consent = await env.context.waitForEvent('page', { timeout: 15_000 });
+  await consent.waitForLoadState('domcontentloaded');
+  await consent.getByRole('button', { name: 'Connect', exact: true }).click();
+  assert.deepEqual(await result, { ok: true, address: env.wallet.address });
+  await env.page.waitForTimeout(1_000);
+  env.context.off('page', listen);
+  assert.equal(windows.length, 1, 'one consent window, not one per relay');
+  await env.page.evaluate(() => window.rand.disconnect());
+});
+
 test('a locked wallet answers LOCKED, and the page says to unlock', { skip, timeout: 60_000 }, async () => {
   await env.app.evaluate(async () => { const m = await import('./backend-extension.js'); await m.extensionBackend().wallet.lock(); });
   const code = await env.page.evaluate(() => window.rand.connect().then(() => 'connected', (e) => e.code));

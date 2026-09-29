@@ -51,15 +51,46 @@ ext.alarms.onAlarm.addListener(async (alarm) => {
   try { await ext.storage.session.remove(UNLOCKED_SESSION_KEY); } catch { /* nothing to remove */ }
 });
 
+// ---- the page provider, put back into tabs that already have the site open ----
+//
+// The browser orphans a tab's content scripts when the extension is reloaded (a store update, a
+// developer's reload of an unpacked build) and never re-injects them: every open randbridge.org
+// tab would answer "Rand Wallet did not respond" until the user thought to reload it. So on
+// install and on update the two scripts go back in — inpage.js first (it returns at once when the
+// page already has a `window.rand`), then content.js, which retires the orphaned relay (see the
+// takeover notice in content.js). The sites are the manifests' `content_scripts.matches`, and
+// extension/test/background.test.mjs holds the three in step. A tab the extension may not touch
+// (a localhost the user never granted) refuses the injection; that tab keeps its orphan and its
+// "reload the page" answer, which is the situation before this existed.
+const PROVIDER_SITES = ['https://randbridge.org/*', 'https://*.randbridge.org/*', 'http://localhost/*', 'http://127.0.0.1/*'];
+
+async function reinjectProvider() {
+  if (!ext.scripting || !ext.tabs || typeof ext.tabs.query !== 'function') return;
+  let tabs;
+  try { tabs = await ext.tabs.query({ url: PROVIDER_SITES }); } catch { return; }
+  for (const tab of tabs || []) {
+    // A tab whose URL is hidden from us is one we have no permission for.
+    if (!tab || !Number.isInteger(tab.id) || typeof tab.url !== 'string') continue;
+    try { await ext.scripting.executeScript({ target: { tabId: tab.id }, files: ['inpage.js'], world: 'MAIN' }); } catch { /* not ours to touch */ }
+    try { await ext.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] }); } catch { /* same tab, same answer */ }
+  }
+}
+
+// On the worker's global so extension/test/bridge-chrome.e2e.test.mjs can run it against a real
+// page: a driver cannot reload an unpacked extension without losing it.
+globalThis.reinjectRandProvider = reinjectProvider;
+
 ext.runtime.onInstalled.addListener(async (details) => {
-  if (!details || details.reason !== 'install') return;
-  try {
-    const stored = await ext.storage.local.get(WALLET_KEY);
-    // An install over storage that already has a wallet (a re-install, a profile restore) is
-    // somebody who does not need to be told what this is.
-    if (stored && stored[WALLET_KEY]) return;
-    await ext.tabs.create({ url: ext.runtime.getURL('app.html#welcome') });
-  } catch { /* no tab is better than a broken install */ }
+  if (!details) return;
+  if (details.reason === 'install') {
+    try {
+      const stored = await ext.storage.local.get(WALLET_KEY);
+      // An install over storage that already has a wallet (a re-install, a profile restore) is
+      // somebody who does not need to be told what this is.
+      if (!(stored && stored[WALLET_KEY])) await ext.tabs.create({ url: ext.runtime.getURL('app.html#welcome') });
+    } catch { /* no tab is better than a broken install */ }
+  }
+  if (details.reason === 'install' || details.reason === 'update') await reinjectProvider();
 });
 
 // A browser restart empties `storage.session`, so the wallet is already locked; the listener is
