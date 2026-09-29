@@ -26,6 +26,19 @@ import { makeWasmBackend, CANNOT_PROVE_REASON } from '../../../ui/engine/backend
 const CORE_JS = new URL('../../../extension/shared/core/rand_wallet.js', import.meta.url);
 const CORE_WASM = new URL('../../../extension/shared/core/rand_wallet_bg.wasm', import.meta.url);
 const NODE_BIN = process.env.RAND_NODE_BIN || '';
+
+/**
+ * Chain 18's genesis `gas` section (fullnode v0.6.6, constraint set 8, spec 2026-09-28 §4.2): the
+ * prices, the bundle guest's pinned gas (20 479 — the one value genesis accepts) and the in-circuit
+ * meter, so the node holds every bundle proof this wallet makes to the pin exactly as the real cut
+ * does. Only when the node knows the flags: an older `rand-node` (a v0.6.2 build, say, passed as
+ * RAND_NODE_BIN) cuts a chain without the section and the test still runs against it.
+ */
+function gasSectionArgs(nodeBin) {
+  const help = execFileSync(nodeBin, ['genesis', '--help'], { stdio: 'pipe' }).toString();
+  if (!help.includes('--bundle-gas-limit')) return [];
+  return ['--gas-price', '100', '--byte-price', '800', '--bundle-gas-limit', '20479'];
+}
 const PROVER_BIN = process.env.RAND_PROVER_BIN || '';
 const PASSWORD = 'an-e2e-password-for-a-real-vault';
 const CHAIN_ID = 18; // the chain this build's core was made for (`version.default_chain_id`)
@@ -208,7 +221,7 @@ before(async () => {
   execFileSync(NODE_BIN, ['keygen', '--out', key], { stdio: 'pipe' });
   execFileSync(NODE_BIN, [
     'genesis', '--chain-id', String(CHAIN_ID), '--fri-profile', 'test', '--faucet',
-    '--validator', `${key},1000,${env.aInfo.address}`, '--out', genesis,
+    '--validator', `${key},1000,${env.aInfo.address}`, '--out', genesis, ...gasSectionArgs(NODE_BIN),
   ], { stdio: 'pipe' });
   execFileSync(NODE_BIN, ['init', '--datadir', datadir, '--genesis', genesis], { stdio: 'pipe' });
   env.node = launch(NODE_BIN, [

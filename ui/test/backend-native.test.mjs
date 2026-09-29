@@ -767,3 +767,29 @@ test('MEMO: a burn is sealed at the chain’s envelope size too', async () => {
   const [, proved] = env.core.calls.find(([m]) => m === 'prove_burn');
   assert.equal(proved.envelope_bytes, 1860);
 });
+
+// Constraint set 8 (chain 18, spec 2026-09-28 §4.3): a chain with a `gas` section pins the gas
+// every bundle proof declares. The wallet hands the chain's pin to the core, which refuses a value
+// its guest does not declare before building anything — a proof declaring another value would be
+// refused by every validator, so nothing is gained by proving it.
+test('GAS: a send and a burn reach the prover with the chain’s bundle_gas_limit, null without a gas section', async () => {
+  const gas = { rand_getLimits: () => ({ envelope_bytes: 1860, max_proof_bytes: 4194304, bundle_gas_limit: 20479, gas_metering: 'circuit' }) };
+  const env = await sendableWallet({ fetch: gas });
+  await env.backend.send.send({ asset: 0, to: ADDRESS, amount: '1000000000' }, () => {});
+  const [, proved] = env.core.calls.find(([m]) => m === 'prove_transfer');
+  assert.equal(proved.bundle_gas_limit, 20479);
+  const burn = await burnableWallet(bridgeOn(), {}, gas);
+  await burn.backend.bridge.withdraw(burnReq(), () => {});
+  const [, burned] = burn.core.calls.find(([m]) => m === 'prove_burn');
+  assert.equal(burned.bundle_gas_limit, 20479);
+  // A chain without a gas section (and a node that predates the field) names none.
+  const plain = await sendableWallet({ fetch: { rand_getLimits: () => ({ envelope_bytes: 1860 }) } });
+  await plain.backend.send.send({ asset: 0, to: ADDRESS, amount: '1000000000' }, () => {});
+  assert.equal(plain.core.calls.find(([m]) => m === 'prove_transfer')[1].bundle_gas_limit, null);
+  // A pin this core refuses is refused before anything is proved, in the core's own words.
+  const refusing = await sendableWallet({
+    fetch: { rand_getLimits: () => ({ bundle_gas_limit: 16383 }) },
+    core: { prove_transfer: (p) => { if (p.bundle_gas_limit !== 20479) throw new Error(`this chain pins every bundle at ${p.bundle_gas_limit} gas, but this wallet's bundle guest declares 20479; update the wallet`); throw new Error('unexpected'); } },
+  });
+  await assert.rejects(refusing.backend.send.send({ asset: 0, to: ADDRESS, amount: '1000000000' }, () => {}), /update the wallet/);
+});

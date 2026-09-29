@@ -103,3 +103,25 @@ test('every memo view is one line that never wraps: the memo-line class is nowra
   assert.match(line, /text-overflow:\s*ellipsis/);
   assert.doesNotMatch(rule('.memo'), /pre-wrap/, 'no memo view wraps its lines');
 });
+
+// Fullnode issue #64: `rand_getLimits.envelope_bytes` is the node's word. On a chain whose genesis
+// sets no envelope size (14–17) the ledger admits any envelope up to 2 048 bytes, so a node
+// answering 1860 there would have a wallet seal a 1 860-byte envelope among everyone else's
+// 1 348 — a permanent public tag on its transactions. The memo field is never offered on those
+// chains, whatever the node says; the core refuses the memo and seals legacy there regardless.
+test('memoSupportedFor never believes a memo claim on a chain pinned as pre-memo (#64)', async () => {
+  const { memoSupportedFor, LEGACY_ENVELOPE_CHAIN_IDS } = await import('../lib/memo.js');
+  assert.deepEqual(LEGACY_ENVELOPE_CHAIN_IDS, [14, 15, 16, 17]);
+  for (const chain of LEGACY_ENVELOPE_CHAIN_IDS) {
+    assert.equal(memoSupportedFor(1860, chain), false, `chain ${chain}`);
+    assert.equal(memoSupportedFor(null, chain), false, `chain ${chain}`);
+  }
+  // Chain 18 is cut with envelope_bytes 1860: the claim stands there, and on any later chain.
+  assert.equal(memoSupportedFor(1860, 18), true);
+  assert.equal(memoSupportedFor(1860, 19), true);
+  assert.equal(memoSupportedFor(null, 18), false);
+  assert.equal(memoSupportedFor(1024, 18), false);
+  // Without a chain id the size rule alone decides, as before.
+  assert.equal(memoSupportedFor(1860), true);
+  assert.equal(memoSupportedFor(1861), false);
+});

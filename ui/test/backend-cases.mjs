@@ -2250,6 +2250,26 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.deepEqual(await old.backend.send.limits(), { envelopeBytes: null });
   });
 
+  // Fullnode issue #64: on a chain whose genesis sets no envelope size, a node claiming the memo
+  // form is not believed — believing it would have this wallet seal 1 860-byte envelopes among
+  // everyone else's 1 348, a permanent public tag on each transaction it sent.
+  scoped('send.limits never believes a memo claim on a chain pinned as pre-memo (#64)', async () => {
+    // A node on the build's own chain, claiming the memo envelope.
+    const on = (chainId) => build({
+      core: stubCore({ version: () => ({ ...CORE_VERSION, default_chain_id: chainId }) }),
+      fetch: chainFetch({ genesis: GENESIS, chainId }, { rand_getLimits: () => ({ max_block_bytes: 4194304, envelope_bytes: 1860 }) }),
+    });
+    for (const chainId of [14, 15, 16, 17]) {
+      const pinned = on(chainId);
+      await pinned.backend.wallet.create(PASSWORD);
+      assert.deepEqual(await pinned.backend.send.limits(), { envelopeBytes: null }, `chain ${chainId}`);
+    }
+    // Chain 18 is cut with envelope_bytes 1860: the claim is taken.
+    const memoChain = on(18);
+    await memoChain.backend.wallet.create(PASSWORD);
+    assert.deepEqual(await memoChain.backend.send.limits(), { envelopeBytes: 1860 });
+  });
+
   scoped('a note’s memo and a sent row’s memo reach sync as `memo`, and a note without one has none', async () => {
     const rows = [
       { index: 0, cm: '0a'.repeat(32), height: 5, envelope: { kem_ct: '', to_receiver: '', to_sender: '', body: '' } },

@@ -32,9 +32,23 @@ export function displayMemo(text) {
  *  (a 112-byte note plus the 512-byte memo field, sealed) and nothing else. */
 export const MEMO_ENVELOPE_BYTES = 1860;
 
+/** The chain ids whose genesis sets no envelope size (fullnode issue #64): chains 14–17, every
+ *  chain that ran a build able to seal the memo form. `rand_getLimits.envelope_bytes` is the
+ *  node's word, and on such a chain the ledger admits any envelope up to 2 048 bytes, so a node
+ *  answering 1860 there would have this wallet seal 1 860-byte envelopes among everyone else's
+ *  1 348 — a permanent public tag on its transactions. The memo is never offered on these chains,
+ *  whatever the node says, and the core (`wallet_core::LEGACY_ENVELOPE_CHAIN_IDS`, which
+ *  `version.legacy_envelope_chain_ids` reports) seals legacy and refuses a memo there regardless.
+ *  Chain 18 is cut with `envelope_bytes` 1860, so it is not listed. iOS and Android carry the same
+ *  list. */
+export const LEGACY_ENVELOPE_CHAIN_IDS = [14, 15, 16, 17];
+
 /** Whether a chain whose limits report `envelopeBytes` carries a memo: exactly 1860, nothing else
- *  (final review, finding 6 — any other value, and no value, is a chain without memos). iOS and
- *  Android gate on the same number. */
-export function memoSupportedFor(envelopeBytes) {
+ *  (final review, finding 6 — any other value, and no value, is a chain without memos), and never
+ *  on a chain id in `LEGACY_ENVELOPE_CHAIN_IDS` (#64). `chainId` may be left out where only the
+ *  size is known; the backends' `send.limits` has already applied the pin. iOS and Android gate
+ *  on the same number and the same list. */
+export function memoSupportedFor(envelopeBytes, chainId) {
+  if (chainId !== undefined && chainId !== null && LEGACY_ENVELOPE_CHAIN_IDS.includes(Number(chainId))) return false;
   return envelopeBytes === MEMO_ENVELOPE_BYTES;
 }

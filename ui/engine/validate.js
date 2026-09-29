@@ -461,7 +461,9 @@ export function checkTransaction(reply) {
  * `rand_getLimits` → the chain's `envelope_bytes` (spec 2026-09-26 §2.4): the exact size every
  * note envelope must be on a chain that declares one, or `null` on a chain that does not (every
  * genesis before the memo, chain 14 included) — which seals the legacy envelope and carries no
- * memo. A missing field is `null` too: an older node's reply simply has no such key.
+ * memo. A missing field is `null` too: an older node's reply simply has no such key. Beside it,
+ * `max_proof_bytes` (the proof cap) and `bundle_gas_limit` (chain 18's pinned bundle gas), each
+ * `null` where the node does not say.
  *
  * Anything else is refused rather than read as "no memo": a proof sealed at the wrong size is
  * refused by a memo chain as a permanent `EnvelopeSize`, after two minutes of proving.
@@ -479,7 +481,14 @@ export function checkLimits(reply) {
   const maxProofBytes = p === undefined || p === null
     ? null
     : intField(m, 'max_proof_bytes', p, { max: 1 << 30 }) || fail(m, 'max_proof_bytes is zero', p);
-  return { envelopeBytes, maxProofBytes };
+  // Constraint set 8 (chain 18, spec 2026-09-28 §4.3): the gas every bundle proof must declare on
+  // a chain with a `gas` section. `null` (and a reply without the key) is a chain without one. The
+  // core refuses a value other than its own guest's ceiling before building anything.
+  const g = reply.bundle_gas_limit;
+  const bundleGasLimit = g === undefined || g === null
+    ? null
+    : intField(m, 'bundle_gas_limit', g, { max: Number.MAX_SAFE_INTEGER }) || fail(m, 'bundle_gas_limit is zero', g);
+  return { envelopeBytes, maxProofBytes, bundleGasLimit };
 }
 
 /** `rand_sendTransaction` / `rand_mint` → the transaction hash. */

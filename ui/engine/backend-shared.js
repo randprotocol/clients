@@ -82,6 +82,7 @@
 import { encryptSecret, decryptSecret, checkVault, isVaultRecordError } from './crypto.js';
 import { makeRpc, isAllowedRpcMethod, rpcUrlList } from './rpc.js';
 import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, HEIGHT_SPAN, envelopeBytesOf } from './wallet.js';
+import { LEGACY_ENVELOPE_CHAIN_IDS } from '../lib/memo.js';
 import { listContacts, addContact, removeContact, nameOf as contactNameOf, addressOf as contactAddressOf, CONTACTS_KEY } from '../lib/contacts.js';
 import { checkFee, checkTokens, checkSubmitted, checkBridgeState, MAX_TOKEN_PAGE, NodeReplyError } from './validate.js';
 import {
@@ -1715,10 +1716,18 @@ export function makeSharedBackend({
      * `rand_getLimits` (spec 2026-09-26 §2.4), `null` where the chain carries no memo (or the
      * node predates the method). The send screen shows the memo field only when this is a number.
      * Asked of a verified client, like everything else that describes the chain.
+     *
+     * Fullnode issue #64: on a chain whose genesis sets no envelope size (`LEGACY_ENVELOPE_
+     * CHAIN_IDS`, 14–17) the node's claim is not believed — the answer is `null` whatever it
+     * said, so no memo field is offered and no memo is sent. The chain id is this build's, never
+     * the node's: a node cannot move it, and the core seals legacy there regardless
+     * (`wallet_core::envelope_format_on`).
      */
     async limits() {
       const { client } = await requireVerifiedChain();
-      return { envelopeBytes: await envelopeBytesOf(client) };
+      const { chainId } = await getSettings();
+      const envelopeBytes = await envelopeBytesOf(client);
+      return { envelopeBytes: LEGACY_ENVELOPE_CHAIN_IDS.includes(Number(chainId)) ? null : envelopeBytes };
     },
 
     /**

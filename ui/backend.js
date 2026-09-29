@@ -355,7 +355,10 @@
  *    forgets it.
  *  - `send.limits?()` → `{envelopeBytes}`: the chain's `envelope_bytes` from `rand_getLimits`
  *    (spec 2026-09-26 §2.4), or `null` where the chain carries no memo or the node predates the
- *    method. The send screen offers a memo field only when this is a number.
+ *    method — and `null`, whatever the node claimed, on a chain whose genesis sets no envelope
+ *    size (fullnode issue #64: chains 14–17, `ui/lib/memo.js`'s `LEGACY_ENVELOPE_CHAIN_IDS`),
+ *    where a believed claim would tag every transaction the wallet sent. The send screen offers
+ *    a memo field only when this is a number.
  *  - `address?` — a whole OPTIONAL GROUP, the address-sharing formats, every one the core's own
  *    code (spec 2026-09-26 §2); pure — no node, no key:
  *     · `address.fingerprint(address)` → `'XXXX-XXXX-XXXX-XXXX'`, 80 bits of the address in

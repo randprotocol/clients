@@ -65,18 +65,23 @@ export async function envelopeBytesOf(client, signal) {
 }
 
 /**
- * `rand_getLimits`' two fields a transfer needs, from one request: `envelopeBytes` (above) and
+ * `rand_getLimits`' three fields a transfer needs, from one request: `envelopeBytes` (above),
  * `maxProofBytes`, the chain's proof-size cap — `null` where the node does not say, which the core
- * reads as its own vendored `MAX_PROOF_BYTES`, never as "unbounded". The same missing-method rule
+ * reads as its own vendored `MAX_PROOF_BYTES`, never as "unbounded" — and `bundleGasLimit`, the
+ * gas every bundle proof must declare on a chain with a `gas` section (chain 18, constraint set
+ * 8), `null` on a chain without one. The core refuses a `bundleGasLimit` other than its own
+ * guest's ceiling before building anything: a proof declaring another value is refused by every
+ * validator, so the wallet must be updated, not the proof retried. The same missing-method rule
  * as `envelopeBytesOf`.
  */
 export async function chainLimitsOf(client, signal) {
-  if (!client || typeof client.getLimits !== 'function') return { envelopeBytes: null, maxProofBytes: null };
+  const none = { envelopeBytes: null, maxProofBytes: null, bundleGasLimit: null };
+  if (!client || typeof client.getLimits !== 'function') return none;
   let reply;
   try {
     reply = await client.getLimits(signal ? { signal } : undefined);
   } catch (err) {
-    if (err && err.code === -32601) return { envelopeBytes: null, maxProofBytes: null };
+    if (err && err.code === -32601) return none;
     throw err;
   }
   return checkLimits(reply);
@@ -958,7 +963,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     // before the witnesses — a reply this wallet cannot use refuses the send while nothing has
     // been proved. The core refuses a non-empty memo on a chain that reports `null`, also before
     // proving (wallet-core's `envelope_format_for`).
-    const { envelopeBytes, maxProofBytes } = await chainLimitsOf(client, signal);
+    const { envelopeBytes, maxProofBytes, bundleGasLimit } = await chainLimitsOf(client, signal);
     const { hcBundle, profile } = await proofParamsOf(client, signal);
     const { anchor, paths } = await anchorAndWitnesses(client, [...inputs, ...feeInputs], signal);
     // A remote prover reports its own 'prove' phases (queued, proving); the device reports one.
@@ -981,6 +986,9 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       // Sealed with the payment only; change and dummies carry an empty field of the same size.
       memo: String(memo ?? ''),
       envelope_bytes: envelopeBytes,
+      // Chain 18's pinned bundle gas (`null` without a gas section): the core refuses a chain
+      // whose pin its guest does not declare, before anything is built.
+      bundle_gas_limit: bundleGasLimit,
       // The chain's guest, for the device's proof and the prover's alike: a proof of this build's
       // default guest would be refused by a chain that pins another.
       ...(hcBundle ? { hc_bundle: hcBundle } : {}),
@@ -1089,7 +1097,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     onPhase?.('witness');
     // A burn carries no memo, but its change and dummies are sealed at the chain's size all the
     // same (see `envelopeBytesOf`).
-    const { envelopeBytes, maxProofBytes } = await chainLimitsOf(client, signal);
+    const { envelopeBytes, maxProofBytes, bundleGasLimit } = await chainLimitsOf(client, signal);
     const { hcBundle, profile } = await proofParamsOf(client, signal);
     // One fetch for both groups, so the whole bundle is folded against the same root.
     const { anchor, paths } = await anchorAndWitnesses(client, [...assetInputs, ...feeInputs], signal);
@@ -1111,6 +1119,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       fee_inputs: feeInputs.map((note, i) => ({ note, path: paths[assetInputs.length + i] })),
       profile,
       envelope_bytes: envelopeBytes,
+      bundle_gas_limit: bundleGasLimit,
       ...(hcBundle ? { hc_bundle: hcBundle } : {}),
     };
     const res = typeof prove === 'function'

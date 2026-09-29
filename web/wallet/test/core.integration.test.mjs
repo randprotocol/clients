@@ -245,6 +245,11 @@ test('the artefact this wallet loads is built for chain 18 on the hidden-asset b
   const core = await realCore();
   const k = await core.call('version');
   assert.equal(k.default_chain_id, 18, 'the core has described chain 18 since 2026-09-29 (16 from d3e3ada before that)');
+  // Fullnode v0.6.6 (constraint set 8, the chain-18 build): every bundle proof declares the guest's
+  // ceiling, which chain 18's genesis pins; the chains on which a memo claim is never believed.
+  assert.equal(k.chain_build, 'd742a9b');
+  assert.equal(k.bundle_gas_limit, 20479);
+  assert.deepEqual(k.legacy_envelope_chain_ids, [14, 15, 16, 17]);
   assert.equal(k.rpl_transfer, true, 'a token transfer is admitted (since chain 14)');
   assert.equal(k.transfer_proofs, 1);
   assert.equal(k.bridge_burn_proofs, 1, 'a burn was two proofs on chain 13 and is one now');

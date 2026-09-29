@@ -385,3 +385,18 @@ test('a transaction record yields only a validated height', () => {
   rejects(() => checkTransaction({ height: '7' }), /height/);
   rejects(() => checkTransaction({}), /height/);
 });
+
+test('limits: envelope_bytes, max_proof_bytes and the chain-18 bundle_gas_limit, each null when absent', async () => {
+  const { checkLimits } = await import('../engine/validate.js');
+  assert.deepEqual(checkLimits({ max_block_bytes: 4194304 }), { envelopeBytes: null, maxProofBytes: null, bundleGasLimit: null });
+  assert.deepEqual(
+    checkLimits({ envelope_bytes: 1860, max_proof_bytes: 8388608, bundle_gas_limit: 20479, gas_metering: 'circuit', gas_price: '100' }),
+    { envelopeBytes: 1860, maxProofBytes: 8388608, bundleGasLimit: 20479 },
+  );
+  assert.equal(checkLimits({ bundle_gas_limit: null }).bundleGasLimit, null, 'a chain without a gas section');
+  rejects(() => checkLimits({ bundle_gas_limit: 0 }), /bundle_gas_limit is zero/);
+  rejects(() => checkLimits({ bundle_gas_limit: '20479' }), /bundle_gas_limit/);
+  rejects(() => checkLimits({ bundle_gas_limit: -1 }), /bundle_gas_limit/);
+  rejects(() => checkLimits({ envelope_bytes: 0 }), /envelope_bytes is zero/);
+  rejects(() => checkLimits(null), /not an object/);
+});
