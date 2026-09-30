@@ -1,0 +1,183 @@
+# Build every package a hosted runner can build, and on a tag attach them to a draft release.
+#
+#   a tag v<version>     builds, then creates (or refills) the DRAFT release for that tag
+#   workflow_dispatch    builds only: the packages are the run's artifacts, nothing is released
+#
+# What it builds: the desktop app for macOS (arm64, x64), Windows (x64) and Linux (x86_64, arm64);
+# the Chrome and Firefox extension zips; and the source tarball with the fullnode submodule in it.
+# Every step that builds something is a script under scripts/release/ or a platform's own pack
+# script, so the same commands run on a laptop and under Jenkins (Jenkinsfile).
+#
+# What it does not build: Android and iOS. Their signing keys are not in this repository's
+# secrets; scripts/release/build-local.sh builds them, and scripts/release/checksums.sh attaches
+# the .apk/.aab and re-sums. The draft is published by hand once those are in.
+#
+# Nothing here is code-signed with a paid certificate: the .dmg is ad-hoc signed and the Windows
+# installers are unsigned. README.md ("Download") says what each OS shows for that and how to
+# check a download against SHA256SUMS instead.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: 1.98.1
+  TAURI_CLI_VERSION: 2.11.5
+
+jobs:
+  desktop:
+    name: desktop ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos-arm64,   os: macos-15,         target: '' }
+          - { name: macos-x64,     os: macos-15,         target: x86_64-apple-darwin }
+          - { name: windows-x64,   os: windows-2022,     target: '' }
+          - { name: linux-x86_64,  os: ubuntu-22.04,     target: '' }
+          - { name: linux-arm64,   os: ubuntu-22.04-arm, target: '' }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Rust ${{ env.RUST_TOOLCHAIN }}
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup default "$RUST_TOOLCHAIN"
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+            patchelf rpm file xdg-utils
+      - name: Cache cargo registry and tauri-cli
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/bin/cargo-tauri*
+          key: cargo-${{ matrix.name }}-${{ env.RUST_TOOLCHAIN }}-tauri${{ env.TAURI_CLI_VERSION }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ matrix.name }}-${{ env.RUST_TOOLCHAIN }}-tauri${{ env.TAURI_CLI_VERSION }}-
+      - name: tauri-cli ${{ env.TAURI_CLI_VERSION }}
+        run: |
+          cargo tauri --version 2>/dev/null | grep -q "$TAURI_CLI_VERSION" \
+            || cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
+      - name: Test the app's own crate
+        if: matrix.target == ''
+        working-directory: desktop/src-tauri
+        run: node ../scripts/stage-ui.mjs && cargo test --locked
+      - name: Build and package
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            scripts/release/build-desktop.sh --target "${{ matrix.target }}"
+          else
+            scripts/release/build-desktop.sh
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.name }}
+          path: dist/release/*/rand-wallet-*
+          if-no-files-found: error
+          retention-days: 14
+
+  extensions:
+    name: extensions and source
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Rust ${{ env.RUST_TOOLCHAIN }}
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown
+          rustup default "$RUST_TOOLCHAIN"
+      - name: Cache cargo registry and wasm-bindgen
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/bin/wasm-bindgen*
+          key: cargo-wasm-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('core/Cargo.lock') }}
+      - name: The wasm core
+        run: core/scripts/build-wasm.sh
+      - name: The shared UI's tests
+        run: |
+          npm ci --prefix ui
+          node --test --test-reporter=tap ui/test > ui-test.tap || { grep -B2 -A30 '^not ok' ui-test.tap | head -200; exit 1; }
+          tail -8 ui-test.tap
+      - name: Pack
+        run: |
+          chrome/pack.sh
+          firefox/pack.sh
+          VER=$(node -p "require('./chrome/manifest.json').version")
+          mkdir -p "dist/release/v$VER"
+          cp "dist/rand-wallet-chrome-$VER.zip" "dist/rand-wallet-firefox-$VER.zip" "dist/release/v$VER/"
+          scripts/release/source-tarball.sh "dist/release/v$VER/rand-wallet-$VER-source.tar.gz"
+      - name: Lint the Firefox build
+        run: npx --yes web-ext@8 lint --source-dir dist/firefox
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extensions
+          path: dist/release/*/rand-wallet-*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: draft release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [desktop, extensions]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect, check the version, and sum
+        run: |
+          VER=$(node -p "require('./chrome/manifest.json').version")
+          [ "v$VER" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME, but the manifests say $VER"; exit 1; }
+          mkdir out
+          find artifacts -type f -name 'rand-wallet-*' -exec cp {} out/ \;
+          ( cd out && LC_ALL=C ls | xargs sha256sum > SHA256SUMS && cat SHA256SUMS )
+          [ "$(ls out | wc -l)" -eq 16 ] || { echo "expected 15 packages and SHA256SUMS"; ls -la out; exit 1; }
+      - name: Create or refill the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES="docs/releases/$GITHUB_REF_NAME.md"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" out/* --clobber
+          elif [ -f "$NOTES" ]; then
+            gh release create "$GITHUB_REF_NAME" out/* --draft --verify-tag \
+              --title "Rand Wallet $GITHUB_REF_NAME" --notes-file "$NOTES"
+          else
+            gh release create "$GITHUB_REF_NAME" out/* --draft --verify-tag \
+              --title "Rand Wallet $GITHUB_REF_NAME" --generate-notes
+          fi

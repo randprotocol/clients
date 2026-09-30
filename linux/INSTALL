@@ -1,0 +1,35 @@
+Rand Wallet for Linux — the bare binary
+
+This archive is the desktop app's executable on its own, for a distribution the .deb, the .rpm and
+the AppImage do not fit. It is the same program: the shared wallet interface (the one the browser
+extension shows) in the system webview, over the Rust wallet core.
+
+It links against the system's webkit2gtk 4.1 and GTK 3, so install those first:
+
+  Debian, Ubuntu    sudo apt install libwebkit2gtk-4.1-0
+  Fedora            sudo dnf install webkit2gtk4.1
+  Arch              sudo pacman -S webkit2gtk-4.1
+  openSUSE          sudo zypper install libwebkit2gtk-4_1-0
+
+Run it where it is:
+
+  ./rand-wallet
+
+Or install it for your user, with a launcher entry:
+
+  install -Dm755 rand-wallet         ~/.local/bin/rand-wallet
+  install -Dm644 rand-wallet.png     ~/.local/share/icons/hicolor/256x256/apps/rand-wallet.png
+  install -Dm644 rand-wallet.desktop ~/.local/share/applications/rand-wallet.desktop
+
+(~/.local/bin has to be on your PATH for the launcher entry to find it.)
+
+The wallet keeps one file, ~/.config/RandWallet/wallet.json, readable by your user only. Sending
+needs about 8 GiB of memory: the proof is made on this computer.
+
+Check the download before you run it: SHA256SUMS is published with every release at
+https://github.com/randprotocol/clients/releases
+
+  sha256sum -c SHA256SUMS --ignore-missing
+
+Licence: GPL-3.0-only (LICENSE). Source: https://github.com/randprotocol/clients
+Experimental testnet software: not audited, not for real value.

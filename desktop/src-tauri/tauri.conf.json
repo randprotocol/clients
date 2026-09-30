@@ -41,6 +41,9 @@
       "../assets/icons/icon.ico"
     ],
     "category": "Finance",
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "shortDescription": "A shielded wallet for RAND",
     "longDescription": "Rand Wallet holds RAND in shielded notes, scans a node's commitment tree locally, and proves transfers on this computer. Keys never leave the machine."
   }
