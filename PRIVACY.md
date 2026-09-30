@@ -1,6 +1,6 @@
 # Rand Wallet — privacy policy
 
-Effective 30 September 2026. This covers every Rand Wallet client: the iOS and Android apps, the
+Effective 1 October 2026. This covers every Rand Wallet client: the iOS and Android apps, the
 Chrome and Firefox extensions, the desktop app for Windows, macOS and Linux, and the local web
 wallet. The same text is published at https://randprotocol.org/clients/privacy.
 
@@ -40,9 +40,14 @@ your device until you delete them.
 - **To the testnet faucet, if you ask it.** A faucet request asks the node to mint test RAND
   into a note that only your key can open.
 - **To a prover, only if you pair one.** A browser wallet, or a phone without the memory for a
-  proof, can have the proof made by a prover you pair in Settings → Prover: the desktop app on
-  your own computer, or a server you run. A proving job contains your spend key, encrypted to
-  that one prover. The wallet does not come with a prover of ours and never pairs one by itself.
+  proof, can have the payment's proof made by a prover you pair in Settings → Prover: the
+  desktop app on your own computer, or a server you run or trust. Each proving job carries your
+  wallet's **viewing key** and a one-time salt, encrypted to that one prover. With them the
+  prover can read your wallet's whole history — every payment received and sent, before and
+  after the pairing — and it cannot spend: your **spend key never leaves your device**, which
+  makes the small authorisation proof itself. The app warns you before it saves a pairing to a
+  prover that is not your own. The wallet does not come with a prover of ours and never pairs
+  one by itself.
 - **To sites you connect, in the extension.** On randbridge.org the extension offers itself as
   `window.rand`. A site learns nothing until you approve it for that site, and an approved site
   learns your address and its bridge recipient hash, nothing else.

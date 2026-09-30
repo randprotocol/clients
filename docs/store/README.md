@@ -463,10 +463,12 @@ certifications:
 
 Privacy policy URL: `https://randprotocol.org/clients/privacy`.
 
-One thing to know before ticking: when the user pairs their own prover, the spend key is sent
-to that prover inside an encrypted job. It goes to a machine the user runs and named themselves,
-not to the developer or a third party, which is why "authentication information" stays
-unticked; the description and the privacy policy both say so, and they must keep saying so.
+One thing to know before ticking: when the user pairs a prover, each proving job carries the
+wallet's viewing key and a one-time salt, encrypted to that prover — enough to read the wallet's
+history, not to spend (the spend key never leaves the device). It goes only to a prover the user
+chose and pasted the link of, never to the developer, which is why "financial and payment
+information" stays unticked; the app warns before saving a pairing that is not the user's own,
+and the description and the privacy policy both say all of this. They must keep saying so.
 
 ### Graphics
 
@@ -537,7 +539,7 @@ No bundler, minifier or transpiler is used. Every .js file in the add-on is a so
 
 TESTING. No account is needed. Click the toolbar button → "Create a new wallet" → set a password → save the spend key. To test with funds, choose "I already have a wallet" and paste the review wallet's key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE> (the Faucet button is refused by the public node; it is for nodes that run an open faucet). Sending needs a prover the user runs themselves (the Rand Wallet desktop app); without one the Send screen explains this and stops.
 
-NETWORK. JSON-RPC POSTs to the node URL in Settings (default https://rpc.randprotocol.org; rpc1–rpc3.randprotocol.org are failover hosts). If, and only if, the user pairs a prover in Settings → Prover, requests go to that URL as well; a proving job contains the wallet's spend key encrypted to that prover. No analytics, no telemetry, no remote code.
+NETWORK. JSON-RPC POSTs to the node URL in Settings (default https://rpc.randprotocol.org; rpc1–rpc3.randprotocol.org are failover hosts). If, and only if, the user pairs a prover in Settings → Prover, requests go to that URL as well; a proving job contains the wallet's viewing key and a one-time salt, encrypted to that prover (enough to read the wallet's history, not to spend; the spend key never leaves the device, which makes the authorisation proof itself). No analytics, no telemetry, no remote code.
 
 CONTENT SCRIPTS run only on randbridge.org (and localhost, for a locally served bridge) and expose a provider object, window.rand. A page learns the wallet address only after the user approves that site.
 
