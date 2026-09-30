@@ -1,48 +1,53 @@
-# Proving through your own prover
+# Proving through a prover
 
-A transfer on the Rand chain is authorised by a bundle proof, and making one peaks at about
-**5.7 GB** of memory. The browser extension and the local web wallet cannot fit that (WebAssembly
-stops at 4 GiB), and most phones cannot either. This page is for wallet users: how to let a
-machine you run make those proofs for you, and what that costs you in trust. The prover itself —
-its commands, options and wire — is documented once, in the fullnode's
-[`docs/prover.md`](https://github.com/randprotocol/fullnode/blob/v0.6.6/docs/prover.md)
+A transfer on the Rand chain carries two proofs. The **bundle proof** is the big one: making it
+peaks at about **6.2 GB** of memory, which the browser extension and the local web wallet cannot
+fit (WebAssembly stops at 4 GiB), and most phones cannot either. The **authorisation proof** is
+small (a few seconds on a computer, about half a minute in a browser), and the wallet always makes
+it itself, from the spend key. This page is for wallet users: how to let another machine make the
+big proof for you, and what that costs you in trust. The prover itself — its commands, options
+and wire — is documented once, in the fullnode's
+[`docs/prover.md`](https://github.com/randprotocol/fullnode/blob/v0.6.7/docs/prover.md)
 (`../fullnode/docs/prover.md` in a checkout beside this one); this page points there rather than
 repeating it.
 
 ## 1. What it is
 
 The wallet becomes a **light client**: it still picks the notes, builds the outputs, seals the
-envelopes and binds the transaction, exactly as before, and a **prover** only fills in the one
-bundle proof. The wallet seals everything the proof needs into a job only that prover can open,
-sends it, waits, checks the proof that comes back, and submits the transaction to its own node
-itself. The prover sees what the proof needs — this payment's notes and amounts, and your spend
-key (§2) — but not the transaction it goes into, and it never talks to the chain. On the chain this
-prover is the third role that proves or verifies, beside validators and aggregators, and in this
-phase it is one you run for yourself.
+envelopes, binds the transaction and authorises the spend, exactly as before, and a **prover**
+only fills in the bundle proof. The wallet seals everything that proof needs into a job only that
+prover can open, sends it, waits, checks the proof that comes back, and submits the transaction to
+its own node itself. The prover sees what the proof needs — this payment's notes and amounts, and
+your viewing key (§2) — but not the transaction it goes into, and it never talks to the chain. On
+the chain this prover is the third role that proves or verifies, beside validators and
+aggregators.
 
 ## 2. The trust model
 
-Today's proof takes the spend key as a private input, so whoever makes it holds the key. That is
-why there are two phases:
+Since **split authorisation** (fullnode v0.6.3; every chain since 17 — chain 18 and 19 are the
+live ones), the bundle proof is made from the wallet's **viewing key** and a fresh salt, and a
+second proof, made from the **spend key** and that salt, is what authorises the spend. The wallet
+makes the second one on the device, always — through a prover or not — and the spend key never
+leaves it. So a prover can be anybody's:
 
-| | the prover receives | it can read | it can spend | the wallet offers |
-|---|---|---|---|---|
-| Phase 1 | the spend key | the whole history | **yes** | "My own prover" only |
-| Phase 2 | the viewing key | the whole history | no | any prover the user pairs |
+| the prover receives | it can read | it can spend | the wallet offers |
+|---|---|---|---|
+| the viewing key and a one-time salt, with each job | the whole history — every payment received and sent, before and after today | **no** | any prover you pair |
 
-This release is Phase 1. The Settings screen shows this warning before a pairing is saved, and it
-cannot be dismissed:
-
-> This prover will receive your spend key each time it makes a proof. Anyone who controls it can
-> spend your funds. Pair only a machine you run yourself.
-
-Phase 2 will show this one for a prover that is not your own:
+That is still a lot to hand over. The Settings screen shows this warning before a pairing is
+saved, own or not, and it cannot be dismissed:
 
 > This prover will be able to read this wallet's whole history — every payment received and
 > sent, before and after today. It cannot spend. To keep your history private, run your own.
 
-There is no default prover and no directory of provers: a prover exists in a wallet only because
-its user pasted a pairing link into it.
+A pairing link marked `own=1` (one a machine you run made) is shown as "My own prover"; any other
+as "Paired prover", with the same sentence under it. The earlier Phase 1 rule — a job that carried
+the spend key, sent only to a prover marked as your own — applies only to chains without split
+authorisation, which no public chain is any more; a wallet on such a chain still refuses to send a
+spend-key job anywhere but an `own=1` pairing.
+
+There is no directory of provers: a prover exists in a wallet only because its user pasted a
+pairing link into it.
 
 ## 3. Pair the desktop app with the extension or the web wallet
 
@@ -70,10 +75,11 @@ certificate is needed.
    prover · 127.0.0.1:8600" and a line such as `Answering · 0 of 8 in its queue.` — the jobs
    waiting, out of the most it will queue.
 
-From then on, **Send** and **Withdraw** work in the browser. While the proof is being made, the
-proving step reads `Waiting at position N on 127.0.0.1:8600` while the job waits behind others
-in the prover's queue, then `Proving on 127.0.0.1:8600…` while the prover works on it (the name
-is the prover's address). The desktop app proves one job at a time. **Cancel** stops waiting and
+From then on, **Send** and **Withdraw** work in the browser. The proving step first reads
+`Authorising the spend on this device…` — the wallet's own small proof, made from the spend key
+before any job leaves the browser (about half a minute there) — then `Waiting at position N on
+127.0.0.1:8600` while the job waits behind others in the prover's queue, then `Proving on
+127.0.0.1:8600…` while the prover works on it (the name is the prover's address). The desktop app proves one job at a time. **Cancel** stops waiting and
 cancels the job on the prover too. The wallet waits up to 30 minutes for a job to leave the
 prover's queue and up to 20 minutes for it to be proved; past either it stops waiting, keeps the
 job, and offers **Resume** (wait for the same job again) and **Cancel**.
@@ -87,7 +93,7 @@ is the same as locking it.
 
 **Which pages may talk to a prover.** A prover answers a browser page only from an origin on its
 allow-list, so that an arbitrary website cannot read its key and recognise your machine. By default
-(fullnode `v0.6.2`, unchanged in `v0.6.6`) the list is browser extensions (`chrome-extension://*`, `moz-extension://*`,
+(fullnode `v0.6.2`, unchanged in `v0.6.7`) the list is browser extensions (`chrome-extension://*`, `moz-extension://*`,
 `safari-web-extension://*`) and pages on this machine (`http://localhost:*`, `http://127.0.0.1:*`,
 `http://[::1]:*`); the desktop app uses that default. The extension and the local web wallet
 (served by `web/wallet/serve.sh` on `http://127.0.0.1:<port>`) are on it and need nothing more.
@@ -104,7 +110,7 @@ Anything else is refused with `-32007 origin not allowed`:
   list — put the prover behind an `https://` proxy (§4) for such a wallet.
 
 `prover_info` reports the list as `allowed_origins`
-([fullnode `docs/prover.md` §6.1](https://github.com/randprotocol/fullnode/blob/v0.6.6/docs/prover.md#61-transport)).
+([fullnode `docs/prover.md` §6.1](https://github.com/randprotocol/fullnode/blob/v0.6.7/docs/prover.md#61-transport)).
 
 To stop using the prover, press **Forget this prover** in Settings; proofs go back to this device
 (which, in a browser, means sending is unavailable again).
@@ -112,10 +118,12 @@ To stop using the prover, press **Forget this prover** in Settings; proofs go ba
 ## 4. Run `rand-prover` on your own server
 
 Any machine with 8 GB of memory or more can run the fullnode's `rand-prover` for your wallets — a
-home server proving for a laptop, say. Generate its key, mint a pairing **with `--own`** (a link
-without `own=1` is saved but never sent a job, because every job in this phase carries your spend
-key), and run it with `--accept-spend-key`. The commands, options, memory gate and service unit
-are in [the fullnode's `docs/prover.md`, §3](https://github.com/randprotocol/fullnode/blob/v0.6.6/docs/prover.md#3-run-your-own);
+home server proving for a laptop, say. Generate its key, mint a pairing (`--own` marks the link as
+a machine of yours, which is what the wallet then calls it), and run it — without
+`--accept-spend-key`: a viewing-key job is all a wallet on a split-authorisation chain sends, and
+the desktop app's host takes nothing else either. Do not run it with `--fee`: this wallet pays no
+prover fee and refuses a prover that quotes one. The commands, options, memory gate and service
+unit are in [the fullnode's `docs/prover.md`, §3](https://github.com/randprotocol/fullnode/blob/v0.6.7/docs/prover.md#3-run-your-own);
 a validator can also host one inside `rand-node` (§4 there).
 
 Then pair it exactly as in §3 above, with the link `rand-prover pair` printed.
@@ -126,12 +134,12 @@ only for a prover on this machine (`localhost`, `127.0.0.1`). The wallet refuses
 sealed either way, but the pairing token travels inside it, and a network should not be able to
 see or rewrite a proof on its way to you. `rand-prover` itself speaks plain HTTP on
 `127.0.0.1:8600`, so to reach it from another machine put a TLS-terminating proxy in front of it
-and pair with the proxy's `https://` URL ([fullnode `docs/prover.md` §7](https://github.com/randprotocol/fullnode/blob/v0.6.6/docs/prover.md#7-tls)).
+and pair with the proxy's `https://` URL ([fullnode `docs/prover.md` §7](https://github.com/randprotocol/fullnode/blob/v0.6.7/docs/prover.md#7-tls)).
 The extension will ask for permission to reach that host when you save.
 
 ## 5. What the wallet checks on every reply
 
-The prover is not trusted to be correct, only to be yours. The core (`finish_proof` in
+The prover is not trusted to be correct, and it need not be yours. The core (`finish_proof` in
 `core/crates/wallet-core`) checks every reply before anything is submitted, in this order:
 
 1. the reply opens under the key this job was sealed with;
@@ -144,13 +152,16 @@ The prover is not trusted to be correct, only to be yours. The core (`finish_pro
    binding.
 
 A reply that fails any of these never reaches the node: the send ends with a definite error and
-nothing was submitted. Two more rules hold before a job is ever built: a spend-key job goes only
-to a prover paired with `own=1`, and the spend key leaves the device only inside the sealed job,
-never in clear.
+nothing was submitted. Before a job is ever built the core also refuses a chain it cannot
+authorise a spend on (a bundle guest whose auth guest the node does not name, or names
+differently from this build's), and it holds, in its own code, the rule that a spend-key job — an
+older chain's — goes only to a prover paired with `own=1`; on a split-authorisation chain no
+spend-key job exists to send. The pending transaction the wallet keeps while the prover works
+already carries the authorisation proof and never the spend key or the viewing key.
 
 ## 6. The mobile apps
 
-Phase 1 lets a phone use a prover you run, too — but it must be reachable from the phone over TLS
+A phone can use a prover too — but it must be reachable from the phone over TLS
 (an `https://` address, §4): the desktop app's prover listens on its own computer only
 (`127.0.0.1`), which a phone cannot reach, so a phone pairs with your own `rand-prover` behind a
 TLS-terminating proxy. Plain `http://` is accepted only for `localhost`/`127.0.0.1`, which on a
@@ -166,28 +177,31 @@ phone means the phone itself (in practice, the simulator or emulator during deve
    success it says **Paired** with the fingerprint — check it against the one your prover shows.
    The token is kept in the Keychain (iOS) or the encrypted key vault (Android), beside the spend
    key, never in the app's settings; there is no password step, because those stores are already
-   locked to the device. A link without `own=1` is saved but never sent a job ("Saved; not usable
-   in this build").
-4. Settings then reads "Proofs are made by: My own prover · host:port", its fingerprint, and a
-   status line such as `Answering · 0 of 8 in its queue.` **Forget this prover** removes the
-   pairing and its token; removing the wallet from the phone removes them too.
+   locked to the device. A link without `own=1` is paired too, and shown with what such a prover
+   can read.
+4. Settings then reads "Proofs are made by: My own prover · host:port" (or "Paired prover", for
+   a link not marked own), its fingerprint, and a status line such as `Answering · 0 of 8 in its
+   queue.` **Forget this prover** removes the pairing and its token; removing the wallet from the
+   phone removes them too.
 
 A phone with enough memory for a proof (about 8 GB) keeps proving for itself; the prover is used
 only when it cannot. Then the review step says the paired prover will make the proof, and
-**Send** checks that the prover answers with the paired key and takes a spend-key job before it
-builds anything — if not, the send stops with the reason and nothing is sent. While the proof is
-made the proving screen reads `Waiting at position N on host:port`, then `Proving on host:port…`;
+**Send** checks that the prover answers with the paired key, takes a viewing-key job and charges
+nothing before it builds anything — if not, the send stops with the reason and nothing is sent.
+The phone makes the authorisation proof itself first (`Authorising the spend on this device…`),
+then the proving screen reads `Waiting at position N on host:port`, then `Proving on host:port…`;
 the reply is checked exactly as in §5 before the transaction is submitted. The mobile apps have
 no Withdraw screen, so only transfers go through the prover.
 
 The job lives only in the running app (on Android, in its proving service): if the system kills
 the app mid-proof, that job is lost and nothing is sent — send again.
 
-## 7. Phase 2
+## 7. Fees
 
-Phase 2 needs a chain cut. The wallet will make a small authorisation proof itself and send the
-prover a job that carries the **viewing key** instead of the spend key, so a prover can no longer
-spend and the wallet can offer **any** prover you pair, not only your own — with a fee line when
-the prover charges one. It is not private: a prover holding the viewing key can read the wallet's
-whole history, which is what the second warning in §2 says. To keep your history private, run
-your own.
+The fullnode's `rand-prover` can quote a fee (`rand-prover run --fee <RAND> --fee-address …`),
+paid by one extra RAND output inside the bundle it proves. **This wallet does not pay prover
+fees** in this release: paying one changes which notes a transfer selects and what the review step
+shows, in every shell. A prover that quotes a fee is not offered as a way to prove (Settings and
+the send both say so), and one that starts charging between the pairing and a job is refused
+before the job is built; the prover's own refusal of an unpaid job (`-32006`) is reported in the
+same words. Pair a prover that charges nothing, or run your own.

@@ -121,9 +121,10 @@
  * with the core's own sentence before any work is done.
  *
  * `send.canProve()` → `{ok, reason?, via?}`. The device is asked first; where it cannot prove (the
- * wasm shells: the proof needs ~5.7 GB and wasm32 stops at 4 GiB; a desktop without the memory) a
- * prover the user paired **as their own** that answers `prover.probe()` makes it `{ok: true, via:
- * 'prover'}`. `ok: false` means neither can; `reason` is shown to the user verbatim, so it is
+ * wasm shells: the proof needs ~6 GB and wasm32 stops at 4 GiB; a desktop without the memory) the
+ * paired prover — the user's own or not, since split authorisation — that answers
+ * `prover.probe()`, charges no fee and takes a job this wallet can send it makes it `{ok: true,
+ * via: 'prover'}`. `ok: false` means neither can; `reason` is shown to the user verbatim, so it is
  * written for them, not for a log (the wasm shells' names both ways out: pair a prover, or use the
  * desktop app). It may ask the paired prover, never the node. **A shell whose `canProve()` is
  * false never simulates a send**: `send.send` rejects there, before anything is selected, whatever
@@ -144,9 +145,11 @@
  *    `'selecting' | 'witness' | 'proving' | 'submitting' | 'confirming'`. **The phase is how the UI
  *    decides what a failure means** (see the rejection fields below), so a backend must report
  *    `'submitting'` before it hands the transaction to the node, not after. `detail` is OPTIONAL
- *    and today only accompanies `'proving'` on a paired prover: `{position, prover}` while the job
- *    waits in its queue (1-based), `{prover}` while it is being proved — `prover` the pairing's
- *    name. A screen that reads one argument sees exactly what it always did.
+ *    and today only accompanies `'proving'` on a paired prover: `{prover, authorising: true}`
+ *    while this device makes the auth proof (split authorisation: from the spend key, before any
+ *    job exists — seconds natively, about half a minute in a browser), then `{position, prover}`
+ *    while the job waits in the prover's queue (1-based), `{prover}` while it is being proved —
+ *    `prover` the pairing's name. A screen that reads one argument sees exactly what it always did.
  *  - While a remote proof is pending (see `send.pending?`), `send.send` rejects `definite` with
  *    "A proof is still pending — resume or cancel it." rather than start a second one.
  *  - `options` is OPTIONAL and today carries one OPTIONAL field:
@@ -307,7 +310,7 @@
  *       unaffected, which is why it is reported rather than folded into `enabled`.
  *     · `bridge.canWithdraw()` → `{ok, reason?, via?}`, in the same shape and with the same rules as
  *       `send.canProve()`. It asks two questions in a fixed order: can this device prove at all (a
- *       burn is ONE bundle proof, the same one a transfer is — ~5.7 GB, about two minutes;
+ *       burn is ONE bundle proof, the same one a transfer is — ~6.2 GB, about two minutes;
  *       the answer is `send.canProve()`'s own sentence, verbatim), and is the bridge enabled. Both
  *       must pass. On a wasm shell with no paired prover the first is false, so this is too, and no
  *       node is asked; with one, the burn is proved by the prover exactly as a transfer is.
@@ -329,21 +332,27 @@
  *       exactly as `send.send`'s do, and **it refuses exactly what `estimate` refuses, before a
  *       proof starts** — the two run one shared list, because a gate on one and not the other is
  *       a proof spent on a transaction the chain was always going to refuse.
- *  - `prover?` — a whole OPTIONAL GROUP, delegated proving (spec 2026-09-28, Phase 1): a prover
- *    the user runs (the desktop app's, or `rand-prover` on their own machine) proves for a device
- *    that cannot. Phase 1 sends a spend-key job only to a pairing whose link says `own`.
+ *  - `prover?` — a whole OPTIONAL GROUP, delegated proving (spec 2026-09-28, Phases 1 and 2): a
+ *    paired prover makes the BUNDLE proof for a device that cannot. Since split authorisation
+ *    (bundle guest v3, every chain since 17) the job carries the wallet's **viewing key** and a
+ *    salt — the prover can read the wallet's whole history and cannot spend — so it may be any
+ *    prover, the user's own or somebody else's; the spend key stays on the device, which makes the
+ *    small auth proof itself inside the core. On an older chain the job carries the spend key and
+ *    goes only to a pairing whose link says `own`; the core, not the shell, decides which
+ *    (`chain_guests`). A prover that quotes a fee is not used: this build pays none.
  *     · `prover.preview(link)` → `{url, fingerprint, own, warning?}`: the link read by the core and
  *       held to the URL rule, nothing saved, nobody asked, no password. A screen calls it first, to
  *       learn the host to ask permission for (inside the same click) and to show the fingerprint.
- *       `warning` — a sentence for the user — is there exactly when `own` is false: Phase 1 never
- *       sends such a prover a job. Never carries the token. Rejects with the core's sentence.
+ *       `warning` — the core's `prover_history_warning`, a sentence for the user — is there exactly
+ *       when `own` is false: what that prover will be able to read. Never carries the token.
+ *       Rejects with the core's sentence.
  *     · `prover.pair(link, password, {name}?)` → the new `settings.prover`. The password is checked
  *       first (the token, key and URL are sealed under it together, as a second vault record); the `randprover:` link is
  *       parsed by the core; its URL must be https, or http to this machine only; the prover must
  *       answer `prover_info` with the key the link names, or nothing is stored. Re-pairing
  *       replaces the pairing in the vault and in the unlocked session. Rejects with a sentence.
- *       Before calling it a screen must show the spec §4.4 warning (this prover receives the spend
- *       key each time it proves; pair only a machine you run yourself).
+ *       Before calling it a screen must show the history warning (this prover will be able to
+ *       read this wallet's whole history; it cannot spend; run your own to keep it private).
  *     · `prover.probe()` → `{ok: true, queue: {depth, max, proving}, witnessKinds, fee, hcBundles}`
  *       or `{ok: false, reason}`; never rejects.
  *     · `prover.forget()` — removes `settings.prover`, the vault's token and the session's copy.
@@ -382,7 +391,8 @@
  *  - `platform.share?({title, text})` → the system share sheet, for the receive screen's payment
  *    link. Where it is missing no Share button is offered.
  *  - `platform.proverHost?` — the desktop app only (spec 2026-09-28 §5): the fullnode's prover
- *    service run inside the app on 127.0.0.1, one proof at a time, spend-key jobs accepted.
+ *    service run inside the app on 127.0.0.1, one proof at a time, viewing-key jobs only (it is
+ *    never sent a spend key: a wallet paired with it makes its own auth proof).
  *    `start()` / `stop()` / `status()` → `{running, addr, fingerprint, proving, error?, note?}`
  *    (`start` rejects with a sentence on too little memory or a busy port); `link()` → the
  *    `randprover:` link of its one `own` pairing, the same until `rotate()` → a new link (the old

@@ -31,7 +31,7 @@
 //
 // ---- what this shell cannot do ----
 //
-// A bundle proof peaks at ~5.7 GB (`wallet-core`'s own PROVER_PEAK_MEMORY_BYTES) and wasm32 stops
+// A bundle proof peaks at ~6.2 GB (`wallet-core`'s own PROVER_PEAK_MEMORY_BYTES) and wasm32 stops
 // at 4 GiB, so without a paired prover `send.canProve()` is `{ok: false}` and `send.send()` rejects
 // before anything is selected — for a transfer of RAND, for a transfer of an RPL token (which chain 14 admits, and
 // which is the same one bundle) and for a withdrawal alike. Everything else — keys, addresses,
@@ -45,10 +45,11 @@ export { UNLOCKED_SESSION_KEY, unlockDelayMs };
  * Shown to the user verbatim, so it is written for them (ui/backend.js on `send.canProve`). The
  * delegated-proving spec's sentence (§4.2): it names both ways out — a prover the user pairs, or
  * the desktop app. `backend-shared.js` answers `{ok: true, via: 'prover'}` instead of this when
- * a prover of the user's own is paired and answering.
+ * a prover is paired and answering. (Since split authorisation it need not be the user's own: the
+ * spend key stays in this browser, which makes the small auth proof itself.)
  */
-export const CANNOT_PROVE_REASON = 'This browser cannot make a transfer proof (it needs about 5.7 GB). '
-  + 'Pair your own prover in Settings, or send from the desktop app.';
+export const CANNOT_PROVE_REASON = 'This browser cannot make a transfer proof (it needs about 6.2 GB). '
+  + 'Pair a prover in Settings, or send from the desktop app.';
 
 async function canProve() {
   return { ok: false, reason: CANNOT_PROVE_REASON };
@@ -60,8 +61,8 @@ async function canProve() {
  * false` — refuses the way it always has, rather than silently starting to prove here.
  */
 async function executeSend(ctx) {
-  // Delegated proving: the proof is made by the user's own paired prover, not in this browser, so
-  // the rest of the transfer is exactly the desktop app's.
+  // Delegated proving: the bundle proof is made by the paired prover, not in this browser (which
+  // makes only the auth proof, in the core), so the rest of the transfer is the desktop app's.
   if (ctx && ctx.via === 'prover') return executeTransfer(ctx);
   const err = new Error((ctx && ctx.reason) || CANNOT_PROVE_REASON);
   err.definite = true;

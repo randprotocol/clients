@@ -89,12 +89,29 @@ export async function chainLimitsOf(client, signal) {
 
 const HC_BUNDLE_RE = /^[0-9a-f]{64}$/;
 
+/** `rand_status`'s `field` as a guest digest: `null` when absent, 64 lowercase hex, or a rejection. */
+function guestDigestOf(st, field) {
+  const raw = st && typeof st === 'object' ? st[field] : undefined;
+  if (raw === undefined || raw === null) return null;
+  const hc = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (!HC_BUNDLE_RE.test(hc)) {
+    const shown = typeof raw === 'string' ? raw.slice(0, 80) : typeof raw;
+    throw new NodeReplyError(`rand_status: ${field} is not 64 hex characters (${shown})`);
+  }
+  return hc;
+}
+
 /**
  * The chain's proof parameters from ONE `rand_status` on the verified client — what a proof must
  * be made with:
  *  - `hcBundle`: the chain's bundle guest, `rand_status.hc_bundle` (64 hex). `null` (a node that
  *    does not report it, or predates `rand_status`) leaves the core on this build's default guest;
  *    a value that is there but is not 64 hex rejects with a `NodeReplyError`.
+ *  - `hcAuth`: the chain's auth guest, `rand_status.hc_auth` (64 hex) — split authorisation,
+ *    fullnode v0.6.3: a transaction carries an auth proof this device makes from the spend key
+ *    beside a bundle proof that needs only the viewing key. `null` on a chain without it. The core
+ *    refuses, before anything is built, bundle guest v3 whose auth guest is `null` or not its own,
+ *    and an auth guest beside an older bundle guest; malformed rejects exactly as `hcBundle`.
  *  - `profile`: the FRI profile its validators verify, `rand_status.fri_profile`. Only `'test'`
  *    (a Test-profile chain — fast, insecure, tests only) is taken from the node; anything else,
  *    absent included, is `'production'`, which is every live chain.
@@ -104,31 +121,33 @@ const HC_BUNDLE_RE = /^[0-9a-f]{64}$/;
  * building anything.
  */
 export async function proofParamsOf(client, signal) {
-  if (!client || typeof client.status !== 'function') return { hcBundle: null, profile: 'production' };
+  if (!client || typeof client.status !== 'function') return { hcBundle: null, hcAuth: null, profile: 'production' };
   let st;
   try {
     st = await client.status(signal ? { signal } : undefined);
   } catch (err) {
-    if (err && err.code === -32601) return { hcBundle: null, profile: 'production' };
+    if (err && err.code === -32601) return { hcBundle: null, hcAuth: null, profile: 'production' };
     throw err;
   }
   // Absent is an older node: the build's default guest. PRESENT but malformed is a node this
   // wallet cannot read, refused up front like a bad `rand_getLimits` — never silently replaced by
   // the default guest, which on a chain that moved guests is a proof its validators refuse.
-  const raw = st && typeof st === 'object' ? st.hc_bundle : undefined;
-  let hcBundle = null;
-  if (raw !== undefined && raw !== null) {
-    const hc = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
-    if (!HC_BUNDLE_RE.test(hc)) {
-      const shown = typeof raw === 'string' ? raw.slice(0, 80) : typeof raw;
-      throw new NodeReplyError(`rand_status: hc_bundle is not 64 hex characters (${shown})`);
-    }
-    hcBundle = hc;
-  }
   return {
-    hcBundle,
+    hcBundle: guestDigestOf(st, 'hc_bundle'),
+    hcAuth: guestDigestOf(st, 'hc_auth'),
     profile: st && st.fri_profile === 'test' ? 'test' : 'production',
   };
+}
+
+/**
+ * The two guest fields of a `prove_*` / `prepare_*` request. Neither, when the node names no
+ * bundle guest (the core then proves for the chain its defaults describe). Otherwise both, with
+ * `hc_auth` sent even when `null`: "this chain names no auth guest" is what the core must hear to
+ * refuse a v3 bundle guest it could not authorise a spend for.
+ */
+function guestFields(hcBundle, hcAuth) {
+  if (!hcBundle && !hcAuth) return {};
+  return { ...(hcBundle ? { hc_bundle: hcBundle } : {}), hc_auth: hcAuth ?? null };
 }
 
 /**
@@ -331,6 +350,7 @@ export function coreApi(core) {
     // Delegated proving (plan 2026-09-28): the same build, sealed to a paired prover instead of
     // proved here (`{sealed_hex, pending, expected}`; `pending` carries no spend key), and the
     // prover's reply opened, checked and verified into the result `prove_*` would have returned.
+    chainGuests: (guests) => call('chain_guests', guests || {}),
     prepareTransfer: (req) => call('prepare_transfer', req),
     prepareBurn: (req) => call('prepare_burn', req),
     finishProof: (pending, reply_hex) => call('finish_proof', { pending, reply_hex }),
@@ -1022,7 +1042,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    * Both groups' witnesses come from ONE `anchorAndWitnesses` call, because `prove_transfer` takes
    * a single `anchor_height`/`anchor_root` and the bundle is folded against one root.
    *
-   * A wasm shell reaches it only with a paired prover: a bundle proof peaks at ~5.7 GB and wasm32
+   * A wasm shell reaches it only with a paired prover: a bundle proof peaks at ~6.2 GB and wasm32
    * stops at 4 GiB, so the proof is made by `prove` — the backend's hook that seals the witness to
    * the prover through the core's `prepare_transfer` and returns `finish_proof`'s result, the same
    * shape `prove_transfer` returns. Without the hook the core proves here. Either way the request
@@ -1051,7 +1071,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     // been proved. The core refuses a non-empty memo on a chain that reports `null`, also before
     // proving (wallet-core's `envelope_format_for`).
     const { envelopeBytes, maxProofBytes, bundleGasLimit } = await chainLimitsOf(client, signal);
-    const { hcBundle, profile } = await proofParamsOf(client, signal);
+    const { hcBundle, hcAuth, profile } = await proofParamsOf(client, signal);
     const { anchor, paths } = await anchorAndWitnesses(client, [...inputs, ...feeInputs], signal);
     // A remote prover reports its own 'prove' phases (queued, proving); the device reports one.
     if (typeof prove !== 'function') onPhase?.('prove');
@@ -1076,12 +1096,13 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       // Chain 18's pinned bundle gas (`null` without a gas section): the core refuses a chain
       // whose pin its guest does not declare, before anything is built.
       bundle_gas_limit: bundleGasLimit,
-      // The chain's guest, for the device's proof and the prover's alike: a proof of this build's
-      // default guest would be refused by a chain that pins another.
-      ...(hcBundle ? { hc_bundle: hcBundle } : {}),
+      // The chain's guests, for the device's proof and the prover's alike: a proof of this build's
+      // default guest would be refused by a chain that pins another, and on a split-authorisation
+      // chain the core makes the auth proof here, from the spend key, whoever proves the bundle.
+      ...guestFields(hcBundle, hcAuth),
     };
     const res = typeof prove === 'function'
-      ? await prove({ kind: 'transfer', request, maxProofBytes, hcBundle, meta: { to, memo: String(memo ?? '') }, onPhase, signal })
+      ? await prove({ kind: 'transfer', request, maxProofBytes, hcBundle, hcAuth, meta: { to, memo: String(memo ?? '') }, onPhase, signal })
       : await c.proveTransfer(request);
     return completeSend(spendKey, res, { to, memo, wait, onPhase, signal, client }, s);
   }
@@ -1185,7 +1206,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     // A burn carries no memo, but its change and dummies are sealed at the chain's size all the
     // same (see `envelopeBytesOf`).
     const { envelopeBytes, maxProofBytes, bundleGasLimit } = await chainLimitsOf(client, signal);
-    const { hcBundle, profile } = await proofParamsOf(client, signal);
+    const { hcBundle, hcAuth, profile } = await proofParamsOf(client, signal);
     // One fetch for both groups, so the whole bundle is folded against the same root.
     const { anchor, paths } = await anchorAndWitnesses(client, [...assetInputs, ...feeInputs], signal);
     if (typeof prove !== 'function') onPhase?.('prove');
@@ -1207,10 +1228,10 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       profile,
       envelope_bytes: envelopeBytes,
       bundle_gas_limit: bundleGasLimit,
-      ...(hcBundle ? { hc_bundle: hcBundle } : {}),
+      ...guestFields(hcBundle, hcAuth),
     };
     const res = typeof prove === 'function'
-      ? await prove({ kind: 'burn', request, maxProofBytes, hcBundle, meta: {}, onPhase, signal })
+      ? await prove({ kind: 'burn', request, maxProofBytes, hcBundle, hcAuth, meta: {}, onPhase, signal })
       : await c.proveBurn(request);
     return completeBurn(spendKey, res, { wait, onPhase, signal, client }, s);
   }

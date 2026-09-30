@@ -199,7 +199,7 @@ test('an empty wallet has one asset, no notes and cannot prove', { skip }, async
 
   const prove = await backend.send.canProve();
   assert.equal(prove.ok, false);
-  assert.match(prove.reason, /5.7 GB/);
+  assert.match(prove.reason, /6.2 GB/);
   await assert.rejects(() => backend.send.send({ asset: 0, to: 'rand1x', amount: '1' }, () => {}), (err) => err.definite === true);
 });
 
@@ -239,16 +239,25 @@ test('BUNDLE_INPUTS matches what the real core will actually select', { skip }, 
 // ------------------------------------------------------------------------- the chain-14 core ---
 
 test('the artefact this wallet loads is built for chain 19 on the hidden-asset bundle', { skip }, async () => {
+  const { PROVER_WARNING } = await import('../../../ui/screens/settings.js');
   // The wasm is git-ignored build output, so "is it the current one" is a real question: a stale
   // artefact would answer every offline call above perfectly while proving against a guest the
   // chain no longer runs. These are the constants that moved, and a stale build fails here.
   const core = await realCore();
   const k = await core.call('version');
   assert.equal(k.default_chain_id, 19, 'the core has described chain 19 since 2026-09-30 (18 from e830acc, 16 from d3e3ada before that)');
-  // Fullnode v0.6.6 (constraint set 8, the chain-18 build): every bundle proof declares the guest's
-  // ceiling, which chain 18's genesis pins; the chains on which a memo claim is never believed.
-  assert.equal(k.chain_build, 'd742a9b');
+  // Fullnode v0.6.7 (constraint set 8 and split authorisation — the build chains 18 and 19 run):
+  // every bundle proof declares the guest's ceiling, which the genesis pins; the chains on which a
+  // memo claim is never believed; the two guests chain 18's `rand_status` names (2026-09-30).
+  assert.equal(k.chain_build, '86941a1');
   assert.equal(k.bundle_gas_limit, 20479);
+  assert.equal(k.hc_bundle, '60af094acfe65d85fdb18fb3d06cf9085dcf28c96e59e87f1ee527226e6e3fce', 'bundle guest v3');
+  assert.equal(k.hc_auth, '1e4e347f44cf86750b30a9a4bdf9ec9256efe353d4ff8017451eca7d195639c1', 'the auth guest');
+  assert.equal(k.split_authorisation, true);
+  assert.deepEqual(k.prover_witness_kinds, ['viewing_key', 'spend_key']);
+  // The sentence the settings screen shows before a pairing is saved is the core's own.
+  assert.equal(k.prover_history_warning, PROVER_WARNING);
+  assert.equal(k.prover_peak_memory_bytes, 6200000000);
   assert.deepEqual(k.legacy_envelope_chain_ids, [14, 15, 16, 17]);
   assert.equal(k.rpl_transfer, true, 'a token transfer is admitted (since chain 14)');
   assert.equal(k.transfer_proofs, 1);

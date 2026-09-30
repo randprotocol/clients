@@ -537,8 +537,10 @@ test('a copied key is dropped a minute later, and the panel goes with it', async
 // Delegated proving, Phase 1 (spec 2026-09-28 §4.4). The pairing link carries a secret token and
 // the save carries the wallet's password: neither may reach the page's markup or `ctx.state`.
 
-const PROVER_WARNING = 'This prover will receive your spend key each time it makes a proof. Anyone who '
-  + 'controls it can spend your funds. Pair only a machine you run yourself.';
+// The core's `prover_history_warning`, as the screen mirrors it (web/wallet's integration test holds
+// the real core's sentence equal to the screen's).
+const PROVER_WARNING = 'This prover will be able to read this wallet\'s whole history — every payment '
+  + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.';
 const PROVER_TOKEN = '7a'.repeat(32);
 const proverLink = ({ url = 'https://prover.example', own = true } = {}) =>
   `randprover:KEY?url=${encodeURIComponent(url)}&token=${PROVER_TOKEN}${own ? '&own=1' : ''}`;
@@ -559,7 +561,7 @@ test('the Prover section is there only when the backend has the prover group', a
   assert.equal([...root.querySelectorAll('.section-title')].some((el) => el.textContent === 'Prover'), false);
 });
 
-test('the Prover section says the device proves, and shows the Phase 1 warning verbatim above the password', async (t) => {
+test('the Prover section says the device proves, and shows the history warning verbatim above the password', async (t) => {
   const { root } = await settings(t);
   const section = root.querySelector('[data-role="prover-form"]').closest('.card');
   assert.match(section.querySelector('[data-role="prover-state"]').textContent, /This device/);
@@ -647,17 +649,32 @@ test('a wrong password is the engine\'s refusal, and the password field is empti
   assert.match(root.querySelector('[data-role="prover-state"]').textContent, /This device/);
 });
 
-test('a link that is not marked own relays the engine\'s Phase 1 warning', async (t) => {
+test('a link that is not marked own is paired, and the engine\'s history warning is relayed', async (t) => {
+  // Split authorisation: such a prover makes the proofs too (the job carries the viewing key), so
+  // the screen says where proofs now go AND what that prover can then read — never "my own".
   const { app, root } = await settings(t);
   submitProver(root, { link: proverLink({ own: false }) });
   await app.idle();
   const status = root.querySelector('[data-role="prover-status"]').textContent;
-  assert.match(status, /does not mark the prover as your own/);
-  assert.match(status, /Saved; not usable in this build/);
-  assert.doesNotMatch(status, /Paired|go to/, 'no banner says proofs now go to this prover');
-  const state = root.querySelector('[data-role="prover-state"]').textContent;
-  assert.match(state, /Paired prover \(not usable in this build\)/);
-  assert.doesNotMatch(state, /My own prover/, 'a pairing not marked own is called the user\'s own');
+  assert.match(status, /Paired — this prover can read your history/);
+  assert.match(status, /Proofs this device cannot make go to/);
+  assert.ok(status.includes(PROVER_WARNING), 'the engine\'s warning, verbatim');
+  const state = root.querySelector('[data-role="prover-state"]');
+  assert.match(state.textContent, /Paired prover · /);
+  assert.doesNotMatch(state.textContent, /My own prover|not usable/, 'a pairing not marked own is called the user\'s own');
+  assert.match(state.querySelector('[data-role="prover-not-own"]').textContent, /can read this wallet's whole history\. It cannot spend\./);
+});
+
+test('a pairing marked own carries no history note under it', async (t) => {
+  const { app, root } = await settings(t);
+  submitProver(root, { link: proverLink({ own: true }) });
+  await app.idle();
+  const status = root.querySelector('[data-role="prover-status"]').textContent;
+  assert.match(status, /PairedProofs this device cannot make go to/);
+  assert.doesNotMatch(status, /read your history/);
+  const state = root.querySelector('[data-role="prover-state"]');
+  assert.match(state.textContent, /My own prover · /);
+  assertGone(state.querySelector('[data-role="prover-not-own"]'), 'a history note under the user\'s own prover');
 });
 
 test('an empty link empties the password field too', async (t) => {

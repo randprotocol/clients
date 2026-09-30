@@ -105,29 +105,36 @@ function networkMarkup(settings) {
     <div data-role="rescan-slot"></div>`);
 }
 
-// ---- the prover (delegated proving, spec 2026-09-28 §4.4) ----
-// Verbatim from the spec, Phase 1: shown before a pairing is saved, as part of the form, above the
-// password — not a dismissible notice.
-export const PROVER_WARNING = 'This prover will receive your spend key each time it makes a proof. '
-  + 'Anyone who controls it can spend your funds. Pair only a machine you run yourself.';
+// ---- the prover (delegated proving, spec 2026-09-28 §4.4, Phase 2) ----
+// What a paired prover learns, since split authorisation (every chain since 17): the job carries
+// the wallet's viewing key, never its spend key. The core's own sentence (`version`'s
+// `prover_history_warning`; web/wallet's integration test holds the two equal), shown before a
+// pairing is saved, as part of the form, above the password — not a dismissible notice.
+export const PROVER_WARNING = 'This prover will be able to read this wallet\'s whole history — every payment '
+  + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.';
+/** Under a pairing that is not the user's own: what that prover can do, in one line. */
+export const PROVER_NOT_OWN_NOTE = 'Not marked as your own: it can read this wallet\'s whole history. It cannot spend.';
 
 /** Who makes this wallet's proofs: this device, or the paired prover. Every field is text. */
 function proverStateMarkup(prover) {
   if (prover && prover.mode === 'remote') {
-    // A pairing whose link was not marked own is stored but never sent a job in Phase 1: it is
-    // not "my own prover", and this line must not say it makes the proofs.
-    const who = prover.own === true
+    // "My own" only for a pairing whose link said so: a prover somebody else runs makes the
+    // proofs too (the job carries the viewing key), and the line under it says what it sees.
+    const own = prover.own === true;
+    const who = own
       ? h`My own prover · ${prover.name || prover.url || ''}`
-      : h`Paired prover (not usable in this build) · ${prover.name || prover.url || ''}`;
+      : h`Paired prover · ${prover.name || prover.url || ''}`;
+    const note = own ? '' : raw(h`<p class="caption" data-role="prover-not-own">${PROVER_NOT_OWN_NOTE}</p>`);
     return h`
       <div class="kv"><span class="k">Proofs are made by</span><span class="v">${raw(who)}</span></div>
       <div class="kv"><span class="k">Fingerprint</span><span class="v mono">${prover.fingerprint || ''}</span></div>
+      ${note}
       <p class="caption" data-role="prover-probe">Asking the prover…</p>
       <button class="btn block" type="button" data-role="forget-prover">Forget this prover</button>`;
   }
   return h`
     <div class="kv"><span class="k">Proofs are made by</span><span class="v">This device</span></div>
-    <p class="caption">Where this device cannot make a proof, pair a prover you run yourself — the desktop app, or rand-prover on your own machine.</p>`;
+    <p class="caption">Where this device cannot make a proof, pair a prover. Your spend key stays here either way; a prover you run yourself — the desktop app, or rand-prover on your own machine — also keeps your history to yourself.</p>`;
 }
 
 // Offered only where the backend has the (optional) `prover` group. The link is never put in
@@ -145,9 +152,9 @@ function proverMarkup(settings, platform, host = '') {
         <span class="hint" id="settings-prover-link-hint">The randprover: link your prover shows. It carries a secret — paste it here and nowhere else.</span>
       </div>
       ${scan}
-      <div class="banner negative" data-role="prover-warning">
+      <div class="banner warn" data-role="prover-warning">
         <span class="ic">${raw(icons.warning())}</span>
-        <span><span class="banner-title">Your spend key goes to this prover</span>${PROVER_WARNING}</span>
+        <span><span class="banner-title">A prover sees your history</span>${PROVER_WARNING}</span>
       </div>
       <div class="field">
         <label class="label" for="settings-prover-password">Password</label>
@@ -171,7 +178,7 @@ function proverHostMarkup() {
         <input type="checkbox" name="proverHost">
         <span>Prove for my other devices</span>
       </label>
-      <p class="caption">This computer makes the proofs for your browser extension or web wallet on this machine, one at a time. It listens on this computer only, and it receives the spend key of every wallet you pair with it.</p>
+      <p class="caption">This computer makes the proofs for your browser extension or web wallet on this machine, one at a time. It listens on this computer only. A wallet you pair with it sends it its viewing key — enough to read that wallet's history, never to spend from it.</p>
       <p class="caption" data-role="prover-host-status">Off.</p>
       <div class="stack" data-role="prover-host-link" hidden>
         <div class="qr qr-large"><canvas data-role="prover-qr" data-ec-level="L" aria-label="QR code of the pairing link"></canvas></div>
@@ -600,12 +607,13 @@ registerScreen('settings', {
       proverLinkInput.value = ''; // the token goes with it
       settings = { ...settings, prover: paired };
       paintProverState();
-      // The engine's own sentence, relayed: Phase 1 never sends a job to a prover not marked own,
-      // so such a pairing is reported as saved, not as where proofs now go.
+      // A prover that is not the user's own makes the proofs too; the engine's sentence (the
+      // core's) says once more what it can then see, beside where the proofs now go.
+      const where = `Proofs this device cannot make go to ${paired.name || seen.url}. Its fingerprint is ${paired.fingerprint || seen.fingerprint} — check that the prover shows the same.`;
       if (seen.warning) {
-        showStatus('warn', 'Saved; not usable in this build', seen.warning, proverStatusEl);
+        showStatus('warn', 'Paired — this prover can read your history', `${where} ${seen.warning}`, proverStatusEl);
       } else {
-        showStatus('positive', 'Paired', `Proofs this device cannot make go to ${paired.name || seen.url}. Its fingerprint is ${paired.fingerprint || seen.fingerprint} — check that your prover shows the same.`, proverStatusEl);
+        showStatus('positive', 'Paired', where, proverStatusEl);
       }
     });
 

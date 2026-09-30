@@ -38,7 +38,7 @@ export { UNLOCKED_SESSION_KEY, unlockDelayMs };
 /**
  * How much memory a machine must report before this wallet will attempt a bundle proof.
  *
- * The proof itself peaks at ~5.7 GB (`wallet-core`'s own `PROVER_PEAK_MEMORY_BYTES`). 8 GiB is
+ * The proof itself peaks at ~6.2 GB (`wallet-core`'s own `PROVER_PEAK_MEMORY_BYTES`). 8 GiB is
  * that plus room for the operating system, the webview and whatever else the user has open: a
  * machine that only just clears the peak would swap for the whole proof, or be killed part-way
  * through — and a transfer killed after `rand_sendTransaction` is the one outcome this wallet
@@ -53,9 +53,9 @@ function saidGiB(gib) {
 
 export function cannotProveReason(gib) {
   if (!Number.isFinite(gib) || gib <= 0) {
-    return 'Proving needs about 5.7 GB of free memory, and this computer did not report how much it has.';
+    return 'Proving needs about 6.2 GB of free memory, and this computer did not report how much it has.';
   }
-  return `Proving needs about 5.7 GB of free memory; this computer reports ${saidGiB(gib)} GB.`;
+  return `Proving needs about 6.2 GB of free memory; this computer reports ${saidGiB(gib)} GB.`;
 }
 
 function makeCanProve(systemMemoryGiB) {

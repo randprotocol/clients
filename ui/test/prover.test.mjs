@@ -1,8 +1,13 @@
-// Delegated proving, Phase 1 (plan docs/superpowers/plans/2026-09-28-delegated-proving-phase1.md,
-// Task 3): the engine's `prover` group, the pairing token in the vault, a send proved by a paired
-// prover, and a popup closed mid-proof resuming the same job — against the real shared backend
-// (`makeWasmBackend`, whose device can never prove) with the stub core and a stub fetch that plays
-// both the node and the prover.
+// Delegated proving (plan docs/superpowers/plans/2026-09-28-delegated-proving-phase1.md, Task 3,
+// and Phase 2 — split authorisation): the engine's `prover` group, the pairing token in the vault,
+// a send proved by a paired prover, and a popup closed mid-proof resuming the same job — against
+// the real shared backend (`makeWasmBackend`, whose device can never prove) with the stub core and
+// a stub fetch that plays both the node and the prover.
+//
+// The stub chain is a split-authorisation chain, as every live chain is (`rand_status` names
+// bundle guest v3 and the auth guest), and the stub prover is a v0.6.7 one started without
+// `--accept-spend-key`: the job is a viewing-key job, and any paired prover may have it. The older
+// chain — a spend-key job, to a prover paired as the user's own and no other — has its own tests.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeWasmBackend, CANNOT_PROVE_REASON } from '../engine/backend-wasm.js';
@@ -14,11 +19,15 @@ import {
 import {
   stubCore, stubFetch, mapStorage, stubPlatform, assertKeyNeverLeaked,
   PASSWORD, ADDRESS, SPEND_KEY, PROVER_URL, PROVER_TOKEN, PROVER_REPLY, PROVED_TX_HASH, SEALED_JOB,
-  proverLink, proverInfo, proverEk, proverFingerprint,
+  proverLink, proverInfo, proverEk, proverFingerprint, HC_V2, HC_V3, HC_AUTH, CORE_VERSION,
 } from './backend-fixtures.mjs';
 
 const ROOT = '1b'.repeat(32);
-const HC_V2 = 'f0'.repeat(32);
+/** `rand_status` of a split-authorisation chain, and of a chain that predates it. */
+const STATUS_V3 = { height: 100, peer_count: 3, syncing: false, hc_bundle: HC_V3, hc_auth: HC_AUTH };
+const STATUS_OLD = { height: 100, peer_count: 3, syncing: false, hc_bundle: HC_V2, hc_auth: null };
+/** A prover that also takes spend-key jobs (`rand-prover run --accept-spend-key`). */
+const OWN_PROVER_INFO = () => proverInfo('KEY', { witnessKinds: ['viewing_key', 'spend_key'] });
 const NOTE = {
   index: 0, note: '00'.repeat(112), cm: '0b'.repeat(32), nf: '0c'.repeat(32),
   amount: '5000000000', asset: 0, time: 7, from: '00'.repeat(32), height: 7, spent: false, pending: null,
@@ -31,7 +40,7 @@ function sendableFetch(table = {}) {
     rand_getWitness: () => ({ index: 0, root: ROOT, path: Array.from({ length: 32 }, () => '00'.repeat(32)) }),
     rand_sendTransaction: () => PROVED_TX_HASH,
     rand_getTransaction: () => ({ height: 101 }),
-    rand_status: () => ({ height: 100, peer_count: 3, syncing: false, hc_bundle: HC_V2 }),
+    rand_status: () => ({ ...STATUS_V3 }),
     rand_getLimits: () => ({ envelope_bytes: null, max_proof_bytes: 2097152 }),
     ...table,
   });
@@ -96,8 +105,8 @@ test('pairing_stores_the_token_in_the_vault_not_in_settings', async () => {
   assert.equal(vault.kdf, 'pbkdf2-sha256');
   assert.equal(vault.iter, 600000);
   assert.deepEqual(JSON.parse(await decryptSecret(PASSWORD, vault)), {
-    token: PROVER_TOKEN, kemEk: proverEk(), url: PROVER_URL, fingerprint: proverFingerprint(),
-  }, 'the vault record holds the token, the key and the URL together');
+    token: PROVER_TOKEN, kemEk: proverEk(), url: PROVER_URL, fingerprint: proverFingerprint(), own: true,
+  }, 'the vault record holds the token, the key, the URL and whether the link said own, together');
   assert.equal(env.storage.sessionMap.get('unlocked').prover.token, PROVER_TOKEN, 'the unlocked session carries the token');
 
   // Only the prover's info was asked, and neither secret went anywhere but the core.
@@ -134,10 +143,12 @@ test('preview reads a link without saving, asking, or needing the password', asy
   assert.deepEqual(seen, { url: PROVER_URL, fingerprint: proverFingerprint(), own: true });
   assert.equal(JSON.stringify(seen).includes(PROVER_TOKEN), false, 'the token came back from preview');
 
-  // Not own: the pairing is described, and the engine says why Phase 1 will not use it.
+  // Not own: the pairing is described, with what such a prover learns — the core's sentence.
   const other = await env.backend.prover.preview(proverLink({ own: false }));
   assert.equal(other.own, false);
-  assert.match(other.warning, /own/);
+  assert.equal(other.warning, CORE_VERSION.prover_history_warning);
+  assert.match(other.warning, /whole history/);
+  assert.match(other.warning, /It cannot spend/);
 
   // The core's refusal and the URL rule are the engine's sentences.
   await assert.rejects(() => env.backend.prover.preview('randpay:nope'), /randprover/);
@@ -216,24 +227,167 @@ test('the_wasm_reason_names_the_prover_option', async () => {
   const env = build({ fetch: sendableFetch({ rand_getBridgeState: () => ({ enabled: true, emitters: {}, assets: [] }) }) });
   const answer = await env.backend.send.canProve();
   assert.deepEqual(answer, { ok: false, reason: CANNOT_PROVE_REASON });
-  assert.match(answer.reason, /Pair your own prover in Settings/);
+  assert.match(answer.reason, /Pair a prover in Settings/);
   assert.match(answer.reason, /desktop app/);
-  assert.match(answer.reason, /5\.7 GB/);
+  assert.match(answer.reason, /6\.2 GB/);
   assert.deepEqual(await env.backend.bridge.canWithdraw(), { ok: false, reason: CANNOT_PROVE_REASON });
 });
 
-test('a_spend_key_job_is_built_only_for_an_own_prover', async () => {
+test('a_viewing_key_job_goes_to_a_prover_that_is_not_the_users_own', async () => {
+  // Split authorisation: the job carries the viewing key, so a prover paired from a link without
+  // own=1 — somebody else's machine — may make the proof. The pairing says so in the vault, and
+  // the core is told, so it could never be handed a spend-key witness by mistake.
   const env = await sendableWallet();
   await env.backend.prover.pair(proverLink({ own: false }), PASSWORD);
   assert.equal((await env.backend.settings.get()).prover.own, false);
-  assert.deepEqual(await env.backend.send.canProve(), { ok: false, reason: CANNOT_PROVE_REASON });
+  assert.equal(JSON.parse(await decryptSecret(PASSWORD, env.storage.local.get('proverToken'))).own, false);
+  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover' });
+  const out = await env.backend.send.send(SEND, () => {});
+  assert.equal(out.hash, PROVED_TX_HASH);
+  const [[, prepared]] = coreCalled(env, 'prepare_transfer');
+  assert.deepEqual(prepared.prover, { kem_ek: proverEk(), token: PROVER_TOKEN, own: false, fee: null, hc_bundle: HC_V3 });
+  assert.equal(prepared.hc_auth, HC_AUTH);
+  assert.equal('witness_kind' in prepared.prover, false, 'the witness kind is the core\'s decision, not a request field');
+  // The core was asked what this chain's guest takes before anything was built.
+  assert.deepEqual(coreCalled(env, 'chain_guests')[0][1], { hc_bundle: HC_V3, hc_auth: HC_AUTH });
+  assert.equal(count(env.fetch, 'prover_submit'), 1);
+  assertKeyNeverLeaked(env);
+});
+
+test('a_spend_key_job_is_built_only_for_an_own_prover', async () => {
+  // A chain WITHOUT split authorisation: its witness carries the spend key. A prover that is not
+  // the user's own is refused before the prover is asked anything and before the core builds.
+  const oldChain = { rand_status: () => ({ ...STATUS_OLD }), prover_info: OWN_PROVER_INFO };
+  const env = await sendableWallet({ fetch: sendableFetch(oldChain) });
+  await env.backend.prover.pair(proverLink({ own: false }), PASSWORD);
+  const asked = count(env.fetch, 'prover_info');
   await assert.rejects(() => env.backend.send.send(SEND, () => {}), (err) => {
     assert.equal(err.definite, true);
-    assert.equal(err.message, CANNOT_PROVE_REASON);
+    assert.match(err.message, /needs the spend key, which goes only to a prover paired as your own/);
     return true;
   });
   assert.equal(coreCalled(env, 'prepare_transfer').length, 0);
+  assert.equal(count(env.fetch, 'prover_info'), asked + 1, 'only canProve\'s probe asked the prover');
   assert.equal(count(env.fetch, 'prover_submit'), 0);
+  assert.equal(count(env.fetch, 'rand_sendTransaction'), 0);
+
+  // The user's own prover, on the same chain: the spend-key job, as Phase 1 built it.
+  const mine = await sendableWallet({ fetch: sendableFetch(oldChain) });
+  await mine.backend.prover.pair(proverLink({ own: true }), PASSWORD);
+  await mine.backend.send.send(SEND, () => {});
+  const [[, prepared]] = coreCalled(mine, 'prepare_transfer');
+  assert.deepEqual(prepared.prover, { kem_ek: proverEk(), token: PROVER_TOKEN, own: true, fee: null, hc_bundle: HC_V2 });
+  assert.equal(prepared.hc_auth, null, 'the node named no auth guest, and the core is told so');
+
+  // An own prover that does not take spend-key jobs (a v0.6.7 one without --accept-spend-key).
+  const plain = await sendableWallet({ fetch: sendableFetch({ rand_status: () => ({ ...STATUS_OLD }) }) });
+  await plain.backend.prover.pair(proverLink({ own: true }), PASSWORD);
+  await assert.rejects(() => plain.backend.send.send(SEND, () => {}), /does not take spend-key jobs/);
+  assert.equal(coreCalled(plain, 'prepare_transfer').length, 0);
+});
+
+test('a pairing made before the vault kept own is never sent a spend-key job', async () => {
+  // Phase 1 stored `{token, kemEk, url, fingerprint}`; whether the link said own lived only in the
+  // plaintext settings, which anything that can write local storage can rewrite. The sealed record
+  // is what decides, and one without the field reads "not own".
+  const env = await sendableWallet({ fetch: sendableFetch({ rand_status: () => ({ ...STATUS_OLD }), prover_info: OWN_PROVER_INFO }) });
+  await env.backend.prover.pair(proverLink({ own: false }), PASSWORD);
+  const settings = env.storage.local.get('settings');
+  settings.prover = { ...settings.prover, own: true };
+  env.storage.local.set('settings', settings);
+  await env.backend.wallet.lock();
+  await env.backend.wallet.unlock(PASSWORD);
+  assert.equal((await env.backend.settings.get()).prover.own, true, 'the display copy was tampered');
+  await assert.rejects(() => env.backend.send.send(SEND, () => {}), /only to a prover paired as your own/);
+  assert.equal(coreCalled(env, 'prepare_transfer').length, 0);
+  assert.equal(count(env.fetch, 'prover_submit'), 0);
+});
+
+test('a chain whose guests this wallet cannot prove for is refused before the prover is asked', async () => {
+  // Bundle guest v3 with no auth guest named, a foreign auth guest, and an auth guest beside an
+  // older bundle guest: the core's refusals, surfaced as a definite error, nothing built.
+  for (const [status, want] of [
+    [{ ...STATUS_V3, hc_auth: null }, /names no auth guest/],
+    [{ ...STATUS_V3, hc_auth: '99'.repeat(32) }, /update the wallet/],
+    [{ ...STATUS_OLD, hc_auth: HC_AUTH }, /misconfigured or lying/],
+  ]) {
+    const env = await sendableWallet({ fetch: sendableFetch({ rand_status: () => ({ ...status }) }) });
+    await env.backend.prover.pair(proverLink(), PASSWORD);
+    const asked = count(env.fetch, 'prover_info');
+    await assert.rejects(() => env.backend.send.send(SEND, () => {}), (err) => {
+      assert.equal(err.definite, true);
+      assert.match(err.message, want);
+      return true;
+    });
+    assert.equal(coreCalled(env, 'prepare_transfer').length, 0);
+    assert.equal(count(env.fetch, 'prover_info'), asked + 1, 'only canProve\'s probe asked the prover');
+    assert.equal(count(env.fetch, 'prover_submit'), 0);
+  }
+  // A malformed hc_auth is the node's reply this wallet cannot read.
+  const env = await sendableWallet({ fetch: sendableFetch({ rand_status: () => ({ ...STATUS_V3, hc_auth: 'zz' }) }) });
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  await assert.rejects(() => env.backend.send.send(SEND, () => {}), /rand_status: hc_auth is not 64 hex/);
+});
+
+test('a prover that charges a fee is not a way to prove, and is never sent a job', async () => {
+  const fee = { amount: '250000000', address: ADDRESS };
+  let quoted = null;
+  const env = await sendableWallet({ fetch: sendableFetch({ prover_info: () => proverInfo('KEY', { fee: quoted }) }) });
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover' });
+  // It starts charging: canProve says why it is no longer a route…
+  quoted = fee;
+  const answer = await env.backend.send.canProve();
+  assert.equal(answer.ok, false);
+  assert.match(answer.reason, /charges a fee of 250000000 RAND per proof, which this version of the wallet does not pay/);
+  // …and a prover that raised its price between the probe and the job is refused by the core,
+  // which is handed the fee the prover quoted at the moment the job was made.
+  let calls = 0;
+  const late = await sendableWallet({
+    fetch: sendableFetch({ prover_info: () => { calls += 1; return proverInfo('KEY', { fee: calls > 2 ? fee : null }); } }),
+  });
+  await late.backend.prover.pair(proverLink(), PASSWORD);
+  await assert.rejects(() => late.backend.send.send(SEND, () => {}), (err) => {
+    assert.equal(err.definite, true);
+    assert.match(err.message, /does not pay a prover's fee/);
+    return true;
+  });
+  assert.deepEqual(coreCalled(late, 'prepare_transfer')[0][1].prover.fee, fee);
+  assert.equal(count(late.fetch, 'prover_submit'), 0);
+  // A zero fee is no fee.
+  const free = await sendableWallet({ fetch: sendableFetch({ prover_info: () => proverInfo('KEY', { fee: { amount: '0', address: ADDRESS } }) }) });
+  await free.backend.prover.pair(proverLink(), PASSWORD);
+  assert.deepEqual(await free.backend.send.canProve(), { ok: true, via: 'prover' });
+  // And the prover's own refusal of an unpaid job (-32006) is a definite error in words.
+  const refused = await sendableWallet({
+    fetch: sendableFetch({ prover_submit: () => { throw Object.assign(new Error('the prover fee is not paid'), { code: -32006, data: { reason: 'no output pays this prover\'s fee address' } }); } }),
+  });
+  await refused.backend.prover.pair(proverLink(), PASSWORD);
+  await assert.rejects(() => refused.backend.send.send(SEND, () => {}), (err) => {
+    assert.equal(err.definite, true);
+    assert.match(err.message, /charges a fee, which this version of the wallet does not pay/);
+    return true;
+  });
+});
+
+test('a prover whose key changed since the pairing is not sent a job', async () => {
+  let key = 'KEY';
+  const env = await sendableWallet({ fetch: sendableFetch({ prover_info: () => proverInfo(key) }) });
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  // The route is decided on the paired key; the prover is then swapped before the job is made.
+  let calls = 0;
+  const swapped = build({
+    storage: env.storage, core: env.core,
+    fetch: sendableFetch({ prover_info: () => { calls += 1; return proverInfo(calls > 1 ? 'OTHER' : 'KEY'); } }),
+  });
+  await assert.rejects(() => swapped.backend.send.send(SEND, () => {}), (err) => {
+    assert.equal(err.definite, true);
+    assert.match(err.message, /different key/);
+    return true;
+  });
+  assert.equal(coreCalled(env, 'prepare_transfer').length, 0);
+  assert.equal(count(swapped.fetch, 'prover_submit'), 0);
+  key = 'KEY';
 });
 
 test('an own prover that answers makes canProve say yes, via the prover — on the desktop too', async () => {
@@ -259,7 +413,7 @@ test('an own prover that answers makes canProve say yes, via the prover — on t
   const silent = build({ storage: env.storage, core: env.core, fetch: sendableFetch({ prover_info: () => { throw Object.assign(new Error('down'), { code: -32000 }); } }) });
   const answer = await silent.backend.send.canProve();
   assert.equal(answer.ok, false);
-  assert.match(answer.reason, /Pair your own prover/);
+  assert.match(answer.reason, /Pair a prover/);
   assert.match(answer.reason, /prover is not available/);
 });
 
@@ -272,7 +426,7 @@ test('a_proof_is_made_on_the_chains_fri_profile', async () => {
   for (const [served, want] of [['test', 'test'], ['production', 'production'], [undefined, 'production'], ['weird', 'production']]) {
     const env = await sendableWallet({
       fetch: sendableFetch({
-        rand_status: () => ({ height: 100, peer_count: 3, syncing: false, hc_bundle: HC_V2, ...(served === undefined ? {} : { fri_profile: served }) }),
+        rand_status: () => ({ ...STATUS_V3, ...(served === undefined ? {} : { fri_profile: served }) }),
         prover_status: () => ({ state: 'done', reply: PROVER_REPLY }),
       }),
     });
@@ -291,8 +445,11 @@ test('a_send_through_the_prover_seals_submits_polls_and_submits_the_finished_tx'
   const phases = [];
   const out = await env.backend.send.send(SEND, (p, detail) => phases.push(detail === undefined ? [p] : [p, detail]));
 
+  // 'proving' begins ON THIS DEVICE: the auth proof, made from the spend key inside the core's
+  // `prepare_transfer`, before the job exists. Then the prover's own phases.
   assert.deepEqual(phases, [
     ['selecting'], ['witness'],
+    ['proving', { prover: '127.0.0.1:8546', authorising: true }],
     ['proving', { prover: '127.0.0.1:8546' }],
     ['proving', { position: 2, prover: '127.0.0.1:8546' }],
     ['proving', { prover: '127.0.0.1:8546' }],
@@ -303,8 +460,9 @@ test('a_send_through_the_prover_seals_submits_polls_and_submits_the_finished_tx'
 
   // The core sealed it to the paired prover, for the chain's guest and proof cap.
   const [[, prepared]] = coreCalled(env, 'prepare_transfer');
-  assert.deepEqual(prepared.prover, { kem_ek: proverEk(), token: PROVER_TOKEN, witness_kind: 'spend_key', hc_bundle: HC_V2 });
-  assert.equal(prepared.hc_bundle, HC_V2);
+  assert.deepEqual(prepared.prover, { kem_ek: proverEk(), token: PROVER_TOKEN, own: true, fee: null, hc_bundle: HC_V3 });
+  assert.equal(prepared.hc_bundle, HC_V3);
+  assert.equal(prepared.hc_auth, HC_AUTH);
   assert.equal(prepared.max_proof_bytes, 2097152);
   assert.equal(coreCalled(env, 'prove_transfer').length, 0, 'the browser tried to prove');
 
@@ -463,7 +621,8 @@ test('the device path proves with the chain\'s bundle guest', async () => {
   const env = await sendableWallet({ core, native: true, systemMemoryGiB: () => 16 });
   await env.backend.send.send(SEND, () => {});
   const [[, proved]] = coreCalled(env, 'prove_transfer');
-  assert.equal(proved.hc_bundle, HC_V2);
+  assert.equal(proved.hc_bundle, HC_V3);
+  assert.equal(proved.hc_auth, HC_AUTH, 'the device\'s own proof is told the chain\'s auth guest too');
   assert.equal(count(env.fetch, 'prover_submit'), 0);
 });
 

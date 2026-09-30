@@ -34,8 +34,8 @@ use randprotocol_core::{format_amount, parse_amount, Action, Transaction, FAUCET
 use randprotocol_zkvm::address::{address_of, envelope_from_core, seal_note_as};
 use randprotocol_core::confidential::ConfidentialExecutor;
 use randprotocol_prover::wire::{fresh_reply_key, open_reply, seal_job, ProveJob, WitnessKind, WIRE_VERSION};
-use randprotocol_zkvm::executor::{prove_bundle_for, ZkExecutor};
-use randprotocol_zkvm::hidden::{self, HiddenDigestInput, HiddenOutput, A_SLOTS, SLOTS};
+use randprotocol_zkvm::executor::{prove_auth, prove_bundle_for, ZkExecutor};
+use randprotocol_zkvm::hidden::{self, HiddenDigestInput, HiddenDigestInputV3, HiddenOutput, A_SLOTS, SLOTS};
 use randprotocol_zkvm::machine::{Backend, FriProfile};
 use randprotocol_zkvm::notes::{Note, SpendKey, ViewingKey};
 use randprotocol_zkvm::viewing::TxKey;
@@ -51,16 +51,20 @@ pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode's tag
-/// `v0.6.6` (`d742a9b`, v0.6.2 + gas: **constraint set 8**, circuits `18c2627`), the chain-18
-/// build — one more public value on every proof (`pv::GAS`, the declared gas limit; 35 in all),
-/// the `GAS` column in the cpu AIR, the genesis `gas` section whose `bundle_gas_limit` every
-/// bundle proof must declare exactly ([`check_bundle_gas_limit`]). Every verifier key moved, so
-/// a proof made by an earlier build verifies on no chain-18 node and one made by this build on no
-/// earlier chain. Earlier: `98d1ff6` (v0.6.2, constraint set 7 — the delegated prover,
-/// `randprotocol-prover`'s sealed job wire, unchanged here), `e6d1327`, `109f47d`, `1a13359`
-/// (`feat/address-sharing` on v0.5.9: the address fingerprint, `randpay:` links and the encrypted
-/// memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "d742a9b";
+/// `v0.6.7` (`86941a1`, circuits `aeacf31`), the build chains 18 and 19 run — **constraint set 8**
+/// (one more public value on every proof, `pv::GAS`, the declared gas limit; the genesis `gas`
+/// section whose `bundle_gas_limit` every bundle proof must declare exactly,
+/// [`check_bundle_gas_limit`]) and **split authorisation** (fullnode v0.6.3, delegated proving
+/// Phase 2): bundle guest v3 takes the viewing key `nk` and a per-transaction salt instead of the
+/// spend key, every `Bundle` carries `auth_commit` and an `auth_proof` the wallet makes itself
+/// over the spend key and that salt, and the transaction id domain is `rand-txid-3`
+/// ([`chain_guests`], [`prove_auth_locally`]). Earlier: `d742a9b` (the tag `v0.6.6`, a
+/// pre-rebase line with constraint set 8 and **no** split authorisation — a wallet built on it
+/// could scan chain 18 and every send was refused `AuthMissing`), `98d1ff6` (v0.6.2, constraint
+/// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
+/// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
+/// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
+pub const CHAIN_BUILD: &str = "86941a1";
 /// The chain the defaults below describe: chain 19, the next cut (not live on 2026-09-30; the
 /// public node answered chain 18, genesis `a7cb020c…`, that day; chain 18 was the aim from
 /// 2026-09-29, 16 from 2026-09-28). Chain 19 is chain 18 re-cut on the same build (fullnode
@@ -77,32 +81,34 @@ pub const EXPLORER_URL: &str = "https://randscan.org";
 /// Peak resident memory of one bundle proof, measured on this crate's own fixture
 /// (`examples/prove_fixture.rs`, Apple M-series): the prover materialises every table's
 /// low-degree extension at once. Clients compare it with the device's memory before proving,
-/// and wasm32 (4 GiB address space) cannot prove at all until this drops. Re-measured on
-/// constraint set 6 (2026-09-19): 97.6 s, 5 634 113 536 bytes.
+/// and wasm32 (4 GiB address space) cannot prove the bundle at all until this drops. (The auth
+/// proof a split-authorisation transaction also carries is tier 10 and small — under 400 MiB in
+/// wasm32 — and is never what this number gates.)
 ///
-/// **Re-measured on chain 14's hidden-asset guest (2026-09-20)**, Apple M-series, `--release`,
-/// production FRI, `/usr/bin/time -l ./target/release/examples/prove_fixture <kind> production`
-/// — the *largest* of the three shapes a wallet builds, which is what a device has to clear:
+/// **Re-measured on fullnode v0.6.7 (2026-10-01)** — constraint set 8, bundle guest v3 — Apple
+/// M-series, `--release`, `/usr/bin/time -l ./target/release/examples/prove_fixture <kind>
+/// <profile>`, which makes the auth proof, then the bundle proof, then runs `Ledger::validate`:
 ///
-/// | fixture | proving | peak RSS |
-/// |---|---|---|
-/// | `transfer` (RAND) | 97.0 s | **5 656 723 456** |
-/// | `token` (asset 1) | 97.0 s | 5 645 041 664 |
-/// | `burn` | 99.1 s | 5 643 026 432 |
+/// | fixture | profile | proving | peak RSS |
+/// |---|---|---|---|
+/// | `transfer` (RAND) | production | 117.2 s | 6 121 111 552 |
+/// | `burn` | production | 112.2 s | 6 148 816 896 |
+/// | `transfer` (RAND) | test | 114.6 s | **6 159 302 656** |
+/// | `token` (asset 1) | test | 123.8 s | 6 127 730 688 |
+/// | `burn` | test | 127.6 s | 6 112 034 816 |
 ///
-/// Four slots cost about 0.4% more than the retired two-slot guest's 5 634 113 536 — the guest
-/// doubled its slots but the prover's peak is dominated by one low-degree extension either way —
-/// and a burn is now **one** proof rather than two, so the worst case a client must budget for
-/// went *down*. The published requirement (an 8 GiB device gate) is unchanged.
+/// Up from the 5 656 723 456 measured on chain 14's guest (2026-09-20) by about 9%: constraint set
+/// 8's `GAS` column and the v3 guest's wider witness (1 212 words) and program. The published
+/// requirement (an 8 GiB device gate) is unchanged.
 ///
-/// The constant is the largest measured run **rounded up to 5.7 GB**, not the sample itself. Peak
+/// The constant is the largest measured run **rounded up to 6.2 GB**, not the sample itself. Peak
 /// RSS varies run to run, with the allocator and with the OS version, so a constant equal to one
 /// sample would leave a `>=` comparison with no margin at all and would read as a threshold that
-/// had been tuned to pass. 5 700 000 000 is ~0.8% above the largest of the three runs, the same
-/// shape of headroom the chain-8 figure had. It is **descriptive, not the gate**: the operative
+/// had been tuned to pass. 6 200 000 000 is ~0.7% above the largest of the five runs, the same
+/// shape of headroom the earlier figures had. It is **descriptive, not the gate**: the operative
 /// device check is `MIN_PROVE_GIB` (8 GiB) in `ui/engine/backend-native.js`, and wasm32 cannot
-/// prove at all until this number drops below a 4 GiB address space.
-pub const PROVER_PEAK_MEMORY_BYTES: u64 = 5_700_000_000;
+/// prove the bundle at all until this number drops below a 4 GiB address space.
+pub const PROVER_PEAK_MEMORY_BYTES: u64 = 6_200_000_000;
 
 /// A bundle spends at most this many input notes **per group** — slots 0–1 carry the private
 /// asset, slots 2–3 carry RAND — so coin selection picks at most two notes of each. Unchanged
@@ -1007,6 +1013,30 @@ struct Prepared {
     tx_keys: [TxKey; BUNDLE_SLOTS],
     change_a: u64,
     change_r: u64,
+    /// The chain's bundle guest ([`chain_guests`]) — the program this bundle is proved with.
+    guest: Word8,
+    /// The chain runs split authorisation (fullnode spec 2026-09-28 §4.1): `guest` is bundle guest
+    /// v3, `words` carries the viewing key `nk` and `salt` **instead of the spend key**, `expected`
+    /// is the v3 digest, and the transaction needs a second proof — the auth proof, made by this
+    /// wallet over its spend key and `salt`, publishing `auth_commit` ([`prove_auth_locally`]).
+    v3: bool,
+    /// 256 fresh random bits, drawn for this bundle alone: a repeated salt repeats `auth_commit`
+    /// and links two transactions to one wallet, and no guest can tell. Zero when not `v3`.
+    salt: Word8,
+    /// `auth::auth_commit(nk, salt)` — the bundle's `auth_commit`, which the auth proof must
+    /// publish and the v3 digest folds in. Zero when not `v3`.
+    auth_commit: Word8,
+}
+
+/// The witness carries a long-term secret — `nk` on v3, the spend key on v1/v2 — and `salt` is what
+/// keeps `auth_commit` unlinkable, so both are wiped when the bundle is dropped, on every path, the
+/// error returns included (upstream's `Drop for Prepared`). A copy the prover took is its to wipe.
+impl Drop for Prepared {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.words.zeroize();
+        self.salt.zeroize();
+    }
 }
 
 /// Build one hidden-asset bundle from a plan, the anchor and the bundle's `time` — upstream's
@@ -1017,7 +1047,19 @@ struct Prepared {
 /// **each with a fresh blinding** — two identical dummies would repeat a nullifier or a commitment
 /// and taint the proof (spec §3.3), and a repeated one across transactions would be refused as
 /// spent. Every output envelope is sealed under its own fresh transaction key.
-fn build_bundle(w: &Wallet, plan: &BundlePlan, format: EnvelopeFormat, anchor: Word8, time: u32) -> Result<Prepared> {
+///
+/// `guests` is the chain's ([`chain_guests`]). On bundle guest v3 (split authorisation) the bundle
+/// draws a fresh salt, carries `auth_commit = H(AUTH, nk, salt)`, and its witness is the v3 one —
+/// `nk` and the salt, **never the spend key** — with the v3 digest expected; on every other guest
+/// the bundle is what it always was, `auth_commit` zero.
+fn build_bundle(
+    w: &Wallet,
+    plan: &BundlePlan,
+    format: EnvelopeFormat,
+    anchor: Word8,
+    time: u32,
+    guests: &ChainGuests,
+) -> Result<Prepared> {
     let pk_self = w.vk.pk();
     let asset = plan.asset;
     // The guest stages every input under this wallet's key, and asserts on one that is not; the
@@ -1085,7 +1127,7 @@ fn build_bundle(w: &Wallet, plan: &BundlePlan, format: EnvelopeFormat, anchor: W
     // A burn is a public boundary, so it names its asset; everything else publishes 0, which the
     // ledger requires of every non-burning action (`TxError::UnsupportedAsset`).
     let burn_asset = if plan.burn_a != 0 { asset } else { 0 };
-    let expected = hidden::hidden_bundle_digest(&HiddenDigestInput {
+    let digest_input = HiddenDigestInput {
         anchor,
         nullifiers,
         commitments,
@@ -1094,9 +1136,26 @@ fn build_bundle(w: &Wallet, plan: &BundlePlan, format: EnvelopeFormat, anchor: W
         burn_r: plan.burn_r,
         burn_asset,
         time,
-    });
-    let words =
-        hidden::hidden_bundle_inputs(&w.sk, &inputs, &outs, anchor, plan.fee, plan.burn_a, plan.burn_r, asset, time);
+    };
+    let (salt, auth_commit, expected, words) = if guests.v3 {
+        // Fresh for every bundle, never derived from anything: a repeated salt repeats
+        // `auth_commit` and links the two transactions to one wallet (fullnode spec §4.1).
+        let salt = fresh_word();
+        let auth_commit = randprotocol_zkvm::auth::auth_commit(&w.vk.nk, &salt);
+        let expected = hidden::hidden_bundle_digest_v3(&HiddenDigestInputV3 { base: digest_input, auth_commit });
+        // The v3 witness: `nk` where v1/v2 hold the spend key, the salt appended. No word of it
+        // is the spend key's, which is what lets it go to a prover that must not be able to spend.
+        let words = hidden::hidden_bundle_inputs_v3(
+            &w.vk, &salt, &inputs, &outs, anchor, plan.fee, plan.burn_a, plan.burn_r, asset, time,
+        );
+        (salt, auth_commit, expected, words)
+    } else {
+        let expected = hidden::hidden_bundle_digest(&digest_input);
+        let words = hidden::hidden_bundle_inputs(
+            &w.sk, &inputs, &outs, anchor, plan.fee, plan.burn_a, plan.burn_r, asset, time,
+        );
+        ([0; 8], [0; 8], expected, words)
+    };
     let envelopes: [Envelope; BUNDLE_SLOTS] =
         envelopes.try_into().map_err(|_| "a bundle has four envelopes".to_string())?;
     let tx_keys: [TxKey; BUNDLE_SLOTS] =
@@ -1112,8 +1171,58 @@ fn build_bundle(w: &Wallet, plan: &BundlePlan, format: EnvelopeFormat, anchor: W
         time,
         envelopes,
         proof: Vec::new(),
+        // Set before the transaction around it exists, so the binding both proofs are made over
+        // covers it. Zero on a chain without genesis `hc_auth`, which that chain requires.
+        auth_commit,
+        auth_proof: Vec::new(),
     };
-    Ok(Prepared { bundle, words, expected, tx_keys, change_a: plan.change_a()?, change_r: plan.change_r()? })
+    Ok(Prepared {
+        bundle,
+        words,
+        expected,
+        tx_keys,
+        change_a: plan.change_a()?,
+        change_r: plan.change_r()?,
+        guest: guests.hc,
+        v3: guests.v3,
+        salt,
+        auth_commit,
+    })
+}
+
+/// Make the auth proof (split authorisation) **on this device** — always here, never on a prover,
+/// because its witness is the spend key. Tier 10: seconds natively, and small enough for wasm32.
+/// Upstream's `prove_auth_locally`, with its check that the `c` the proof publishes is the
+/// bundle's `auth_commit` (both computed from this wallet's own `nk` and salt, so a mismatch is a
+/// bug here, caught before a bundle proof is paid for).
+fn prove_auth_locally(
+    prepared: &Prepared,
+    sk: &SpendKey,
+    binding: &[u32; TX_BINDING_WORDS],
+    profile: FriProfile,
+) -> Result<Vec<u8>> {
+    let (proof, c, _tier) = prove_auth(profile, sk, &prepared.salt, binding, Backend::Cpu)
+        .map_err(|e| format!("proving the spend authorisation failed: {e}"))?;
+    if c != prepared.auth_commit {
+        return bad("the auth proof published a commitment this bundle does not carry; refusing to submit (wallet bug)");
+    }
+    Ok(proof)
+}
+
+/// Put `tx`'s auth proof in place, made over `tx`'s own binding — a no-op on a chain without
+/// split authorisation. The binding blanks both proofs ([`Transaction::binding`]), so it is the
+/// same before and after, and the bundle proof made next (here or on a prover) is bound to the
+/// same words. Returns the auth proof's size, 0 for none.
+fn authorise(tx: &mut Transaction, prepared: &Prepared, sk: &SpendKey, profile: FriProfile) -> Result<usize> {
+    if !prepared.v3 {
+        return Ok(0);
+    }
+    let binding: [u32; TX_BINDING_WORDS] = tx.binding();
+    let auth = prove_auth_locally(prepared, sk, &binding, profile)?;
+    let bytes = auth.len();
+    tx.bundle.as_mut().ok_or("a shielded transaction has a bundle")?.auth_proof = auth;
+    debug_assert_eq!(tx.binding(), binding, "filling the auth proof in never moves the binding");
+    Ok(bytes)
 }
 
 /// Prove `tx`'s one bundle against `tx`'s own binding, in place — upstream's `prove_transaction`.
@@ -1128,11 +1237,14 @@ fn build_bundle(w: &Wallet, plan: &BundlePlan, format: EnvelopeFormat, anchor: W
 /// half on a laptop CPU and peaks at [`PROVER_PEAK_MEMORY_BYTES`], so a client runs it off the UI
 /// thread and never two at once. Returns the tier and the proof's size.
 ///
-/// `hc` is the chain's bundle guest ([`chain_guest`]): the proof is made with that guest's program,
-/// so a chain whose genesis pins the v2 guest gets a v2 proof, never this build's default.
-fn prove_transaction(tx: &mut Transaction, prepared: &Prepared, profile: FriProfile, hc: &Word8) -> Result<(u8, usize)> {
+/// The proof is made with the chain's bundle guest (`prepared.guest`, from [`chain_guests`]), so a
+/// chain whose genesis pins the v2 guest gets a v2 proof and a split-authorisation chain a v3 one.
+/// There the auth proof is made first ([`authorise`]: seconds, so a failure costs no bundle proof),
+/// over the same binding, from `sk` — the one place the spend key is used.
+fn prove_transaction(tx: &mut Transaction, prepared: &Prepared, sk: &SpendKey, profile: FriProfile) -> Result<(u8, usize)> {
+    authorise(tx, prepared, sk, profile)?;
     let binding: [u32; TX_BINDING_WORDS] = tx.binding();
-    let (proof, digest, tier) = prove_bundle_for(hc, profile, &prepared.words, &binding, Backend::Cpu)
+    let (proof, digest, tier) = prove_bundle_for(&prepared.guest, profile, &prepared.words, &binding, Backend::Cpu)
         .map_err(|e| format!("proving failed: {e}"))?;
     // The guest taints its digest instead of failing when a witness violates the relation, so a
     // proof that does not publish the digest this wallet computed from its own plaintext is a bug
@@ -1216,11 +1328,16 @@ pub struct ProveRequest {
     /// does not declare it, which seals the legacy envelope and carries no memo.
     #[serde(default)]
     pub envelope_bytes: Option<u32>,
-    /// The chain's bundle guest, `rand_status.hc_bundle` (64 hex). Absent (the default) means this
-    /// build's default guest ([`ZkExecutor::hc_bundle`]); a guest this build does not carry is
-    /// refused before anything is built.
+    /// The chain's bundle guest, `rand_status.hc_bundle` (64 hex); a guest this build does not
+    /// carry is refused before anything is built. Absent **together with `hc_auth`** means the
+    /// guests of the chain this build's defaults describe ([`chain_guests`]).
     #[serde(default)]
     pub hc_bundle: Option<String>,
+    /// The chain's auth guest, `rand_status.hc_auth` (64 hex, or `null` on a chain without split
+    /// authorisation). Bundle guest v3 needs it, equal to this build's auth guest; a v1/v2 guest
+    /// beside one, or v3 without one, is refused before anything is proved ([`chain_guests`]).
+    #[serde(default)]
+    pub hc_auth: Option<String>,
     /// The chain's `bundle_gas_limit`, from `rand_getLimits` (constraint set 8, spec 2026-09-28
     /// §4.3): the gas every bundle proof on a chain with a `gas` section must declare, exactly.
     /// `null` (the default) is a chain without the section, or a node that predates the field.
@@ -1249,6 +1366,9 @@ pub struct ProveResult {
     pub fee: String,
     pub tier: u8,
     pub proof_bytes: usize,
+    /// The auth proof's size (split authorisation: the transaction's second proof, made on this
+    /// device over the spend key); 0 on a chain without it. `tx_bytes` counts both proofs.
+    pub auth_proof_bytes: usize,
     pub tx_bytes: usize,
     /// One per slot, in slot order.
     pub nullifiers: [String; BUNDLE_SLOTS],
@@ -1359,7 +1479,7 @@ struct TransferBuild {
     proofs: u8,
 }
 
-fn build_transfer_unproven(req: &ProveRequest) -> Result<(Wallet, TransferBuild)> {
+fn build_transfer_unproven(req: &ProveRequest, guests: &ChainGuests) -> Result<(Wallet, TransferBuild)> {
     let w = Wallet::from_hex(&req.spend_key)?;
     let dest = ShieldedAddress::parse(req.to.trim()).map_err(|e| format!("recipient: {e}"))?;
     let amount = parse_units(&req.amount, "amount")?;
@@ -1438,8 +1558,8 @@ fn build_transfer_unproven(req: &ProveRequest) -> Result<(Wallet, TransferBuild)
         burn_r: 0,
         memo: req.memo.clone(),
     };
-    let prepared = build_bundle(&w, &plan, format, root, time)?;
-    // The whole transaction first, its bundle's proof empty; then the proof, bound to it.
+    let prepared = build_bundle(&w, &plan, format, root, time, guests)?;
+    // The whole transaction first, its bundle's proofs empty; then the proofs, bound to it.
     let tx = Transaction::shielded(req.chain_id, prepared.bundle.clone(), Action::None);
     let spent_indices = a_spent.into_iter().chain(r_spent).collect();
     Ok((
@@ -1454,9 +1574,9 @@ fn build_transfer_unproven(req: &ProveRequest) -> Result<(Wallet, TransferBuild)
 ///
 /// This is the slow call — see `prove_transaction`. Nothing is submitted.
 pub fn prove_transfer(req: &ProveRequest) -> Result<ProveResult> {
-    let hc = chain_guest(req.hc_bundle.as_deref())?;
-    let (_w, mut b) = build_transfer_unproven(req)?;
-    let (tier, proof_bytes) = prove_transaction(&mut b.tx, &b.prepared, b.profile, &hc)?;
+    let guests = chain_guests(req.hc_bundle.as_deref(), req.hc_auth.as_deref())?;
+    let (w, mut b) = build_transfer_unproven(req, &guests)?;
+    let (tier, proof_bytes) = prove_transaction(&mut b.tx, &b.prepared, &w.sk, b.profile)?;
     Ok(transfer_result(&transfer_scalars(&b), &b.tx, tier, proof_bytes))
 }
 
@@ -1516,6 +1636,7 @@ fn transfer_result(s: &PendingScalars, tx: &Transaction, tier: u8, proof_bytes: 
         fee: s.fee.clone(),
         tier,
         proof_bytes,
+        auth_proof_bytes: auth_proof_bytes_of(tx),
         nullifiers: s.nullifiers.clone(),
         commitments: s.commitments.clone(),
         tx_keys: s.tx_keys.clone(),
@@ -1525,6 +1646,11 @@ fn transfer_result(s: &PendingScalars, tx: &Transaction, tier: u8, proof_bytes: 
         spent_indices: s.spent_indices.clone(),
         proofs: s.proofs,
     }
+}
+
+/// The size of the auth proof `tx` carries, 0 for none (a chain without split authorisation).
+fn auth_proof_bytes_of(tx: &Transaction) -> usize {
+    tx.bundle.as_ref().map_or(0, |b| b.auth_proof.len())
 }
 
 // ------------------------------------------------------------------ proving a bridge burn
@@ -1584,6 +1710,9 @@ pub struct BurnRequest {
     /// The chain's bundle guest, exactly as [`ProveRequest`]'s.
     #[serde(default)]
     pub hc_bundle: Option<String>,
+    /// The chain's auth guest, exactly as [`ProveRequest`]'s.
+    #[serde(default)]
+    pub hc_auth: Option<String>,
     /// The chain's `bundle_gas_limit`, exactly as [`ProveRequest`]'s.
     #[serde(default)]
     pub bundle_gas_limit: Option<u64>,
@@ -1614,6 +1743,8 @@ pub struct BurnResult {
     pub fee_change: String,
     pub tier: u8,
     pub proof_bytes: usize,
+    /// The auth proof's size, exactly as [`ProveResult`]'s.
+    pub auth_proof_bytes: usize,
     pub tx_bytes: usize,
     pub nullifiers: [String; BUNDLE_SLOTS],
     pub commitments: [String; BUNDLE_SLOTS],
@@ -1672,7 +1803,7 @@ struct BurnBuild {
 /// number of its release unit. Those are [`burn_is_possible`], which takes a
 /// `rand_getBridgeState` reply the client fetched — run it before calling this, as `submit_burn`
 /// does, or a typo costs a proof for a transaction the chain refuses outright.
-fn build_burn_unproven(req: &BurnRequest) -> Result<(Wallet, BurnBuild)> {
+fn build_burn_unproven(req: &BurnRequest, guests: &ChainGuests) -> Result<(Wallet, BurnBuild)> {
     let w = Wallet::from_hex(&req.spend_key)?;
     let amount = parse_units(&req.amount, "amount")?;
     let relayer_fee = parse_units(&req.relayer_fee, "relayer_fee")?;
@@ -1720,7 +1851,7 @@ fn build_burn_unproven(req: &BurnRequest) -> Result<(Wallet, BurnBuild)> {
     // A burn pays nobody inside the pool: `to: None`, and the amount moves to `burn_a`.
     let plan =
         BundlePlan { asset: req.asset, a_slots, r_slots, to: None, fee, burn_a: amount, burn_r: 0, memo: String::new() };
-    let prepared = build_bundle(&w, &plan, format, root, time)?;
+    let prepared = build_bundle(&w, &plan, format, root, time, guests)?;
     let action = Action::BridgeBurn {
         asset: req.asset,
         amount,
@@ -1757,9 +1888,9 @@ fn build_burn_unproven(req: &BurnRequest) -> Result<(Wallet, BurnBuild)> {
 /// spent from slots 0–1 and destroyed there, the RAND fee is paid from slots 2–3 of the same proof.
 /// Chain 13's two-bundle burn — and its doubled cost — is gone. Nothing is submitted.
 pub fn prove_burn(req: &BurnRequest) -> Result<BurnResult> {
-    let hc = chain_guest(req.hc_bundle.as_deref())?;
-    let (_w, mut b) = build_burn_unproven(req)?;
-    let (tier, proof_bytes) = prove_transaction(&mut b.tx, &b.prepared, b.profile, &hc)?;
+    let guests = chain_guests(req.hc_bundle.as_deref(), req.hc_auth.as_deref())?;
+    let (w, mut b) = build_burn_unproven(req, &guests)?;
+    let (tier, proof_bytes) = prove_transaction(&mut b.tx, &b.prepared, &w.sk, b.profile)?;
     burn_result(&burn_scalars(&b, req.to_chain), &b.tx, tier, proof_bytes)
 }
 
@@ -1812,6 +1943,7 @@ fn burn_result(s: &PendingScalars, tx: &Transaction, tier: u8, proof_bytes: usiz
         fee_change: s.fee_change.clone(),
         tier,
         proof_bytes,
+        auth_proof_bytes: auth_proof_bytes_of(tx),
         nullifiers: s.nullifiers.clone(),
         commitments: s.commitments.clone(),
         tx_keys: s.tx_keys.clone(),
@@ -1825,11 +1957,17 @@ fn burn_result(s: &PendingScalars, tx: &Transaction, tier: u8, proof_bytes: usiz
 
 // ------------------------------------------------------------------ delegated proving (light client)
 
-/// The witness kind a prover is sent when the request does not name one — the only kind this
-/// build's guests take.
-fn spend_key_kind() -> String {
-    WitnessKind::SpendKey.as_str().to_string()
-}
+/// The refusal for a spend-key witness bound for a prover that is not the owner's own — upstream's
+/// `randprotocol_client::prover::NOT_OWN`, in this wallet's words. Only a chain **without** split
+/// authorisation has such a witness; on a v3 chain no spend-key job exists to send.
+pub const NOT_OWN: &str = "this chain's bundle witness carries the spend key; only a prover paired as your own \
+     (a link made with `rand-prover pair --own`) may receive it";
+
+/// What a prover that is not the owner's own learns from a viewing-key job — upstream's
+/// `VIEWING_KEY_WARNING`, as the sentence every shell shows before such a pairing is saved.
+/// Reported by `version` as `prover_history_warning`, so the four shells say the same thing.
+pub const PROVER_HISTORY_WARNING: &str = "This prover will be able to read this wallet's whole history — every payment \
+     received and sent, before and after today. It cannot spend. To keep your history private, run your own.";
 
 /// The prover a light client hands its proof to: what it read off a pairing (`rand-prover`'s
 /// ML-KEM-768 encapsulation key and the bearer token it issued) plus the chain's bundle guest.
@@ -1839,14 +1977,27 @@ pub struct ProverTarget {
     pub kem_ek: String,
     /// The pairing's bearer token, 64 hex characters. Sealed inside the job, never sent in clear.
     pub token: String,
-    /// `"spend_key"` (the default and, in this build, the only kind accepted).
-    #[serde(default = "spend_key_kind")]
-    pub witness_kind: String,
-    /// The chain's bundle guest, `rand_status.hc_bundle` (64 hex). Absent means this build's
-    /// default guest ([`ZkExecutor::hc_bundle`]); a guest this build does not carry is refused
-    /// before anything is built.
+    /// `"viewing_key"` or `"spend_key"`. **Optional, and never a choice**: the kind follows the
+    /// chain's bundle guest — v3 (split authorisation) takes the viewing key `nk`, v1/v2 the spend
+    /// key — and a request naming the other one is refused rather than obeyed. Absent (the
+    /// default) means "whatever this chain's guest takes".
+    #[serde(default)]
+    pub witness_kind: Option<String>,
+    /// The chain's bundle guest, `rand_status.hc_bundle` (64 hex). Absent means the request's own
+    /// `hc_bundle`; two that disagree are refused.
     #[serde(default)]
     pub hc_bundle: Option<String>,
+    /// The pairing link carried `own=1`: the user says this prover is a machine of theirs. Only
+    /// such a prover may be sent a **spend-key** witness ([`NOT_OWN`]); a viewing-key witness
+    /// (every job on a split-authorisation chain) may go to any paired prover. Absent is `false`.
+    #[serde(default)]
+    pub own: bool,
+    /// The prover's `prover_info.fee`, passed through as it answered: `null` (the default) or
+    /// `{amount, address}`. **This build pays no prover fee**: a prover quoting one is refused
+    /// here, before anything is built ([`refuse_prover_fee`]) — it would refuse the unpaid job
+    /// itself (`-32006`), after the wallet had made its auth proof for nothing.
+    #[serde(default)]
+    pub fee: Value,
 }
 
 /// What `prepare_transfer` takes: a [`ProveRequest`], flattened, plus the prover and the chain's
@@ -1875,11 +2026,16 @@ pub struct PrepareBurnRequest {
 /// public once the transaction is submitted, or a one-time reply key that opens only this job's
 /// reply. It is everything [`finish_proof`] needs to produce the result `prove_transfer` or
 /// `prove_burn` would have, so a client may store it while the prover works.
+///
+/// On a split-authorisation chain the transaction already carries its **auth proof** — made on
+/// this device by `prepare_*`, from the spend key, before the job was sealed — so `tx_hex` is
+/// about 2.8 MB of hex at the production profile (a 1.36 MB proof) where it was some 15 kB.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Pending {
     /// `"transfer"` or `"burn"`.
     pub kind: String,
-    /// `bincode(Transaction)` as hex, its bundle's proof empty.
+    /// `bincode(Transaction)` as hex, its bundle's proof empty (and, on a split-authorisation
+    /// chain, its auth proof already in place).
     pub tx_hex: String,
     /// The digest this wallet computed from its own plaintext, which the proof must publish.
     pub expected: String,
@@ -1890,6 +2046,11 @@ pub struct Pending {
     pub profile: String,
     /// The bundle guest the proof is verified against, 64 hex.
     pub hc_bundle: String,
+    /// What the prover was sent: `"viewing_key"` (a split-authorisation chain: `nk` and a salt —
+    /// it can read this wallet's history and cannot spend) or `"spend_key"` (an older chain, and
+    /// then only to a prover paired as the owner's own). For a screen to say; nothing checks it.
+    #[serde(default)]
+    pub witness_kind: String,
     pub scalars: PendingScalars,
 }
 
@@ -1953,52 +2114,158 @@ fn hex32(s: &str, what: &str) -> Result<[u8; 32]> {
     bytes.try_into().map_err(|v: Vec<u8>| format!("{what} must be 32 bytes (64 hex characters), got {}", v.len()))
 }
 
-/// A [`ProverTarget`] checked: the key's length, the token, the witness kind and the guest, all
-/// before anything is built.
+/// A [`ProverTarget`] checked: the key's length, the token, the witness kind, the fee and the
+/// chain's guests, all before anything is built.
 struct Target {
     kem_ek: Vec<u8>,
     token: [u8; 32],
-    hc_bundle: Word8,
+    guests: ChainGuests,
+    /// What this chain's guest takes, and so what the job carries: never chosen by the caller.
+    kind: WitnessKind,
 }
 
-/// The bundle guest a chain pins, from its `rand_status.hc_bundle` (`None` = this build's default),
-/// refused unless this build carries it: a proof of another guest would publish the right digest
-/// and still be refused by every validator, a minute and a half later.
-fn chain_guest(h: Option<&str>) -> Result<Word8> {
-    let hc = match h {
-        None => ZkExecutor::hc_bundle(),
-        Some(h) => word8_from_hex(h.trim()).ok_or("hc_bundle is not 64 hex characters")?,
+/// A chain's two guests as this build resolved them: the bundle guest to prove with and whether
+/// it is v3 — split authorisation, where the bundle's witness carries `nk` and a salt and the
+/// transaction carries an auth proof beside the bundle's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ChainGuests {
+    hc: Word8,
+    v3: bool,
+}
+
+/// The guests a chain pins — its `rand_status.hc_bundle` and `hc_auth` — refused unless this build
+/// can prove for them: upstream's `chain_bundle_guest`, without the I/O (the client read
+/// `rand_status` and passes both fields in). A proof of another guest would publish the right
+/// digest and still be refused by every validator, a minute and a half later.
+///
+/// * **Both absent** is the chain this build's defaults describe ([`DEFAULT_CHAIN_ID`]): bundle
+///   guest v3 and this build's auth guest.
+/// * **v3** needs `hc_auth`, equal to this build's auth guest. `null`, or another digest, is a
+///   chain this wallet cannot authorise a spend on (or a node lying about one): refused.
+/// * **v1/v2 beside an `hc_auth`** is no genesis any build cuts — every `hc_auth` chain runs
+///   bundle guest v3 — so the node is misconfigured or lying: refused.
+fn chain_guests(hc_bundle: Option<&str>, hc_auth: Option<&str>) -> Result<ChainGuests> {
+    let v3 = ZkExecutor::hc_hidden_bundle_v3();
+    let (Some(named), auth) = (hc_bundle, hc_auth) else {
+        // No `hc_bundle`: the default chain's guest, v3 — and an `hc_auth` named beside it is held
+        // to this build's like any other.
+        return match hc_auth {
+            None => Ok(ChainGuests { hc: v3, v3: true }),
+            Some(_) => chain_guests(Some(&word8_to_hex(&v3)), hc_auth),
+        };
     };
+    let hc = word8_from_hex(named.trim()).ok_or("hc_bundle is not 64 hex characters")?;
     if ZkExecutor::bundle_program_for(&hc).is_none() {
         return bad(format!("this build does not carry the chain's bundle guest {}: update the wallet", word8_to_hex(&hc)));
     }
-    Ok(hc)
+    if hc != v3 {
+        if auth.is_some() {
+            return bad(format!(
+                "this chain names an auth guest but a v1/v2 bundle guest ({}); the node is misconfigured or lying — \
+                 refusing to prove",
+                word8_to_hex(&hc)
+            ));
+        }
+        return Ok(ChainGuests { hc, v3: false });
+    }
+    let ours = ZkExecutor::hc_auth();
+    match auth {
+        None => bad(format!(
+            "this chain's bundle guest is v3 (split authorisation) but the node names no auth guest (rand_status has \
+             no hc_auth); this wallet carries {} — refusing to prove a bundle it cannot authorise",
+            word8_to_hex(&ours)
+        )),
+        Some(a) => {
+            let theirs = word8_from_hex(a.trim()).ok_or("hc_auth is not 64 hex characters")?;
+            if theirs != ours {
+                return bad(format!(
+                    "this chain's auth guest is {}; this wallet carries {} — refusing to prove a v3 bundle it cannot \
+                     authorise; update the wallet",
+                    word8_to_hex(&theirs),
+                    word8_to_hex(&ours)
+                ));
+            }
+            Ok(ChainGuests { hc, v3: true })
+        }
+    }
 }
 
-/// `request` is the flattened request's own `hc_bundle`: the prover's wins when only it is given,
-/// the request's when only it is, and two that disagree are refused rather than guessed between.
-fn check_target(t: &ProverTarget, request: Option<&String>) -> Result<Target> {
-    match WitnessKind::parse(&t.witness_kind) {
-        Some(WitnessKind::SpendKey) => {}
-        Some(WitnessKind::ViewingKey) => {
-            return bad("this build's guests take a spend key: a viewing-key witness cannot prove a spend yet")
-        }
-        None => return bad(format!("unknown witness_kind {:?}; use \"spend_key\"", t.witness_kind)),
+/// `prover_info.fee` as the prover answered it, refused unless it charges nothing. Upstream's
+/// `parse_fee` reading: `null` is no fee; otherwise `{amount, address}` with the amount a decimal
+/// string of base units and the address a `rand1…` one; a zero amount is no fee. A quote that does
+/// not parse is an error, **never read as "free"** — the prover would refuse every job that did
+/// not pay it.
+///
+/// The fullnode wallet pays such a fee from a bundle slot, under a cap (`--max-prover-fee`). This
+/// build does not: paying it changes which notes a transfer selects (a RAND transfer needs a
+/// second group of RAND notes for it) and so the plan every shell shows before it proves.
+fn refuse_prover_fee(fee: &Value) -> Result<()> {
+    if fee.is_null() {
+        return Ok(());
     }
+    let unreadable = |why: &str| format!("the prover quotes a fee this wallet cannot read ({why}); not sending it a job");
+    let amount = fee.get("amount").and_then(Value::as_str).ok_or_else(|| unreadable("no amount string"))?;
+    if !is_decimal_digits(amount) {
+        return Err(unreadable("the amount is not a decimal string of base units"));
+    }
+    let amount: u64 = amount.parse().map_err(|_| unreadable("the amount does not fit 64 bits"))?;
+    let address = fee.get("address").and_then(Value::as_str).ok_or_else(|| unreadable("no address"))?;
+    ShieldedAddress::parse(address).map_err(|e| unreadable(&format!("the address: {e}")))?;
+    if amount == 0 {
+        return Ok(());
+    }
+    bad(format!(
+        "this prover charges {} RAND per proof, and this version of the wallet does not pay a prover's fee: pair a \
+         prover that charges nothing, or prove on this device",
+        format_amount(amount)
+    ))
+}
+
+/// `request_hc`/`request_auth` are the flattened request's own `hc_bundle` and `hc_auth`: the
+/// prover's `hc_bundle` wins when only it is given, the request's when only it is, and two that
+/// disagree are refused rather than guessed between.
+///
+/// The witness kind is decided here and nowhere else, from the chain's guest: **viewing key on
+/// v3, spend key otherwise**. A spend-key witness goes only to a prover paired as the owner's own;
+/// a request that names a kind is held to the chain's.
+fn check_target(t: &ProverTarget, request_hc: Option<&String>, request_auth: Option<&str>) -> Result<Target> {
     let kem_ek = hex::decode(t.kem_ek.trim()).map_err(|_| "the prover's kem_ek is not hex".to_string())?;
     if kem_ek.len() != KEM_EK_BYTES {
         return bad(format!("the prover's kem_ek is {} bytes, expected {KEM_EK_BYTES}", kem_ek.len()));
     }
     let token = hex32(&t.token, "the prover's token")?;
-    let named = match (&t.hc_bundle, request) {
+    let named = match (&t.hc_bundle, request_hc) {
         (Some(a), Some(b)) if a.trim().to_ascii_lowercase() != b.trim().to_ascii_lowercase() => {
             return bad("prover.hc_bundle and hc_bundle name different bundle guests")
         }
         (Some(a), _) => Some(a.as_str()),
         (None, b) => b.map(String::as_str),
     };
-    let hc_bundle = chain_guest(named)?;
-    Ok(Target { kem_ek, token, hc_bundle })
+    let guests = chain_guests(named, request_auth)?;
+    let kind = if guests.v3 { WitnessKind::ViewingKey } else { WitnessKind::SpendKey };
+    if let Some(asked) = t.witness_kind.as_deref() {
+        match WitnessKind::parse(asked) {
+            Some(k) if k == kind => {}
+            Some(WitnessKind::SpendKey) => {
+                return bad(
+                    "witness_kind \"spend_key\" on a split-authorisation chain: its bundle guest (v3) takes the viewing \
+                     key, and this wallet never sends the spend key there",
+                )
+            }
+            Some(WitnessKind::ViewingKey) => {
+                return bad(
+                    "witness_kind \"viewing_key\" on a chain without split authorisation: its bundle guest takes the \
+                     spend key, so a viewing-key witness cannot prove a spend there",
+                )
+            }
+            None => return bad(format!("unknown witness_kind {asked:?}; use \"viewing_key\" or \"spend_key\"")),
+        }
+    }
+    if kind == WitnessKind::SpendKey && !t.own {
+        return bad(NOT_OWN);
+    }
+    refuse_prover_fee(&t.fee)?;
+    Ok(Target { kem_ek, token, guests, kind })
 }
 
 /// Seal the job for `tx` to the prover and write the pending transaction. `words` is the witness;
@@ -2014,13 +2281,19 @@ fn seal_pending(
     max_proof_bytes: Option<u32>,
     scalars: PendingScalars,
 ) -> Result<PrepareResult> {
+    // The witness is the width its guest reads — 1 212 words of `nk ‖ … ‖ salt` for v3, 1 204 of
+    // `sk ‖ …` otherwise — so a job labelled "viewing_key" can never be carrying the other one.
+    let want = ZkExecutor::bundle_input_words(&target.guests.hc);
+    if words.len() != want {
+        return bad(format!("a witness of {} words for a guest that reads {want} (wallet bug)", words.len()));
+    }
     let reply_key = fresh_reply_key();
     let sealed = {
         let job = ProveJob {
             version: WIRE_VERSION,
             token: target.token,
-            witness_kind: WitnessKind::SpendKey,
-            hc_bundle: target.hc_bundle,
+            witness_kind: target.kind,
+            hc_bundle: target.guests.hc,
             profile: profile_name(profile).to_string(),
             binding: tx.binding(),
             inputs: words,
@@ -2039,7 +2312,8 @@ fn seal_pending(
             reply_key: hex::encode(reply_key),
             max_proof_bytes: max_proof_bytes.unwrap_or(gas::MAX_PROOF_BYTES as u32),
             profile: profile_name(profile).to_string(),
-            hc_bundle: word8_to_hex(&target.hc_bundle),
+            hc_bundle: word8_to_hex(&target.guests.hc),
+            witness_kind: target.kind.as_str().to_string(),
             scalars,
         },
         expected,
@@ -2049,13 +2323,24 @@ fn seal_pending(
 /// Build a transfer exactly as [`prove_transfer`] does and seal its witness to a prover instead of
 /// proving it here. The returned `pending` carries no spend key and no witness; hand
 /// `sealed_hex` to the prover's `prover_submit` and its reply to [`finish_proof`].
+///
+/// On a split-authorisation chain this **makes the auth proof here first** (tier 10 — seconds
+/// natively), from the spend key, which therefore never leaves the device: the job that goes out
+/// carries the viewing key `nk` and the bundle's salt, which can prove the bundle and read this
+/// wallet's history, and can authorise nothing.
 pub fn prepare_transfer(r: &PrepareTransferRequest) -> Result<PrepareResult> {
-    let target = check_target(&r.prover, r.req.hc_bundle.as_ref())?;
-    let (_w, mut b) = build_transfer_unproven(&r.req)?;
-    prepare_transfer_with(&mut b, &target, r.max_proof_bytes)
+    let target = check_target(&r.prover, r.req.hc_bundle.as_ref(), r.req.hc_auth.as_deref())?;
+    let (w, mut b) = build_transfer_unproven(&r.req, &target.guests)?;
+    prepare_transfer_with(&w, &mut b, &target, r.max_proof_bytes)
 }
 
-fn prepare_transfer_with(b: &mut TransferBuild, target: &Target, max_proof_bytes: Option<u32>) -> Result<PrepareResult> {
+fn prepare_transfer_with(
+    w: &Wallet,
+    b: &mut TransferBuild,
+    target: &Target,
+    max_proof_bytes: Option<u32>,
+) -> Result<PrepareResult> {
+    authorise(&mut b.tx, &b.prepared, &w.sk, b.profile)?;
     let words = std::mem::take(&mut b.prepared.words);
     let scalars = transfer_scalars(b);
     seal_pending("transfer", target, &b.tx, words, &b.prepared.expected, b.profile, max_proof_bytes, scalars)
@@ -2063,11 +2348,36 @@ fn prepare_transfer_with(b: &mut TransferBuild, target: &Target, max_proof_bytes
 
 /// [`prepare_transfer`] for a bridge burn: [`prove_burn`]'s build, sealed to a prover.
 pub fn prepare_burn(r: &PrepareBurnRequest) -> Result<PrepareResult> {
-    let target = check_target(&r.prover, r.req.hc_bundle.as_ref())?;
-    let (_w, mut b) = build_burn_unproven(&r.req)?;
+    let target = check_target(&r.prover, r.req.hc_bundle.as_ref(), r.req.hc_auth.as_deref())?;
+    let (w, mut b) = build_burn_unproven(&r.req, &target.guests)?;
+    authorise(&mut b.tx, &b.prepared, &w.sk, b.profile)?;
     let words = std::mem::take(&mut b.prepared.words);
     let scalars = burn_scalars(&b, r.req.to_chain);
     seal_pending("burn", &target, &b.tx, words, &b.prepared.expected, b.profile, r.max_proof_bytes, scalars)
+}
+
+/// The pending transaction's auth fields against its guest, before any reply is opened: a v3
+/// transaction carries an auth proof that publishes its own `auth_commit` (a decode — the proof
+/// was made and checked on this device by `prepare_*`), and any other carries neither. A pending
+/// that lost its auth proof would be refused `AuthMissing` by every validator after the prover had
+/// done its work.
+fn check_pending_auth(exec: &ZkExecutor, hc: &Word8, bundle: &Bundle) -> Result<()> {
+    if *hc != ZkExecutor::hc_hidden_bundle_v3() {
+        if !bundle.auth_proof.is_empty() || bundle.auth_commit != [0; 8] {
+            return bad("the pending transaction carries an auth proof, but its bundle guest takes none");
+        }
+        return Ok(());
+    }
+    if bundle.auth_proof.is_empty() {
+        return bad("the pending transaction carries no auth proof, which its bundle guest (v3) needs");
+    }
+    let c = exec
+        .auth_proof_digest(&bundle.auth_proof)
+        .map_err(|e| format!("the pending transaction's auth proof does not decode: {e}"))?;
+    if c != bundle.auth_commit {
+        return bad("the pending transaction's auth proof publishes a commitment its bundle does not carry");
+    }
+    Ok(())
 }
 
 /// Open the prover's reply, check it, put the proof into the pending transaction and assemble the
@@ -2089,8 +2399,13 @@ pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
     let profile = profile_from_str(&p.profile)?;
     let mut tx = Transaction::decode(&hex::decode(&p.tx_hex).map_err(|_| "pending.tx_hex is not hex")?)
         .map_err(|e| format!("pending.tx_hex is not a transaction: {e}"))?;
-    if !tx.bundle.as_ref().ok_or("the pending transaction has no bundle")?.proof.is_empty() {
-        return bad("the pending transaction already carries a proof");
+    let exec = ZkExecutor::new(profile);
+    {
+        let bundle = tx.bundle.as_ref().ok_or("the pending transaction has no bundle")?;
+        if !bundle.proof.is_empty() {
+            return bad("the pending transaction already carries a proof");
+        }
+        check_pending_auth(&exec, &hc, bundle)?;
     }
     let sealed = hex::decode(r.reply_hex.trim()).map_err(|_| "the prover's reply is not hex".to_string())?;
 
@@ -2102,9 +2417,10 @@ pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
             p.max_proof_bytes
         ));
     }
-    let exec = ZkExecutor::new(profile);
+    // Keyed by the chain's guest: the heights a proof must declare are that guest's, exactly as
+    // the ledger reads them (`ConfidentialExecutor::bundle_proof_digest`).
     let published = exec
-        .bundle_proof_digest(&reply.proof)
+        .bundle_proof_digest(&hc, &reply.proof)
         .map_err(|e| format!("the prover's proof does not decode as a bundle proof, so its digest cannot be read: {e}"))?;
     if published != expected {
         return bad(format!(
@@ -2430,7 +2746,17 @@ pub fn constants() -> Value {
         "time_window": TIME_WINDOW,
         "anchor_window": randprotocol_core::ledger::ANCHOR_WINDOW,
         "tree_depth": DEPTH,
-        "hc_bundle": word8_to_hex(&randprotocol_zkvm::executor::ZkExecutor::hc_bundle()),
+        // The guests of the chain these defaults describe: bundle guest v3 and the auth guest
+        // (split authorisation, fullnode v0.6.3). `prove_*`/`prepare_*` take the connected chain's
+        // own — `rand_status.hc_bundle` and `.hc_auth` — and refuse a pair this build cannot prove
+        // for (`chain_guests`); both absent means these two.
+        "hc_bundle": word8_to_hex(&ZkExecutor::hc_hidden_bundle_v3()),
+        "hc_auth": word8_to_hex(&ZkExecutor::hc_auth()),
+        // Every bundle guest this build can prove for, by the `hc_bundle` a genesis pins.
+        "hc_bundles": ZkExecutor::known_hc_bundles().iter().map(word8_to_hex).collect::<Vec<_>>(),
+        // A transaction on a split-authorisation chain carries two proofs: the bundle's, and the
+        // auth proof this device always makes itself (tier 10, from the spend key).
+        "split_authorisation": true,
         // Constraint set 8: the gas every bundle proof this build makes declares — the one value a
         // chain's genesis `gas.bundle_gas_limit` may name for this guest (`check_bundle_gas_limit`).
         "bundle_gas_limit": gas::bundle_gas_limit_pin(),
@@ -2440,6 +2766,12 @@ pub fn constants() -> Value {
         // The delegated-proving job wire this build seals and opens (randprotocol-prover); a
         // client pairs only with a prover that speaks the same version.
         "prover_wire": randprotocol_prover::wire::WIRE_VERSION,
+        // What a paired prover is sent, by chain: the viewing key on a split-authorisation chain
+        // (any paired prover), the spend key on an older one (the owner's own prover only).
+        "prover_witness_kinds": [WitnessKind::ViewingKey.as_str(), WitnessKind::SpendKey.as_str()],
+        // What a prover that is not the owner's own learns — the sentence every shell shows
+        // before it saves such a pairing.
+        "prover_history_warning": PROVER_HISTORY_WARNING,
         "prover_peak_memory_bytes": PROVER_PEAK_MEMORY_BYTES,
     })
 }
@@ -2571,21 +2903,38 @@ fn asset_param(p: &Value) -> Result<u32> {
 ///   an error naming what the chain would refuse. `bridge_state` is a whole `rand_getBridgeState`
 ///   reply the client fetched. **Call this before `prove_burn`** — it is the only thing standing
 ///   between a typo and a wasted proof
-/// - `prove_burn` `{…BurnRequest}` → BurnResult (slow — one bundle proof)
-/// - `prove_transfer` `{…ProveRequest}` → ProveResult (slow — one bundle proof). `memo` (default
+/// - `prove_burn` `{…BurnRequest}` → BurnResult (slow — one bundle proof, and the auth proof)
+/// - `prove_transfer` `{…ProveRequest}` → ProveResult (slow — one bundle proof, and on a
+///   split-authorisation chain the auth proof before it, a few seconds). `hc_bundle` and `hc_auth`
+///   (both default `null`) are the chain's guests, from `rand_status`: bundle guest v3 needs
+///   `hc_auth` equal to this build's (`version.hc_auth`), a v1/v2 guest beside an `hc_auth` is
+///   refused, and both absent means the default chain's. The reply's `auth_proof_bytes` is the
+///   auth proof's size (0 for none). `memo` (default
 ///   `""`) is sealed with the payment only; `envelope_bytes` (default `null`) is the chain's, from
 ///   `rand_getLimits` — `null` seals the legacy envelope and refuses a non-empty memo up front,
 ///   and so does any value on a chain id in [`LEGACY_ENVELOPE_CHAIN_IDS`] (issue #64);
 ///   `bundle_gas_limit` (default `null`) is the chain's, from `rand_getLimits` — a value other
 ///   than this build's guest ceiling (`version.bundle_gas_limit`) is refused before building
-/// - `prepare_transfer` `{…ProveRequest, prover: {kem_ek, token, witness_kind?, hc_bundle?},
-///   max_proof_bytes?}` → `{sealed_hex, pending, expected}` (fast — no proof). The transfer
-///   `prove_transfer` would build, its witness sealed to a paired prover (ML-KEM-768 `kem_ek`, the
-///   pairing's `token`) for `prover_submit`; `witness_kind` is `"spend_key"`, the only kind this
-///   build takes; `hc_bundle` is the chain's `rand_status.hc_bundle` (default: this build's
-///   guest); `max_proof_bytes` is `rand_getLimits`' (default `gas::MAX_PROOF_BYTES`). `pending`
-///   carries **no spend key and no witness** — a client may store it while the prover works
+/// - `prepare_transfer` `{…ProveRequest, prover: {kem_ek, token, own?, fee?, witness_kind?,
+///   hc_bundle?}, max_proof_bytes?}` → `{sealed_hex, pending, expected}` (no bundle proof; on a
+///   split-authorisation chain the **auth proof is made here**, a few seconds natively). The
+///   transfer `prove_transfer` would build, its witness sealed to a paired prover (ML-KEM-768
+///   `kem_ek`, the pairing's `token`) for `prover_submit`. What the witness carries follows the
+///   chain's guest and is never the caller's choice: on bundle guest v3 the **viewing key** `nk`
+///   and a salt — it may go to any paired prover, which can then read this wallet's history and
+///   cannot spend — and on a v1/v2 guest the **spend key**, which goes only to a prover with
+///   `own: true` (the pairing link's `own=1`). `witness_kind`, if named, must be that kind.
+///   `fee` is the prover's `prover_info.fee` as it answered: anything but `null` or a zero amount
+///   is refused — this build pays no prover fee. `hc_bundle` is the chain's
+///   `rand_status.hc_bundle`; `max_proof_bytes` is `rand_getLimits`' (default
+///   `gas::MAX_PROOF_BYTES`). `pending` carries **no spend key and no witness** — a client may
+///   store it while the prover works; it names `witness_kind`, what the prover was sent
 /// - `prepare_burn` `{…BurnRequest, prover, max_proof_bytes?}` → the same, for a burn
+/// - `chain_guests` `{hc_bundle?, hc_auth?}` → `{hc_bundle, hc_auth, split_authorisation,
+///   witness_kind}` (instant): the check `prove_*`/`prepare_*` make of a chain's two guests, on
+///   its own — so a client can refuse a chain this build cannot prove for, and learn which
+///   witness a paired prover would be sent (`"viewing_key"` or `"spend_key"`), before it fetches
+///   a witness or builds anything. Errors exactly as they do
 /// - `finish_proof` `{pending, reply_hex}` → the ProveResult or BurnResult `prove_transfer` /
 ///   `prove_burn` would have returned (by `pending.kind`), once the prover's sealed reply opens
 ///   under the job's key, its proof is within `max_proof_bytes`, publishes the digest this wallet
@@ -2695,6 +3044,16 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
             let req: ProveRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
             Ok(ser(&prove_transfer(&req)?))
         }
+        "chain_guests" => {
+            let opt = |name: &str| -> Result<Option<&str>> {
+                match params.get(name) {
+                    None | Some(Value::Null) => Ok(None),
+                    Some(Value::String(s)) => Ok(Some(s.as_str())),
+                    Some(_) => bad(format!("{name} must be a string of 64 hex characters, or null")),
+                }
+            };
+            Ok(chain_guests_json(&chain_guests(opt("hc_bundle")?, opt("hc_auth")?)?))
+        }
         "prepare_transfer" => {
             let req: PrepareTransferRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
             Ok(ser(&prepare_transfer(&req)?))
@@ -2728,6 +3087,17 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
         "parse_amount" => Ok(Value::String(parse_amount(str_param(params, "text")?).map_err(|e| e.to_string())?.to_string())),
         other => bad(format!("unknown method {other:?}")),
     }
+}
+
+/// `chain_guests`' reply: what this build will do on a chain with those guests.
+fn chain_guests_json(g: &ChainGuests) -> Value {
+    let kind = if g.v3 { WitnessKind::ViewingKey } else { WitnessKind::SpendKey };
+    json!({
+        "hc_bundle": word8_to_hex(&g.hc),
+        "hc_auth": g.v3.then(|| word8_to_hex(&ZkExecutor::hc_auth())),
+        "split_authorisation": g.v3,
+        "witness_kind": kind.as_str(),
+    })
 }
 
 /// `parse_prover_link`: the vendored parser, so no client re-implements base58 or the fingerprint.
@@ -2790,6 +3160,17 @@ mod tests {
 
     fn wallet(n: u32) -> Wallet {
         Wallet::from_spend_key(SpendKey([n; 8]))
+    }
+
+    /// [`build_transfer_unproven`] with the guests the request itself names, as `prove_transfer`
+    /// resolves them — both absent is the default chain's (bundle guest v3).
+    fn transfer_unproven(req: &ProveRequest) -> Result<(Wallet, TransferBuild)> {
+        build_transfer_unproven(req, &chain_guests(req.hc_bundle.as_deref(), req.hc_auth.as_deref())?)
+    }
+
+    /// [`build_burn_unproven`] likewise.
+    fn burn_unproven(req: &BurnRequest) -> Result<(Wallet, BurnBuild)> {
+        build_burn_unproven(req, &chain_guests(req.hc_bundle.as_deref(), req.hc_auth.as_deref())?)
     }
 
     /// A minimal `OwnedNote` for coin-selection tests: no real note bytes, commitment or
@@ -3137,7 +3518,7 @@ mod tests {
     fn a_burn_has_the_ledger_shape() {
         let req: BurnRequest = serde_json::from_value(fixture_burn_request("test").unwrap()).unwrap();
         let amount: u64 = req.amount.parse().unwrap();
-        let (w, b) = build_burn_unproven(&req).unwrap();
+        let (w, b) = burn_unproven(&req).unwrap();
         let bundle = b.tx.bundle.as_ref().expect("a burn carries a bundle");
 
         assert_eq!(b.proofs, 1, "chain 14 proves a burn once");
@@ -3192,7 +3573,7 @@ mod tests {
     fn a_burn_carries_one_bundle_and_an_action_of_plain_words() {
         let req: BurnRequest = serde_json::from_value(fixture_burn_request("test").unwrap()).unwrap();
         let amount: u64 = req.amount.parse().unwrap();
-        let (_w, b) = build_burn_unproven(&req).unwrap();
+        let (_w, b) = burn_unproven(&req).unwrap();
 
         assert_eq!(b.tx.chain_id, DEFAULT_CHAIN_ID);
         let bundle = b.tx.bundle.as_ref().expect("a burn carries a bundle");
@@ -3239,7 +3620,7 @@ mod tests {
         let mut req = fixture_burn_request("test").unwrap();
         req["to"] = json!(hexed);
         let req: BurnRequest = serde_json::from_value(req).unwrap();
-        let (_w, b) = build_burn_unproven(&req).unwrap();
+        let (_w, b) = burn_unproven(&req).unwrap();
         assert_eq!(b.to, want, "no re-ordering between the request and the build");
         assert_eq!(b.token, FIXTURE_BURN_TOKEN, "nor for the coin being redeemed");
         let Action::BridgeBurn { to, token, .. } = &b.tx.action else { panic!("a bridge burn") };
@@ -3261,7 +3642,7 @@ mod tests {
                 req[k] = v.clone();
             }
             let req: BurnRequest = serde_json::from_value(req).unwrap();
-            match build_burn_unproven(&req) {
+            match burn_unproven(&req) {
                 Ok(_) => panic!("{patch} should have been refused"),
                 Err(e) => e,
             }
@@ -3660,20 +4041,45 @@ mod tests {
         assert_eq!(v["value"], "250000000");
     }
 
-    /// The whole send path against a real tree, under the fast FRI profile: a proved transfer
-    /// whose bundle the chain's own ledger rules accept (digest, nullifiers, commitments).
+    /// A ledger shaped like chain 18's — bundle guest v3, the auth guest, the `gas` section with
+    /// its bundle pin, 1 860-byte envelopes — holding `leaves` in order, its root recorded as an
+    /// anchor and its height at `height`. `Ledger::validate` on it is what a chain-18 node runs.
+    fn chain18_ledger(exec: &ZkExecutor, leaves: &[Word8], height: u64) -> randprotocol_core::Ledger {
+        let mut ledger =
+            randprotocol_core::Ledger::new(DEFAULT_CHAIN_ID, ZkExecutor::hc_hidden_bundle_v3(), Default::default(), exec);
+        ledger.set_hc_auth(Some(ZkExecutor::hc_auth()));
+        ledger.set_envelope_bytes(Some(randprotocol_core::notes::MEMO_ENVELOPE_BYTES));
+        let gas: gas::GasConfig = serde_json::from_value(json!({
+            "gas_price": "100", "byte_price": "800", "bundle_gas_limit": gas::bundle_gas_limit_pin(), "metering": "circuit",
+        }))
+        .unwrap();
+        ledger.set_gas(Some(gas));
+        for cm in leaves {
+            ledger.deposit(*cm, exec).unwrap();
+        }
+        ledger.record_anchor(1);
+        ledger.set_height(height);
+        ledger.set_timestamp_ms(1_000_000);
+        ledger
+    }
+
+    /// The whole send path against a real tree, under the fast FRI profile: a proved transfer that
+    /// **a chain-18-shaped ledger admits** — split authorisation (bundle guest v3 and the auth
+    /// proof), the gas pins, the memo envelope — through `Ledger::validate`, the function every
+    /// node runs on a submitted transaction.
     #[test]
-    fn prove_transfer_produces_an_admissible_bundle() {
+    fn prove_transfer_produces_a_transaction_a_split_authorisation_chain_admits() {
         use randprotocol_core::notes::FullTree;
         let alice = wallet(11);
         let bob = wallet(12);
-        let exec = randprotocol_zkvm::executor::ZkExecutor::new(FriProfile::Test);
+        let exec = ZkExecutor::new(FriProfile::Test);
         let note = Note::new(alice.vk.pk(), [0; 8], 3_000_000_000, 0, 1);
         let leaves = vec![Note::new([1; 8], [0; 8], 1, 0, 1).commitment(), note.commitment()];
-        let tree = FullTree::new(leaves, &exec);
+        let tree = FullTree::new(leaves.clone(), &exec);
         let root = tree.root();
         let path = tree.path(1).unwrap();
         let owned = owned_note(&alice, 1, 1, note.commitment(), note);
+        let v3 = ZkExecutor::hc_hidden_bundle_v3();
         let req = ProveRequest {
             spend_key: alice.spend_key_hex(),
             chain_id: DEFAULT_CHAIN_ID,
@@ -3686,10 +4092,12 @@ mod tests {
             inputs: vec![ProveInput { note: owned, path: path.iter().map(word8_to_hex).collect() }],
             fee_inputs: vec![],
             profile: "test".into(),
-            memo: String::new(),
-            envelope_bytes: None,
-            hc_bundle: None,
-            bundle_gas_limit: None,
+            memo: "for the lamp".into(),
+            // What a chain-18 node answers: `rand_getLimits` and `rand_status`.
+            envelope_bytes: Some(1860),
+            hc_bundle: Some(word8_to_hex(&v3)),
+            hc_auth: Some(word8_to_hex(&ZkExecutor::hc_auth())),
+            bundle_gas_limit: Some(gas::bundle_gas_limit_pin()),
         };
         let res = prove_transfer(&req).unwrap();
         assert_eq!(res.change, (3_000_000_000u64 - 1_000_000_000 - gas::BUNDLE_BASE).to_string());
@@ -3699,6 +4107,10 @@ mod tests {
         assert_eq!(res.payment_slot, Some(2), "a RAND transfer pays from slots 2-3");
         let tx = Transaction::decode(&hex::decode(&res.tx_hex).unwrap()).unwrap();
         assert_eq!(tx.hash().to_hex(), res.hash);
+        // Whole, first: what a chain-18 node does with it.
+        let ledger = chain18_ledger(&exec, &leaves, 40);
+        assert!(ledger.is_anchor(&root));
+        ledger.validate(&tx, &exec).expect("a chain-18-shaped ledger admits the transaction");
         let bundle = tx.bundle.as_ref().unwrap();
         assert_eq!(bundle.anchor, root);
         assert_eq!(bundle.time, 40);
@@ -3720,19 +4132,35 @@ mod tests {
         let bob_scan = scan_page(&bob, &rows).unwrap();
         assert_eq!(bob_scan.received.len(), 1);
         assert_eq!(bob_scan.received[0].amount, "1000000000");
+        assert_eq!(bob_scan.received[0].memo.as_deref(), Some("for the lamp"));
         let alice_scan = scan_page(&alice, &rows).unwrap();
         assert_eq!(alice_scan.received.len(), 1);
         assert_eq!(alice_scan.received[0].amount, res.change);
         assert_eq!(alice_scan.sent.len(), 1);
-        // Exactly the ledger's two checks: the digest the proof published is the one recomputed
-        // from the bundle's plaintext, and the proof verifies against the pinned bundle guest.
-        use randprotocol_core::confidential::ConfidentialExecutor;
-        let recomputed = exec.bundle_digest(&bundle.digest_input());
-        assert_eq!(exec.bundle_proof_digest(&bundle.proof).unwrap(), recomputed);
-        // Chain 14: the proof is verified against the transaction's own binding as well as the
-        // pinned guest, so a proof copied onto any other transaction no longer verifies.
+
+        // Split authorisation, field by field, as the ledger reads it: the bundle carries the
+        // commitment to this wallet's `nk` and a fresh salt, the auth proof publishes exactly
+        // that commitment and verifies against the auth guest and THIS transaction's binding, and
+        // the bundle proof publishes the v3 digest — the one with the commitment folded in.
         let binding = tx.binding();
-        exec.verify_bundle(&randprotocol_zkvm::executor::ZkExecutor::hc_bundle(), &bundle.proof, &binding).unwrap();
+        assert_ne!(bundle.auth_commit, [0; 8], "a v3 bundle carries its auth commitment");
+        assert_eq!(res.auth_proof_bytes, bundle.auth_proof.len());
+        assert!(res.auth_proof_bytes > 0, "and its auth proof");
+        assert_eq!(exec.auth_proof_digest(&bundle.auth_proof).unwrap(), bundle.auth_commit);
+        assert_eq!(exec.verify_auth(&ZkExecutor::hc_auth(), &bundle.auth_proof, &binding).unwrap(), bundle.auth_commit);
+        assert_eq!(exec.auth_gas_limit(&bundle.auth_proof).unwrap(), Some(gas::auth_gas_limit_pin()));
+        let recomputed = exec.bundle_digest_v3(&bundle.digest_input());
+        assert_eq!(exec.bundle_proof_digest(&v3, &bundle.proof).unwrap(), recomputed);
+        assert_ne!(recomputed, exec.bundle_digest(&bundle.digest_input()), "not the v1 digest");
+        exec.verify_bundle(&v3, &bundle.proof, &binding).unwrap();
+        assert_eq!(exec.bundle_gas_limit(&bundle.proof).unwrap(), Some(gas::bundle_gas_limit_pin()));
+        // The same transaction without its auth proof is what a wallet built on the pre-rebase
+        // fullnode (`d742a9b`) could at best have sent: refused, by name.
+        let mut bare = tx.clone();
+        bare.bundle.as_mut().unwrap().auth_proof.clear();
+        let refused = format!("{:?}", ledger.validate(&bare, &exec).unwrap_err());
+        assert!(refused.contains("AuthMissing"), "{refused}");
+
         // Through the scalars, which is what a client reads: the key and the commitment that
         // name the payment, on a really-proved transaction.
         assert_eq!(res.payment_commitment.as_deref(), Some(rows[0].cm.as_str()));
@@ -3858,12 +4286,12 @@ mod tests {
             });
             let req: ProveRequest = serde_json::from_value(js("coffee", json!(1860))).unwrap();
             assert_eq!((req.memo.as_str(), req.envelope_bytes), ("coffee", Some(1860)));
-            let (_w, b) = build_transfer_unproven(&req).unwrap();
+            let (_w, b) = transfer_unproven(&req).unwrap();
             assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == 1860));
             // A node without `envelope_bytes`: JS sends `null` and `''`, the legacy envelope.
             let req: ProveRequest = serde_json::from_value(js("", Value::Null)).unwrap();
             assert_eq!((req.memo.as_str(), req.envelope_bytes), ("", None));
-            let (_w, b) = build_transfer_unproven(&req).unwrap();
+            let (_w, b) = transfer_unproven(&req).unwrap();
             // The legacy envelope: kem_ct 1 088 + 60 + 60 + a body of the note alone (12 + 112 + 16).
             assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == 1348));
 
@@ -3957,7 +4385,7 @@ mod tests {
         fn a_rand_transfer_pays_from_slots_two_and_three() {
             let req: ProveRequest = serde_json::from_value(fixture_prove_request("test", 0).unwrap()).unwrap();
             let amount: u64 = req.amount.parse().unwrap();
-            let (w, build) = build_transfer_unproven(&req).unwrap();
+            let (w, build) = transfer_unproven(&req).unwrap();
             let dest = ShieldedAddress::parse(&req.to).unwrap();
             let b = build.tx.bundle.as_ref().unwrap();
 
@@ -3988,7 +4416,7 @@ mod tests {
             assert_eq!(req.asset, 1);
             assert!(!req.fee_inputs.is_empty(), "a token transfer names RAND notes for its fee");
             let amount: u64 = req.amount.parse().unwrap();
-            let (w, build) = build_transfer_unproven(&req).unwrap();
+            let (w, build) = transfer_unproven(&req).unwrap();
             let dest = ShieldedAddress::parse(&req.to).unwrap();
             let b = build.tx.bundle.as_ref().unwrap();
 
@@ -4028,7 +4456,7 @@ mod tests {
         fn a_burn_is_one_bundle_carrying_the_token_byte_exact() {
             let req: BurnRequest = serde_json::from_value(fixture_burn_request("test").unwrap()).unwrap();
             let amount: u64 = req.amount.parse().unwrap();
-            let (_w, build) = build_burn_unproven(&req).unwrap();
+            let (_w, build) = burn_unproven(&req).unwrap();
             let b = build.tx.bundle.as_ref().unwrap();
 
             assert_eq!(build.proofs, 1, "chain 14 proves a burn once");
@@ -4058,7 +4486,7 @@ mod tests {
             let mut req = fixture_burn_request("test").unwrap();
             req["token"] = json!(hexed);
             let req: BurnRequest = serde_json::from_value(req).unwrap();
-            let (_w, build) = build_burn_unproven(&req).unwrap();
+            let (_w, build) = burn_unproven(&req).unwrap();
             let Action::BridgeBurn { token, .. } = &build.tx.action else { panic!("a burn") };
             assert_eq!(*token, want);
             assert_eq!(token[0], 0x01, "the token's first byte, not its word's last");
@@ -4078,7 +4506,7 @@ mod tests {
             let req: ProveRequest = serde_json::from_value(req).unwrap();
             assert_eq!(req.asset, 0, "asset defaults to RAND");
             assert!(req.fee_inputs.is_empty());
-            let (w, build) = build_transfer_unproven(&req).unwrap();
+            let (w, build) = transfer_unproven(&req).unwrap();
             let dest = ShieldedAddress::parse(&req.to).unwrap();
             let b = build.tx.bundle.as_ref().unwrap();
             assert_eq!(b.burn_asset, 0);
@@ -4171,7 +4599,7 @@ mod tests {
                 let req: ProveRequest =
                     serde_json::from_value(fixture_prove_request("test", asset).unwrap()).unwrap();
                 let amount: u64 = req.amount.parse().unwrap();
-                let (_w, build) = build_transfer_unproven(&req).unwrap();
+                let (_w, build) = transfer_unproven(&req).unwrap();
                 let bundle = build.tx.bundle.as_ref().unwrap();
 
                 assert_eq!(build.plan.payment_slot(), Some(want_slot), "asset {asset}");
@@ -4224,7 +4652,7 @@ mod tests {
         #[test]
         fn a_burn_has_no_payment_to_disclose() {
             let req: BurnRequest = serde_json::from_value(fixture_burn_request("test").unwrap()).unwrap();
-            let (_w, b) = build_burn_unproven(&req).unwrap();
+            let (_w, b) = burn_unproven(&req).unwrap();
             assert_eq!(b.plan.payment_slot(), None, "a burn pays nobody");
             assert_eq!(payment_of(&b.plan, &b.prepared), (None, None, None));
 
@@ -4245,6 +4673,7 @@ mod tests {
                 fee_change: "0".into(),
                 tier: 14,
                 proof_bytes: 0,
+                auth_proof_bytes: 0,
                 tx_bytes: 0,
                 nullifiers: std::array::from_fn(|_| String::new()),
                 commitments: std::array::from_fn(|_| String::new()),
@@ -4272,7 +4701,7 @@ mod tests {
             let first = req["inputs"][0].clone();
             req["inputs"] = json!([first.clone(), first]);
             let req: ProveRequest = serde_json::from_value(req).unwrap();
-            let e = match build_transfer_unproven(&req) {
+            let e = match transfer_unproven(&req) {
                 Ok(_) => panic!("one note in two slots should have been refused"),
                 Err(e) => e,
             };
@@ -4281,7 +4710,7 @@ mod tests {
             // And across the two groups of a token bundle, where the notes are of different assets
             // and so cannot be the same leaf, the four slots are still pairwise distinct.
             let req: ProveRequest = serde_json::from_value(fixture_prove_request("test", 1).unwrap()).unwrap();
-            let (_w, b) = build_transfer_unproven(&req).unwrap();
+            let (_w, b) = transfer_unproven(&req).unwrap();
             let bundle = b.tx.bundle.as_ref().unwrap();
             for i in 0..BUNDLE_SLOTS {
                 for j in (i + 1)..BUNDLE_SLOTS {
@@ -4386,7 +4815,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 19);
-            assert_eq!(v["chain_build"], "d742a9b");
+            assert_eq!(v["chain_build"], "86941a1");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
@@ -4395,9 +4824,16 @@ mod tests {
             assert_eq!(v["bundle_slots"], BUNDLE_SLOTS);
             assert_eq!(v["bundle_asset_slots"], A_SLOTS);
             assert_eq!(v["bundle_inputs"], BUNDLE_INPUTS, "still two notes per group");
-            // The guest changed with the chain, so every artefact must be rebuilt: chain 13's was
-            // `4a27356f…`.
-            assert_ne!(v["hc_bundle"].as_str().unwrap(), "", "the pinned guest digest is reported");
+            // The guests chains 18 and 19 pin in their genesis (fullnode v0.6.7, `rand_status` on
+            // chain 18, 2026-09-30): bundle guest v3 and the auth guest. A vendored build that
+            // assembled either differently could prove nothing those chains accept.
+            assert_eq!(v["hc_bundle"], "60af094acfe65d85fdb18fb3d06cf9085dcf28c96e59e87f1ee527226e6e3fce");
+            assert_eq!(v["hc_auth"], "1e4e347f44cf86750b30a9a4bdf9ec9256efe353d4ff8017451eca7d195639c1");
+            assert_eq!(v["hc_bundles"].as_array().unwrap().len(), 3);
+            assert!(v["hc_bundles"].as_array().unwrap().contains(&v["hc_bundle"]));
+            assert_eq!(v["split_authorisation"], true);
+            assert_eq!(v["prover_witness_kinds"], json!(["viewing_key", "spend_key"]));
+            assert_eq!(v["prover_history_warning"], PROVER_HISTORY_WARNING);
         }
     }
 
@@ -4483,7 +4919,7 @@ mod tests {
             req["memo"] = json!(memo);
             req["envelope_bytes"] = json!(envelope_bytes);
             let req: ProveRequest = serde_json::from_value(req).unwrap();
-            let (_w, b) = build_transfer_unproven(&req)?;
+            let (_w, b) = transfer_unproven(&req)?;
             Ok((req, b))
         }
 
@@ -4553,7 +4989,7 @@ mod tests {
             req["chain_id"] = json!(15);
             req["envelope_bytes"] = json!(1860);
             let req: BurnRequest = serde_json::from_value(req).unwrap();
-            let (_w, b) = build_burn_unproven(&req).unwrap();
+            let (_w, b) = burn_unproven(&req).unwrap();
             assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == LEGACY_ENVELOPE_BYTES));
             // The list is published for the shells, which gate their memo fields on it.
             assert_eq!(constants()["legacy_envelope_chain_ids"], json!([14, 15, 16, 17]));
@@ -4566,7 +5002,7 @@ mod tests {
             req["memo"] = json!(memo);
             req["envelope_bytes"] = json!(envelope_bytes);
             let req: ProveRequest = serde_json::from_value(req).unwrap();
-            let (_w, b) = build_transfer_unproven(&req)?;
+            let (_w, b) = transfer_unproven(&req)?;
             Ok((req, b))
         }
 
@@ -4584,20 +5020,20 @@ mod tests {
             let mut req = fixture_prove_request("test", 0).unwrap();
             req["bundle_gas_limit"] = json!(16_383);
             let r: ProveRequest = serde_json::from_value(req.clone()).unwrap();
-            refused(build_transfer_unproven(&r).err().unwrap());
+            refused(transfer_unproven(&r).err().unwrap());
             req["prover"] = json!({ "kem_ek": hex::encode(randprotocol_prover::key::ProverKey::from_seed([7u8; 64]).kem_ek()), "token": hex::encode([9u8; 32]) });
             let r: PrepareTransferRequest = serde_json::from_value(req.clone()).unwrap();
             refused(prepare_transfer(&r).err().unwrap());
             req["bundle_gas_limit"] = json!(20_479);
             let r: ProveRequest = serde_json::from_value(req.clone()).unwrap();
-            assert!(build_transfer_unproven(&r).is_ok(), "the pin itself");
+            assert!(transfer_unproven(&r).is_ok(), "the pin itself");
             req["bundle_gas_limit"] = Value::Null;
             let r: ProveRequest = serde_json::from_value(req).unwrap();
-            assert!(build_transfer_unproven(&r).is_ok(), "a chain without a gas section names none");
+            assert!(transfer_unproven(&r).is_ok(), "a chain without a gas section names none");
             let mut burn = fixture_burn_request("test").unwrap();
             burn["bundle_gas_limit"] = json!(16_383);
             let r: BurnRequest = serde_json::from_value(burn).unwrap();
-            refused(build_burn_unproven(&r).err().unwrap());
+            refused(burn_unproven(&r).err().unwrap());
         }
 
         #[test]
@@ -4613,10 +5049,10 @@ mod tests {
             let mut req = fixture_burn_request("test").unwrap();
             req["envelope_bytes"] = json!(1860);
             let req: BurnRequest = serde_json::from_value(req).unwrap();
-            let (_w, b) = build_burn_unproven(&req).unwrap();
+            let (_w, b) = burn_unproven(&req).unwrap();
             assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == 1860));
             let req: BurnRequest = serde_json::from_value(fixture_burn_request("test").unwrap()).unwrap();
-            let (_w, b) = build_burn_unproven(&req).unwrap();
+            let (_w, b) = burn_unproven(&req).unwrap();
             assert!(b.prepared.bundle.envelopes.iter().all(|e| env_len(e) == LEGACY_ENVELOPE_BYTES));
         }
 
@@ -4660,24 +5096,215 @@ mod tests {
         }
     }
 
-    /// Delegated proving, Phase 1: the proof split for a light client (`prepare_*` builds and
-    /// seals, a prover proves, `finish_proof` checks and assembles).
+    /// Split authorisation (fullnode v0.6.3, the chain-17 fork every later chain keeps): which
+    /// guests a chain names, and what this wallet then builds.
+    mod split_authorisation {
+        use super::*;
+
+        fn hex_of(w: &Word8) -> String {
+            word8_to_hex(w)
+        }
+
+        /// `chain_guests` is upstream's `chain_bundle_guest` without the I/O: every pair of
+        /// `rand_status.hc_bundle` / `hc_auth` a node can answer, and what this wallet makes of it.
+        #[test]
+        fn a_chain_is_proved_for_only_when_both_its_guests_are_this_builds() {
+            let v1 = ZkExecutor::hc_hidden_bundle();
+            let v2 = ZkExecutor::hc_hidden_bundle_v2();
+            let v3 = ZkExecutor::hc_hidden_bundle_v3();
+            let auth = ZkExecutor::hc_auth();
+            // The default chain's pair, named or not.
+            assert_eq!(chain_guests(None, None).unwrap(), ChainGuests { hc: v3, v3: true });
+            assert_eq!(chain_guests(Some(&hex_of(&v3)), Some(&hex_of(&auth))).unwrap(), ChainGuests { hc: v3, v3: true });
+            assert_eq!(chain_guests(None, Some(&hex_of(&auth))).unwrap(), ChainGuests { hc: v3, v3: true });
+            // A chain without split authorisation: v1 or v2, and no auth guest.
+            assert_eq!(chain_guests(Some(&hex_of(&v1)), None).unwrap(), ChainGuests { hc: v1, v3: false });
+            assert_eq!(chain_guests(Some(&hex_of(&v2)), None).unwrap(), ChainGuests { hc: v2, v3: false });
+            // v3 whose auth guest the node does not name: a spend this wallet cannot authorise.
+            let e = chain_guests(Some(&hex_of(&v3)), None).unwrap_err();
+            assert!(e.contains("names no auth guest") && e.contains(&hex_of(&auth)), "{e}");
+            // v3 beside a foreign auth guest.
+            let foreign = hex_of(&[7u32; 8]);
+            let e = chain_guests(Some(&hex_of(&v3)), Some(&foreign)).unwrap_err();
+            assert!(e.contains(&foreign) && e.contains("update the wallet"), "{e}");
+            assert!(chain_guests(None, Some(&foreign)).is_err(), "the default guest is held to the same rule");
+            // The reverse: an auth guest beside a v1/v2 bundle guest is no genesis any build cuts.
+            for old in [v1, v2] {
+                let e = chain_guests(Some(&hex_of(&old)), Some(&hex_of(&auth))).unwrap_err();
+                assert!(e.contains("misconfigured or lying"), "{e}");
+            }
+            // A guest this build does not carry, and digests that are not digests.
+            assert!(chain_guests(Some(&hex_of(&[5u32; 8])), None).unwrap_err().contains("bundle guest"));
+            assert!(chain_guests(Some("zz"), None).unwrap_err().contains("hc_bundle"));
+            assert!(chain_guests(Some(&hex_of(&v3)), Some("zz")).unwrap_err().contains("hc_auth"));
+        }
+
+        /// `chain_guests` through `dispatch`, as a shell asks it before building anything: the
+        /// chain's guests as `rand_status` spells them (hex, or `null`), and the witness a paired
+        /// prover would be sent.
+        #[test]
+        fn dispatch_chain_guests_names_the_witness_a_prover_would_be_sent() {
+            let v2 = hex_of(&ZkExecutor::hc_hidden_bundle_v2());
+            let v3 = hex_of(&ZkExecutor::hc_hidden_bundle_v3());
+            let auth = hex_of(&ZkExecutor::hc_auth());
+            let want_v3 = json!({ "hc_bundle": v3, "hc_auth": auth, "split_authorisation": true, "witness_kind": "viewing_key" });
+            assert_eq!(dispatch("chain_guests", &json!({ "hc_bundle": v3, "hc_auth": auth })).unwrap(), want_v3);
+            assert_eq!(dispatch("chain_guests", &json!({})).unwrap(), want_v3, "both absent: the default chain's");
+            assert_eq!(dispatch("chain_guests", &json!({ "hc_bundle": null, "hc_auth": null })).unwrap(), want_v3);
+            assert_eq!(
+                dispatch("chain_guests", &json!({ "hc_bundle": v2, "hc_auth": null })).unwrap(),
+                json!({ "hc_bundle": v2, "hc_auth": null, "split_authorisation": false, "witness_kind": "spend_key" })
+            );
+            let e = dispatch("chain_guests", &json!({ "hc_bundle": v3, "hc_auth": null })).unwrap_err();
+            assert!(e.contains("names no auth guest"), "{e}");
+            let e = dispatch("chain_guests", &json!({ "hc_bundle": v2, "hc_auth": auth })).unwrap_err();
+            assert!(e.contains("misconfigured or lying"), "{e}");
+            let e = dispatch("chain_guests", &json!({ "hc_bundle": 7 })).unwrap_err();
+            assert!(e.contains("hc_bundle must be a string"), "{e}");
+        }
+
+        /// The refusals reach the two slow calls before anything is built — through `dispatch`,
+        /// as a shell calls them — so none of them costs a proof.
+        #[test]
+        fn prove_transfer_and_prove_burn_refuse_a_chain_they_cannot_authorise_before_building() {
+            let v3 = hex_of(&ZkExecutor::hc_hidden_bundle_v3());
+            let v2 = hex_of(&ZkExecutor::hc_hidden_bundle_v2());
+            let auth = hex_of(&ZkExecutor::hc_auth());
+            for fixture in [fixture_prove_request("test", 0).unwrap(), fixture_burn_request("test").unwrap()] {
+                let method = if fixture.get("to_chain").is_some() { "prove_burn" } else { "prove_transfer" };
+                let with = |hc: Value, a: Value| {
+                    let mut v = fixture.clone();
+                    v["hc_bundle"] = hc;
+                    v["hc_auth"] = a;
+                    dispatch(method, &v)
+                };
+                let e = with(json!(v3), Value::Null).unwrap_err();
+                assert!(e.contains("names no auth guest"), "{method}: {e}");
+                let e = with(json!(v3), json!(hex_of(&[9u32; 8]))).unwrap_err();
+                assert!(e.contains("update the wallet"), "{method}: {e}");
+                let e = with(json!(v2), json!(auth)).unwrap_err();
+                assert!(e.contains("misconfigured or lying"), "{method}: {e}");
+                let e = with(json!(hex_of(&[5u32; 8])), Value::Null).unwrap_err();
+                assert!(e.contains("bundle guest"), "{method}: {e}");
+                let e = with(json!("zz"), Value::Null).unwrap_err();
+                assert!(e.contains("hc_bundle"), "{method}: {e}");
+            }
+        }
+
+        /// What a v3 bundle is before any proof: a fresh salt, the commitment to `nk` and that
+        /// salt on the bundle, the v3 digest expected, and a witness of `nk ‖ … ‖ salt` in which
+        /// the spend key does not appear.
+        #[test]
+        fn a_v3_bundle_commits_to_nk_and_a_fresh_salt_and_its_witness_holds_no_spend_key() {
+            use randprotocol_zkvm::hidden::hidden_input_v3;
+            let req: ProveRequest = serde_json::from_value(fixture_prove_request("test", 0).unwrap()).unwrap();
+            let (w, b) = transfer_unproven(&req).unwrap();
+            let p = &b.prepared;
+            assert!(p.v3);
+            assert_eq!(p.guest, ZkExecutor::hc_hidden_bundle_v3());
+            assert_ne!(p.salt, [0; 8]);
+            assert_eq!(p.auth_commit, randprotocol_zkvm::auth::auth_commit(&w.vk.nk, &p.salt));
+            let bundle = b.tx.bundle.as_ref().unwrap();
+            assert_eq!(bundle.auth_commit, p.auth_commit, "the bundle carries it, inside the binding");
+            assert!(bundle.auth_proof.is_empty() && bundle.proof.is_empty(), "nothing is proved yet");
+            use randprotocol_core::confidential::ConfidentialExecutor;
+            assert_eq!(p.expected, ZkExecutor::new(FriProfile::Test).bundle_digest_v3(&bundle.digest_input()));
+            // The witness: 1 212 words, `nk` first, the salt last.
+            assert_eq!(p.words.len(), hidden_input_v3::COUNT);
+            assert_eq!(p.words.len(), 1212);
+            assert_eq!(p.words[hidden_input_v3::NK..hidden_input_v3::NK + 8], w.vk.nk);
+            assert_eq!(p.words[hidden_input_v3::SALT..], p.salt);
+            assert!(!p.words.windows(8).any(|win| win == w.sk.0), "the spend key is in the v3 witness");
+            // A second bundle for the same request draws another salt: a repeated one would
+            // repeat `auth_commit` and link the two transactions to one wallet.
+            let (_w, again) = transfer_unproven(&req).unwrap();
+            assert_ne!(again.prepared.salt, p.salt);
+            assert_ne!(again.prepared.auth_commit, p.auth_commit);
+
+            // A chain without split authorisation keeps the old bundle: the spend-key witness,
+            // the v1 digest, no commitment.
+            let mut v = fixture_prove_request("test", 0).unwrap();
+            v["hc_bundle"] = json!(hex_of(&ZkExecutor::hc_hidden_bundle_v2()));
+            let old: ProveRequest = serde_json::from_value(v).unwrap();
+            let (w, b) = transfer_unproven(&old).unwrap();
+            assert!(!b.prepared.v3);
+            assert_eq!(b.prepared.words.len(), randprotocol_zkvm::hidden::hidden_input::COUNT);
+            assert_eq!(b.prepared.words[..8], w.sk.0);
+            assert_eq!(b.tx.bundle.as_ref().unwrap().auth_commit, [0; 8]);
+            assert_eq!(b.prepared.salt, [0; 8]);
+        }
+
+        /// The auth proof alone — tier 10, a second or so at the test profile: made over the
+        /// transaction's binding, it publishes the bundle's commitment, verifies against the auth
+        /// guest, and is refused under any other transaction's binding.
+        #[test]
+        fn the_auth_proof_is_made_here_over_this_transactions_binding() {
+            use randprotocol_core::confidential::ConfidentialExecutor;
+            let req: ProveRequest = serde_json::from_value(fixture_prove_request("test", 0).unwrap()).unwrap();
+            let (w, mut b) = transfer_unproven(&req).unwrap();
+            let before = b.tx.binding();
+            let bytes = authorise(&mut b.tx, &b.prepared, &w.sk, FriProfile::Test).unwrap();
+            let bundle = b.tx.bundle.as_ref().unwrap();
+            assert_eq!(bytes, bundle.auth_proof.len());
+            assert!(bytes > 0);
+            assert_eq!(b.tx.binding(), before, "the auth proof is outside the binding it is made over");
+            let exec = ZkExecutor::new(FriProfile::Test);
+            assert_eq!(exec.auth_proof_digest(&bundle.auth_proof).unwrap(), bundle.auth_commit);
+            assert_eq!(exec.verify_auth(&ZkExecutor::hc_auth(), &bundle.auth_proof, &before).unwrap(), bundle.auth_commit);
+            assert_eq!(exec.auth_gas_limit(&bundle.auth_proof).unwrap(), Some(gas::auth_gas_limit_pin()));
+            let mut other = before;
+            other[0] ^= 1;
+            assert!(exec.verify_auth(&ZkExecutor::hc_auth(), &bundle.auth_proof, &other).is_err());
+            // Another wallet's key cannot make this bundle's auth proof: the `c` it publishes is
+            // over its own `nk`.
+            let (_w2, mut b2) = transfer_unproven(&req).unwrap();
+            let e = authorise(&mut b2.tx, &b2.prepared, &wallet(99).sk, FriProfile::Test).unwrap_err();
+            assert!(e.contains("commitment this bundle does not carry"), "{e}");
+            // A chain without split authorisation gets no auth proof at all.
+            let mut v = fixture_prove_request("test", 0).unwrap();
+            v["hc_bundle"] = json!(hex_of(&ZkExecutor::hc_hidden_bundle_v2()));
+            let old: ProveRequest = serde_json::from_value(v).unwrap();
+            let (w, mut b) = transfer_unproven(&old).unwrap();
+            assert_eq!(authorise(&mut b.tx, &b.prepared, &w.sk, FriProfile::Test).unwrap(), 0);
+            assert!(b.tx.bundle.as_ref().unwrap().auth_proof.is_empty());
+        }
+    }
+
+    /// Delegated proving: the proof split for a light client (`prepare_*` builds, authorises and
+    /// seals, a prover proves, `finish_proof` checks and assembles). Phase 2 — on a
+    /// split-authorisation chain the job carries the viewing key, never the spend key.
     mod delegated {
         use super::*;
         use randprotocol_prover::key::ProverKey;
         use randprotocol_prover::wire::{open_job, seal_reply, ProveReply, WitnessKind};
-        use randprotocol_zkvm::executor::ZkExecutor;
+        use randprotocol_zkvm::hidden::{hidden_input, hidden_input_v3};
 
         fn prover_key() -> ProverKey {
             ProverKey::from_seed([7u8; 64])
         }
 
+        /// A pairing that is NOT the owner's own — what a shared or third-party prover is.
         fn target(ek: &[u8]) -> Value {
             json!({ "kem_ek": hex::encode(ek), "token": hex::encode([9u8; 32]) })
         }
 
+        /// A pairing made from an `own=1` link.
+        fn own_target(ek: &[u8]) -> Value {
+            json!({ "kem_ek": hex::encode(ek), "token": hex::encode([9u8; 32]), "own": true })
+        }
+
         fn transfer_request(prover: Value) -> (Value, PrepareTransferRequest) {
             let mut v = fixture_prove_request("test", 0).unwrap();
+            v["prover"] = prover;
+            let r = serde_json::from_value(v.clone()).unwrap();
+            (v, r)
+        }
+
+        /// The same transfer on a chain WITHOUT split authorisation (bundle guest v2, no auth
+        /// guest): the spend-key witness.
+        fn old_chain_transfer_request(prover: Value) -> (Value, PrepareTransferRequest) {
+            let mut v = fixture_prove_request("test", 0).unwrap();
+            v["hc_bundle"] = json!(word8_to_hex(&ZkExecutor::hc_hidden_bundle_v2()));
             v["prover"] = prover;
             let r = serde_json::from_value(v.clone()).unwrap();
             (v, r)
@@ -4693,47 +5320,57 @@ mod tests {
             hex::decode(&p.reply_key).unwrap().try_into().unwrap()
         }
 
+        /// The job a split-authorisation chain's prover gets — **any** paired prover, own or not
+        /// — and the pending record the client keeps: the viewing key goes out, the spend key
+        /// goes nowhere, and the transaction already carries the auth proof made here.
         #[test]
-        fn prepare_transfer_seals_a_job_the_prover_key_opens_and_pending_carries_no_secret() {
+        fn prepare_transfer_seals_a_viewing_key_job_and_nothing_carries_the_spend_key() {
             let key = prover_key();
             let (v, r) = transfer_request(target(key.kem_ek()));
+            assert!(!r.prover.own, "not the owner's own prover");
             let out = prepare_transfer(&r).unwrap();
             let job = open_job(key.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
-            assert_eq!(job.inputs.len(), 1204);
-            assert_eq!(job.inputs.len(), randprotocol_zkvm::hidden::hidden_input::COUNT);
-            assert_eq!(job.witness_kind, WitnessKind::SpendKey);
-            assert_eq!(job.hc_bundle, ZkExecutor::hc_bundle());
+            assert_eq!(job.witness_kind, WitnessKind::ViewingKey);
+            assert_eq!(job.inputs.len(), 1212);
+            assert_eq!(job.inputs.len(), hidden_input_v3::COUNT);
+            assert_eq!(job.hc_bundle, ZkExecutor::hc_hidden_bundle_v3());
             assert_eq!(job.profile, "test");
             assert_eq!(job.token, [9u8; 32]);
             assert_eq!(hex::encode(job.reply_key), out.pending.reply_key);
             assert_eq!(out.pending.kind, "transfer");
+            assert_eq!(out.pending.witness_kind, "viewing_key");
             assert_eq!(out.expected, out.pending.expected);
-            assert_eq!(out.pending.hc_bundle, word8_to_hex(&ZkExecutor::hc_bundle()));
-            let tx = Transaction::decode(&hex::decode(&out.pending.tx_hex).unwrap()).unwrap();
-            assert!(tx.bundle.as_ref().unwrap().proof.is_empty(), "pending carries the unproven transaction");
-            assert_eq!(job.binding, tx.binding(), "the job proves this very transaction");
+            assert_eq!(out.pending.hc_bundle, word8_to_hex(&ZkExecutor::hc_hidden_bundle_v3()));
 
+            // The witness: `nk` where the spend key used to be, and no eight consecutive words of
+            // it are the spend key's.
+            let sender = Wallet::from_hex(v["spend_key"].as_str().unwrap()).unwrap();
+            assert_eq!(job.inputs[hidden_input_v3::NK..hidden_input_v3::NK + 8], sender.vk.nk);
+            assert!(!job.inputs.windows(8).any(|w| w == sender.sk.0), "the job carries the spend key");
+
+            // The pending transaction: the bundle proof still to come, the auth proof in place —
+            // made over the very binding the job names, and publishing the bundle's commitment.
+            let tx = Transaction::decode(&hex::decode(&out.pending.tx_hex).unwrap()).unwrap();
+            let bundle = tx.bundle.as_ref().unwrap();
+            assert!(bundle.proof.is_empty(), "pending carries the transaction without its bundle proof");
+            assert_eq!(job.binding, tx.binding(), "the job proves this very transaction");
+            let exec = ZkExecutor::new(FriProfile::Test);
+            assert_eq!(exec.verify_auth(&ZkExecutor::hc_auth(), &bundle.auth_proof, &tx.binding()).unwrap(), bundle.auth_commit);
+            assert_eq!(bundle.auth_commit, randprotocol_zkvm::auth::auth_commit(&sender.vk.nk, &job.inputs[hidden_input_v3::SALT..].try_into().unwrap()));
+
+            // Neither key is in what the client stores: not the spend key, and not the viewing
+            // key either (the prover has it; a session record need not).
             let s = serde_json::to_string(&out.pending).unwrap();
             let sk = v["spend_key"].as_str().unwrap();
+            let nk = sender.viewing_key_hex();
             assert!(!s.contains(sk), "pending carries the spend key");
             assert!(!s.contains(&sk[..16]), "pending carries a piece of the spend key");
-            assert!(!s.contains("spend_key") && !s.contains("inputs") && !s.contains("words"), "{s}");
-            // The witness's first eight words are the spend key's; none of them in decimal either.
-            // (A word of fewer than nine digits could turn up by chance inside a hex string, so
-            // only those long enough to mean something are asserted.)
-            let mut checked = 0;
-            for w in &job.inputs[..8] {
-                let d = w.to_string();
-                if d.len() >= 9 {
-                    assert!(!s.contains(&d), "pending carries witness word {d}");
-                    checked += 1;
-                }
-            }
-            assert!(checked >= 1, "at least one witness word was long enough to check");
+            assert!(!s.contains(&nk) && !s.contains(&nk[..16]), "pending carries the viewing key");
+            assert!(!s.contains("spend_key\":") && !s.contains("inputs") && !s.contains("words"), "{}", &s[..200]);
             // The whole reply a client gets, through `dispatch`, carries no spend key either.
             let whole = dispatch("prepare_transfer", &v).unwrap();
             let whole = serde_json::to_string(&whole["pending"]).unwrap();
-            assert!(!whole.contains(sk) && !whole.contains("spend_key"));
+            assert!(!whole.contains(sk) && !whole.contains("spend_key\":"));
         }
 
         #[test]
@@ -4742,7 +5379,10 @@ mod tests {
             let r = burn_request(target(key.kem_ek()));
             let out = prepare_burn(&r).unwrap();
             let job = open_job(key.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
-            assert_eq!(job.inputs.len(), 1204);
+            assert_eq!(job.inputs.len(), 1212);
+            assert_eq!(job.witness_kind, WitnessKind::ViewingKey);
+            let sender = Wallet::from_hex(&r.req.spend_key).unwrap();
+            assert!(!job.inputs.windows(8).any(|w| w == sender.sk.0), "the job carries the spend key");
             assert_eq!(out.pending.kind, "burn");
             assert_eq!(out.pending.scalars.to_chain, Some(FIXTURE_BURN_TO_CHAIN));
             assert_eq!(out.pending.scalars.token.as_deref(), Some(hex::encode(FIXTURE_BURN_TOKEN).as_str()));
@@ -4750,28 +5390,103 @@ mod tests {
             let tx = Transaction::decode(&hex::decode(&out.pending.tx_hex).unwrap()).unwrap();
             assert!(matches!(tx.action, Action::BridgeBurn { .. }));
             assert_eq!(job.binding, tx.binding());
+            assert!(!tx.bundle.as_ref().unwrap().auth_proof.is_empty(), "a burn is authorised here too");
             assert!(!serde_json::to_string(&out.pending).unwrap().contains(&r.req.spend_key));
         }
 
+        /// The witness kind is the chain's, never the caller's: a request naming the other one is
+        /// refused, on both kinds of chain, for a transfer and a burn.
         #[test]
-        fn prepare_refuses_a_viewing_key_witness_in_this_build() {
+        fn the_witness_kind_follows_the_chains_guest_and_a_request_naming_another_is_refused() {
             let key = prover_key();
+            // A split-authorisation chain: the viewing key, named or not…
             let mut t = target(key.kem_ek());
             t["witness_kind"] = json!("viewing_key");
-            let (_, r) = transfer_request(t.clone());
-            let e = prepare_transfer(&r).err().unwrap();
-            assert!(e.contains("spend key"), "{e}");
-            let e = prepare_burn(&burn_request(t)).err().unwrap();
-            assert!(e.contains("spend key"), "{e}");
+            let (_, r) = transfer_request(t);
+            let out = prepare_transfer(&r).unwrap();
+            assert_eq!(out.pending.witness_kind, "viewing_key");
+            // …and never the spend key, even to the owner's own prover, even when asked.
+            for t in [target(key.kem_ek()), own_target(key.kem_ek())] {
+                let mut t = t;
+                t["witness_kind"] = json!("spend_key");
+                let (_, r) = transfer_request(t.clone());
+                let e = prepare_transfer(&r).err().unwrap();
+                assert!(e.contains("never sends the spend key"), "{e}");
+                let e = prepare_burn(&burn_request(t)).err().unwrap();
+                assert!(e.contains("never sends the spend key"), "{e}");
+            }
             let mut t = target(key.kem_ek());
             t["witness_kind"] = json!("both");
             let (_, r) = transfer_request(t);
             assert!(prepare_transfer(&r).err().unwrap().contains("witness_kind"));
-            // Explicit "spend_key" is the default spelled out.
+            // A chain without split authorisation: a viewing-key witness cannot prove there.
+            let mut t = own_target(key.kem_ek());
+            t["witness_kind"] = json!("viewing_key");
+            let (_, r) = old_chain_transfer_request(t);
+            let e = prepare_transfer(&r).err().unwrap();
+            assert!(e.contains("without split authorisation"), "{e}");
+        }
+
+        /// A spend-key job — the only job a chain without split authorisation has — goes to a
+        /// prover paired as the owner's own and to no other. The core holds that line itself now;
+        /// before Phase 2 only the shells did.
+        #[test]
+        fn a_spend_key_job_goes_only_to_the_owners_own_prover() {
+            let key = prover_key();
+            let (_, r) = old_chain_transfer_request(target(key.kem_ek()));
+            assert_eq!(prepare_transfer(&r).err().unwrap(), NOT_OWN);
             let mut t = target(key.kem_ek());
-            t["witness_kind"] = json!("spend_key");
-            let (_, r) = transfer_request(t);
-            prepare_transfer(&r).unwrap();
+            t["own"] = json!(false);
+            let (_, r) = old_chain_transfer_request(t);
+            assert_eq!(prepare_transfer(&r).err().unwrap(), NOT_OWN);
+            // Own: the v1/v2 job exactly as Phase 1 sealed it.
+            let (v, r) = old_chain_transfer_request(own_target(key.kem_ek()));
+            let out = prepare_transfer(&r).unwrap();
+            let job = open_job(key.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
+            assert_eq!(job.witness_kind, WitnessKind::SpendKey);
+            assert_eq!(job.inputs.len(), hidden_input::COUNT);
+            assert_eq!(job.inputs.len(), 1204);
+            assert_eq!(out.pending.witness_kind, "spend_key");
+            let sender = Wallet::from_hex(v["spend_key"].as_str().unwrap()).unwrap();
+            assert_eq!(job.inputs[..8], sender.sk.0);
+            let tx = Transaction::decode(&hex::decode(&out.pending.tx_hex).unwrap()).unwrap();
+            let bundle = tx.bundle.as_ref().unwrap();
+            assert!(bundle.auth_proof.is_empty() && bundle.auth_commit == [0; 8], "no auth fields on such a chain");
+            assert!(!serde_json::to_string(&out.pending).unwrap().contains(v["spend_key"].as_str().unwrap()));
+        }
+
+        /// This build pays no prover fee: a prover that quotes one is refused before anything is
+        /// built, and a quote that does not parse is never read as "free".
+        #[test]
+        fn a_prover_that_quotes_a_fee_is_refused_before_anything_is_built() {
+            let key = prover_key();
+            let address = wallet(55).address.to_string();
+            let with_fee = |fee: Value| {
+                let mut t = target(key.kem_ek());
+                t["fee"] = fee;
+                let (_, r) = transfer_request(t.clone());
+                (prepare_transfer(&r).map(|_| ()), prepare_burn(&burn_request(t)).map(|_| ()))
+            };
+            // No fee: `null`, absent, or an amount of zero.
+            assert_eq!(with_fee(Value::Null), (Ok(()), Ok(())));
+            assert_eq!(with_fee(json!({ "amount": "0", "address": address })), (Ok(()), Ok(())));
+            // A fee, as `prover_info` spells it: refused, with the amount, for both kinds of job.
+            let (t, b) = with_fee(json!({ "amount": "250000000", "address": address }));
+            for e in [t.unwrap_err(), b.unwrap_err()] {
+                assert!(e.contains("0.25 RAND") && e.contains("does not pay a prover's fee"), "{e}");
+            }
+            // A quote this wallet cannot read is refused too.
+            for odd in [
+                json!({ "amount": 250000000u64, "address": address }),
+                json!({ "amount": "1e9", "address": address }),
+                json!({ "amount": "250000000" }),
+                json!({ "amount": "250000000", "address": "rand1nope" }),
+                json!("0.25"),
+                json!(true),
+            ] {
+                let (t, _) = with_fee(odd.clone());
+                assert!(t.unwrap_err().contains("cannot read"), "{odd}");
+            }
         }
 
         #[test]
@@ -4798,7 +5513,7 @@ mod tests {
         fn prepare_carries_the_chains_bundle_guest() {
             let key = prover_key();
             let v2 = ZkExecutor::hc_hidden_bundle_v2();
-            let mut t = target(key.kem_ek());
+            let mut t = own_target(key.kem_ek());
             t["hc_bundle"] = json!(word8_to_hex(&v2));
             let (_, r) = transfer_request(t);
             let out = prepare_transfer(&r).unwrap();
@@ -4812,38 +5527,25 @@ mod tests {
             let key = prover_key();
             let v2 = ZkExecutor::hc_hidden_bundle_v2();
             // Only the request names it (the prover target does not): the job carries it.
-            let (mut v, _) = transfer_request(target(key.kem_ek()));
+            let (mut v, _) = transfer_request(own_target(key.kem_ek()));
             v["hc_bundle"] = json!(word8_to_hex(&v2));
             let r: PrepareTransferRequest = serde_json::from_value(v.clone()).unwrap();
             let out = prepare_transfer(&r).unwrap();
             let job = open_job(key.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
             assert_eq!(job.hc_bundle, v2);
             // Both, and they disagree: refused rather than guessed between.
-            v["prover"]["hc_bundle"] = json!(word8_to_hex(&ZkExecutor::hc_bundle()));
+            v["prover"]["hc_bundle"] = json!(word8_to_hex(&ZkExecutor::hc_hidden_bundle()));
             let r: PrepareTransferRequest = serde_json::from_value(v).unwrap();
             assert!(prepare_transfer(&r).err().unwrap().contains("different bundle guests"));
-        }
-
-        /// The local path proves with the chain's guest: the request's `hc_bundle` is what
-        /// `prove_transfer`/`prove_burn` resolve before building, an unknown guest is refused
-        /// before a minute and a half of proving, and absent means this build's default.
-        #[test]
-        fn the_local_prove_call_takes_the_requests_bundle_guest() {
-            let v2 = ZkExecutor::hc_hidden_bundle_v2();
-            assert_eq!(chain_guest(None).unwrap(), ZkExecutor::hc_bundle());
-            assert_eq!(chain_guest(Some(&word8_to_hex(&v2))).unwrap(), v2);
-            let mut v = fixture_prove_request("test", 0).unwrap();
-            v["hc_bundle"] = json!(word8_to_hex(&[5u32; 8]));
-            let req: ProveRequest = serde_json::from_value(v.clone()).unwrap();
-            assert_eq!(req.hc_bundle.as_deref(), Some(word8_to_hex(&[5u32; 8]).as_str()));
-            let e = prove_transfer(&req).err().unwrap();
-            assert!(e.contains("bundle guest"), "{e}");
-            let e = dispatch("prove_transfer", &v).err().unwrap();
-            assert!(e.contains("bundle guest"), "{e}");
-            let mut b = fixture_burn_request("test").unwrap();
-            b["hc_bundle"] = json!("zz");
-            let e = dispatch("prove_burn", &b).err().unwrap();
-            assert!(e.contains("hc_bundle"), "{e}");
+            // The request's `hc_auth` reaches the delegated path as it does the local one.
+            let (mut v, _) = transfer_request(target(key.kem_ek()));
+            v["hc_bundle"] = json!(word8_to_hex(&ZkExecutor::hc_hidden_bundle_v3()));
+            v["hc_auth"] = Value::Null;
+            let r: PrepareTransferRequest = serde_json::from_value(v.clone()).unwrap();
+            assert!(prepare_transfer(&r).err().unwrap().contains("names no auth guest"));
+            v["hc_auth"] = json!(word8_to_hex(&ZkExecutor::hc_auth()));
+            let r: PrepareTransferRequest = serde_json::from_value(v).unwrap();
+            prepare_transfer(&r).unwrap();
         }
 
         /// One real Test-profile proof for the v2 guest through `prove_transfer`: it verifies
@@ -4856,11 +5558,12 @@ mod tests {
             v["hc_bundle"] = json!(word8_to_hex(&v2));
             let req: ProveRequest = serde_json::from_value(v).unwrap();
             let out = prove_transfer(&req).unwrap();
+            assert_eq!(out.auth_proof_bytes, 0, "a chain without split authorisation has no auth proof");
             let tx = Transaction::decode(&hex::decode(&out.tx_hex).unwrap()).unwrap();
             let bundle = tx.bundle.as_ref().unwrap();
             let exec = ZkExecutor::new(FriProfile::Test);
             exec.verify_bundle(&v2, &bundle.proof, &tx.binding()).unwrap();
-            assert!(exec.verify_bundle(&ZkExecutor::hc_bundle(), &bundle.proof, &tx.binding()).is_err());
+            assert!(exec.verify_bundle(&ZkExecutor::hc_hidden_bundle(), &bundle.proof, &tx.binding()).is_err());
         }
 
         #[test]
@@ -4942,28 +5645,79 @@ mod tests {
             assert!(e.contains("kind"), "{e}");
         }
 
-        /// The one real proof: made here on the build's own witness, sealed as a prover would
-        /// seal it, and handed to `finish_proof` — whose result must be `prove_transfer`'s own
-        /// assembly over the same build and proof, field for field.
+        /// A v3 pending transaction must still carry the auth proof `prepare_*` made, publishing
+        /// its own commitment — checked before the prover's reply is opened, so a record that
+        /// lost it (or had it swapped) never reaches a node as a transaction it refuses.
+        #[test]
+        fn finish_proof_refuses_a_pending_transaction_whose_auth_proof_is_gone_or_foreign() {
+            let key = prover_key();
+            let (_, r) = transfer_request(target(key.kem_ek()));
+            let pending = prepare_transfer(&r).unwrap().pending;
+            let rk = reply_key(&pending);
+            let expected = word8_from_hex(&pending.expected).unwrap();
+            let reply = || hex::encode(seal_reply(&rk, &ProveReply { proof: vec![0; 64], digest: expected, tier: 14 }));
+            let with_tx = |edit: &dyn Fn(&mut Bundle)| {
+                let mut p = pending.clone();
+                let mut tx = Transaction::decode(&hex::decode(&p.tx_hex).unwrap()).unwrap();
+                edit(tx.bundle.as_mut().unwrap());
+                p.tx_hex = hex::encode(tx.encode());
+                finish_proof(&FinishRequest { pending: p, reply_hex: reply() }).err().unwrap()
+            };
+            let e = with_tx(&|b| b.auth_proof.clear());
+            assert!(e.contains("carries no auth proof"), "{e}");
+            let e = with_tx(&|b| b.auth_proof = vec![0; 64]);
+            assert!(e.contains("auth proof does not decode"), "{e}");
+            // Another bundle's (real) auth proof: it decodes, and publishes another commitment.
+            let (_, r2) = transfer_request(target(key.kem_ek()));
+            let other = prepare_transfer(&r2).unwrap().pending;
+            let other_tx = Transaction::decode(&hex::decode(&other.tx_hex).unwrap()).unwrap();
+            let foreign = other_tx.bundle.unwrap().auth_proof;
+            let e = with_tx(&|b| b.auth_proof = foreign.clone());
+            assert!(e.contains("publishes a commitment its bundle does not carry"), "{e}");
+            // The untouched pending gets past these checks, to the reply (which is not a proof).
+            let e = finish_proof(&FinishRequest { pending: pending.clone(), reply_hex: reply() }).err().unwrap();
+            assert!(e.contains("does not decode as a bundle proof"), "{e}");
+            // And a pre-v3 pending must carry no auth fields at all.
+            let (_, old) = old_chain_transfer_request(own_target(key.kem_ek()));
+            let old = prepare_transfer(&old).unwrap().pending;
+            let mut p = old.clone();
+            let mut tx = Transaction::decode(&hex::decode(&p.tx_hex).unwrap()).unwrap();
+            tx.bundle.as_mut().unwrap().auth_proof = foreign;
+            p.tx_hex = hex::encode(tx.encode());
+            let rk = reply_key(&old);
+            let reply = hex::encode(seal_reply(&rk, &ProveReply { proof: vec![0; 64], digest: [0; 8], tier: 14 }));
+            let e = finish_proof(&FinishRequest { pending: p, reply_hex: reply }).err().unwrap();
+            assert!(e.contains("its bundle guest takes none"), "{e}");
+        }
+
+        /// The one real proof: made here on the build's own **viewing-key** witness, exactly as a
+        /// prover that holds no spend key makes it, sealed as that prover seals it, and handed to
+        /// `finish_proof` — whose result must be `prove_transfer`'s own assembly over the same
+        /// build and proofs, field for field, and a transaction a chain-18-shaped ledger admits.
         #[test]
         #[ignore = "one real Test-profile bundle proof (~100 s); run with --ignored"]
         fn finish_proof_matches_prove_transfer_field_for_field() {
             let key = prover_key();
             let (_, r) = transfer_request(target(key.kem_ek()));
-            let (_w, mut b) = build_transfer_unproven(&r.req).unwrap();
-            let words = b.prepared.words.clone();
-            let out = prepare_transfer_with(&mut b, &check_target(&r.prover, None).unwrap(), r.max_proof_bytes).unwrap();
+            let target = check_target(&r.prover, None, None).unwrap();
+            assert_eq!(target.kind, WitnessKind::ViewingKey);
+            let (w, mut b) = build_transfer_unproven(&r.req, &target.guests).unwrap();
+            let out = prepare_transfer_with(&w, &mut b, &target, r.max_proof_bytes).unwrap();
             assert!(b.prepared.words.is_empty(), "the witness moved into the job, which zeroizes it");
+            // The prover's side: nothing but the opened job.
+            let job = open_job(key.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
             let binding = b.tx.binding();
+            assert_eq!(job.binding, binding);
             let (proof, digest, tier) =
-                randprotocol_zkvm::executor::prove_bundle(FriProfile::Test, &words, &binding, Backend::Cpu).unwrap();
+                prove_bundle_for(&job.hc_bundle, FriProfile::Test, &job.inputs, &job.binding, Backend::Cpu).unwrap();
             assert_eq!(word8_to_hex(&digest), out.expected);
 
-            // `prove_transfer`'s path: `prove_transaction` fills the proof in, then the result is
-            // assembled from the build's scalars.
+            // `prove_transfer`'s path: `prove_transaction` fills both proofs in (the auth proof is
+            // already in `b.tx`, from the prepare), then the result is assembled from the scalars.
             let proof_bytes = proof.len();
             b.tx.bundle.as_mut().unwrap().proof = proof.clone();
             let want = serde_json::to_value(transfer_result(&transfer_scalars(&b), &b.tx, tier, proof_bytes)).unwrap();
+            assert!(want["auth_proof_bytes"].as_u64().unwrap() > 0);
 
             let rk = reply_key(&out.pending);
             let finish = |p: &Pending, reply: &ProveReply| {
@@ -4981,6 +5735,18 @@ mod tests {
             )
             .unwrap();
             assert_eq!(via, want);
+            // What came out is a transaction a split-authorisation chain admits: the fixture's two
+            // leaves are the whole tree, at indices 0 and 1.
+            let exec = ZkExecutor::new(FriProfile::Test);
+            let mut leaves: Vec<(u64, Word8)> =
+                r.req.inputs.iter().map(|i| (i.note.index, word8_from_hex(&i.note.cm).unwrap())).collect();
+            leaves.sort_by_key(|(i, _)| *i);
+            let leaves: Vec<Word8> = leaves.into_iter().map(|(_, cm)| cm).collect();
+            let mut ledger = chain18_ledger(&exec, &leaves, r.req.anchor_height);
+            // The fixture seals the legacy envelope (it names no `envelope_bytes`).
+            ledger.set_envelope_bytes(None);
+            let done = Transaction::decode(&hex::decode(got["tx_hex"].as_str().unwrap()).unwrap()).unwrap();
+            ledger.validate(&done, &exec).expect("the delegated transaction is admitted");
 
             // A real proof whose reply claims another digest.
             let mut lie = digest;

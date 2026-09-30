@@ -10,14 +10,20 @@ import { displayMemo } from '../../lib/memo.js';
 /** What `'proving'` says when this device makes the proof. */
 export const DEVICE_PROVING_LABEL = 'Proving the bundle';
 
+/** What `'proving'` says while this device makes the auth proof, before a prover has the job. */
+export const AUTHORISING_LABEL = 'Authorising the spend on this device…';
+
 /**
- * `'proving'`'s label from its `detail` (ui/backend.js, R3): on a paired prover, where the job
- * waits in its queue, then that the prover is working on it; otherwise the device sentence. The
- * prover's name is the user's own pairing label — shown as text, never markup.
+ * `'proving'`'s label from its `detail` (ui/backend.js, R3): on a paired prover, first that this
+ * device is authorising the spend (the auth proof — made here, from the spend key, before the job
+ * exists), then where the job waits in the prover's queue, then that the prover is working on it;
+ * otherwise the device sentence. The prover's name is the user's own pairing label — shown as
+ * text, never markup.
  */
 export function provingLabel(detail = {}) {
   const d = detail || {};
   const name = typeof d.prover === 'string' && d.prover ? d.prover : '';
+  if (d.authorising === true) return AUTHORISING_LABEL;
   const position = Number(d.position);
   if (name && Number.isInteger(position) && position >= 1) return `Waiting at position ${position} on ${name}`;
   if (name) return `Proving on ${name}…`;
@@ -47,8 +53,8 @@ export function provingBanner(store, deviceText = 'The proof runs on this device
   const name = store && typeof store.proverName === 'string' ? store.proverName : '';
   if (!name) return { title: 'Keep this window open', text: deviceText };
   return {
-    title: 'Your prover is making the proof',
-    text: `The proof is being made by ${name}. You can look at other screens — it keeps going — and if the wallet closes, opening it again before it locks picks the proof up where it was.`,
+    title: 'A prover is making the proof',
+    text: `This device authorises the spend; the proof itself is being made by ${name}. You can look at other screens — it keeps going — and if the wallet closes, opening it again before it locks picks the proof up where it was.`,
   };
 }
 
@@ -184,7 +190,7 @@ export function safeHash(hash) {
 export function explainProvingError(msg) {
   const text = String((msg && msg.message) || msg || '').trim();
   if (/unreachable|out of memory|alloc|worker failed|memory access/i.test(text)) {
-    return 'This device ran out of memory while proving. A transfer proof needs about 5.7 GB and a '
+    return 'This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a '
       + 'browser gives WebAssembly at most 4 GB. Your notes are untouched — send from the desktop '
       + 'app, which proves natively.';
   }

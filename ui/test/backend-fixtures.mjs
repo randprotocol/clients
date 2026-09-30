@@ -81,14 +81,45 @@ export const CORE_VERSION = Object.freeze({
   version: '0.1.0', default_chain_id: 13, default_rpc_url: 'https://rpc.randprotocol.org',
   explorer_url: 'https://randscan.org', address_hrp: 'rand1', token_symbol: 'RAND',
   token_decimals: 9, units_per_rand: '1000000000', bundle_base_fee: '1000000',
-  prover_peak_memory_bytes: 5700000000,
+  prover_peak_memory_bytes: 6200000000,
   // Chain 14: one bundle, four slots, one proof for a transfer AND for a burn.
   bundle_inputs: 2, bundle_slots: 4, bundle_asset_slots: 2,
   transfer_proofs: 1, bridge_burn_proofs: 1, rpl_transfer: true,
   bridge_burn_fee: '10000000',
   // Delegated proving (plan 2026-09-28): the prover wire this core seals and opens.
   prover_wire: 1,
+  // Split authorisation (fullnode v0.6.3, every chain since 17): the default chain's two guests,
+  // and the sentence a shell shows before a prover that is not the user's own is paired.
+  hc_bundle: 'd3'.repeat(32), hc_auth: 'a7'.repeat(32), split_authorisation: true,
+  prover_witness_kinds: ['viewing_key', 'spend_key'],
+  prover_history_warning: 'This prover will be able to read this wallet\'s whole history — every payment '
+    + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.',
 });
+
+/** The stub chain's guests: bundle guest v3 and the auth guest (a split-authorisation chain)… */
+export const HC_V3 = CORE_VERSION.hc_bundle;
+export const HC_AUTH = CORE_VERSION.hc_auth;
+/** …and an older bundle guest, whose witness carries the spend key and which has no auth guest. */
+export const HC_V2 = 'f0'.repeat(32);
+/** The core's refusal for a spend-key witness bound for a prover that is not the user's own. */
+export const NOT_OWN = 'this chain\'s bundle witness carries the spend key; only a prover paired as your own '
+  + '(a link made with `rand-prover pair --own`) may receive it';
+
+/**
+ * The stub of the core's `chain_guests`: the same four outcomes, on the stub digests. Both absent
+ * is the default chain's pair; v3 needs this build's auth guest; an older guest must have none.
+ */
+export function stubChainGuests({ hc_bundle: hc = null, hc_auth: auth = null } = {}) {
+  const bundle = hc ?? HC_V3;
+  if (bundle !== HC_V3) {
+    if (auth !== null) throw new Error(`this chain names an auth guest but a v1/v2 bundle guest (${bundle}); the node is misconfigured or lying — refusing to prove`);
+    return { hc_bundle: bundle, hc_auth: null, split_authorisation: false, witness_kind: 'spend_key' };
+  }
+  if (hc === null && auth === null) return { hc_bundle: HC_V3, hc_auth: HC_AUTH, split_authorisation: true, witness_kind: 'viewing_key' };
+  if (auth === null) throw new Error('this chain\'s bundle guest is v3 (split authorisation) but the node names no auth guest');
+  if (auth !== HC_AUTH) throw new Error(`this chain\'s auth guest is ${auth}; this wallet carries ${HC_AUTH} — update the wallet`);
+  return { hc_bundle: HC_V3, hc_auth: HC_AUTH, split_authorisation: true, witness_kind: 'viewing_key' };
+}
 
 // ------------------------------------------------------------------------ a paired prover -----
 /** A prover on this machine, as a pairing link names it (http is allowed only here). */
@@ -111,12 +142,15 @@ export function proverFingerprint(key = 'KEY') {
 export function proverLink({ key = 'KEY', url = PROVER_URL, token = PROVER_TOKEN, own = true } = {}) {
   return `randprover:${key}?url=${encodeURIComponent(url)}&token=${token}${own ? '&own=1' : ''}`;
 }
-/** `prover_info` for the prover whose link key is `key`. */
-export function proverInfo(key = 'KEY', { witnessKinds = ['spend_key'], depth = 0 } = {}) {
+/**
+ * `prover_info` for the prover whose link key is `key` — by default what a v0.6.7 `rand-prover`
+ * answers when started without `--accept-spend-key`: viewing-key jobs only, no fee.
+ */
+export function proverInfo(key = 'KEY', { witnessKinds = ['viewing_key'], depth = 0, fee = null } = {}) {
   return {
-    version: '0.6.2', kem_fingerprint: proverFingerprint(key), kem_ek: proverEk(key),
-    hc_bundles: ['f0'.repeat(32)], profiles: ['production'], backend: 'cpu',
-    witness_kinds: witnessKinds, queue: { depth, max: 4, proving: 0 }, fee: null,
+    version: '0.6.7', kem_fingerprint: proverFingerprint(key), kem_ek: proverEk(key),
+    hc_bundles: [HC_V3, HC_V2], profiles: ['production'], backend: 'cpu',
+    witness_kinds: witnessKinds, queue: { depth, max: 4, proving: 0 }, fee,
   };
 }
 /** The sealed job the stub core "seals": a constant, carrying nothing it was given. */
@@ -291,6 +325,7 @@ export function stubCore(overrides = {}) {
       return { kem_ek: proverEk(m[1]), url: q.url, token: q.token, own: q.own === '1', fingerprint: proverFingerprint(m[1]) };
     },
     prover_fingerprint: ({ kem_ek: ek }) => fingerprintOfEk(ek),
+    chain_guests: (p) => stubChainGuests(p),
     prepare_transfer: (p) => stubPrepared('transfer', p),
     prepare_burn: (p) => stubPrepared('burn', p),
     finish_proof: ({ pending, reply_hex: reply }) => {
@@ -310,15 +345,29 @@ export function stubCore(overrides = {}) {
   };
 }
 
-/** `prepare_*`'s reply in the stub: the request's public facts in `pending`, never its spend key. */
+/**
+ * `prepare_*`'s reply in the stub: the request's public facts in `pending`, never its spend key —
+ * after the real core's refusals, in its order: the chain's guests decide the witness kind (never
+ * the caller), a spend-key witness needs `prover.own`, and a prover's fee is not paid.
+ */
 function stubPrepared(kind, p) {
   if (!p.prover || !/^[0-9a-f]{64}$/.test(p.prover.token || '')) throw new Error('prover: token must be 64 hex characters');
+  const guests = stubChainGuests({ hc_bundle: p.prover.hc_bundle ?? p.hc_bundle ?? null, hc_auth: p.hc_auth ?? null });
+  const asked = p.prover.witness_kind;
+  if (asked !== undefined && asked !== null && asked !== guests.witness_kind) {
+    throw new Error(`witness_kind "${asked}" is not what this chain's bundle guest takes (${guests.witness_kind})`);
+  }
+  if (guests.witness_kind === 'spend_key' && p.prover.own !== true) throw new Error(NOT_OWN);
+  const fee = p.prover.fee;
+  if (fee !== undefined && fee !== null && !(fee && /^0+$/.test(String(fee.amount)))) {
+    throw new Error('this prover charges a fee, and this version of the wallet does not pay a prover\'s fee');
+  }
   const asset = Number(p.asset) || 0;
   const slot = kind === 'transfer' ? (asset === 0 ? 2 : 0) : null;
   const pending = {
     kind, tx_hex: 'ab'.repeat(200), expected: 'ee'.repeat(32), reply_key: 'cc'.repeat(32),
     max_proof_bytes: p.max_proof_bytes ?? 2097152, profile: p.profile || 'production',
-    hc_bundle: (p.prover && p.prover.hc_bundle) || p.hc_bundle || 'f0'.repeat(32),
+    hc_bundle: guests.hc_bundle, witness_kind: guests.witness_kind,
     scalars: {
       time: 7, asset, amount: String(p.amount), change: '0', fee_change: '0', fee: String(p.fee),
       // Two-hex-digit patterns no fixture key uses (SPEND_KEY is a1…, PK c3…), so a leak probe

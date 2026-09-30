@@ -194,7 +194,7 @@ function sentence(text) {
  * it reads a backing's `locked` with upstream's `amount_field` (a decimal string on chain 14, a
  * number on an older node). Chain 14's zUSD amendment added two of those four checks; re-porting
  * them would have meant two implementations of a rule whose whole job is to agree with the ledger,
- * and the one that disagreed would cost the user a ~100-second, ~5.7 GB proof for a transaction
+ * and the one that disagreed would cost the user a ~100-second, ~6.2 GB proof for a transaction
  * the chain was always going to refuse.
  *
  * So what lives here is only the adaptation: `checkBridgeState`'s validated `{enabled, assets}`
@@ -766,8 +766,12 @@ export function makeSharedBackend({
   }
 
   /**
-   * `{token, kemEk, url, fingerprint}` from a decrypted pairing record, or `undefined` when it is
-   * not one (a pre-release record holding the bare token included: that pairing must be made again).
+   * `{token, kemEk, url, fingerprint, own}` from a decrypted pairing record, or `undefined` when it
+   * is not one (a pre-release record holding the bare token included: that pairing must be made
+   * again). `own` is whether the pairing link said `own=1` — what decides whether this prover may
+   * ever be sent a spend-key witness — and it is read from HERE, the sealed record, never from the
+   * plaintext `settings.prover`. A record written before it was kept (Phase 1) reads `false`: such
+   * a prover is sent viewing-key jobs only, which is every job on a split-authorisation chain.
    */
   function pairingOf(value) {
     let v = value;
@@ -775,7 +779,7 @@ export function makeSharedBackend({
     if (!v || typeof v !== 'object') return undefined;
     const { token, kemEk, url, fingerprint } = v;
     if (![token, kemEk, url, fingerprint].every((x) => typeof x === 'string' && x)) return undefined;
-    return { token, kemEk, url, fingerprint };
+    return { token, kemEk, url, fingerprint, own: v.own === true };
   }
 
   /**
@@ -1457,10 +1461,15 @@ export function makeSharedBackend({
   }
 
   // --------------------------------------------------------------- delegated proving ----------
-  // Plan 2026-09-28 (Phase 1). A shell that cannot prove on this device — every wasm shell, and a
-  // desktop without the memory — may prove through a prover the user paired as their OWN: the
-  // spend key reaches it only inside a job the core sealed to its ML-KEM key, and `finish_proof`
-  // checks whatever comes back before anything is submitted.
+  // Plans 2026-09-28 (Phase 1 and Phase 2). A shell that cannot prove on this device — every wasm
+  // shell, and a desktop without the memory — may have its BUNDLE proof made by a paired prover.
+  // On a split-authorisation chain (bundle guest v3: every chain since 17) the job the core seals
+  // carries the viewing key and a salt, never the spend key: the prover can read this wallet's
+  // history and cannot spend, so any paired prover may have it, and the spend authorisation — the
+  // auth proof — is made on this device by the core's `prepare_*`. On an older chain the job
+  // carries the spend key and goes only to a prover paired as the user's OWN. Which it is follows
+  // the chain's guest and is the core's decision (`chain_guests`), and `finish_proof` checks
+  // whatever comes back before anything is submitted.
 
   async function writeProverSetting(value) {
     const stored = (await storage.get(K.settings)) || {};
@@ -1497,10 +1506,26 @@ export function makeSharedBackend({
    * one the link names; only then is anything stored — the token, key and URL together in the vault
    * (never in `settings`), and a display copy in `settings.prover`.
    */
-  // Phase 1 sends a spend-key job only to a prover the link marks as the user's own; a pairing
-  // without it is stored but never used, and a screen says so before the user saves it.
-  const NOT_OWN_WARNING = 'This link does not mark the prover as your own, so this version of the '
-    + 'wallet will never send it a job: pair only a prover you run yourself, from a link it made with own=1.';
+  /**
+   * What a prover learns from a viewing-key job — the core's sentence (`version`'s
+   * `prover_history_warning`), so every shell says the same thing. `preview` returns it as
+   * `warning` for a link that is not marked as the user's own, and a screen shows it before the
+   * pairing is saved. (A prover of the user's own learns exactly as much; it is theirs.)
+   */
+  async function historyWarning() {
+    const k = await constants();
+    return String(k.prover_history_warning || 'This prover will be able to read this wallet\'s whole history. It cannot spend.');
+  }
+
+  /** `prover_info.fee` as a sentence when it is a fee, `null` when the prover charges nothing. */
+  async function feeRefusal(fee) {
+    if (fee === null || fee === undefined) return null;
+    const amount = fee && typeof fee === 'object' && typeof fee.amount === 'string' ? fee.amount : '';
+    if (/^0+$/.test(amount)) return null;
+    let shown = '';
+    if (/^[0-9]{1,20}$/.test(amount)) { try { shown = ` of ${await c.formatAmount(amount)} RAND`; } catch { shown = ''; } }
+    return `it charges a fee${shown} per proof, which this version of the wallet does not pay`;
+  }
 
   async function probeAt(p) {
     if (!p || typeof p.url !== 'string' || !p.url || (p.mode !== undefined && p.mode !== 'remote')) {
@@ -1529,7 +1554,7 @@ export function makeSharedBackend({
       const checked = checkProverUrl(parsed.url);
       if (checked.error) throw new Error(checked.error);
       const own = parsed.own === true;
-      return { url: checked.url, fingerprint: String(parsed.fingerprint), own, ...(own ? {} : { warning: NOT_OWN_WARNING }) };
+      return { url: checked.url, fingerprint: String(parsed.fingerprint), own, ...(own ? {} : { warning: await historyWarning() }) };
     },
 
     async pair(link, password, { name } = {}) {
@@ -1550,9 +1575,12 @@ export function makeSharedBackend({
       if (!(await sameProverKey(info, kemEk, parsed.fingerprint))) {
         throw new Error('The prover at that address has a different key from the one the link names. Do not pair it.');
       }
-      // Everything that decides where the spend key goes is sealed under the password together;
-      // `settings.prover` below is what a screen shows, and nothing reads a seal target from it.
-      const pairing = { token: String(parsed.token), kemEk, url: checked.url, fingerprint: String(parsed.fingerprint) };
+      // Everything that decides where a witness goes — and whether it may ever be a spend-key
+      // one (`own`) — is sealed under the password together; `settings.prover` below is what a
+      // screen shows, and nothing reads a seal target from it.
+      const pairing = {
+        token: String(parsed.token), kemEk, url: checked.url, fingerprint: String(parsed.fingerprint), own: parsed.own === true,
+      };
       const vault = await encryptSecret(password, JSON.stringify(pairing));
       await storage.set(K.proverToken, vault);
       const label = typeof name === 'string' && name.trim() ? name.trim().slice(0, 64) : new URL(checked.url).host;
@@ -1593,17 +1621,23 @@ export function makeSharedBackend({
 
   /**
    * `send.canProve`'s answer and, when it is the prover, the pairing to use. The device first (its
-   * answer needs nothing but this machine); then a paired prover that is the user's own (Phase 1:
-   * a spend-key job goes nowhere else), answering, and taking spend-key jobs.
+   * answer needs nothing but this machine, and a proof made here tells nobody anything); then the
+   * paired prover — the user's own or not — answering, charging nothing, and taking a job this
+   * wallet can send it: a viewing-key job, or, for a prover paired as the user's own, a spend-key
+   * one. Which of the two a given send needs is the chain's and is settled by the core when the
+   * job is made (`proveHookFor`); this only rules out a prover that could take neither.
    */
   async function proveRoute() {
     const device = await canProve();
     if (device && device.ok) return { answer: device };
     const { prover: p } = await getSettings();
-    if (!p || p.mode !== 'remote' || p.own !== true) return { answer: device };
+    if (!p || p.mode !== 'remote') return { answer: device };
     const probe = await prover.probe();
-    if (!probe.ok || !probe.witnessKinds.includes('spend_key')) {
-      const why = probe.ok ? 'it does not take a spend-key job' : probe.reason;
+    const kinds = probe.ok ? probe.witnessKinds : [];
+    const why = !probe.ok ? probe.reason
+      : (await feeRefusal(probe.fee))
+        || (kinds.includes('viewing_key') || (p.own === true && kinds.includes('spend_key')) ? null : 'it does not take this wallet\'s jobs');
+    if (why) {
       return { answer: { ok: false, reason: `${(device && device.reason) || 'This device cannot prove.'} Your paired prover is not available: ${why}.` } };
     }
     return { answer: { ok: true, via: 'prover' }, route: p };
@@ -1625,16 +1659,53 @@ export function makeSharedBackend({
       err.definite = true;
       throw err;
     }
-    const { token, kemEk, url } = pairing;
-    return async ({ kind, request, maxProofBytes, hcBundle, meta, onPhase, signal }) => {
+    const { token, kemEk, url, fingerprint, own } = pairing;
+    const refuse = (message) => { const err = new Error(message); err.definite = true; return err; };
+    return async ({ kind, request, maxProofBytes, hcBundle, hcAuth, meta, onPhase, signal }) => {
+      // What this chain's bundle guest takes, from the core, before anything is built: the viewing
+      // key on a split-authorisation chain, the spend key on an older one. It also refuses, here,
+      // a chain whose guests this build cannot prove for.
+      let guests;
+      try {
+        guests = await c.chainGuests({ hc_bundle: hcBundle ?? null, hc_auth: hcAuth ?? null });
+      } catch (err) { throw refuse((err && err.message) || 'This wallet cannot prove for this chain.'); }
+      const wants = guests.witness_kind;
+      // A spend-key witness goes to a prover paired as the user's own and to no other. The core
+      // refuses it too; this says so before the prover is even asked.
+      if (wants === 'spend_key' && own !== true) {
+        throw refuse('On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the desktop app.');
+      }
+      // The prover as it is NOW: still the key this wallet paired, taking this kind of job, and
+      // charging nothing. Its fee is its own to change at any time, so it is read here, at the one
+      // point a job is made, and handed to the core, which refuses any.
+      const proverClient = proverClientFor(url);
+      let info;
+      try {
+        info = readInfo(await proverClient.info({ signal }));
+      } catch (err) {
+        if (err && err.name === 'AbortError') throw err;
+        throw refuse(`Your prover did not answer: ${(err && err.message) || err}`);
+      }
+      if (!(await sameProverKey(info, String(kemEk).toLowerCase(), fingerprint))) {
+        throw refuse('The prover at that address now has a different key. Pair it again in Settings.');
+      }
+      if (!info.witnessKinds.includes(wants)) {
+        throw refuse(wants === 'viewing_key'
+          ? 'Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another.'
+          : 'Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the desktop app.');
+      }
       const params = {
         ...request,
-        prover: { kem_ek: kemEk, token, witness_kind: 'spend_key', ...(hcBundle ? { hc_bundle: hcBundle } : {}) },
+        prover: { kem_ek: kemEk, token, own: own === true, fee: info.fee, ...(hcBundle ? { hc_bundle: hcBundle } : {}) },
         ...(maxProofBytes ? { max_proof_bytes: maxProofBytes } : {}),
       };
+      // On a split-authorisation chain the core makes the auth proof inside `prepare_*`, from the
+      // spend key, on this device: seconds natively, about half a minute in a browser. Reported as
+      // its own step of 'prove', so the wait is not silent and says what is happening where.
+      if (guests.split_authorisation && typeof onPhase === 'function') onPhase('prove', { prover: route.name, authorising: true });
       const prepared = kind === 'burn' ? await c.prepareBurn(params) : await c.prepareTransfer(params);
       return remoteProve({
-        client: proverClientFor(url), core, prepared, storage,
+        client: proverClient, core, prepared, storage,
         meta: { kind, name: route.name, ...(meta || {}) },
         onPhase, signal, locks: locksApi, ...proverTiming,
       });
@@ -1786,7 +1857,7 @@ export function makeSharedBackend({
     /**
      * `(req, onPhase, options?)` — the contract's signature. A pending remote proof refuses a
      * second send. Then `proveRoute()` answers, without touching the node: a shell that
-     * *structurally* cannot prove (wasm: ~5.7 GB against a 4 GiB address space) and has no prover
+     * *structurally* cannot prove (wasm: ~6.2 GB against a 4 GiB address space) and has no prover
      * of the user's own paired says so before asking anything of a node — that answer can never be
      * wrong, and it is what the user needs. Only once it says `ok: true` does this go on to prove
      * the chain (`requireVerifiedChain()`), and only then does `executeSend` run — with the client
@@ -1877,7 +1948,7 @@ export function makeSharedBackend({
    * `bridge.estimate` and `bridge.withdraw` both run it, and that is the point: they used to carry
    * two lists and `withdraw`'s was the shorter — a zero amount and a relayer fee larger than the
    * amount were refused when the user pressed Review and not when they pressed Withdraw, so a
-   * flow that reached the button by any other route paid ~100 seconds and ~5.7 GB for a
+   * flow that reached the button by any other route paid ~100 seconds and ~6.2 GB for a
    * transaction the chain always refuses. The order is the cheapest question first: the shape of
    * the request, then the one question that needs a node (`rand_getBridgeState`), then the four
    * only the chain can answer, which go to the core whole.
@@ -1915,7 +1986,7 @@ export function makeSharedBackend({
    * is for a transfer.
    *
    * The whole reason this group exists rather than the screen calling `rpc.call` itself: a burn
-   * costs a bundle proof, about two minutes and ~5.7 GB, and there are four ways to spend
+   * costs a bundle proof, about two minutes and ~6.2 GB, and there are four ways to spend
    * that on a transaction the chain will refuse outright — a disabled bridge, an unregistered
    * index, a coin that does not back the asset, and a coin that is not holding enough of it.
    * `wallet-core` cannot check any of them on its own (it does no I/O), so `screenBurn` puts the

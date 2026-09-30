@@ -18,6 +18,13 @@
 //! runs on a submitted transaction — against a ledger built to hold exactly the fixture's leaves
 //! (and, for a burn, exactly its token and backing), so a mistake in the slot layout, the burn
 //! words or the transaction binding fails here rather than on chain.
+//!
+//! The ledger is shaped like chain 18's and 19's (fullnode v0.6.7): **split authorisation** —
+//! bundle guest v3 and the auth guest pinned, so the transaction must carry the auth proof this
+//! wallet makes from the spend key beside the bundle proof made from the viewing key — and the
+//! `gas` section, which pins the gas both proofs declare. The auth proof's time and size are
+//! printed beside the bundle's: it is the part a device that delegates its bundle proof still
+//! makes itself.
 use std::collections::BTreeMap;
 use std::time::Instant;
 
@@ -81,11 +88,12 @@ fn prove_transfer_fixture(profile: &str, asset: u32) {
         }
     };
     println!(
-        "proved {} bundle in {:.1}s: tier {}, proof {} bytes, transaction {} bytes",
+        "proved {} bundle in {:.1}s: tier {}, proof {} bytes, auth proof {} bytes, transaction {} bytes",
         r.proofs,
         t.elapsed().as_secs_f64(),
         r.tier,
         r.proof_bytes,
+        r.auth_proof_bytes,
         r.tx_bytes
     );
     println!(
@@ -128,11 +136,12 @@ fn prove_burn_fixture(profile: &str) {
         }
     };
     println!(
-        "proved {} bundle in {:.1}s: tier {}, proof {} bytes, transaction {} bytes",
+        "proved {} bundle in {:.1}s: tier {}, proof {} bytes, auth proof {} bytes, transaction {} bytes",
         r.proofs,
         t.elapsed().as_secs_f64(),
         r.tier,
         r.proof_bytes,
+        r.auth_proof_bytes,
         r.tx_bytes
     );
     println!("  burned {} of asset {}, change {}, fee {} RAND, RAND change {}", r.amount, r.asset, r.change, r.fee, r.fee_change);
@@ -180,7 +189,16 @@ fn admits(
     bridged: Option<(u32, u16, [u8; 32], u64)>,
 ) -> Result<(), String> {
     let exec = ZkExecutor::new(fri(profile));
-    let mut ledger = Ledger::new(chain_id, ZkExecutor::hc_bundle(), BTreeMap::new(), &exec);
+    // Chain 18's and 19's pins: bundle guest v3, the auth guest, and the `gas` section (its
+    // `bundle_gas_limit` is what every bundle proof must declare; the auth proof's pin follows
+    // from the section being there at all).
+    let mut ledger = Ledger::new(chain_id, ZkExecutor::hc_hidden_bundle_v3(), BTreeMap::new(), &exec);
+    ledger.set_hc_auth(Some(ZkExecutor::hc_auth()));
+    let gas_section: gas::GasConfig = serde_json::from_value(serde_json::json!({
+        "gas_price": "100", "byte_price": "800", "bundle_gas_limit": gas::bundle_gas_limit_pin(), "metering": "circuit",
+    }))
+    .map_err(|e| format!("the gas section: {e}"))?;
+    ledger.set_gas(Some(gas_section));
 
     // The fixture's leaves, in leaf-index order: appending them reproduces the very tree the
     // witnesses were folded against.
