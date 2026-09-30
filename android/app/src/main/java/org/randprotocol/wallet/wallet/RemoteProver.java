@@ -9,8 +9,10 @@ import org.json.JSONObject;
  * reply that fails any of that never reaches the node. Transport failures are retried until
  * {@code maxWaitMs} (the prover may be restarting); a JSON-RPC error stops.
  *
- * <p>No resume on mobile in Phase 1: the job lives in this call, on the {@link ProvingService}'s
- * thread. A process the system kills loses it, and nothing is sent.
+ * <p>No resume on mobile: the job — and the pending transaction, ~2.8 MB of hex on a
+ * split-authorisation chain, since the auth proof is already inside it — lives in this call, in
+ * memory, on the {@link ProvingService}'s thread. Nothing writes it to preferences or a file. A
+ * process the system kills loses it, and nothing is sent.
  */
 public final class RemoteProver {
     public interface Finisher {
@@ -20,6 +22,14 @@ public final class RemoteProver {
     /** {@code position} is the queue position while waiting, null while handed over or proving. */
     public interface PhaseListener {
         void phase(Integer position);
+
+        /**
+         * On a split-authorisation chain, before the job is sealed: this device is making the auth
+         * proof from the spend key (seconds natively) — {@code ui/screens/send/state.js}'s
+         * {@code AUTHORISING_LABEL} step. Announced once, before {@code prepare_*}.
+         */
+        default void authorising() {
+        }
     }
 
     public interface Clock {
@@ -41,6 +51,11 @@ public final class RemoteProver {
 
     public RemoteProver(ProverClient client) {
         this.client = client;
+    }
+
+    /** The paired prover this carries jobs to; {@link RemoteSend} asks it {@code prover_info} before sealing one. */
+    public ProverClient client() {
+        return client;
     }
 
     public JSONObject prove(String sealedHex, Object pending, Finisher finisher, PhaseListener onPhase) throws Exception {

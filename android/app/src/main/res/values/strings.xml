@@ -87,7 +87,7 @@
     <string name="review_fee">Fee</string>
     <string name="review_total">Total</string>
     <string name="review_note">Proving the transfer takes a few minutes on a phone. Keep the app open; a notification shows progress if you switch away.</string>
-    <string name="review_memory_warning">This proof needs about %1$s GB of memory and this phone has %2$s GB. Android will most likely stop the app before it finishes. Pair a prover you run yourself in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.</string>
+    <string name="review_memory_warning">This proof needs about %1$s GB of memory and this phone has %2$s GB. Android will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.</string>
     <string name="review_confirm">Confirm and prove</string>
     <string name="review_back">Back</string>
     <string name="proving_title">Proving your transfer</string>
@@ -160,23 +160,26 @@
     <string name="settings_prover_by">Proofs are made by</string>
     <string name="settings_prover_device">This device</string>
     <string name="settings_prover_remote">My own prover · %1$s</string>
+    <string name="settings_prover_remote_paired">Paired prover · %1$s</string>
+    <!-- Under a pairing not marked as the user's own: ProverPairing.NOT_OWN_NOTE, the shared UI's PROVER_NOT_OWN_NOTE. -->
+    <string name="settings_prover_not_own_note">Not marked as your own: it can read this wallet\'s whole history. It cannot spend.</string>
     <string name="settings_prover_fingerprint">Fingerprint %1$s</string>
-    <string name="settings_prover_device_body">Where this device cannot make a proof, pair a prover you run yourself — rand-prover on your own machine, reachable from this phone over https.</string>
+    <string name="settings_prover_device_body">Where this device cannot make a proof, pair a prover — rand-prover on a machine you run, or one somebody else runs, reachable from this phone over https. It receives this wallet\'s viewing key and a salt: it can read the wallet\'s whole history and cannot spend.</string>
     <string name="settings_prover_link">Pairing link</string>
     <string name="settings_prover_link_hint">The randprover: link your prover shows. It carries a secret — paste it here and nowhere else. A prover must be reached over https (plain http only on this device).</string>
     <string name="settings_prover_scan">Scan QR code</string>
     <string name="settings_prover_scan_prompt">Scan your prover\'s pairing QR code</string>
-    <string name="settings_prover_warning_title">Your spend key goes to this prover</string>
-    <string name="settings_prover_warning">This prover will receive your spend key each time it makes a proof. Anyone who controls it can spend your funds. Pair only a machine you run yourself.</string>
+    <string name="settings_prover_warning_title">A prover sees your history</string>
+    <!-- The core's own sentence (version.prover_history_warning, ProverPairing.WARNING); SettingsActivity reads it from the core and falls back to this. -->
+    <string name="settings_prover_warning">This prover will be able to read this wallet\'s whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.</string>
     <string name="settings_prover_forget">Forget this prover</string>
     <string name="settings_prover_asking">Asking the prover…</string>
     <string name="settings_prover_pairing">Pairing…</string>
     <string name="settings_prover_no_link">Not paired: paste the randprover: link your prover shows.</string>
     <string name="settings_prover_paired">Paired. Proofs this device cannot make go to %1$s. Its fingerprint is %2$s — check that your prover shows the same.</string>
-    <string name="settings_prover_saved_not_own">Saved; not usable in this build. %1$s</string>
     <string name="settings_prover_not_paired">Not paired: %1$s</string>
     <string name="settings_prover_forgotten">Forgotten. Proofs are made on this device again. The prover\'s pairing is gone from this wallet.</string>
-    <string name="review_remote_prover">This device does not have the memory for this proof, so your prover, %1$s, will make it. Your spend key goes to it inside a sealed job; this phone checks the proof before anything is sent.</string>
+    <string name="review_remote_prover">This device does not have the memory for this proof, so your prover, %1$s, will make it. It receives your viewing key and a salt inside a sealed job — it can read this wallet\'s history and cannot spend; this phone authorises the spend itself and checks the proof before anything is sent.</string>
     <string name="settings_security">Security</string>
     <string name="settings_autolock">Auto-lock</string>
     <string name="settings_theme">Theme</string>

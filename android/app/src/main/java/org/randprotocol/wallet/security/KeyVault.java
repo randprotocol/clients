@@ -11,9 +11,10 @@ import java.security.GeneralSecurityException;
 
 /**
  * The spend key at rest: an {@link EncryptedSharedPreferences} whose AES-GCM key lives in the
- * Android Keystore. Beside it, and nothing else, a paired prover's record (delegated proving,
- * Phase 1: the token AND the key and URL a job is sealed and sent to) — the viewing key and the
- * address are derived from the spend key on demand by the core.
+ * Android Keystore. Beside it, and nothing else, a paired prover's record (delegated proving:
+ * the token AND the key and URL a job is sealed and sent to, and whether the link marked the
+ * prover as the user's own — the one copy a send decides by) — the viewing key and the address
+ * are derived from the spend key on demand by the core.
  */
 public final class KeyVault {
     private static final String FILE = "rand_wallet_vault";
@@ -60,9 +61,10 @@ public final class KeyVault {
     }
 
     /**
-     * The paired prover's record — token, key, URL, fingerprint — or null. The token travels only
-     * inside a job the core sealed to this record's key, which (not {@link Prefs}' display copy)
-     * decides where the job goes; never in {@link Prefs}, never in a log.
+     * The paired prover's record — token, key, URL, fingerprint, {@code own} — or null. The token
+     * travels only inside a job the core sealed to this record's key, which (not {@link Prefs}'
+     * display copy) decides where the job goes and whether it may carry the spend key; never in
+     * {@link Prefs}, never in a log.
      */
     public org.randprotocol.wallet.wallet.ProverSecret proverSecret() {
         return org.randprotocol.wallet.wallet.ProverSecret.fromJson(prefs.getString(KEY_PROVER_PAIRING, null));

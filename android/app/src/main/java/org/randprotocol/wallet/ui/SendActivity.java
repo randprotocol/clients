@@ -377,8 +377,10 @@ public class SendActivity extends BaseActivity {
     static final long PROVER_PEAK_MEMORY_BYTES = WalletService.PROVER_PEAK_MEMORY_BYTES;
 
     /**
-     * Where this device cannot fit the proof: the prover that will make it (a pairing the user
-     * marked as their own), or the memory warning.
+     * Where this device cannot fit the proof: the paired prover that will make it (own or not —
+     * on a split-authorisation chain it gets the viewing key and a salt, never the spend key; an
+     * older chain's spend-key job is refused for a pairing not marked own when the send starts,
+     * {@link org.randprotocol.wallet.wallet.RemoteSend#prove}), or the memory warning.
      */
     private void showMemoryWarning() {
         android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE);
@@ -387,7 +389,7 @@ public class SendActivity extends BaseActivity {
         boolean enough = WalletService.deviceCanProve(this);
         b.memoryWarning.setVisibility(enough ? android.view.View.GONE : android.view.View.VISIBLE);
         ProverPairing prover = wallet().prefs().prover();
-        if (!enough && prover != null && prover.own) {
+        if (!enough && prover != null) {
             b.memoryWarning.setText(getString(R.string.review_remote_prover, prover.name));
         } else if (!enough) {
             b.memoryWarning.setText(getString(R.string.review_memory_warning,

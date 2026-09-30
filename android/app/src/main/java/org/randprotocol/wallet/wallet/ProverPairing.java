@@ -16,12 +16,17 @@ import java.util.Locale;
  * {@code kem_fingerprint} is its word, not evidence). Only then is anything stored.
  */
 public final class ProverPairing {
-    /** Copy, Phase 1 (spec §4.4), shown before a pairing is saved. */
-    public static final String WARNING = "This prover will receive your spend key each time it makes a proof. "
-            + "Anyone who controls it can spend your funds. Pair only a machine you run yourself.";
+    /**
+     * What a paired prover learns, since split authorisation (spec §4.4, Phase 2; every chain
+     * since 17): the job carries the wallet's viewing key and a salt, never its spend key. The
+     * core's own sentence ({@code version.prover_history_warning} — {@link ProverCore#historyWarning}
+     * reads it; this is the fallback), shown before a pairing is saved, own or not.
+     */
+    public static final String WARNING = "This prover will be able to read this wallet's whole history — every payment "
+            + "received and sent, before and after today. It cannot spend. To keep your history private, run your own.";
 
-    public static final String NOT_OWN_WARNING = "This link does not mark the prover as your own, so this version of the "
-            + "wallet will never send it a job: pair only a prover you run yourself, from a link it made with own=1.";
+    /** Under a pairing that is not the user's own: what that prover can do, in one line. */
+    public static final String NOT_OWN_NOTE = "Not marked as your own: it can read this wallet's whole history. It cannot spend.";
 
     /** What the proving screen calls it: the prover's host (and port). */
     public final String name;
@@ -29,7 +34,12 @@ public final class ProverPairing {
     /** The prover's ML-KEM-768 encapsulation key, lowercase hex (1 184 bytes). */
     public final String kemEk;
     public final String fingerprint;
-    /** The link was made with {@code own=1}. Phase 1 sends a spend-key job to such a prover only. */
+    /**
+     * The link was made with {@code own=1}: the user says this prover is a machine of theirs. A
+     * viewing-key job (every job on a split-authorisation chain) may go to any paired prover; a
+     * spend-key job (an older chain) only to one paired as own. DISPLAY here — the copy a send
+     * decides by is the vault's {@link ProverSecret#own}.
+     */
     public final boolean own;
 
     public ProverPairing(String name, String url, String kemEk, String fingerprint, boolean own) {
@@ -69,14 +79,18 @@ public final class ProverPairing {
         public final String url;
         public final String fingerprint;
         public final boolean own;
-        /** Set when the link is not marked {@code own}: such a pairing is saved but never used. */
+        /**
+         * Set when the link is not marked {@code own}: what that prover will learn — the core's
+         * {@link ProverCore#historyWarning}. (A prover of the user's own learns exactly as much;
+         * it is theirs.)
+         */
         public final String warning;
 
-        Preview(String url, String fingerprint, boolean own) {
+        Preview(String url, String fingerprint, boolean own, String warning) {
             this.url = url;
             this.fingerprint = fingerprint;
             this.own = own;
-            this.warning = own ? null : NOT_OWN_WARNING;
+            this.warning = own ? null : warning;
         }
     }
 
@@ -118,7 +132,8 @@ public final class ProverPairing {
 
     public static Preview preview(ProverCore core, String link) throws Exception {
         JSONObject p = parse(core, link);
-        return new Preview(ProverClient.checkUrl(p.getString("url")), p.getString("fingerprint"), p.optBoolean("own", false));
+        return new Preview(ProverClient.checkUrl(p.getString("url")), p.getString("fingerprint"), p.optBoolean("own", false),
+                core.historyWarning());
     }
 
     public static boolean sameKey(ProverCore core, ProverClient.Info info, String kemEk, String fingerprint) {

@@ -91,6 +91,9 @@ public class SettingsActivity extends BaseActivity {
             paintProver();
             b.proverStatus.setText(R.string.settings_prover_forgotten);
         });
+        // What a paired prover learns, in the core's own words (version.prover_history_warning),
+        // shown before any pairing is saved — own or not; the resource is the fallback.
+        b.proverWarning.setText(ProverCore.NATIVE.historyWarning());
         paintProver();
 
         // Keys
@@ -168,20 +171,26 @@ public class SettingsActivity extends BaseActivity {
                 .setOrientationLocked(false));
     }
 
-    /** Who makes this wallet's proofs, and — for a pairing — whether the prover answers. */
+    /**
+     * Who makes this wallet's proofs, and — for a pairing — whether the prover answers. "My own"
+     * only for a pairing whose link said so: a prover somebody else runs makes the proofs too (the
+     * job carries the viewing key), and the line under it says what it sees.
+     */
     private void paintProver() {
         ProverPairing p = wallet().prefs().prover();
         int run = ++probeRun;
         if (p == null) {
             b.proverBy.setText(R.string.settings_prover_device);
             b.proverFingerprint.setVisibility(View.GONE);
+            b.proverNotOwn.setVisibility(View.GONE);
             b.proverForget.setVisibility(View.GONE);
             b.proverProbe.setText(R.string.settings_prover_device_body);
             return;
         }
-        b.proverBy.setText(getString(R.string.settings_prover_remote, p.name));
+        b.proverBy.setText(getString(p.own ? R.string.settings_prover_remote : R.string.settings_prover_remote_paired, p.name));
         b.proverFingerprint.setText(getString(R.string.settings_prover_fingerprint, p.fingerprint));
         b.proverFingerprint.setVisibility(View.VISIBLE);
+        b.proverNotOwn.setVisibility(p.own ? View.GONE : View.VISIBLE);
         b.proverForget.setVisibility(View.VISIBLE);
         b.proverProbe.setText(R.string.settings_prover_asking);
         wallet().runInBackground(() -> {
@@ -194,9 +203,10 @@ public class SettingsActivity extends BaseActivity {
     }
 
     /**
-     * Save = preview (the core reads the link; the URL rule) → the prover's own key, which must be
-     * the link's → the token into the KeyVault, the rest into Prefs. The link leaves the field
-     * once it is paired: it carries the token.
+     * Save = the core reads the link (the URL rule) → the prover's own key, which must be the
+     * link's → the token, key, URL and {@code own} into the KeyVault, the display copy into Prefs.
+     * The link leaves the field once it is paired: it carries the token. A pairing not marked as
+     * the user's own is saved and used like any other (a viewing-key job), and said so.
      */
     private void saveProver() {
         if (pairing) return;
@@ -212,12 +222,10 @@ public class SettingsActivity extends BaseActivity {
             String status;
             boolean paired = false;
             try {
-                ProverPairing.Preview seen = ProverPairing.preview(ProverCore.NATIVE, link);
                 ProverPairing.Paired done = wallet().pairProver(link);
                 paired = true;
-                status = seen.warning != null
-                        ? getString(R.string.settings_prover_saved_not_own, seen.warning)
-                        : getString(R.string.settings_prover_paired, done.pairing.name, done.pairing.fingerprint);
+                status = getString(R.string.settings_prover_paired, done.pairing.name, done.pairing.fingerprint)
+                        + (done.pairing.own ? "" : " " + getString(R.string.settings_prover_not_own_note));
             } catch (Exception e) {
                 status = getString(R.string.settings_prover_not_paired, e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
             }
