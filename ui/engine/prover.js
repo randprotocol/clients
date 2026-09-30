@@ -1,5 +1,8 @@
-// Delegated proving, Phase 1 (spec docs/superpowers/specs/2026-09-28-delegated-proving-design.md):
-// the wallet's side of a paired `rand-prover`. Three things, and none of them chain crypto:
+// Delegated proving (spec docs/superpowers/specs/2026-09-28-delegated-proving-design.md): the
+// wallet's side of a paired `rand-prover`. Phase 2 (split authorisation, every chain since 17):
+// the job the core seals carries the viewing key, not the spend key, and the transaction's auth
+// proof is already made, on this device, before `remoteProve` is called. Three things, and none of
+// them chain crypto:
 //
 //   * `checkProverUrl`   the URL rule a prover is held to — the node's (`screens/settings.js`'s
 //                        `checkRpcUrl`): https anywhere, plain http only to this machine.
@@ -37,6 +40,7 @@ export const PROVER_UNKNOWN_JOB = -32001;
 export const PROVER_UNPAIRED = -32003;
 export const PROVER_WITNESS_KIND = -32004;
 export const PROVER_BUSY = -32005;
+export const PROVER_FEE = -32006;
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 export const DEFAULT_POLL_MS = 1000;
@@ -175,7 +179,11 @@ export function proverRefusal(err) {
     return definite('This prover does not know this pairing. Pair it again in Settings.', { unpaired: true });
   }
   if (err.code === PROVER_WITNESS_KIND) {
-    return definite('This prover does not accept a spend-key job. Pair your own prover in Settings.');
+    const reason = err.data && typeof err.data.reason === 'string' ? ` (${err.data.reason.slice(0, 200)})` : '';
+    return definite(`This prover does not accept this kind of job${reason}. Pair another prover in Settings, or send from the desktop app.`);
+  }
+  if (err.code === PROVER_FEE) {
+    return definite('This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the desktop app.');
   }
   if (err.code === PROVER_UNKNOWN_JOB) {
     return definite('The prover no longer has this proof (it restarted or the job expired). Send again.');
@@ -303,7 +311,7 @@ export async function startRemoteProof({ client, prepared, storage, meta = {}, s
     // Nothing reached the node, whatever the prover said or did not say.
     const refusal = proverRefusal(err);
     if (refusal !== err) throw refusal;
-    throw definite(`Could not hand the proof to your prover: ${err && err.message}`);
+    throw definite(`Could not hand the proof to the prover: ${err && err.message}`);
   }
   const record = { job, pending: prepared.pending, url: client.url, startedAt: now(), ...meta };
   await storage.session.set(PENDING_PROOF_KEY, record);

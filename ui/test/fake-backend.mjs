@@ -413,8 +413,9 @@ function createBackend(initial = {}, overrides = {}) {
   // OPTIONAL in the contract: delegated proving's `prover` group, over the stub link grammar
   // `randprover:<KEY>?url=<url>&token=<64 hex>[&own=1]`. A test deletes `backend.prover` to cover
   // a shell without it.
-  const PROVER_NOT_OWN = 'This link does not mark the prover as your own, so this version of the '
-    + 'wallet will never send it a job: pair only a prover you run yourself, from a link it made with own=1.';
+  // The core's `prover_history_warning`, which the engine relays for a link not marked own.
+  const PROVER_NOT_OWN = 'This prover will be able to read this wallet\'s whole history — every payment '
+    + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.';
   const readProverLink = (link) => {
     const m = /^randprover:([A-Za-z0-9]+)\?(.*)$/.exec(String(link || '').trim());
     if (!m) throw new Error('not a randprover: link');

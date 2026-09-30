@@ -914,8 +914,8 @@ test('proofParamsOf refuses a malformed hc_bundle instead of falling back to the
   const { NodeReplyError } = await import('../engine/validate.js');
   const on = (st) => ({ status: async () => st });
   // Absent: an older node, the build's default guest.
-  assert.deepEqual(await proofParamsOf(on({ height: 1 })), { hcBundle: null, profile: 'production' });
-  assert.deepEqual(await proofParamsOf(on({ hc_bundle: null })), { hcBundle: null, profile: 'production' });
+  assert.deepEqual(await proofParamsOf(on({ height: 1 })), { hcBundle: null, hcAuth: null, profile: 'production' });
+  assert.deepEqual(await proofParamsOf(on({ hc_bundle: null })), { hcBundle: null, hcAuth: null, profile: 'production' });
   // Present and well formed: taken, lower-cased.
   assert.equal((await proofParamsOf(on({ hc_bundle: 'AB'.repeat(32) }))).hcBundle, 'ab'.repeat(32));
   // Present and malformed: refused, not replaced.
@@ -926,6 +926,28 @@ test('proofParamsOf refuses a malformed hc_bundle instead of falling back to the
       return true;
     });
   }
+});
+
+test('proofParamsOf reads the chain\'s auth guest beside its bundle guest, and refuses a malformed one', async () => {
+  // Split authorisation (fullnode v0.6.3): `rand_status.hc_auth` is what tells the core that a
+  // transaction here needs an auth proof. `null` is an answer ("this chain has none"), not a gap.
+  const { proofParamsOf } = await import('../engine/wallet.js');
+  const { NodeReplyError } = await import('../engine/validate.js');
+  const on = (st) => ({ status: async () => st });
+  const hc = 'ab'.repeat(32);
+  assert.deepEqual(await proofParamsOf(on({ hc_bundle: hc, hc_auth: 'CD'.repeat(32) })), { hcBundle: hc, hcAuth: 'cd'.repeat(32), profile: 'production' });
+  assert.deepEqual(await proofParamsOf(on({ hc_bundle: hc, hc_auth: null })), { hcBundle: hc, hcAuth: null, profile: 'production' });
+  assert.deepEqual(await proofParamsOf(on({ hc_bundle: hc })), { hcBundle: hc, hcAuth: null, profile: 'production' });
+  for (const bad of ['zz'.repeat(32), 'cd'.repeat(31), '', 7, true]) {
+    await assert.rejects(() => proofParamsOf(on({ hc_bundle: hc, hc_auth: bad })), (err) => {
+      assert.ok(err instanceof NodeReplyError, `${JSON.stringify(bad)} → ${err && err.name}`);
+      assert.match(err.message, /rand_status: hc_auth/);
+      return true;
+    });
+  }
+  // A node without `rand_status` at all: neither is known, and the core proves for its default chain.
+  const none = { status: async () => { throw Object.assign(new Error('no such method'), { code: -32601 }); } };
+  assert.deepEqual(await proofParamsOf(none), { hcBundle: null, hcAuth: null, profile: 'production' });
 });
 
 // ------------------------------------------------------------ the deposit scan, by header ----
