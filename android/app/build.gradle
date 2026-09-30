@@ -10,12 +10,12 @@ if (keystoreFile.exists()) {
 
 android {
     namespace 'org.randprotocol.wallet'
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         applicationId 'org.randprotocol.wallet'
         minSdk 26
-        targetSdk 35
+        targetSdk 36
         versionCode 3
         versionName '0.6.6'
         ndk {
@@ -55,7 +55,7 @@ android {
 
     packaging {
         jniLibs {
-            // Play requires 16 KiB page alignment for targetSdk 35; the .so is built aligned and
+            // Play requires 16 KiB page alignment for targetSdk 36; the .so is built aligned and
             // must be stored uncompressed and unextracted.
             useLegacyPackaging = false
         }

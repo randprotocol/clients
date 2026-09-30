@@ -5,10 +5,14 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Bundle;
 import android.os.PersistableBundle;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import org.randprotocol.wallet.security.Unlock;
 import org.randprotocol.wallet.wallet.WalletService;
@@ -24,6 +28,22 @@ public abstract class BaseActivity extends AppCompatActivity {
     /** Whether this screen requires an unlocked wallet (the lock and onboarding screens do not). */
     protected boolean requiresUnlock() {
         return true;
+    }
+
+    /**
+     * Android 15 and later draw every app edge to edge, under the status bar, the navigation bar
+     * and a camera cutout. Pad the content by what those cover (and by the keyboard), so no
+     * screen's first line sits under the clock on a phone with a tall status bar.
+     */
+    @Override
+    protected void onPostCreate(Bundle savedInstanceState) {
+        super.onPostCreate(savedInstanceState);
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars()
+                    | WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.ime());
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return WindowInsetsCompat.CONSUMED;
+        });
     }
 
     @Override

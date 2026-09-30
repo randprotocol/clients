@@ -3,6 +3,7 @@ package org.randprotocol.wallet.ui;
 import android.content.Intent;
 import android.os.Bundle;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.biometric.BiometricPrompt;
 import androidx.core.content.ContextCompat;
@@ -25,6 +26,14 @@ public class LockActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         b = ActivityLockBinding.inflate(getLayoutInflater());
         setContentView(b.getRoot());
+        // Locked means locked: leave the app rather than the lock screen. A dispatcher callback,
+        // not onBackPressed(): an app targeting API 36 is no longer sent that.
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                moveTaskToBack(true);
+            }
+        });
         if (!Unlock.deviceCanAuthenticate(this)) {
             b.body.setText(R.string.lock_no_credential);
             b.unlock.setOnClickListener(v -> proceed());
@@ -59,12 +68,5 @@ public class LockActivity extends BaseActivity {
             startActivity(new Intent(this, HomeActivity.class));
         }
         finish();
-    }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public void onBackPressed() {
-        // Locked means locked: leave the app rather than the lock screen.
-        moveTaskToBack(true);
     }
 }

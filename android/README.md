@@ -19,7 +19,7 @@ app/src/main/java/org/randprotocol/wallet/
 ## Requirements
 
 - JDK 17 or newer (`brew install openjdk`; `export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home`)
-- Android SDK: platform 35, build-tools 35, NDK 27 (`sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018"`)
+- Android SDK: platform 36, build-tools 36, NDK 27 (`sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018"`)
 - Rust 1.98.1 with the Android targets and `cargo-ndk` (`../core/scripts/build-android.sh` installs both)
 - `local.properties` with `sdk.dir=/path/to/Android/sdk` (gitignored)
 
@@ -36,7 +36,7 @@ ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/27.2.12479018 ../core/scripts/bui
 
 ## Run on the emulator
 
-Create an arm64 or x86_64 AVD (API 35), then:
+Create an arm64 or x86_64 AVD (API 36), then:
 
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -67,7 +67,8 @@ the transaction key on randscan.org.
    ```
    R8 keeps `NativeCore` (proguard-rules.pro); the `.so` files are built with 16 KiB page
    alignment and packaged uncompressed (`useLegacyPackaging false`), which Play requires for
-   targetSdk 35.
+   targetSdk 35 and later (the app targets 36, which Play has required of new apps since
+   31 August 2026).
 3. In the Play Console: create the app (`org.randprotocol.wallet`), upload the `.aab` to Internal
    testing, complete the Data safety form (no data collected; the only network peer is the RPC
    URL the user configures), the content rating, and the app category (Finance). Bump
