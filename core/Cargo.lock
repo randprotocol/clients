@@ -149,7 +149,7 @@ dependencies = [
 
 [[package]]
 name = "bridge-codec"
-version = "0.6.6"
+version = "0.6.7"
 
 [[package]]
 name = "bs58"
@@ -1373,7 +1373,7 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "randprotocol-core"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "bincode",
  "blake3",
@@ -1393,7 +1393,7 @@ dependencies = [
 
 [[package]]
 name = "randprotocol-prover"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "blake3",
  "bs58",
@@ -1413,7 +1413,7 @@ dependencies = [
 
 [[package]]
 name = "randprotocol-zkvm"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "chacha20",
  "chacha20poly1305",
@@ -1833,6 +1833,7 @@ dependencies = [
  "randprotocol-zkvm",
  "serde",
  "serde_json",
+ "zeroize",
 ]
 
 [[package]]
