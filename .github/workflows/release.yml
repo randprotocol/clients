@@ -93,6 +93,43 @@ jobs:
           else
             scripts/release/build-desktop.sh
           fi
+      # A package that builds is not yet a package that runs. Each OS installs (or mounts) what
+      # it just built and starts the app; an app that exits by itself inside the wait is a failure.
+      - name: The .deb installs and the app starts
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y xvfb
+          sudo apt-get install -y ./dist/release/*/rand-wallet-*-linux-*.deb
+          set +e
+          xvfb-run -a timeout 20 rand-wallet > app.log 2>&1
+          code=$?
+          set -e
+          tail -20 app.log
+          [ "$code" -eq 124 ] || { echo "the app exited by itself with $code within 20 s"; exit 1; }
+      - name: The .msi installs and the app starts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem dist/release/*/rand-wallet-*-windows-x64.msi).FullName
+          $p = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn /norestart /l*v install.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; throw "msiexec exited $($p.ExitCode)" }
+          $exe = Get-ChildItem "$env:ProgramFiles\Rand Wallet\*.exe" | Where-Object { $_.Name -notmatch 'uninstall' } | Select-Object -First 1
+          if (-not $exe) { Get-ChildItem "$env:ProgramFiles\Rand Wallet" -ErrorAction SilentlyContinue; throw "the installer left no executable" }
+          $app = Start-Process $exe.FullName -PassThru
+          Start-Sleep -Seconds 20
+          if ($app.HasExited) { throw "the app exited by itself with $($app.ExitCode) within 20 s" }
+          Stop-Process -Id $app.Id -Force
+      - name: The app in the .dmg is signed as a whole and starts
+        if: runner.os == 'macOS' && matrix.target == ''
+        run: |
+          M=$(hdiutil attach -nobrowse -readonly dist/release/*/rand-wallet-*-macos-arm64.dmg | tail -1 | awk -F'\t' '{print $NF}')
+          codesign --verify --deep --strict "$M/Rand Wallet.app"
+          "$M/Rand Wallet.app/Contents/MacOS/rand-wallet" > app.log 2>&1 &
+          pid=$!
+          sleep 20
+          kill -0 "$pid" || { cat app.log; echo "the app exited by itself within 20 s"; exit 1; }
+          kill "$pid"
+          hdiutil detach "$M" || true
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.name }}
