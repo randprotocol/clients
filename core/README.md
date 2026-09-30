@@ -4,12 +4,26 @@ The one implementation of the chain's cryptography every client shares: the Pose
 hierarchy (spend key → viewing key → address), ML-KEM-768 + ChaCha20-Poly1305 envelopes, note
 commitments and nullifiers, coin selection, and the STARK proof of one **hidden-asset bundle** —
 four input and four output slots, tier 14. It is the fullnode's own crates (`randprotocol-core`,
-`randprotocol-zkvm`, vendored as the submodule `vendor/fullnode` at fullnode's tag `v0.6.6`, commit `d742a9b`
-— the gas release: v0.6.2's delegated prover + constraint set 8, the chain-18 build) behind one JSON entry
+`randprotocol-zkvm`, `randprotocol-prover`'s wire — vendored as the submodule `vendor/fullnode` at
+fullnode's tag `v0.6.7`, commit `86941a1`, the build chains 18 and 19 run) behind one JSON entry
 point. Constraint set 8 adds one public value to every proof (`pv::GAS`, the declared gas limit) and
 moves every verifier key: a bundle this core proves declares the guest's ceiling, 20 479 gas, which
-chain 18's genesis pins as `bundle_gas_limit` (`version.bundle_gas_limit`; a chain naming another
+the genesis pins as `bundle_gas_limit` (`version.bundle_gas_limit`; a chain naming another
 value is refused before proving), and verifies on no chain before 18.
+
+**Split authorisation** (fullnode v0.6.3, every chain since 17). A transaction carries two proofs.
+The **auth proof** is tiny (tier 10: ~7 s natively, ~25 s and under 400 MiB in wasm32, 1.36 MB at
+the production profile) and is made from the **spend key** and a fresh 32-byte salt — always on
+the device, by `prove_*` and `prepare_*` alike. The **bundle proof** (tier 14, ~100 s, 5.7 GB) is
+made by bundle guest v3 from the **viewing key** `nk` and that salt, so it can be handed to a
+paired prover that then learns this wallet's whole history and can spend nothing. The bundle
+carries `auth_commit = H(AUTH, nk, salt)`, which both proofs are bound to, and the transaction id
+domain is `rand-txid-3`. `prove_*`/`prepare_*` take the chain's two guests (`hc_bundle`, `hc_auth`,
+from `rand_status`) and refuse, before anything is proved, a v3 chain whose auth guest is absent
+or not this build's, and an auth guest beside a v1/v2 bundle guest; both absent means the default
+chain's (`version.hc_bundle`, `version.hc_auth`). The tag `v0.6.6` (`d742a9b`) this core was on
+before is a pre-rebase line without any of this: a wallet built on it scans chain 18 and every
+send is refused `AuthMissing`.
 
 ```
 crates/wallet-core   the library and its tests; `wallet_core::call(method, params_json) -> reply_json`
@@ -87,5 +101,15 @@ scripts/build-wasm.sh           # cargo `wasm` profile + wasm-bindgen-cli (insta
 Toolchain 1.98.1 is pinned (`rust-toolchain.toml`), the same as the fullnode. Release builds use
 fat LTO; the iOS static library is about 8 MB, the wasm a few MB.
 
+Delegated proving (`prepare_transfer` / `prepare_burn` → the prover → `finish_proof`): what the
+sealed job carries follows the chain's guest and is never the caller's choice — the viewing key on
+a split-authorisation chain (any paired prover), the spend key on an older one (only a prover with
+`own: true`, the pairing link's `own=1`). `pending` holds the transaction with its auth proof
+already in place, so it is ~2.8 MB of hex at the production profile. A prover that quotes a fee
+(`prover.fee`, its `prover_info.fee` passed through) is refused: this build pays none.
+
 To move to a new chain build: `cd vendor/fullnode && git fetch && git checkout <rev>`, update
-`CHAIN_BUILD`/`DEFAULT_CHAIN_ID` in `wallet-core`, run the tests, rebuild the three targets.
+`CHAIN_BUILD`/`DEFAULT_CHAIN_ID` in `wallet-core`, run the tests (`cargo test --release`, and
+`-- --ignored` for the two real delegated-proof tests), rebuild the three targets. `version`'s
+`hc_bundle`/`hc_auth` are pinned in a test against the digests the live chain's `rand_status`
+answers: if the vendored build assembles either guest differently, that test says so first.

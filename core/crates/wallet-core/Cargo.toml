@@ -17,6 +17,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 hex = { workspace = true }
 bs58 = "0.5"
+# Wipes a bundle's witness (the viewing key `nk`, or the spend key on a pre-v3 chain) and its salt
+# when the bundle is dropped, as the fullnode wallet does.
+zeroize = "1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # randprotocol-core draws its randomness through rand 0.8 (getrandom 0.2, needs the `js` feature);
