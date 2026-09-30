@@ -52,7 +52,7 @@ pipeline {
 
               core/scripts/build-wasm.sh
               npm ci --prefix ui
-              node --test --test-reporter=tap ui/test > ui-test.tap || { grep -B2 -A30 '^not ok' ui-test.tap | head -200; exit 1; }
+              node --test --test-reporter=tap "ui/test/**/*.test.mjs" > ui-test.tap || { grep -B2 -A30 '^not ok' ui-test.tap | head -200; exit 1; }
               chrome/pack.sh
               firefox/pack.sh
               VER=$(node -p "require('./chrome/manifest.json').version")
