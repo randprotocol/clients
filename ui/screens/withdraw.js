@@ -11,7 +11,7 @@
 //
 //   * **Every check that can be made locally is made before `bridge.estimate`, and every check the
 //     chain can make is made before the proof.** A bundle proof is about two minutes of
-//     this computer and ~5.7 GB; a recipient of the wrong shape, a relayer fee bigger than the
+//     this computer and ~6.2 GB; a recipient of the wrong shape, a relayer fee bigger than the
 //     amount, a disabled bridge, an unregistered index, a coin that does not back this token or
 //     one that is not holding enough would each spend all of it on a transaction the chain was
 //     always going to refuse. The first two are here; the rest are `bridge.withdraw`'s own gates

@@ -229,7 +229,7 @@ test('the_wasm_reason_names_the_prover_option', async () => {
   assert.deepEqual(answer, { ok: false, reason: CANNOT_PROVE_REASON });
   assert.match(answer.reason, /Pair a prover in Settings/);
   assert.match(answer.reason, /desktop app/);
-  assert.match(answer.reason, /5\.7 GB/);
+  assert.match(answer.reason, /6\.2 GB/);
   assert.deepEqual(await env.backend.bridge.canWithdraw(), { ok: false, reason: CANNOT_PROVE_REASON });
 });
 

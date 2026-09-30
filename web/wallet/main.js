@@ -5,9 +5,10 @@
 // shell's storage (`idb.js`) — to the browser's own APIs, and gets out of the way. There is no
 // bundler: the browser loads these modules as it finds them.
 //
-// What this shell cannot do: produce a transfer proof. It needs about 5.7 GB and wasm32 stops at
-// 4 GiB, so the Send flow ends in an explanation rather than a Prove button (see
-// `send.canProve()`). Everything else is real — real keys, a real address, a real scan of a real
+// What this shell cannot do: produce the bundle proof. It needs about 6.2 GB and wasm32 stops at
+// 4 GiB, so without a paired prover the Send flow ends in an explanation rather than a Prove
+// button (see `send.canProve()`); with one, the worker makes the small authorisation proof and the
+// prover the bundle's. Everything else is real — real keys, a real address, a real scan of a real
 // node's commitment tree, a real note store.
 import { mount } from './ui/app.js';
 import { makeWasmBackend } from './ui/engine/backend-wasm.js';

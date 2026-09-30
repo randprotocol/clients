@@ -8,10 +8,13 @@
 //!   * **where** — `127.0.0.1:8600` by default, and a busy port is refused with a sentence, never
 //!     moved to a random one: the pairing link embeds the URL, so a port that changed under it
 //!     would silently break every wallet already paired;
-//!   * **what it accepts** — spend-key witnesses (this is the owner's own machine: the link is
-//!     marked `own`), one proof at a time, and not at all on a machine without the memory for one
-//!     (`memory_check(1)`, over `randprotocol_prover::memory`: one tier-14 bundle's peak plus a
-//!     gigabyte, the spec's "8 GB");
+//!   * **what it accepts** — viewing-key witnesses only (split authorisation, fullnode v0.6.3:
+//!     the bundle guest v3 every chain since 17 runs takes the wallet's viewing key and a salt,
+//!     and the wallet makes its own auth proof from the spend key — so this host is never sent a
+//!     spend key, its own machine or not; `accept_spend_key` stays off), one proof at a time, and
+//!     not at all on a machine without the memory for one (`memory_check(1)`, over
+//!     `randprotocol_prover::memory`: one tier-14 bundle's peak plus a gigabyte, the spec's
+//!     "8 GB"). The link is still marked `own`: it names a machine the owner runs;
 //!   * **the one pairing** — labelled `desktop`, minted the first time the prover starts.
 //!
 //! The pairing token is a bearer secret the prover itself keeps only as a hash, yet the link must
@@ -301,7 +304,10 @@ async fn start_with(
         })?;
         let fingerprint = key.fingerprint().to_string();
         let mut cfg = Config::new(key, pairings);
-        cfg.accept_spend_key = true; // the owner's own machine; the link is marked `own`
+        // Never a spend key, even on the owner's own machine: every chain this build can transact
+        // on runs split authorisation, whose bundle witness is the viewing key. A spend-key job
+        // (an older chain's) is refused by the service with `-32004`.
+        cfg.accept_spend_key = false;
         cfg.max_parallel = 1;
         configure(&mut cfg);
         let shared_pairings = cfg.pairings.clone();
@@ -417,7 +423,7 @@ mod tests {
     }
 
     #[test]
-    fn it_starts_serves_the_owners_spend_key_jobs_links_itself_and_stops_freeing_the_port() {
+    fn it_starts_serves_viewing_key_jobs_only_links_itself_and_stops_freeing_the_port() {
         let fx = Fixture::new();
         let state = ProverState::default();
 
@@ -438,9 +444,11 @@ mod tests {
         assert_eq!(started.fingerprint.as_deref(), Some(key.fingerprint().to_string().as_str()));
         assert_eq!(parsed["url"], format!("http://{addr}"));
 
-        // The service itself answers, and takes spend-key witnesses, one proof at a time.
+        // The service itself answers, and takes viewing-key witnesses — never spend-key ones,
+        // its own machine or not — one proof at a time.
         let info = rpc(&addr, "prover_info");
-        assert_eq!(info["result"]["witness_kinds"], json!(["spend_key"]), "{info}");
+        assert_eq!(info["result"]["witness_kinds"], json!(["viewing_key"]), "{info}");
+        assert_eq!(info["result"]["fee"], serde_json::Value::Null, "the desktop host charges nothing");
         assert_eq!(info["result"]["kem_fingerprint"], key.fingerprint().to_string());
 
         // Stopped: the listener is gone and the port can be bound again.
@@ -560,7 +568,7 @@ mod tests {
         use randprotocol_prover::service::{Refusal, State};
         use randprotocol_prover::wire::{fresh_reply_key, seal_job, ProveJob, WitnessKind, WIRE_VERSION};
         use randprotocol_zkvm::executor::ZkExecutor;
-        use randprotocol_zkvm::hidden::hidden_input;
+        use randprotocol_zkvm::hidden::hidden_input_v3;
         use std::sync::atomic::AtomicBool;
 
         let fx = Fixture::new();
@@ -578,14 +586,22 @@ mod tests {
         .unwrap();
         let token = decode_hex32(parse_link(&block_on(pairing_link(&state, &fx.dir, &fx.store, DEFAULT_ADDR)).unwrap())["token"].as_str().unwrap()).unwrap();
         let ek = ProverKey::load(&fx.dir.join(KEY_FILE)).unwrap().kem_ek().to_vec();
-        let sealed = || {
+        // The jobs a wallet sends since split authorisation: viewing-key witnesses for bundle
+        // guest v3. A spend-key job is refused outright — this host never accepts one.
+        let sealed_as = |kind: WitnessKind, hc, words: usize| {
             let job = ProveJob {
-                version: WIRE_VERSION, token, witness_kind: WitnessKind::SpendKey, hc_bundle: ZkExecutor::hc_bundle(),
-                profile: "test".into(), binding: [5; 8], inputs: vec![7; hidden_input::COUNT], reply_key: fresh_reply_key(),
+                version: WIRE_VERSION, token, witness_kind: kind, hc_bundle: hc,
+                profile: "test".into(), binding: [5; 8], inputs: vec![7; words], reply_key: fresh_reply_key(),
             };
             seal_job(&ek, &job).unwrap()
         };
+        let sealed = || sealed_as(WitnessKind::ViewingKey, ZkExecutor::hc_hidden_bundle_v3(), hidden_input_v3::COUNT);
         let svc = block_on(state.inner.lock()).as_ref().unwrap().svc.clone();
+        let spend_key_job = sealed_as(WitnessKind::SpendKey, ZkExecutor::hc_hidden_bundle(), randprotocol_zkvm::hidden::hidden_input::COUNT);
+        assert!(
+            matches!(svc.submit(&spend_key_job), Err(Refusal::WitnessKind(ref m)) if m.contains("spend-key")),
+            "a spend-key job was admitted by the desktop host"
+        );
         let first = svc.submit(&sealed()).unwrap();
         for _ in 0..500 {
             if svc.status(&first).unwrap().state == State::Proving { break; }

@@ -14,7 +14,7 @@ value is refused before proving), and verifies on no chain before 18.
 **Split authorisation** (fullnode v0.6.3, every chain since 17). A transaction carries two proofs.
 The **auth proof** is tiny (tier 10: ~7 s natively, ~25 s and under 400 MiB in wasm32, 1.36 MB at
 the production profile) and is made from the **spend key** and a fresh 32-byte salt — always on
-the device, by `prove_*` and `prepare_*` alike. The **bundle proof** (tier 14, ~100 s, 5.7 GB) is
+the device, by `prove_*` and `prepare_*` alike. The **bundle proof** (tier 14, ~100 s, 6.2 GB) is
 made by bundle guest v3 from the **viewing key** `nk` and that salt, so it can be handed to a
 paired prover that then learns this wallet's whole history and can spend nothing. The bundle
 carries `auth_commit = H(AUTH, nk, salt)`, which both proofs are bound to, and the transaction id

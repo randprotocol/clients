@@ -10,11 +10,13 @@
 //
 // ---- what this shell cannot do ----
 //
-// Produce a transfer proof: it needs about 5.7 GB and wasm32 stops at 4 GiB, so `send.canProve()`
-// is `{ok: false, reason}` and Send ends in that explanation rather than a Prove button. Which is
-// also why the popup needs no escape into a tab (`platform.openFlowInTab`): the long-running steps
-// that would outlive a closed 360×600 window are never reached. Everything else — keys, the
-// address, scanning a real node, the note store, the faucet, viewing keys — is real.
+// Produce the bundle proof: it needs about 6.2 GB and wasm32 stops at 4 GiB, so without a paired
+// prover `send.canProve()` is `{ok: false, reason}` and Send ends in that explanation rather than
+// a Prove button (with one, the worker makes the small authorisation proof and the prover the
+// bundle's, and a closed popup resumes the job). Which is also why the popup needs no escape into
+// a tab (`platform.openFlowInTab`): the long-running steps that would outlive a closed 360×600
+// window are never reached on this device. Everything else — keys, the address, scanning a real
+// node, the note store, the faucet, viewing keys — is real.
 import { makeWasmBackend, UNLOCKED_SESSION_KEY } from './ui/engine/backend-wasm.js';
 import { ext } from './lib/browser.js';
 import { call } from './lib/core.js';

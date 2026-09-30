@@ -4,7 +4,7 @@ A [Tauri](https://tauri.app) app: the **shared wallet UI** (`../ui`) in a system
 **shared Rust core** (`../core/crates/wallet-core`) linked directly as a crate, no FFI.
 
 **This is the one shell in which a transfer can actually complete.** A bundle proof peaks at about
-5.7 GB and wasm32 stops at 4 GiB, so the web wallet and the browser extension do everything except
+6.2 GB and wasm32 stops at 4 GiB, so the web wallet and the browser extension do everything except
 the proof itself and say so (`send.canProve()`). Here the chain crypto is native, and the only
 limit is the machine's real RAM.
 
@@ -88,9 +88,16 @@ does have to answer the CORS preflight, exactly as it must for the web wallet.
 - **Network.** Only the RPC URL in Settings, plus randscan.org / randprotocol.org when a link is
   clicked. `openExternal` is scoped to those two hosts in `src-tauri/capabilities/default.json`,
   so a URL from anywhere else cannot open anything.
-- **Proving.** A transfer is a tier-14 STARK proved on this computer's CPU, about a minute on a
-  laptop. The Send flow reports `selecting → witness → proving → submitting → confirming`, and the
-  idle auto-lock waits for a transfer in flight rather than dropping the key mid-proof.
+- **Proving.** A transfer is a tier-14 STARK proved on this computer's CPU, about two minutes on a
+  laptop — and, since split authorisation (every chain since 17), a second, small tier-10 proof
+  made from the spend key first, a few seconds. The Send flow reports `selecting → witness →
+  proving → submitting → confirming`, and the idle auto-lock waits for a transfer in flight rather
+  than dropping the key mid-proof.
+- **Prove for my other devices** (Settings). The fullnode's own prover service, in this process on
+  `127.0.0.1:8600`, for the browser extension or web wallet on this machine. It takes viewing-key
+  jobs only: a wallet paired with it sends its viewing key and a salt with each job — enough to
+  read that wallet's history, never to spend — and makes its own authorisation proof. It is never
+  sent a spend key, and it charges nothing.
 - **Window.** 1100×760, minimum 380×600 — the same two-pane breakpoint the other shells use, so
   narrowing the window below 900 px swaps the sidebar for a tab bar.
 
