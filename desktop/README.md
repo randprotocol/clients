@@ -30,6 +30,7 @@ cargo install tauri-cli --version "^2.0.0" --locked   # once
 cd desktop/src-tauri
 cargo tauri dev                # stages dist-ui/ and opens the window
 cargo tauri build              # …and bundles a dmg / msi / AppImage / deb
+../../scripts/release/build-desktop.sh   # the release packages for this OS, under release names → dist/release/
 cargo test                     # the commands and the store (Rust 1.98.1 via rust-toolchain.toml)
 ```
 
@@ -40,8 +41,9 @@ its `target/` is separate from `core/target/`.
 
 - **Linux** — the webkit2gtk and appindicator dev packages Tauri's bundler and runtime link
   against (Debian/Ubuntu names; other distros' package managers carry equivalents):
-  `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev`. `cargo tauri build` produces
-  an AppImage and a deb.
+  `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev`, and `rpm` for the `.rpm`.
+  `cargo tauri build` produces an AppImage and a deb; the release script adds an rpm and the
+  bare binary as a `.tar.gz`.
 - **Windows** — the WebView2 runtime, which the app's webview needs at run time. Nothing to
   install for `cargo tauri build` itself: the `.msi` bundler embeds a WebView2 bootstrapper, so a
   machine without it gets it installed alongside the app.

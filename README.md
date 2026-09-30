@@ -9,7 +9,7 @@ Wallets for the Rand Protocol RAND chain (the fully shielded pool served by
 | Android | Java | `android/` | Google Play (`.aab`) | on a device with about 8 GB of memory; otherwise through a paired prover over TLS |
 | Chrome | JavaScript, Manifest V3 | `chrome/` + `extension/` | Chrome Web Store | through a paired prover |
 | Firefox | JavaScript, Manifest V3 | `firefox/` + `extension/` | addons.mozilla.org | through a paired prover |
-| Windows, Linux, macOS | Tauri (shared UI + Rust core) | `desktop/` | .msi / .deb / AppImage / .dmg | yes, and proves for your other wallets |
+| Windows, Linux, macOS | Tauri (shared UI + Rust core) | `desktop/` | .msi / .AppImage, .deb, .rpm, .tar.gz / .dmg | yes, and proves for your other wallets |
 | Local web wallet | JavaScript (shared UI + WebAssembly core) | `web/wallet/` + `ui/` | nothing — served from a checkout | through a paired prover |
 
 The two extensions, the desktop app and the local web wallet share more than the core: `ui/` is one
@@ -29,6 +29,69 @@ limitation below and [`docs/prover.md`](docs/prover.md)); a phone without the me
 own `rand-prover` too, reached over https. Downloads are listed at https://randprotocol.org/clients (`web/`).
 
 Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
+
+## Download
+
+Every release is on [GitHub Releases](https://github.com/randprotocol/clients/releases/latest),
+and https://randprotocol.org/clients links the same files with their checksums. `<v>` below is
+the version, `0.6.6` today.
+
+| you have | download | then |
+|---|---|---|
+| macOS, Apple silicon | `rand-wallet-<v>-macos-arm64.dmg` | open it, drag Rand Wallet to Applications |
+| macOS, Intel | `rand-wallet-<v>-macos-x64.dmg` | the same |
+| Windows 10 or 11 | `rand-wallet-<v>-windows-x64.msi` | run it; `…-windows-x64-setup.exe` is the same app in an `.exe` installer |
+| Debian, Ubuntu | `rand-wallet-<v>-linux-x86_64.deb` | `sudo apt install ./rand-wallet-<v>-linux-x86_64.deb` |
+| Fedora, openSUSE | `rand-wallet-<v>-linux-x86_64.rpm` | `sudo dnf install ./rand-wallet-<v>-linux-x86_64.rpm` |
+| any other Linux | `rand-wallet-<v>-linux-x86_64.AppImage` | `chmod +x` it and run it |
+| a Linux none of those fit | `rand-wallet-<v>-linux-x86_64.tar.gz` | the bare binary; its `INSTALL` says where the files go |
+| Linux on arm64 | the same four, named `…-linux-arm64.…` | |
+| Chrome, Edge, Brave | `rand-wallet-chrome-<v>.zip` | unzip; `chrome://extensions` → Developer mode → Load unpacked |
+| Firefox | `rand-wallet-firefox-<v>.zip` | `about:debugging` → This Firefox → Load Temporary Add-on… → the zip |
+| Android 8 or later | `rand-wallet-<v>-android.apk` | open it on the phone and allow the install, or `adb install` |
+| to build it yourself | `rand-wallet-<v>-source.tar.gz` | this repository and the submodule in one archive; see Build from source |
+
+The Linux desktop app is the same interface the browser extension shows — one `ui/` directory
+drives both — in a native window, and it is the one that proves.
+
+iOS has no download: Apple installs an app only from the App Store or TestFlight, and the
+listing is pending. Until then build it in Xcode (below). The store listings for Android, Chrome
+and Firefox are pending as well; the files above are the same builds that are submitted.
+
+### Check what you downloaded
+
+`SHA256SUMS` is attached to every release. Download it next to the file and compare:
+
+```bash
+shasum -a 256 -c SHA256SUMS --ignore-missing     # macOS
+sha256sum -c SHA256SUMS --ignore-missing         # Linux
+```
+```powershell
+Get-FileHash .\rand-wallet-0.6.6-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
+```
+
+A matching sum says the file is the one that was published. It does not say the file was built
+from this source: the builds are not bit-for-bit reproducible yet, so if that is the question
+you are asking, build it yourself.
+
+### What your OS will say
+
+Nothing here is signed with a paid developer certificate yet, and each OS says so in its own
+words. None of these messages is about the file being damaged; check the sum, then:
+
+- **macOS** — the app is ad-hoc signed and not notarised, so the first launch says Apple could
+  not verify it. Open **System Settings → Privacy & Security**, scroll to the message about Rand
+  Wallet and choose **Open Anyway**; or remove the quarantine flag yourself:
+  `xattr -dr com.apple.quarantine "/Applications/Rand Wallet.app"`.
+- **Windows** — SmartScreen shows "Windows protected your PC". Choose **More info → Run anyway**.
+  The installer adds the WebView2 runtime if the machine does not have it.
+- **Android** — the `.apk` is signed with this project's upload key (certificate SHA-256
+  `75:22:2E:BF:22:D3:95:80:A5:11:2A:AC:B7:EC:2E:03:93:91:07:77:96:E0:45:1D:7B:CF:E3:7E:FA:06:53:52`);
+  the phone asks you to allow installs from the app you opened it with. A later install from
+  Google Play is signed by Play's own key, so Android will ask you to remove this one first —
+  export your key file from Settings before you do.
+- **Firefox** — a temporary add-on is removed when Firefox restarts; release Firefox installs
+  permanently only what addons.mozilla.org has signed.
 
 ## Why there is a Rust core
 
@@ -100,25 +163,133 @@ the two mirrored constants in the mobile apps, rebuild, and the Send flows light
 Until then, a phone without the memory sends through a paired prover of your own, or from the
 desktop app or the `rand` command-line wallet using the key file every client exports.
 
-## Build
+## Build from source
+
+Everything that is published is built from this repository by the commands below. Pick the
+client you want; each one starts from the same checkout.
+
+### 1. What to install first
+
+| for | you need |
+|---|---|
+| every client | `git`; [rustup](https://rustup.rs) (it installs Rust 1.98.1, the version pinned in `core/rust-toolchain.toml`, the first time `cargo` runs here); Node 22 or later |
+| desktop, any OS | `cargo install tauri-cli --version "^2" --locked` |
+| desktop on Linux | `sudo apt install build-essential libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf rpm file` (Debian and Ubuntu names; other distributions carry equivalents) |
+| desktop on Windows | Visual Studio Build Tools with "Desktop development with C++"; Git for Windows, whose Git Bash runs the scripts |
+| desktop on macOS | Xcode Command Line Tools: `xcode-select --install` |
+| Chrome, Firefox, the web wallet | nothing more: the build installs `wasm-bindgen-cli` itself |
+| Android | JDK 17 or later; the Android SDK with platform 36, build-tools 36 and NDK 27 (`sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018"`) |
+| iOS | a Mac with Xcode 16 or later |
+
+The first build of any client compiles the prover and takes several minutes.
+
+### 2. Get the source
 
 ```bash
-git submodule update --init                    # core/vendor/fullnode @ v0.6.6 (d742a9b)
-cd core && cargo test --release                # the core, including a real proof (~1 min)
-
-core/scripts/build-wasm.sh                     # → extension/shared/core/   (installs wasm-bindgen-cli)
-core/scripts/build-ios.sh                      # → ios/Frameworks/RandWalletCore.xcframework
-core/scripts/build-android.sh                  # → android/app/src/main/jniLibs/ (needs an NDK)
-
-node --test ui/test web/wallet/test            # the shared UI and the web wallet
-web/wallet/serve.sh                            # the local web wallet at http://127.0.0.1:8787/
+git clone --recurse-submodules https://github.com/randprotocol/clients.git
+cd clients
+git checkout v0.6.6 && git submodule update --init   # a release, rather than main
 ```
 
-Then per platform: `ios/README.md`, `android/README.md`, `chrome/README.md`, `firefox/README.md`,
-`desktop/README.md`, `web/wallet/README.md`.
+or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
+The submodule is the full node (`core/vendor/fullnode`, at its `v0.6.6` tag): the wallet's
+cryptography is the node's own code.
 
-Toolchain: Rust 1.98.1 (pinned in `core/rust-toolchain.toml`; rustup installs it), Xcode 16+,
-JDK 17+ with Android SDK 35 and NDK 27, Node 20+.
+### 3. Test the core (optional, about a minute)
+
+```bash
+cd core && cargo test --release && cd ..      # includes a real proof, checked by the chain's verifier
+```
+
+### 4. Build the client you want
+
+**Desktop — Linux, Windows, macOS**
+
+```bash
+scripts/release/build-desktop.sh              # → dist/release/v<version>/
+```
+
+It builds the packages of the OS it runs on, under the names the releases use: on Linux an
+AppImage, a `.deb`, an `.rpm` and the bare binary in a `.tar.gz`; on Windows (from Git Bash) the
+`.msi` and the `-setup.exe`; on macOS the `.dmg`. `--target x86_64-apple-darwin` builds the Intel
+dmg on an Apple-silicon Mac. To run it without packaging anything:
+
+```bash
+cd desktop/src-tauri && cargo tauri dev
+```
+
+[`desktop/README.md`](desktop/README.md) has the details.
+
+**Chrome and Firefox extensions**
+
+```bash
+core/scripts/build-wasm.sh                    # the core as WebAssembly → extension/shared/core/
+chrome/pack.sh                                # → dist/chrome/  and dist/rand-wallet-chrome-<version>.zip
+firefox/pack.sh                               # → dist/firefox/ and dist/rand-wallet-firefox-<version>.zip
+```
+
+Load `dist/chrome` with **Load unpacked** at `chrome://extensions` (Developer mode on), or
+`dist/firefox/manifest.json` with **Load Temporary Add-on…** at `about:debugging`.
+[`chrome/README.md`](chrome/README.md), [`firefox/README.md`](firefox/README.md).
+
+**Android**
+
+```bash
+core/scripts/build-android.sh                 # the core → android/app/src/main/jniLibs/
+cd android
+echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties   # wherever your SDK is
+./gradlew assembleDebug                       # → app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+A release build (`./gradlew bundleRelease assembleRelease`) is signed with your own key:
+[`android/README.md`](android/README.md).
+
+**iOS**
+
+```bash
+core/scripts/build-ios.sh                     # the core → ios/Frameworks/RandWalletCore.xcframework
+open ios/RandWallet.xcodeproj                 # choose a simulator or your own device, then Run
+```
+
+Running on your own iPhone needs your Apple ID in Xcode → Settings → Accounts and your team
+selected under Signing & Capabilities. [`ios/README.md`](ios/README.md).
+
+**The local web wallet**
+
+```bash
+web/wallet/serve.sh                           # builds, then serves http://127.0.0.1:8787/
+```
+
+[`web/wallet/README.md`](web/wallet/README.md).
+
+### 5. Run the tests
+
+```bash
+npm ci --prefix ui
+node --test "ui/test/**/*.test.mjs" "web/wallet/test/**/*.test.mjs" "extension/test/*.test.mjs"
+                                                     # the shared interface, the web wallet, the extension
+cd desktop/src-tauri && cargo test                   # the desktop app's own crate
+cd android && ./gradlew testDebugUnitTest            # Android
+```
+
+### How a release is made
+
+`scripts/release/` holds the whole release build, and the three places it runs use the same
+scripts:
+
+- `.github/workflows/release.yml` — on a `v*` tag, GitHub's runners build the desktop app for
+  macOS (arm64, x64), Windows and Linux (x86_64, arm64), both extension zips and the source
+  tarball, and attach them to a draft release with `SHA256SUMS`.
+- `Jenkinsfile` — the same pipeline for a Jenkins with agents labelled `linux`, `macos` and
+  `windows`, as a backup.
+- `scripts/release/build-local.sh` — on a Mac: the extension zips, the dmg, the signed Android
+  `.aab` and `.apk`, an unsigned iOS archive and the source tarball. Android and iOS are built
+  only here, because their signing keys are in no CI.
+
+`scripts/release/checksums.sh <tag> [files…]` attaches more files to a release and rewrites
+`SHA256SUMS` over everything in it. What each store then needs — the listing text, the review
+notes, the privacy answers — is [`docs/store/README.md`](docs/store/README.md).
 
 ## Repository layout
 
@@ -146,6 +317,10 @@ desktop/         Tauri app for Windows, Linux and macOS: ui/ in a webview, walle
                  directly — the one client that can prove a transfer locally, and a prover for
                  the extension and the web wallet on the same machine
 linux/ macosx/ windows/   per-OS packaging notes pointing at desktop/
+scripts/release/ the release build: build-desktop.sh, build-local.sh, source-tarball.sh,
+                 checksums.sh — run by .github/workflows/release.yml, by the Jenkinsfile, and by hand
+docs/store/      what each store upload needs: listing text, review notes, privacy answers
+PRIVACY.md       the privacy policy the store listings link to
 ```
 
 ## Status

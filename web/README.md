@@ -7,6 +7,7 @@ The wallets pages on randprotocol.org live in the site's own repository, `../ran
 |---|---|
 | https://randprotocol.org/clients | `src/pages/clients.astro` |
 | https://randprotocol.org/clients/ios, `/android`, `/chrome`, `/firefox`, `/windows`, `/macos`, `/linux`, `/web` | `src/pages/clients/[slug].astro` |
+| https://randprotocol.org/clients/build, `/clients/privacy` | `src/pages/clients/build.astro`, `src/pages/clients/privacy.astro` (the text of `PRIVACY.md` here) |
 | every fact both of them show: requirements, store links, how each client sends, where it keeps the key, build steps, testnet notes | `src/data/clients.ts` |
 
 So when a client changes in this repository — a new minimum OS or browser, a new vendored
@@ -14,6 +15,10 @@ fullnode, a store listing going live — change `src/data/clients.ts` there to m
 and deploy the site per its `DEPLOY.md` (`npm run build`, then an rsync of `dist/` to the
 droplet). A copy of the page used to be kept here as `web/clients.astro`; the site's version had
 moved ahead of it, so it was removed on 2026-09-29 and the site is the only copy.
+
+Downloads: `src/data/release.ts` there lists a release's files with their SHA-256 sums, and the
+client pages and `/clients/build` read it. After a release, regenerate it from that release's
+`SHA256SUMS` (the header of that file says how) and deploy.
 
 Store links: each client's `link` in `src/data/clients.ts` is `null` until its listing is live;
 set the URL and the card and the client's page switch from "listing pending" to a button.
