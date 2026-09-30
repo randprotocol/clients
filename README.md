@@ -23,10 +23,10 @@ commitment tree for its own notes, asks the testnet faucet, and hands the user t
 and per-transaction keys that [randscan.org](https://randscan.org) opens confidential
 transactions with. The shells that can fit a proof in memory — the desktop app and the mobile
 apps — also prove and submit shielded transfers of RAND and of any listed RPL token; the browser
-extension and the web wallet build and submit the same transfers but have the proof made by a
-prover you pair — the desktop app on the same machine, or your own `rand-prover` (see the known
-limitation below and [`docs/prover.md`](docs/prover.md)); a phone without the memory can pair your
-own `rand-prover` too, reached over https. Downloads are listed at https://randprotocol.org/clients (`web/`).
+extension and the web wallet build, authorise and submit the same transfers but have the bundle
+proof made by a prover you pair — the desktop app on the same machine, or a `rand-prover` (see the
+known limitation below and [`docs/prover.md`](docs/prover.md)); a phone without the memory can
+pair a `rand-prover` too, reached over https. Downloads are listed at https://randprotocol.org/clients (`web/`).
 
 Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
@@ -314,7 +314,7 @@ web/wallet/      the local web wallet: index.html and main.js (the shell), worke
                  checkout; it is not deployed anywhere, and it sends only through a paired prover
                  (docs/prover.md)
 design/          tokens.json, make-icons.py, generated icons
-docs/            prover.md (proving through your own prover), rpc-endpoints.md, design specs
+docs/            prover.md (proving through a prover), rpc-endpoints.md, design specs
 desktop/         Tauri app for Windows, Linux and macOS: ui/ in a webview, wallet-core linked
                  directly — the one client that can prove a transfer locally, and a prover for
                  the extension and the web wallet on the same machine

@@ -1,10 +1,14 @@
 // End to end: a wasm wallet — the real core, the real engine, real `fetch` — pairs a real
 // `rand-prover`, sends through it to a real `rand-node`, and the note lands in a second wallet.
 //
-// Delegated proving, Phase 1 (task 6). Everything in the path is the shipped code: the core's
-// `prepare_transfer`/`finish_proof`, the engine's `prover` group and remote proving, a Test-profile
-// chain (`rand-node genesis --fri-profile test`, like fullnode's `wallet_flow.rs`) and the prover's
-// own queue. One real bundle proof, made by the prover (~100–120 s on a laptop).
+// Delegated proving, Phase 1 (task 6) and Phase 2 (split authorisation). Everything in the path
+// is the shipped code: the core's `prepare_transfer` (which makes the auth proof from the spend
+// key, inside the wasm, on a v3 chain) and `finish_proof`, the engine's `prover` group and remote
+// proving, a Test-profile chain (`rand-node genesis --fri-profile test --bundle-guest v3
+// --auth-guest`, like fullnode's `wallet_flow.rs`) and the prover's own queue. The prover is
+// paired from a link WITHOUT own=1 and started without --accept-spend-key: it takes viewing-key
+// jobs only, which is all a wallet on such a chain sends. One real bundle proof, made by the
+// prover (~100–140 s on a laptop), plus the auth proof in the wasm (~25 s).
 //
 // Skipped, with the reason, unless all three are present:
 //   RAND_NODE_BIN    a `rand-node` built from the fullnode this repo vendors (core/vendor/fullnode)
@@ -28,16 +32,27 @@ const CORE_WASM = new URL('../../../extension/shared/core/rand_wallet_bg.wasm', 
 const NODE_BIN = process.env.RAND_NODE_BIN || '';
 
 /**
- * Chain 18's genesis `gas` section (fullnode v0.6.6, constraint set 8, spec 2026-09-28 §4.2): the
- * prices, the bundle guest's pinned gas (20 479 — the one value genesis accepts) and the in-circuit
- * meter, so the node holds every bundle proof this wallet makes to the pin exactly as the real cut
- * does. Only when the node knows the flags: an older `rand-node` (a v0.6.2 build, say, passed as
- * RAND_NODE_BIN) cuts a chain without the section and the test still runs against it.
+ * What chain 18's genesis has beyond the defaults (fullnode v0.6.7): the `gas` section — the
+ * prices, the bundle guest's pinned gas (20 479, the one value genesis accepts) and the in-circuit
+ * meter (constraint set 8, spec 2026-09-28 §4.2) — and **split authorisation** (v0.6.3): bundle
+ * guest v3 with the auth guest, which needs a block cap of at least three proof caps plus a MiB
+ * (chain 18's 4 MiB proofs and 20 MiB blocks). So the node holds every transaction this wallet
+ * makes to the live rules: the bundle proof to the gas pin, and an auth proof beside it made by
+ * the wallet from its spend key. Only when the node knows the flags: an older `rand-node` (a
+ * v0.6.2 build, say, passed as RAND_NODE_BIN) cuts a plain chain and the test still runs against
+ * it — on a spend-key job, which then needs a prover started with --accept-spend-key.
  */
-function gasSectionArgs(nodeBin) {
+function chainArgs(nodeBin) {
   const help = execFileSync(nodeBin, ['genesis', '--help'], { stdio: 'pipe' }).toString();
-  if (!help.includes('--bundle-gas-limit')) return [];
-  return ['--gas-price', '100', '--byte-price', '800', '--bundle-gas-limit', '20479'];
+  const gas = help.includes('--bundle-gas-limit') ? ['--gas-price', '100', '--byte-price', '800', '--bundle-gas-limit', '20479'] : [];
+  const auth = help.includes('--auth-guest')
+    ? ['--bundle-guest', 'v3', '--auth-guest', '--max-proof-bytes', '4194304', '--max-block-bytes', '20971520']
+    : [];
+  return [...gas, ...auth];
+}
+/** Whether the node cuts a split-authorisation chain (see `chainArgs`). */
+function splitAuthorisation(nodeBin) {
+  return chainArgs(nodeBin).includes('--auth-guest');
 }
 const PROVER_BIN = process.env.RAND_PROVER_BIN || '';
 const PASSWORD = 'an-e2e-password-for-a-real-vault';
@@ -221,7 +236,7 @@ before(async () => {
   execFileSync(NODE_BIN, ['keygen', '--out', key], { stdio: 'pipe' });
   execFileSync(NODE_BIN, [
     'genesis', '--chain-id', String(CHAIN_ID), '--fri-profile', 'test', '--faucet',
-    '--validator', `${key},1000,${env.aInfo.address}`, '--out', genesis, ...gasSectionArgs(NODE_BIN),
+    '--validator', `${key},1000,${env.aInfo.address}`, '--out', genesis, ...chainArgs(NODE_BIN),
   ], { stdio: 'pipe' });
   execFileSync(NODE_BIN, ['init', '--datadir', datadir, '--genesis', genesis], { stdio: 'pipe' });
   env.node = launch(NODE_BIN, [
@@ -238,8 +253,11 @@ before(async () => {
   // no-prover case has run.
   env.proverHome = join(env.dir, 'prover');
   execFileSync(PROVER_BIN, ['--home', env.proverHome, 'keygen'], { stdio: 'pipe' });
+  // On a split-authorisation chain the pairing need not be the user's own: the job carries the
+  // viewing key. On a plain chain (an older node) it must be, and the prover must take spend keys.
+  env.v3 = splitAuthorisation(NODE_BIN);
   env.link = execFileSync(PROVER_BIN, [
-    '--home', env.proverHome, 'pair', '--name', 'laptop', '--own', '--url', env.proverUrl,
+    '--home', env.proverHome, 'pair', '--name', 'laptop', ...(env.v3 ? [] : ['--own']), '--url', env.proverUrl,
   ], { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim().split('\n').find((l) => l.startsWith('randprover:'));
   assert.ok(env.link, 'rand-prover pair printed a randprover: link');
 });
@@ -268,24 +286,29 @@ test('with no prover running, a wasm wallet cannot prove and says how to', { ski
   const unpaired = await env.a.backend.send.canProve();
   assert.equal(unpaired.ok, false);
   assert.equal(unpaired.reason, CANNOT_PROVE_REASON);
-  assert.match(unpaired.reason, /Pair your own prover/);
+  assert.match(unpaired.reason, /Pair a prover/);
 
   // A pairing against a prover that is not listening is refused, and nothing is stored.
   await assert.rejects(() => env.a.backend.prover.pair(env.link, PASSWORD, { name: 'laptop' }));
   assert.equal((await env.a.backend.settings.get()).prover.mode, 'device');
   const still = await env.a.backend.send.canProve();
   assert.equal(still.ok, false);
-  assert.match(still.reason, /Pair your own prover/);
+  assert.match(still.reason, /Pair a prover/);
 });
 
-test('a wasm wallet pairs its own rand-prover, sends through it, and the note lands', { skip, timeout: 20 * 60_000 }, async (t) => {
+test('a wasm wallet pairs a rand-prover that is not its own, sends through it, and the note lands', { skip, timeout: 20 * 60_000 }, async (t) => {
   const started = Date.now();
   try {
     env.prover = launch(PROVER_BIN, [
       '--home', env.proverHome, 'run', '--listen', `127.0.0.1:${env.proverPort}`,
-      '--accept-spend-key', '--skip-memory-check',
+      ...(env.v3 ? [] : ['--accept-spend-key']), '--skip-memory-check',
     ], 'rand-prover');
-    await until('rand-prover to answer prover_info', () => rpc(env.proverUrl, 'prover_info'), { timeoutMs: 30_000, everyMs: 300 });
+    const info = await until('rand-prover to answer prover_info', () => rpc(env.proverUrl, 'prover_info'), { timeoutMs: 30_000, everyMs: 300 });
+    if (env.v3) assert.deepEqual(info.witness_kinds, ['viewing_key'], 'a prover started without --accept-spend-key');
+    assert.equal(info.fee, null);
+    // The chain, as the engine reads it: both guests, so the core makes the auth proof here.
+    const status = await rpc(env.rpcUrl, 'rand_status');
+    if (env.v3) assert.match(String(status.hc_auth), /^[0-9a-f]{64}$/, 'the node names its auth guest');
 
     // Faucet the sender through the engine, and scan until the note is spendable.
     await env.a.backend.faucet.request();
@@ -295,11 +318,15 @@ test('a wasm wallet pairs its own rand-prover, sends through it, and the note la
     }, { timeoutMs: 120_000, everyMs: 2000 });
     t.diagnostic(`funded in ${((Date.now() - started) / 1000).toFixed(1)} s: ${spendableRand(funded).map((n) => n.amount).join(', ')} units`);
 
-    // Pair, and the wasm wallet can now prove — through the prover.
+    // Pair, and the wasm wallet can now prove — through the prover, which is not its own on a
+    // split-authorisation chain (the preview says what it will be able to read).
+    const seen = await env.a.backend.prover.preview(env.link);
+    assert.equal(seen.own, !env.v3);
+    if (env.v3) assert.match(seen.warning, /whole history/);
     const paired = await env.a.backend.prover.pair(env.link, PASSWORD, { name: 'laptop' });
     assert.equal(paired.mode, 'remote');
     assert.equal(paired.name, 'laptop');
-    assert.equal(paired.own, true);
+    assert.equal(paired.own, !env.v3);
     assert.deepEqual(await env.a.backend.send.canProve(), { ok: true, via: 'prover' });
 
     // The send: the proof is made by the prover, the rest by the engine, against the real node.
@@ -313,8 +340,12 @@ test('a wasm wallet pairs its own rand-prover, sends through it, and the note la
     assert.match(out.hash, /^[0-9a-f]{64}$/);
     assert.match(out.txKey, /^[0-9a-f]{64}$/);
     const names = phases.map(([p]) => p);
-    assert.ok(phases.some(([p, d]) => p === 'proving' && d && d.prover === 'laptop' && d.position === undefined),
+    assert.ok(phases.some(([p, d]) => p === 'proving' && d && d.prover === 'laptop' && d.position === undefined && !d.authorising),
       `a 'proving' phase with {prover: 'laptop'}; got ${JSON.stringify(phases)}`);
+    if (env.v3) {
+      assert.ok(phases.some(([p, d]) => p === 'proving' && d && d.authorising === true),
+        `the auth proof was reported as its own step; got ${JSON.stringify(phases)}`);
+    }
     for (const p of ['selecting', 'witness', 'submitting', 'confirming']) assert.ok(names.includes(p), `phase ${p} in ${JSON.stringify(names)}`);
     assert.ok(names.indexOf('proving') < names.indexOf('submitting'), 'proved before submitted');
     assert.equal(await env.a.backend.send.pending(), null, 'nothing left pending after the send');
@@ -330,12 +361,19 @@ test('a wasm wallet pairs its own rand-prover, sends through it, and the note la
     }, { timeoutMs: 60_000, everyMs: 2000 });
     assert.equal(String(received.amount), SEND_UNITS);
 
-    // The spend key went to the prover only inside the sealed job: not one request body this
-    // wallet made — to the node or to the prover — carries it in the clear.
+    // The spend key went nowhere: not one request body this wallet made — to the node or to the
+    // prover — carries it, in the clear or otherwise (on a v3 chain the sealed job carries the
+    // viewing key; the auth proof, the only thing made from the spend key, was made in the wasm).
     assert.ok(env.a.fetch.requests.some((r) => r.url.startsWith(env.proverUrl) && r.body.includes('prover_submit')), 'the job went to the prover');
     for (const r of [...env.a.fetch.requests, ...env.b.fetch.requests]) {
       assert.equal(r.body.includes(env.spendKey), false, `the spend key is in a request to ${r.url}`);
       assert.equal(r.url.includes(env.spendKey), false, 'the spend key is in a URL');
+    }
+    if (env.v3) {
+      // And the committed transaction carries both proofs, as the node renders it.
+      const bundle = tx && (tx.bundle || (tx.transaction && tx.transaction.bundle));
+      t.diagnostic(`committed transaction: ${JSON.stringify(tx).slice(0, 300)}`);
+      if (bundle && bundle.auth_proof_bytes !== undefined) assert.ok(Number(bundle.auth_proof_bytes) > 0, 'an auth proof beside the bundle proof');
     }
     t.diagnostic(`e2e total ${((Date.now() - started) / 1000).toFixed(1)} s`);
   } catch (err) {
@@ -350,5 +388,5 @@ test('a paired prover that stops answering is no longer a way to prove', { skip 
   await until('rand-prover to exit', () => env.prover.exitCode !== null || env.prover.signalCode !== null, { timeoutMs: 10_000, everyMs: 100 });
   const answer = await env.a.backend.send.canProve();
   assert.equal(answer.ok, false);
-  assert.match(answer.reason, /Pair your own prover/);
+  assert.match(answer.reason, /Pair a prover/);
 });
