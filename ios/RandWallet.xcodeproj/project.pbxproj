@@ -29,10 +29,12 @@
 		46A65DB167E5023BCA5DD83C /* TypefaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40B92E6506345D5C81599BF /* TypefaceTests.swift */; };
 		5E809DE4F136AAEAD14CF445 /* InterVariable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C6A590C5B77BAD64AC13D7BB /* InterVariable.ttf */; };
 		64554089BC7AAD37655A0162 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8548109BF97F5DB7DB99F6CE /* HomeView.swift */; };
+		66ACB9955A4ACD4DB0CBD929 /* DepositWalkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D73D5A77FFC38FC54259D79 /* DepositWalkTests.swift */; };
 		71628504EFADE7B1A8B2E0A7 /* LinkHandoffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E39BB6F1188AB35E970520CF /* LinkHandoffTests.swift */; };
 		73DE625E5E18560ECF227095 /* NoteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 183284CD1DA185232100F09D /* NoteStore.swift */; };
 		746BF8D8C153106BFEF2336F /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA40E259F05440DD2DAE0A55 /* Models.swift */; };
 		76838E0AF20A51CF247552FA /* ContactsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B8C97D2A4B42DF67451B26 /* ContactsTests.swift */; };
+		7774EF16AEF9271B5FC2A455 /* DepositWalk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CAA1C4A31DC664F417BA006 /* DepositWalk.swift */; };
 		7F51FCBEB896DBFE88FAC922 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 422B13542A6961C4E86C6C77 /* QRScannerView.swift */; };
 		800C1F2EAA73B476DEF97F7D /* Contacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F641C399AF3E2F3F40FA15A /* Contacts.swift */; };
 		8F6C36B95B6DDDCD64E799C2 /* SendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356ED987BBE644E0AA7E6C60 /* SendView.swift */; };
@@ -68,6 +70,7 @@
 		0EE01B221B5970997D744292 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		142083F0DE48DA5CC65AB1AA /* SOURCES.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = SOURCES.txt; sourceTree = "<group>"; };
 		183284CD1DA185232100F09D /* NoteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteStore.swift; sourceTree = "<group>"; };
+		1CAA1C4A31DC664F417BA006 /* DepositWalk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepositWalk.swift; sourceTree = "<group>"; };
 		228AE584E190F486DBFBDEA4 /* SendLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendLinkTests.swift; sourceTree = "<group>"; };
 		26E39DD97C0FB4416D70C25E /* Inter-OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Inter-OFL.txt"; sourceTree = "<group>"; };
 		2D2DD8768BEDCFD16439F3C8 /* RandWalletApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandWalletApp.swift; sourceTree = "<group>"; };
@@ -80,6 +83,7 @@
 		51B8C97D2A4B42DF67451B26 /* ContactsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsTests.swift; sourceTree = "<group>"; };
 		579B488EB09271EADE817752 /* ReceiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiveView.swift; sourceTree = "<group>"; };
 		5BDD584B1202C111C8EAB6BE /* ActivityDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityDetailView.swift; sourceTree = "<group>"; };
+		5D73D5A77FFC38FC54259D79 /* DepositWalkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepositWalkTests.swift; sourceTree = "<group>"; };
 		600C46C8B2B89650FE98BDFC /* RpcClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RpcClient.swift; sourceTree = "<group>"; };
 		60F34ABC176D8FF75D6013F8 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		6517CA906DB823B64DC2D4AE /* DepartureMono-OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "DepartureMono-OFL.txt"; sourceTree = "<group>"; };
@@ -129,6 +133,7 @@
 			isa = PBXGroup;
 			children = (
 				A11EDD0B6F2E0ABC54D4BFED /* AuthService.swift */,
+				1CAA1C4A31DC664F417BA006 /* DepositWalk.swift */,
 				E9F38010836B46706F1EEF2C /* ProverClient.swift */,
 				98FEAC05B5B18B8B98085A5C /* ProverPairingService.swift */,
 				9480BB9E9D8F9C3D2AD31509 /* WalletService.swift */,
@@ -196,6 +201,7 @@
 			children = (
 				51B8C97D2A4B42DF67451B26 /* ContactsTests.swift */,
 				3E9FD71335C8D0B8513015FE /* CoreSmokeTests.swift */,
+				5D73D5A77FFC38FC54259D79 /* DepositWalkTests.swift */,
 				E39BB6F1188AB35E970520CF /* LinkHandoffTests.swift */,
 				F435046A1ED71DE0910C5DE8 /* NoteStoreTests.swift */,
 				2EFF95F847F91E6F0EED5358 /* ProverTests.swift */,
@@ -367,6 +373,7 @@
 				22071A30C7AE0DB38093A94F /* Components.swift in Sources */,
 				800C1F2EAA73B476DEF97F7D /* Contacts.swift in Sources */,
 				DEB816520B783380A0B1801C /* ContactsView.swift in Sources */,
+				7774EF16AEF9271B5FC2A455 /* DepositWalk.swift in Sources */,
 				64554089BC7AAD37655A0162 /* HomeView.swift in Sources */,
 				E016AEDBB976EB8AD8BE1CBE /* Keychain.swift in Sources */,
 				25CA49B8860133B80AB64F0D /* LockView.swift in Sources */,
@@ -397,6 +404,7 @@
 			files = (
 				76838E0AF20A51CF247552FA /* ContactsTests.swift in Sources */,
 				43D785D5C212AE422FE8BEE8 /* CoreSmokeTests.swift in Sources */,
+				66ACB9955A4ACD4DB0CBD929 /* DepositWalkTests.swift in Sources */,
 				71628504EFADE7B1A8B2E0A7 /* LinkHandoffTests.swift in Sources */,
 				032203A43C3EB86266C74714 /* NoteStoreTests.swift in Sources */,
 				416476360AE7F708578387D0 /* ProverTests.swift in Sources */,

@@ -133,17 +133,30 @@ final class WalletService: ObservableObject {
         var s = store
 
         // Bridge deposits are rebuilt from public block data, since a relayer's envelope cannot
-        // be trusted to open. Read each block once.
+        // be trusted to open. `DepositWalk` reads the headers and opens only the blocks that carry
+        // a transaction; a node that will not answer leaves the cursor where the walk stopped and
+        // does not fail the scan — the leaves and the nullifiers are read regardless.
         let head0 = try await rpc.headHeight()
         if s.scannedAttestHeight <= head0 {
-            if try await rpc.bridgeEnabled() {
-                for h in s.scannedAttestHeight...head0 {
-                    for action in try await rpc.blockActions(height: h) {
-                        if let n = try RandCore.rebuiltDeposit(spendKey: sk, action: action) { s.addDeposit(n) }
+            // `nil`: the bridge could not be asked, so the cursor stands still this scan.
+            let enabled: Bool?
+            do { enabled = try await rpc.bridgeEnabled() } catch is CancellationError { throw CancellationError() } catch { enabled = nil }
+            if enabled == false {
+                s.scannedAttestHeight = head0 + 1
+            } else if enabled == true {
+                var found: [OwnedNote] = []
+                let walked = try await DepositWalk.run(
+                    start: s.scannedAttestHeight,
+                    head: head0,
+                    headers: { try await rpc.blockHeaders(from: $0, to: $1) },
+                    actions: { try await rpc.blockActions(height: $0) },
+                    offer: { action in
+                        if let n = try RandCore.rebuiltDeposit(spendKey: sk, action: action) { found.append(n) }
                     }
-                }
+                )
+                for n in found { s.addDeposit(n) }
+                s.scannedAttestHeight = max(s.scannedAttestHeight, walked.next)
             }
-            s.scannedAttestHeight = head0 + 1
         }
 
         // Leaves.

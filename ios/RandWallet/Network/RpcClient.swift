@@ -6,14 +6,34 @@ final class RpcClient {
     struct RpcError: LocalizedError {
         let code: Int
         let message: String
+        /// The reply was an HTTP status, not a JSON-RPC answer; `code` is that status.
+        var isHTTP = false
+        /// The `Retry-After` header an HTTP refusal carried, if any.
+        var retryAfter: String?
         var errorDescription: String? { message }
     }
 
     let url: URL
     private let session: URLSession
+    private let pause: (UInt64) async throws -> Void
 
-    init(url: URL, session: URLSession? = nil) {
+    /// HTTP 429 is "ask again later": a read is repeated after a wait, on the same node. A first
+    /// scan is several hundred reads, and the public endpoint allows a burst of about a hundred
+    /// and then about one a second — reported as a failure, the first 429 ended the scan and the
+    /// next scan met the same wall. The waits double from one second to eight and stop after about
+    /// three quarters of a minute; a `Retry-After` in seconds is taken at its word up to the
+    /// longest wait. The same rule as `ui/engine/rpc.js`'s `THROTTLE_WAITS_MS`.
+    static let throttleWaitsMs: [UInt64] = [1000, 2000, 4000, 8000, 8000, 8000, 8000, 8000]
+    private static let throttleMaxWaitMs: UInt64 = 8000
+    /// The two methods that change the chain are never repeated: a 429 on the faucet is its answer
+    /// about this wallet's allowance, and one on a send is for the person sending to see at once.
+    private static let submits: Set<String> = ["rand_sendTransaction", "rand_mint"]
+
+    /// `pause` is the wait between two attempts, in milliseconds; the tests pass one that records
+    /// it instead of sleeping.
+    init(url: URL, session: URLSession? = nil, pause: ((UInt64) async throws -> Void)? = nil) {
         self.url = url
+        self.pause = pause ?? { ms in try await Task.sleep(nanoseconds: ms * 1_000_000) }
         if let session { self.session = session; return }
         let cfg = URLSessionConfiguration.ephemeral
         cfg.timeoutIntervalForRequest = 30
@@ -22,13 +42,37 @@ final class RpcClient {
     }
 
     func call(_ method: String, _ params: [Any] = []) async throws -> Any {
+        var attempt = 0
+        while true {
+            do {
+                return try await callOnce(method, params)
+            } catch let e as RpcError {
+                guard e.code == 429, e.isHTTP, !Self.submits.contains(method), attempt < Self.throttleWaitsMs.count else { throw e }
+                try await pause(Self.throttleWaitMs(attempt: attempt, retryAfter: e.retryAfter))
+                attempt += 1
+            }
+        }
+    }
+
+    /// How long to wait before repeating a throttled read: the header's seconds, else the schedule.
+    static func throttleWaitMs(attempt: Int, retryAfter: String?) -> UInt64 {
+        if let text = retryAfter?.trimmingCharacters(in: .whitespaces), let seconds = UInt64(text), seconds > 0 {
+            return seconds > throttleMaxWaitMs / 1000 ? throttleMaxWaitMs : seconds * 1000
+        }
+        return throttleWaitsMs[attempt]
+    }
+
+    /// One POST. The only place bytes leave.
+    private func callOnce(_ method: String, _ params: [Any]) async throws -> Any {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0", "id": 1, "method": method, "params": params])
         let (data, response) = try await session.data(for: req)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw RpcError(code: (response as? HTTPURLResponse)?.statusCode ?? 0, message: "node answered HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+            let http = response as? HTTPURLResponse
+            throw RpcError(code: http?.statusCode ?? 0, message: "node answered HTTP \(http?.statusCode ?? 0)",
+                           isHTTP: true, retryAfter: http?.value(forHTTPHeaderField: "Retry-After"))
         }
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw RpcError(code: 0, message: "node reply is not JSON")
@@ -169,6 +213,13 @@ final class RpcClient {
 
     func bridgeEnabled() async throws -> Bool {
         (try await call("rand_getBridgeState") as? [String: Any])?["enabled"] as? Bool ?? false
+    }
+
+    /// `rand_getBlocks(from, to)`: the headers of that range, at most 1024 a call and never past
+    /// the node's tip, each with a `tx_count` — raw, for `DepositWalk` to check against the range
+    /// it asked for.
+    func blockHeaders(from: UInt64, to: UInt64) async throws -> Any {
+        try await call("rand_getBlocks", [from, to])
     }
 
     func blockActions(height: UInt64) async throws -> [Any] {
