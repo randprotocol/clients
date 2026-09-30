@@ -43,6 +43,11 @@ STARK). The Send flow keeps the screen awake and asks the user to keep the app o
 
 ## TestFlight
 
+The listing text, the App Privacy answers, the review notes and what gets a wallet refused are
+in [`docs/store/README.md`](../docs/store/README.md) §1. Signing for TestFlight needs a paid
+Apple Developer team (for a wallet, an organisation's); `scripts/release/build-local.sh ios`
+builds the same Release archive unsigned, which checks the build without one.
+
 1. In App Store Connect create an app for `org.randprotocol.wallet` (name "Rand Wallet").
 2. Put your team id in `project.yml` (`DEVELOPMENT_TEAM`) and run `xcodegen generate`, or pass it
    on the command line as below. Automatic signing needs your Apple ID in Xcode → Settings →

@@ -69,10 +69,14 @@ the transaction key on randscan.org.
    alignment and packaged uncompressed (`useLegacyPackaging false`), which Play requires for
    targetSdk 35 and later (the app targets 36, which Play has required of new apps since
    31 August 2026).
+   `../scripts/release/build-local.sh android` does both steps and the unit tests, and leaves
+   the `.aab` and an installable `.apk` of the same build in `dist/release/v<version>/`.
 3. In the Play Console: create the app (`org.randprotocol.wallet`), upload the `.aab` to Internal
    testing, complete the Data safety form (no data collected; the only network peer is the RPC
    URL the user configures), the content rating, and the app category (Finance). Bump
-   `versionCode`/`versionName` in `app/build.gradle` for each upload.
+   `versionCode`/`versionName` in `app/build.gradle` for each upload. The listing text, the
+   Data safety and financial-features answers and the foreground-service declaration are in
+   [`docs/store/README.md`](../docs/store/README.md) §2.
 
 ## What the app stores
 
