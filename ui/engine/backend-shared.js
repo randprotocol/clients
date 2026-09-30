@@ -157,7 +157,7 @@ const FALLBACK = Object.freeze({
     'https://rpc.randprotocol.org',
   ]),
   explorerUrl: 'https://randscan.org',
-  chainId: 18,
+  chainId: 19,
   decimals: 9,
   autoLockMin: 15,
   theme: 'system',

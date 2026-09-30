@@ -238,13 +238,13 @@ test('BUNDLE_INPUTS matches what the real core will actually select', { skip }, 
 
 // ------------------------------------------------------------------------- the chain-14 core ---
 
-test('the artefact this wallet loads is built for chain 18 on the hidden-asset bundle', { skip }, async () => {
+test('the artefact this wallet loads is built for chain 19 on the hidden-asset bundle', { skip }, async () => {
   // The wasm is git-ignored build output, so "is it the current one" is a real question: a stale
   // artefact would answer every offline call above perfectly while proving against a guest the
   // chain no longer runs. These are the constants that moved, and a stale build fails here.
   const core = await realCore();
   const k = await core.call('version');
-  assert.equal(k.default_chain_id, 18, 'the core has described chain 18 since 2026-09-29 (16 from d3e3ada before that)');
+  assert.equal(k.default_chain_id, 19, 'the core has described chain 19 since 2026-09-30 (18 from e830acc, 16 from d3e3ada before that)');
   // Fullnode v0.6.6 (constraint set 8, the chain-18 build): every bundle proof declares the guest's
   // ceiling, which chain 18's genesis pins; the chains on which a memo claim is never believed.
   assert.equal(k.chain_build, 'd742a9b');

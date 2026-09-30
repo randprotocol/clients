@@ -8,7 +8,7 @@
 // `bridge.estimate`, `bridge.withdraw` (ui/engine/backend-shared.js), the core's `prepare_burn` /
 // `finish_proof`, the engine's prover group, and the prover's own queue.
 //
-// The chain is a one-validator Test-profile chain 18 with a bridged genesis: the fullnode test
+// The chain is a one-validator Test-profile chain 19 with a bridged genesis: the fullnode test
 // suite's six guardians, chain 2 (Ethereum) registered as a source, and one bridged token, zUSD
 // backed by chain 2 USDT, listed at genesis. `e2e-fixtures` (core/crates/e2e-fixtures) writes
 // that genesis and signs the deposit; `rand bridge-mint` (the fullnode's CLI) submits it.
@@ -52,7 +52,7 @@ const PROVER_BIN = process.env.RAND_PROVER_BIN || '';
 const CLI_BIN = process.env.RAND_CLI_BIN || '';
 const FIXTURES_BIN = process.env.RAND_FIXTURES_BIN || '';
 const PASSWORD = 'an-e2e-password-for-a-real-vault';
-const CHAIN_ID = 18; // the chain this build's core was made for (`version.default_chain_id`)
+const CHAIN_ID = 19; // the chain this build's core was made for (`version.default_chain_id`)
 const SOURCE_CHAIN = 2; // Ethereum's bridge chain id
 // Chain 2 USDT, the mainnet wire address: twelve zero bytes then the contract. The genesis
 // `e2e-fixtures` writes lists zUSD backed by exactly this coin.

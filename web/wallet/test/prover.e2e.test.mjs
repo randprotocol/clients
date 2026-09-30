@@ -41,7 +41,7 @@ function gasSectionArgs(nodeBin) {
 }
 const PROVER_BIN = process.env.RAND_PROVER_BIN || '';
 const PASSWORD = 'an-e2e-password-for-a-real-vault';
-const CHAIN_ID = 18; // the chain this build's core was made for (`version.default_chain_id`)
+const CHAIN_ID = 19; // the chain this build's core was made for (`version.default_chain_id`)
 const SEND_UNITS = '2000000000'; // 2 RAND out of the faucet's 100
 
 const missing = [
