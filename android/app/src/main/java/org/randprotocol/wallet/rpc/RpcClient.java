@@ -32,6 +32,38 @@ public class RpcClient {
         return url;
     }
 
+    /**
+     * HTTP 429 is "ask again later": a read is repeated after a wait, on the same node. A first
+     * scan is several hundred reads, and the public endpoint allows a burst of about a hundred
+     * and then about one a second — reported as a failure, the first 429 ended the scan and the
+     * next scan met the same wall. The waits double from one second to eight and stop after about
+     * three quarters of a minute; a {@code Retry-After} in seconds is taken at its word up to the
+     * longest wait. The same rule as {@code ui/engine/rpc.js}'s {@code THROTTLE_WAITS_MS}.
+     */
+    static final long[] THROTTLE_WAITS_MS = {1000, 2000, 4000, 8000, 8000, 8000, 8000, 8000};
+    private static final long THROTTLE_MAX_WAIT_MS = 8000;
+
+    /**
+     * The two methods that change the chain are never repeated: a 429 on the faucet is its answer
+     * about this wallet's allowance, and one on a send is for the person sending to see at once.
+     */
+    private static boolean submits(String method) {
+        return "rand_sendTransaction".equals(method) || "rand_mint".equals(method);
+    }
+
+    /** What came back from one POST: the status, the body, and {@code Retry-After} if there was one. */
+    public static final class Reply {
+        public final int status;
+        public final String text;
+        public final String retryAfter;
+
+        public Reply(int status, String text, String retryAfter) {
+            this.status = status;
+            this.text = text == null ? "" : text;
+            this.retryAfter = retryAfter;
+        }
+    }
+
     public Object call(String method, JSONArray params) throws RpcException {
         JSONObject body = new JSONObject();
         try {
@@ -42,12 +74,22 @@ public class RpcClient {
         } catch (JSONException e) {
             throw new RpcException("building request", e);
         }
-        String reply = post(body.toString());
+        String json = body.toString();
+        Reply reply;
+        for (int attempt = 0; ; attempt++) {
+            reply = transport(json);
+            if (reply.status != 429 || submits(method) || attempt >= THROTTLE_WAITS_MS.length) break;
+            pause(throttleWaitMs(attempt, reply.retryAfter));
+        }
+        if (reply.status >= 400 && !reply.text.trim().startsWith("{")) {
+            throw new RpcException(0, "HTTP " + reply.status + " from " + url, reply.status);
+        }
+        int status = reply.status >= 400 ? reply.status : 0;
         try {
-            JSONObject r = new JSONObject(reply);
+            JSONObject r = new JSONObject(reply.text);
             JSONObject err = r.optJSONObject("error");
             if (err != null) {
-                throw new RpcException(err.optInt("code", 0), err.optString("message", "unknown error"));
+                throw new RpcException(err.optInt("code", 0), err.optString("message", "unknown error"), status);
             }
             return r.opt("result");
         } catch (JSONException e) {
@@ -55,7 +97,31 @@ public class RpcClient {
         }
     }
 
-    private String post(String json) throws RpcException {
+    /** How long to wait before repeating a throttled read: the header's seconds, else the schedule. */
+    static long throttleWaitMs(int attempt, String retryAfter) {
+        if (retryAfter != null) {
+            try {
+                long seconds = Long.parseLong(retryAfter.trim());
+                if (seconds > 0) return Math.min(seconds > THROTTLE_MAX_WAIT_MS / 1000 ? THROTTLE_MAX_WAIT_MS : seconds * 1000, THROTTLE_MAX_WAIT_MS);
+            } catch (NumberFormatException ignored) {
+                // An HTTP date, or nonsense: the schedule decides.
+            }
+        }
+        return THROTTLE_WAITS_MS[attempt];
+    }
+
+    /** The wait between two attempts. Overridden by the tests, which record it instead. */
+    protected void pause(long ms) throws RpcException {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RpcException("interrupted while waiting for " + url, e);
+        }
+    }
+
+    /** One POST. The only place bytes leave; overridden by the tests, which script the replies. */
+    protected Reply transport(String json) throws RpcException {
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(url).openConnection();
@@ -72,11 +138,7 @@ public class RpcClient {
             }
             int status = c.getResponseCode();
             InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
-            String text = readAll(in);
-            if (status >= 400 && !text.trim().startsWith("{")) {
-                throw new RpcException(0, "HTTP " + status + " from " + url);
-            }
-            return text;
+            return new Reply(status, readAll(in), c.getHeaderField("Retry-After"));
         } catch (IOException e) {
             throw new RpcException("cannot reach " + url + ": " + e.getMessage(), e);
         } finally {
@@ -238,6 +300,17 @@ public class RpcClient {
 
     public String mint(String address) throws RpcException {
         return String.valueOf(call("rand_mint", args(address)));
+    }
+
+    /**
+     * {@code rand_getBlocks(from, to)}: the headers of that range, at most 1024 a call and never
+     * past the node's tip, each with a {@code tx_count}. What {@link
+     * org.randprotocol.wallet.wallet.DepositWalk} pages through instead of opening every block.
+     */
+    public JSONArray blockHeaders(long fromHeight, long toHeight) throws RpcException {
+        Object v = call("rand_getBlocks", args(fromHeight, toHeight));
+        if (!(v instanceof JSONArray)) throw new RpcException(0, "rand_getBlocks: the reply is not a list");
+        return (JSONArray) v;
     }
 
     public JSONObject blockByHeight(long height) throws RpcException {

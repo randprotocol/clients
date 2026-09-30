@@ -247,7 +247,8 @@ public final class WalletService {
         publish(true, null);
         RpcClient rpc = rpc();
 
-        Map<String, OwnedNote> deposits = rebuildableDeposits(rpc, sk);
+        Deposits found = rebuildableDeposits(rpc, sk);
+        Map<String, OwnedNote> deposits = found.notes;
 
         // Pass 1: the leaves.
         while (true) {
@@ -280,6 +281,11 @@ public final class WalletService {
             }
             for (int i = 0; i < rows.length(); i++) from = Math.max(from, rows.getJSONObject(i).getLong("index") + 1);
             if (from <= before) throw new RpcException(0, "getCommitments did not advance");
+        }
+
+        // Every deposit found below `found.next` is on its leaf now, so the cursor may move.
+        synchronized (store) {
+            store.scannedAttestHeight = Math.max(store.scannedAttestHeight, found.next);
         }
 
         // The head *before* the nullifier pages: every block at or below it is read by them.
@@ -352,44 +358,63 @@ public final class WalletService {
         }
     }
 
+    /** What one scan's search for deposits found, and how far it looked. */
+    private static final class Deposits {
+        final Map<String, OwnedNote> notes = new HashMap<>();
+        /** One past the last height examined: where the cursor may move once the notes are placed. */
+        long next;
+    }
+
     /**
-     * Deposit notes committed bridge_attest actions created for this wallet, keyed by
-     * commitment, read out of blocks not read yet. One getBridgeState on a chain without a
-     * bridge.
+     * Deposit notes that committed bridge_attest actions created for this wallet, keyed by
+     * commitment, read out of blocks not read yet ({@link DepositWalk}: by header, opening only
+     * the blocks that carry a transaction). One getBridgeState on a chain without a bridge.
+     *
+     * It does not move {@code store.scannedAttestHeight}: {@link #scan()} does, once the deposits
+     * found here have been placed on their leaves. Moving it here meant a scan that failed between
+     * this and the leaves kept the cursor and dropped the deposits, and a bridge deposit could be
+     * missed for good. A node that will not answer leaves the cursor where the walk stopped and
+     * does not fail the scan: the notes and the spends are read regardless.
      */
-    private Map<String, OwnedNote> rebuildableDeposits(RpcClient rpc, String sk) throws RpcException, CoreException, JSONException {
-        Map<String, OwnedNote> out = new HashMap<>();
-        long head = rpc.headHeight();
+    private Deposits rebuildableDeposits(RpcClient rpc, String sk) throws CoreException, JSONException {
+        Deposits out = new Deposits();
         long from;
         synchronized (store) {
             from = store.scannedAttestHeight;
         }
-        if (from > head) return out;
-        JSONObject bridge = rpc.bridgeState();
+        out.next = from;
+        long head;
+        JSONObject bridge;
+        try {
+            head = rpc.headHeight();
+            if (from > head) return out;
+            bridge = rpc.bridgeState();
+        } catch (RpcException e) {
+            return out; // the bridge could not be asked: the cursor stands still this scan
+        }
         if (!bridge.optBoolean("enabled", false)) {
-            synchronized (store) {
-                store.scannedAttestHeight = head + 1;
-            }
+            out.next = head + 1;
             return out;
         }
-        for (long h = from; h <= head; h++) {
-            JSONObject block = rpc.blockByHeight(h);
-            if (block == null) continue;
-            JSONArray txs = block.optJSONArray("transactions");
-            if (txs == null) continue;
-            for (int i = 0; i < txs.length(); i++) {
-                JSONObject action = txs.getJSONObject(i).optJSONObject("action");
-                if (action == null || !"bridge_attest".equals(action.optString("kind"))) continue;
-                JSONObject note = Core.rebuiltDeposit(sk, action);
-                if (note != null) {
-                    OwnedNote n = OwnedNote.fromJson(note);
-                    out.put(n.cm, n);
-                }
+        DepositWalk.Node node = new DepositWalk.Node() {
+            @Override
+            public JSONArray headers(long a, long b) throws RpcException {
+                return rpc.blockHeaders(a, b);
             }
-        }
-        synchronized (store) {
-            store.scannedAttestHeight = head + 1;
-        }
+
+            @Override
+            public JSONObject block(long height) throws RpcException {
+                return rpc.blockByHeight(height);
+            }
+        };
+        DepositWalk.Result walked = DepositWalk.run(node, from, head, action -> {
+            JSONObject note = Core.rebuiltDeposit(sk, action);
+            if (note != null) {
+                OwnedNote n = OwnedNote.fromJson(note);
+                out.notes.put(n.cm, n);
+            }
+        });
+        out.next = Math.max(from, walked.through + 1);
         return out;
     }
 
