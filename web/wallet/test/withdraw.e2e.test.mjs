@@ -37,16 +37,27 @@ const CORE_WASM = new URL('../../../extension/shared/core/rand_wallet_bg.wasm', 
 const NODE_BIN = process.env.RAND_NODE_BIN || '';
 
 /**
- * Chain 18's genesis `gas` section (fullnode v0.6.6, constraint set 8, spec 2026-09-28 §4.2): the
- * prices, the bundle guest's pinned gas (20 479 — the one value genesis accepts) and the in-circuit
- * meter, so the node holds every bundle proof this wallet makes to the pin exactly as the real cut
- * does. Only when the node knows the flags: an older `rand-node` (a v0.6.2 build, say, passed as
- * RAND_NODE_BIN) cuts a chain without the section and the test still runs against it.
+ * What chain 18's genesis has beyond the defaults (fullnode v0.6.7): the `gas` section — the
+ * prices, the bundle guest's pinned gas (20 479, the one value genesis accepts) and the in-circuit
+ * meter (constraint set 8, spec 2026-09-28 §4.2) — and **split authorisation** (v0.6.3): bundle
+ * guest v3 with the auth guest, which needs a block cap of at least three proof caps plus a MiB
+ * (chain 18's 4 MiB proofs and 20 MiB blocks). So the node holds every transaction this wallet
+ * makes to the live rules: the bundle proof to the gas pin, and an auth proof beside it made by
+ * the wallet from its spend key. Only when the node knows the flags: an older `rand-node` (a
+ * v0.6.2 build, say, passed as RAND_NODE_BIN) cuts a plain chain and the test still runs against
+ * it — on a spend-key job, which then needs a prover started with --accept-spend-key.
  */
-function gasSectionArgs(nodeBin) {
+function chainArgs(nodeBin) {
   const help = execFileSync(nodeBin, ['genesis', '--help'], { stdio: 'pipe' }).toString();
-  if (!help.includes('--bundle-gas-limit')) return [];
-  return ['--gas-price', '100', '--byte-price', '800', '--bundle-gas-limit', '20479'];
+  const gas = help.includes('--bundle-gas-limit') ? ['--gas-price', '100', '--byte-price', '800', '--bundle-gas-limit', '20479'] : [];
+  const auth = help.includes('--auth-guest')
+    ? ['--bundle-guest', 'v3', '--auth-guest', '--max-proof-bytes', '4194304', '--max-block-bytes', '20971520']
+    : [];
+  return [...gas, ...auth];
+}
+/** Whether the node cuts a split-authorisation chain (see `chainArgs`). */
+function splitAuthorisation(nodeBin) {
+  return chainArgs(nodeBin).includes('--auth-guest');
 }
 const PROVER_BIN = process.env.RAND_PROVER_BIN || '';
 const CLI_BIN = process.env.RAND_CLI_BIN || '';
@@ -227,7 +238,7 @@ before(async () => {
   run(NODE_BIN, ['keygen', '--out', key]);
   run(NODE_BIN, [
     'genesis', '--chain-id', String(CHAIN_ID), '--fri-profile', 'test', '--faucet',
-    '--validator', `${key},1000,${env.aInfo.address}`, '--out', genesis, ...gasSectionArgs(NODE_BIN),
+    '--validator', `${key},1000,${env.aInfo.address}`, '--out', genesis, ...chainArgs(NODE_BIN),
   ]);
   run(FIXTURES_BIN, ['genesis', '--in', genesis, '--out', genesis, '--source-chain', String(SOURCE_CHAIN)]);
   run(NODE_BIN, ['init', '--datadir', datadir, '--genesis', genesis]);
@@ -241,10 +252,12 @@ before(async () => {
     return st && st.fri_profile === 'test' && st.height >= 1;
   }, { timeoutMs: 60_000, everyMs: 500 });
 
-  // The prover's key and an own-machine pairing.
+  // The prover's key and a pairing — not the user's own on a split-authorisation chain, where the
+  // job carries the viewing key; own (and a prover taking spend keys) on a plain, older chain.
+  env.v3 = splitAuthorisation(NODE_BIN);
   env.proverHome = join(env.dir, 'prover');
   run(PROVER_BIN, ['--home', env.proverHome, 'keygen']);
-  env.link = run(PROVER_BIN, ['--home', env.proverHome, 'pair', '--name', 'laptop', '--own', '--url', env.proverUrl])
+  env.link = run(PROVER_BIN, ['--home', env.proverHome, 'pair', '--name', 'laptop', ...(env.v3 ? [] : ['--own']), '--url', env.proverUrl])
     .trim().split('\n').find((l) => l.startsWith('randprover:'));
   assert.ok(env.link, 'rand-prover pair printed a randprover: link');
 
@@ -288,7 +301,7 @@ test('the bridge is on, zUSD is listed, and the extension\'s recipient hash is t
 test('a wasm wallet cannot withdraw until a prover is paired', { skip }, async () => {
   const answer = await env.a.backend.bridge.canWithdraw();
   assert.equal(answer.ok, false);
-  assert.match(answer.reason, /Pair your own prover/);
+  assert.match(answer.reason, /Pair a prover/);
 });
 
 test('the wasm wallet is minted zUSD, pairs its prover, and withdraws it to Ethereum', { skip, timeout: 25 * 60_000 }, async (t) => {
@@ -319,11 +332,12 @@ test('the wasm wallet is minted zUSD, pairs its prover, and withdraws it to Ethe
     // 3. Pair the prover: now the wallet can withdraw — through it.
     env.prover = launch(PROVER_BIN, [
       '--home', env.proverHome, 'run', '--listen', `127.0.0.1:${env.proverPort}`,
-      '--accept-spend-key', '--skip-memory-check',
+      ...(env.v3 ? [] : ['--accept-spend-key']), '--skip-memory-check',
     ], 'rand-prover');
     await until('rand-prover to answer prover_info', () => rpc(env.proverUrl, 'prover_info'), { timeoutMs: 30_000, everyMs: 300 });
     const paired = await env.a.backend.prover.pair(env.link, PASSWORD, { name: 'laptop' });
     assert.equal(paired.mode, 'remote');
+    assert.equal(paired.own, !env.v3);
     assert.deepEqual(await env.a.backend.bridge.canWithdraw(), { ok: true, via: 'prover' });
 
     // 4. The withdrawal: estimate, then burn. The proof is the prover's; everything else — the
