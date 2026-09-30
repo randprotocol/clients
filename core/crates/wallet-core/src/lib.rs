@@ -61,15 +61,17 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// (`feat/address-sharing` on v0.5.9: the address fingerprint, `randpay:` links and the encrypted
 /// memo), `9c142c1` (v0.5.1).
 pub const CHAIN_BUILD: &str = "d742a9b";
-/// The chain the defaults below describe: chain 18, the next cut (not live on 2026-09-29; the
-/// public node answered chain 17, genesis `d1afefc3…`, that morning; chain 16 was the aim from
-/// 2026-09-28). A wallet built against it refuses a node on any other chain until 18 is up, then
-/// adopts 18's genesis on its first scan. Chain 14 (genesis
+/// The chain the defaults below describe: chain 19, the next cut (not live on 2026-09-30; the
+/// public node answered chain 18, genesis `a7cb020c…`, that day; chain 18 was the aim from
+/// 2026-09-29, 16 from 2026-09-28). Chain 19 is chain 18 re-cut on the same build (fullnode
+/// v0.6.7, constraint set 8, the memo envelope) with the redeployed bridge endpoints in its
+/// genesis, so nothing but this number moves. A wallet built against it refuses a node on any
+/// other chain until 19 is up, then adopts 19's genesis on its first scan. Chain 14 (genesis
 /// `1cff3b7d…`, cut 2026-09-20) is where this wallet was first built: the shielded pool on the
 /// **hidden-asset bundle** (one 4-in/4-out proof for RAND, a bridged coin or an RPL token alike),
 /// transaction binding, RPL tokens, staking and the call limits, zkVM constraint set 6,
 /// production FRI profile.
-pub const DEFAULT_CHAIN_ID: u64 = 18;
+pub const DEFAULT_CHAIN_ID: u64 = 19;
 pub const DEFAULT_RPC_URL: &str = "https://rpc.randprotocol.org";
 pub const EXPLORER_URL: &str = "https://randscan.org";
 /// Peak resident memory of one bundle proof, measured on this crate's own fixture
@@ -3632,7 +3634,7 @@ mod tests {
         assert_eq!(ADDRESS_HRP, "rand1");
         // The wire names come from upstream, not from a second literal here.
         assert_eq!(ADDRESS_HRP, randprotocol_core::notes::ADDRESS_PREFIX);
-        assert_eq!(v["default_chain_id"], 18);
+        assert_eq!(v["default_chain_id"], 19);
         assert!(v.get("units_per_rand").is_some());
     }
 
@@ -3646,7 +3648,7 @@ mod tests {
     fn json_entry_point_reports_errors_as_json() {
         let v: Value = serde_json::from_str(&call("version", "{}")).unwrap();
         assert_eq!(v["ok"], true);
-        assert_eq!(v["value"]["default_chain_id"], 18);
+        assert_eq!(v["value"]["default_chain_id"], 19);
         assert_eq!(v["value"]["bundle_base_fee"], "1000000");
         let v: Value = serde_json::from_str(&call("wallet_info", r#"{"spend_key":"zz"}"#)).unwrap();
         assert_eq!(v["ok"], false);
@@ -4379,11 +4381,11 @@ mod tests {
             assert!(v["error"].as_str().unwrap().contains("decimal strings"), "{v}");
         }
 
-        /// `version` reports the chain-14 bundle's constants, on a build aimed at chain 18.
+        /// `version` reports the chain-14 bundle's constants, on a build aimed at chain 19.
         #[test]
         fn version_reports_chain_fourteen() {
             let v = constants();
-            assert_eq!(v["default_chain_id"], 18);
+            assert_eq!(v["default_chain_id"], 19);
             assert_eq!(v["chain_build"], "d742a9b");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
