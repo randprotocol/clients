@@ -38,6 +38,13 @@ The files are in `dist/release/v<version>/` after `scripts/release/build-local.s
   developer ($5 once), addons.mozilla.org (free). For a wallet, enrol Apple and Google **as an
   organisation**, not as an individual — see the first item under each store's "What can get it
   rejected".
+- **A funded review wallet.** The public endpoint refuses `rand_mint` ("method not allowed
+  here", checked 2026-09-30), so the in-app Faucet button does not fund a reviewer's wallet, and
+  a reviewer with no funds cannot reach the Send flow. Create a wallet, fund it from a node you
+  operate, and paste its spend key where the review notes below say
+  `<PASTE THE REVIEW WALLET'S SPEND KEY HERE>` — in the stores' private reviewer notes only,
+  never in a public listing. Alternatively open the faucet on the endpoint for the review
+  period (`docs/rpc-endpoints.md` has the tight `@mint` bucket for it) and say so in the notes.
 - **Phone screenshots.** The browser and desktop set is in `docs/store/screenshots/extension/`
   (five at 1280 × 800, made by `docs/store/make-screenshots.sh` from the real interface over the
   dev harness's fixture wallet). The iOS and Android apps have their own native screens and no
@@ -49,8 +56,8 @@ The files are in `dist/release/v<version>/` after `scripts/release/build-local.s
 > Testnet software: not audited, not for real value.
 
 It is in every description below on purpose. A reviewer who thinks real money is at stake asks
-for licences; a reviewer who is told plainly that it is a testnet wallet with a free faucet does
-not.
+for licences; a reviewer who is told plainly that it is a testnet wallet whose coins cost nothing
+does not.
 
 ---
 
@@ -91,7 +98,7 @@ A private wallet for the Rand Protocol testnet. Your balance and your payments a
 **Keywords (100)**
 
 ```
-rand,shielded,private,wallet,zero knowledge,testnet,viewing key,post-quantum,self custody,faucet
+rand,shielded,private,wallet,zero knowledge,testnet,viewing key,post-quantum,self custody,qr
 ```
 
 **Description (4000)**
@@ -106,7 +113,6 @@ WHAT IT DOES
 • Receive: your rand1… address as text and as a QR code
 • Send RAND and listed RPL tokens: review the payment, then the proof is made on your iPhone
 • Scan an address or a randpay: payment link with the camera
-• Testnet faucet: request test RAND to try the wallet
 • Activity: every note you received and every payment you sent
 • Disclose only what you choose: copy your viewing key to open your own history on randscan.org, or one payment's transaction key to show exactly that payment
 
@@ -165,7 +171,7 @@ leave France out of the first release's territories.
 
 ```
 1. Create a new wallet and save the spend key it shows you.
-2. Home → Faucet: request test RAND. It arrives after the next block, usually within seconds.
+2. Import the funded test wallet from the invitation email (Welcome → I already have a wallet), or ask us for test RAND to your own address.
 3. Receive: show your address as a QR code. Scan it from a second device's Send screen.
 4. Send 1 RAND to another Rand Wallet address. On an iPhone with 8 GB of memory the proof takes a minute or two; keep the app open. On other iPhones the review screen explains why this device cannot make the proof.
 5. Activity → a payment → Disclose this payment: copy the transaction key and open it on randscan.org.
@@ -175,17 +181,17 @@ leave France out of the first release's territories.
 ### App Review notes (paste into "Notes")
 
 ```
-Rand Wallet is a non-custodial ("self-custody") wallet for the Rand Protocol TESTNET. Test RAND is issued free by a public faucet and has no monetary value.
+Rand Wallet is a non-custodial ("self-custody") wallet for the Rand Protocol TESTNET. Test RAND costs nothing and has no monetary value.
 
 NO LOGIN: there is no account. Tap "Create a new wallet" to begin.
 
-TO GET FUNDS FOR TESTING: Home → Faucet. 100 test RAND arrive after the next block, usually within seconds.
+TO GET FUNDS FOR TESTING: a funded test wallet is provided for review. On the Welcome screen choose "I already have a wallet" and paste this key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE>. (The Faucet button asks the node for test RAND; the public node does not hand it out to anonymous callers, so that button reports a refusal there. It is for nodes that run an open faucet.)
 
 WHAT THE APP DOES NOT DO: it does not buy, sell, exchange or swap anything; it has no in-app purchases; it holds no user funds (keys are generated and stored only on the device, in the Keychain); it does not run an ICO or sell tokens; it offers no reward for any task.
 
 THE ON-DEVICE COMPUTATION IS NOT MINING. When the user confirms a payment, the app computes one zero-knowledge proof that authorises that single payment. It runs once per payment, only after the user taps Confirm, takes one to two minutes, and earns nothing. There is no background computation.
 
-DEVICE MEMORY: the proof needs about 8 GB of device memory. On devices with less, the review screen says so and the payment is not started; creating a wallet, receiving, the faucet, activity and key disclosure all work on every device. To test a send, use a device with 8 GB of memory (for example iPhone 15 Pro or later).
+DEVICE MEMORY: the proof needs about 8 GB of device memory. On devices with less, the review screen says so and the payment is not started; creating a wallet, receiving, activity and key disclosure all work on every device. To test a send, use a device with 8 GB of memory (for example iPhone 15 Pro or later).
 
 NETWORK: the app connects only to the JSON-RPC node shown in Settings (default https://rpc.randprotocol.org). It collects no data and contains no analytics or advertising SDKs.
 
@@ -221,6 +227,10 @@ Suggested captions, if you add text to the frames:
 - **Guideline 3.1.5(ii) — mining.** The proof is heavy on-device computation in a cryptocurrency
   app, which is what a mining rejection looks like from the outside. The review notes say what
   it is; keep that paragraph.
+- **Guideline 2.1 — a button that reports a refusal.** On the public endpoint the Faucet button
+  answers with the node's refusal. A reviewer reads a feature that errors as an incomplete app.
+  Either open the faucet for the review period, or point the app at an endpoint that serves it;
+  the notes explain it, but an explanation is weaker than a button that works.
 - **Guideline 2.1 — the reviewer cannot finish a send.** On a review device with less than 8 GB
   the send stops at the review screen by design. The notes say which devices can; if a reviewer
   still insists, stand up your own `rand-prover` and give them its pairing link in the notes.
@@ -268,7 +278,6 @@ WHAT IT DOES
 • Receive: your rand1… address as text and as a QR code
 • Send RAND and listed RPL tokens: review the payment, then the proof is made on your phone
 • Scan an address or a randpay: payment link with the camera
-• Testnet faucet: request test RAND to try the wallet
 • Activity: every note you received and every payment you sent
 • Disclose only what you choose: copy your viewing key to open your own history on randscan.org, or one payment's transaction key to show exactly that payment
 
@@ -406,7 +415,6 @@ WHAT IT DOES
 • Receive: your rand1… address as text and as a QR code
 • Send RAND and listed RPL tokens: the extension builds the payment, a prover you pair makes the proof, the extension checks the proof and submits it
 • Connect to randbridge.org: the bridge sees your address only after you approve it
-• Testnet faucet: request test RAND to try the wallet
 • Activity: every note you received and every payment you sent
 • Disclose only what you choose: copy your viewing key to open your own history on randscan.org, or one payment's transaction key to show exactly that payment
 • Password-encrypted key storage, auto-lock, dark and light themes
@@ -471,7 +479,7 @@ unticked; the description and the privacy policy both say so, and they must keep
 ### Test instructions (the dashboard's "Test instructions" tab)
 
 ```
-No login is needed. Click the toolbar icon → "Create a new wallet" → choose a password → save the spend key shown. On Home choose Faucet to receive 100 test RAND (it arrives within seconds). Receive shows the address and QR code. Sending needs a prover the user runs themselves (the Rand Wallet desktop app, Settings → "Prove for my other devices"); without one the Send screen explains this and stops before any proof. To see the bridge connection, open https://randbridge.org and choose Connect → Rand Wallet.
+No login is needed. Click the toolbar icon → "Create a new wallet" → choose a password → save the spend key shown. To test with funds, choose "I already have a wallet" instead and paste the review wallet's key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE> (the Faucet button is refused by the public node; it is for nodes that run an open faucet). Receive shows the address and QR code. Sending needs a prover the user runs themselves (the Rand Wallet desktop app, Settings → "Prove for my other devices"); without one the Send screen explains this and stops before any proof. To see the bridge connection, open https://randbridge.org and choose Connect → Rand Wallet.
 ```
 
 ### What can get it rejected
@@ -506,7 +514,7 @@ code, and Mozilla's reviewers rebuild it.
 | field (limit) | text |
 |---|---|
 | Name | `Rand Wallet` |
-| Summary (250) | `A self-custody wallet for the Rand Protocol testnet: private balances and private transfers, proved by a prover you run yourself, a testnet faucet, and viewing keys to open your own history on randscan.org.` |
+| Summary (250) | `A self-custody wallet for the Rand Protocol testnet: private balances and private transfers, proved by a prover you run yourself, and viewing keys to open your own history on randscan.org.` |
 | Categories | Privacy & Security; Other |
 | Licence | GNU General Public License v3.0 only |
 | Homepage | `https://randprotocol.org/clients/firefox` |
@@ -527,7 +535,7 @@ BUILD. The source archive is the whole repository at the release tag with its on
 
 No bundler, minifier or transpiler is used. Every .js file in the add-on is a source file from extension/shared/ or ui/, byte for byte. The only generated files are core/rand_wallet.js and core/rand_wallet_bg.wasm (wasm-bindgen output).
 
-TESTING. No account is needed. Click the toolbar button → "Create a new wallet" → set a password → save the spend key. Home → Faucet gives 100 test RAND within seconds. Sending needs a prover the user runs themselves (the Rand Wallet desktop app); without one the Send screen explains this and stops.
+TESTING. No account is needed. Click the toolbar button → "Create a new wallet" → set a password → save the spend key. To test with funds, choose "I already have a wallet" and paste the review wallet's key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE> (the Faucet button is refused by the public node; it is for nodes that run an open faucet). Sending needs a prover the user runs themselves (the Rand Wallet desktop app); without one the Send screen explains this and stops.
 
 NETWORK. JSON-RPC POSTs to the node URL in Settings (default https://rpc.randprotocol.org; rpc1–rpc3.randprotocol.org are failover hosts). If, and only if, the user pairs a prover in Settings → Prover, requests go to that URL as well; a proving job contains the wallet's spend key encrypted to that prover. No analytics, no telemetry, no remote code.
 
