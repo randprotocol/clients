@@ -81,8 +81,28 @@ the transaction key on randscan.org.
 ## What the app stores
 
 - The spend key, in `EncryptedSharedPreferences` (AES-256-GCM, Keystore-backed master key).
-  Never the viewing key: it is derived on demand. Beside it, a paired prover's token (Settings →
-  Prover, `../docs/prover.md` §6); the pairing's public fields are in plain preferences.
+  Never the viewing key: it is derived on demand. Beside it, a paired prover's record (Settings →
+  Prover, `../docs/prover.md` §6): the token, the key and URL a job is sealed and sent to, and
+  whether the link marked the prover as your own; the pairing's public fields are in plain
+  preferences, for display only.
+
+## Delegated proving
+
+Where the phone does not have the memory for a bundle proof (about 6.2 GB), a paired
+`rand-prover` makes it (Settings → Prover; `../docs/prover.md`). On a split-authorisation chain
+(bundle guest v3 beside an auth guest — every chain since 17) the job the core seals carries the
+wallet's **viewing key and a salt, never the spend key**: the prover can prove the bundle and read
+this wallet's whole history, and cannot spend. The spend authorisation — the auth proof — is made
+on the phone, inside the core's `prepare_transfer`, from the spend key (several seconds; the
+Proving screen says "Authorising the spend on this device…"). So any paired prover will do, own
+or not; a pairing not marked as your own is shown as "Paired prover" with a note saying what it
+can read. Before a job is made the wallet asks the core which witness the chain's guests take
+(`chain_guests`), re-reads `prover_info` (the key must still be the pairing's, `witness_kinds`
+must include it, and a prover quoting a fee is refused — this version pays none), and only then
+seals. On an older chain (bundle guest v1/v2) the job would carry the spend key and goes only to a
+prover paired as your own (a link made with `rand-prover pair --own`). The pending transaction
+(~2.8 MB of hex with the auth proof inside) lives in memory on the proving service's thread for
+the length of the call; nothing writes it to preferences or a file, and there is no resume.
 - `files/notes.json`: the note cache (plaintext notes, nullifiers, leaf indices) and the
   submissions list with each payment's transaction key. App-private; rebuilt by a rescan.
 - Settings (RPC URL, chain id, auto-lock, theme) in plain preferences.

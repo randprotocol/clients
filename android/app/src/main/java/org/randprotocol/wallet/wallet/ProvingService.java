@@ -22,10 +22,11 @@ import java.math.BigInteger;
  * A bundle proof takes minutes of CPU; a foreground service with a visible notification is what
  * keeps the OS from killing it when the user switches away. The whole send (scan, prove, submit,
  * wait) runs here and reports through {@link SendMonitor}. Where this device cannot fit the
- * proof and a prover the user paired as their own answers, the proof is made there instead
- * ({@link RemoteSend}, the same order: seal, submit, poll, {@code finish_proof}, then the same
- * submission), and this service keeps the process alive while it polls. There is no resume in
- * Phase 1: a process the system kills loses the job, and nothing is sent.
+ * proof and the paired prover answers, the bundle proof is made there instead ({@link RemoteSend},
+ * the same order: the auth proof here, seal, submit, poll, {@code finish_proof}, then the same
+ * submission — the prover gets the viewing key and a salt on a split-authorisation chain, never
+ * the spend key), and this service keeps the process alive while it polls. There is no resume:
+ * a process the system kills loses the job, and nothing is sent.
  */
 public class ProvingService extends Service {
     public static final String EXTRA_TO = "to";

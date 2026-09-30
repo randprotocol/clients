@@ -43,7 +43,7 @@ public final class WalletService {
      * Peak memory of a bundle proof: mirrors {@code wallet_core::PROVER_PEAK_MEMORY_BYTES}
      * (measured 2026-09-20, chain 14).
      */
-    public static final long PROVER_PEAK_MEMORY_BYTES = 5_700_000_000L;
+    public static final long PROVER_PEAK_MEMORY_BYTES = 6_200_000_000L;
 
     /** Android lets a foreground app use well under the whole of RAM; two thirds is generous. */
     public static boolean deviceCanProve(Context c) {
@@ -422,7 +422,8 @@ public final class WalletService {
 
     /**
      * Checks the link and the prover's key, then stores the pairing: the vault's record (token, key,
-     * URL — what a send seals to) first, then the display copy in {@link Prefs}. Blocking.
+     * URL, {@code own} — what a send seals to, and whether it may ever be a spend-key job) first,
+     * then the display copy in {@link Prefs}. Blocking.
      */
     public ProverPairing.Paired pairProver(String link) throws Exception {
         ProverPairing.Paired paired = ProverPairing.pair(ProverCore.NATIVE, link, ProverClient.HTTP);
@@ -442,13 +443,13 @@ public final class WalletService {
     }
 
     /**
-     * Null when this device proves — it has the memory, or no prover is paired as the user's own
-     * (then the review step's memory warning stands, as before). A paired own prover that does not
-     * answer, answers with another key, or takes no spend-key job refuses the send here, before
-     * anything is built: nothing is sent. Blocking.
+     * Null when this device proves — it has the memory, or no prover is paired (then the review
+     * step's memory warning stands, as before). A paired prover — the user's own or not — that
+     * does not answer, answers with another key, quotes a fee, or takes no job this wallet can
+     * send refuses the send here, before anything is built: nothing is sent. Blocking.
      */
     public RemoteSend.Route proveRoute() throws ProverClient.Refusal {
-        return RemoteSend.route(deviceCanProve(app), prefs.prover(), this::probeProver, vault::proverSecret);
+        return RemoteSend.route(deviceCanProve(app), prefs.prover(), ProverCore.NATIVE, this::probeProver, vault::proverSecret);
     }
 
     // ------------------------------------------------------------------ sending
@@ -480,8 +481,9 @@ public final class WalletService {
             return;
         }
         try {
-            // Where the proof is made, decided before any work: this device, or a prover the user
-            // paired as their own (delegated proving, Phase 1).
+            // Where the bundle proof is made, decided before any work: this device, or the paired
+            // prover (delegated proving). On a split-authorisation chain the prover gets the
+            // viewing key and a salt, never the spend key — the auth proof is made here.
             RemoteSend.Route route = proveRoute();
             RpcClient rpc = rpc();
             scan();
@@ -535,8 +537,10 @@ public final class WalletService {
             req.put("anchor_height", anchor.getLong("height"));
             req.put("anchor_root", anchor.getString("root"));
             req.put("inputs", inputs);
-            // The chain's guest and FRI profile, read once for either route: a proof on another
-            // guest or profile is refused by the chain, whoever makes it.
+            // The chain's two guests (hc_bundle, hc_auth) and FRI profile, read once for either
+            // route: a proof on another guest or profile is refused by the chain, whoever makes
+            // it. The core refuses, before building, a v3 bundle guest without an auth guest it
+            // carries, and an auth guest beside an older bundle guest.
             JSONObject status = null;
             try {
                 status = rpc.status();
@@ -552,15 +556,27 @@ public final class WalletService {
 
             JSONObject proved;
             if (route == null) {
+                // Locally: the bundle proof and, on a split-authorisation chain, the auth proof
+                // before it — one call; the reply's auth_proof_bytes says whether there was one.
                 SendMonitor.post(st.with(SendState.Phase.PROVING, "Proving your transfer"));
                 proved = Core.proveTransfer(req);
             } else {
                 final SendState base = st;
                 final String name = route.pairing.name;
                 SendMonitor.post(base.remote(name, null));
-                Integer maxProofBytes = rpc.maxProofBytes();
+                Integer maxProofBytes = limits.maxProofBytes;
                 proved = RemoteSend.prove(ProverCore.NATIVE, new RemoteProver(new ProverClient(route.pairing.url)), req, route,
-                        maxProofBytes, pos -> SendMonitor.post(base.remote(name, pos)));
+                        maxProofBytes, new RemoteProver.PhaseListener() {
+                            @Override
+                            public void phase(Integer pos) {
+                                SendMonitor.post(base.remote(name, pos));
+                            }
+
+                            @Override
+                            public void authorising() {
+                                SendMonitor.post(base.authorising(name));
+                            }
+                        });
             }
             req = null; // the spend key was in it
 

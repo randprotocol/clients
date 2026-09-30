@@ -17,8 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
 /**
- * Delegated proving, Phase 1 (spec docs/superpowers/specs/2026-09-28-delegated-proving-design.md):
- * a JSON-RPC client for ONE paired {@code rand-prover} — the Java twin of
+ * Delegated proving (spec docs/superpowers/specs/2026-09-28-delegated-proving-design.md, Phases 1
+ * and 2): a JSON-RPC client for ONE paired {@code rand-prover} — the Java twin of
  * {@code ui/engine/prover.js}'s {@code makeProverClient}. Four methods, positional params:
  * {@code prover_info}, {@code prover_submit [sealed_hex]}, {@code prover_status [job]},
  * {@code prover_cancel [job]}. The pairing token is not a parameter: it travels only inside the
@@ -29,6 +29,8 @@ public class ProverClient {
     public static final int UNPAIRED = -32003;
     public static final int WITNESS_KIND = -32004;
     public static final int BUSY = -32005;
+    /** The job did not pay the fee the prover quotes ({@code prover_info.fee}); this wallet pays none. */
+    public static final int FEE = -32006;
 
     private static final int TIMEOUT_MS = 20_000;
     private static final Pattern JOB = Pattern.compile("^[A-Za-z0-9_-]{1,128}$");
@@ -66,7 +68,14 @@ public class ProverClient {
     public static final class Info {
         public final String kemEk;
         public final String kemFingerprint;
+        /** {@code "viewing_key"} and/or {@code "spend_key"}: the jobs this prover takes. */
         public final java.util.List<String> witnessKinds = new java.util.ArrayList<>();
+        /**
+         * {@code prover_info.fee} exactly as the prover answered it: {@link JSONObject#NULL} (no
+         * fee, and an older prover that names none) or {@code {amount, address}}. Handed to the
+         * core verbatim ({@code prover.fee}), which refuses any fee — this wallet pays none.
+         */
+        public final Object fee;
         public final int depth;
         public final int max;
         public final int proving;
@@ -81,6 +90,8 @@ public class ProverClient {
                 Object k = kinds.opt(i);
                 if (k instanceof String) witnessKinds.add((String) k);
             }
+            Object f = o.opt("fee");
+            fee = f == null ? JSONObject.NULL : f;
             JSONObject q = o.optJSONObject("queue");
             depth = q == null ? 0 : Math.max(0, q.optInt("depth", 0));
             max = q == null ? 0 : Math.max(0, q.optInt("max", 0));
@@ -204,6 +215,32 @@ public class ProverClient {
         call("prover_cancel", new JSONArray().put(job));
     }
 
+    /** The prover refused an unpaid job ({@link #FEE}), or quoted a fee before one was made. */
+    public static final String FEE_REFUSAL = "This prover charges a fee, which this version of the wallet does not pay. "
+            + "Pair a prover that charges nothing in Settings, or send from the rand command-line wallet.";
+
+    /**
+     * {@code prover_info.fee} as a sentence when it is a fee, null when the prover charges nothing
+     * ({@code feeRefusal} in the JS): {@link JSONObject#NULL} or a zero amount is no fee; anything
+     * else — a quote this wallet cannot read included — is one, since the prover would refuse
+     * every job that did not pay it. {@code core} formats the amount when it is readable.
+     */
+    public static String feeRefusal(Object fee, ProverCore core) {
+        if (fee == null || fee == JSONObject.NULL) return null;
+        String amount = fee instanceof JSONObject && ((JSONObject) fee).opt("amount") instanceof String
+                ? ((JSONObject) fee).optString("amount") : "";
+        if (amount.matches("0+")) return null;
+        String shown = "";
+        if (amount.matches("[0-9]{1,20}")) {
+            try {
+                shown = " of " + core.formatAmount(amount) + " RAND";
+            } catch (Exception e) {
+                shown = "";
+            }
+        }
+        return "it charges a fee" + shown + " per proof, which this version of the wallet does not pay";
+    }
+
     /**
      * The prover's refusal in the user's words ({@code proverRefusal} in the JS), or null for a
      * transport failure — whether to retry that is the caller's decision.
@@ -222,8 +259,16 @@ public class ProverClient {
             }
             case UNPAIRED:
                 return new Refusal("This prover does not know this pairing. Pair it again in Settings.");
-            case WITNESS_KIND:
-                return new Refusal("This prover does not accept a spend-key job. Pair your own prover in Settings.");
+            case WITNESS_KIND: {
+                String reason = "";
+                if (e.data != null && e.data.opt("reason") instanceof String) {
+                    String r = e.data.optString("reason");
+                    reason = " (" + r.substring(0, Math.min(200, r.length())) + ")";
+                }
+                return new Refusal("This prover does not accept this kind of job" + reason + ". Pair another prover in Settings.");
+            }
+            case FEE:
+                return new Refusal(FEE_REFUSAL);
             case UNKNOWN_JOB:
                 return new Refusal("The prover no longer has this proof (it restarted or the job expired). Send again.");
             default: {
