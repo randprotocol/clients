@@ -31,7 +31,7 @@
 //
 // ---- what this shell cannot do ----
 //
-// A bundle proof peaks at ~5.7 GB (`wallet-core`'s own PROVER_PEAK_MEMORY_BYTES) and wasm32 stops
+// A bundle proof peaks at ~6.2 GB (`wallet-core`'s own PROVER_PEAK_MEMORY_BYTES) and wasm32 stops
 // at 4 GiB, so without a paired prover `send.canProve()` is `{ok: false}` and `send.send()` rejects
 // before anything is selected — for a transfer of RAND, for a transfer of an RPL token (which chain 14 admits, and
 // which is the same one bundle) and for a withdrawal alike. Everything else — keys, addresses,
@@ -48,7 +48,7 @@ export { UNLOCKED_SESSION_KEY, unlockDelayMs };
  * a prover is paired and answering. (Since split authorisation it need not be the user's own: the
  * spend key stays in this browser, which makes the small auth proof itself.)
  */
-export const CANNOT_PROVE_REASON = 'This browser cannot make a transfer proof (it needs about 5.7 GB). '
+export const CANNOT_PROVE_REASON = 'This browser cannot make a transfer proof (it needs about 6.2 GB). '
   + 'Pair a prover in Settings, or send from the desktop app.';
 
 async function canProve() {

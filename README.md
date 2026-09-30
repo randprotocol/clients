@@ -100,7 +100,7 @@ STARK proof, keys are Poseidon2 hashes, envelopes are ML-KEM-768 + ChaCha20-Poly
 primitives exist only in the fullnode's Rust crates, and a wallet that re-implemented them in
 Swift, Java or JavaScript would have to be byte-identical to the node or every transfer is
 refused. So `core/` vendors the fullnode crates (`core/vendor/fullnode`,
-a submodule at fullnode's `v0.6.6` tag, `d742a9b` — the gas release: v0.6.2's delegated prover + **constraint set 8**, the chain-18 build, whose proofs carry a declared gas limit and verify on no earlier chain) and exposes one JSON entry point, `call(method, params)`, that each
+a submodule at fullnode's `v0.6.7` tag, `86941a1` — the build chains 18 and 19 run: **constraint set 8**, whose proofs carry a declared gas limit and verify on no earlier chain, and **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key) and exposes one JSON entry point, `call(method, params)`, that each
 client wraps: an XCFramework on iOS, a `.so` on Android, WebAssembly in the browser. Everything
 above that line — the RPC client, note store, scan and send flow, key storage and the UI — is
 Swift, Java and JavaScript.
@@ -137,7 +137,7 @@ Android use `10.0.2.2` from the emulator).
 ## Known limitation: the proof does not fit on small devices yet
 
 A bundle proof (what authorises a transfer — of RAND, of an RPL token, or a bridge burn; on
-chain 14 they are all the same one proof) peaks at about **5.7 GB of memory** on chain 14's
+chain 14 they are all the same one proof) peaks at about **6.2 GB of memory** on chain 14's
 build, measured with `core/crates/wallet-core/examples/prove_fixture.rs`:
 
 ```bash
@@ -149,8 +149,10 @@ Consequences today, per shell: the desktop app proves natively and sends everyth
 extensions and the local web wallet cannot prove for themselves (WebAssembly is capped at 4 GB), so
 they prove through a paired prover — the desktop app on the same machine (Settings → **Prove for
 my other devices**), or your own `rand-prover` on a server — and without one the Send screen
-explains the wall. A prover in this release receives the wallet's spend key with every job, so pair
-only a machine you run yourself; [`docs/prover.md`](docs/prover.md) is the whole guide. Phones with less than
+explains the wall. A prover receives the wallet's viewing key and a one-time salt with every job —
+it can read that wallet's whole history and cannot spend; the spend key stays on the device, which
+makes the small authorisation proof itself — so it need not be yours, though running your own is
+what keeps your history to yourself; [`docs/prover.md`](docs/prover.md) is the whole guide. Phones with less than
 about 8 GB of RAM will have the app terminated mid-proof (the review step warns with the device's
 numbers) unless they pair your own `rand-prover` over https (Settings → Prover,
 [`docs/prover.md`](docs/prover.md) §6). Every other feature — creating and importing wallets, receiving, scanning, the faucet,
@@ -192,7 +194,7 @@ git checkout v0.6.6 && git submodule update --init   # a release, rather than ma
 ```
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
-The submodule is the full node (`core/vendor/fullnode`, at its `v0.6.6` tag): the wallet's
+The submodule is the full node (`core/vendor/fullnode`, at its `v0.6.7` tag): the wallet's
 cryptography is the node's own code.
 
 ### 3. Test the core (optional, about a minute)

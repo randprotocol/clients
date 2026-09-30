@@ -81,7 +81,7 @@ export const CORE_VERSION = Object.freeze({
   version: '0.1.0', default_chain_id: 13, default_rpc_url: 'https://rpc.randprotocol.org',
   explorer_url: 'https://randscan.org', address_hrp: 'rand1', token_symbol: 'RAND',
   token_decimals: 9, units_per_rand: '1000000000', bundle_base_fee: '1000000',
-  prover_peak_memory_bytes: 5700000000,
+  prover_peak_memory_bytes: 6200000000,
   // Chain 14: one bundle, four slots, one proof for a transfer AND for a burn.
   bundle_inputs: 2, bundle_slots: 4, bundle_asset_slots: 2,
   transfer_proofs: 1, bridge_burn_proofs: 1, rpl_transfer: true,

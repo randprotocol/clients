@@ -194,7 +194,7 @@ function sentence(text) {
  * it reads a backing's `locked` with upstream's `amount_field` (a decimal string on chain 14, a
  * number on an older node). Chain 14's zUSD amendment added two of those four checks; re-porting
  * them would have meant two implementations of a rule whose whole job is to agree with the ledger,
- * and the one that disagreed would cost the user a ~100-second, ~5.7 GB proof for a transaction
+ * and the one that disagreed would cost the user a ~100-second, ~6.2 GB proof for a transaction
  * the chain was always going to refuse.
  *
  * So what lives here is only the adaptation: `checkBridgeState`'s validated `{enabled, assets}`
@@ -1857,7 +1857,7 @@ export function makeSharedBackend({
     /**
      * `(req, onPhase, options?)` — the contract's signature. A pending remote proof refuses a
      * second send. Then `proveRoute()` answers, without touching the node: a shell that
-     * *structurally* cannot prove (wasm: ~5.7 GB against a 4 GiB address space) and has no prover
+     * *structurally* cannot prove (wasm: ~6.2 GB against a 4 GiB address space) and has no prover
      * of the user's own paired says so before asking anything of a node — that answer can never be
      * wrong, and it is what the user needs. Only once it says `ok: true` does this go on to prove
      * the chain (`requireVerifiedChain()`), and only then does `executeSend` run — with the client
@@ -1948,7 +1948,7 @@ export function makeSharedBackend({
    * `bridge.estimate` and `bridge.withdraw` both run it, and that is the point: they used to carry
    * two lists and `withdraw`'s was the shorter — a zero amount and a relayer fee larger than the
    * amount were refused when the user pressed Review and not when they pressed Withdraw, so a
-   * flow that reached the button by any other route paid ~100 seconds and ~5.7 GB for a
+   * flow that reached the button by any other route paid ~100 seconds and ~6.2 GB for a
    * transaction the chain always refuses. The order is the cheapest question first: the shape of
    * the request, then the one question that needs a node (`rand_getBridgeState`), then the four
    * only the chain can answer, which go to the core whole.
@@ -1986,7 +1986,7 @@ export function makeSharedBackend({
    * is for a transfer.
    *
    * The whole reason this group exists rather than the screen calling `rpc.call` itself: a burn
-   * costs a bundle proof, about two minutes and ~5.7 GB, and there are four ways to spend
+   * costs a bundle proof, about two minutes and ~6.2 GB, and there are four ways to spend
    * that on a transaction the chain will refuse outright — a disabled bridge, an unregistered
    * index, a coin that does not back the asset, and a coin that is not holding enough of it.
    * `wallet-core` cannot check any of them on its own (it does no I/O), so `screenBurn` puts the

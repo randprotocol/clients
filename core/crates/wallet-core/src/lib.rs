@@ -81,32 +81,34 @@ pub const EXPLORER_URL: &str = "https://randscan.org";
 /// Peak resident memory of one bundle proof, measured on this crate's own fixture
 /// (`examples/prove_fixture.rs`, Apple M-series): the prover materialises every table's
 /// low-degree extension at once. Clients compare it with the device's memory before proving,
-/// and wasm32 (4 GiB address space) cannot prove at all until this drops. Re-measured on
-/// constraint set 6 (2026-09-19): 97.6 s, 5 634 113 536 bytes.
+/// and wasm32 (4 GiB address space) cannot prove the bundle at all until this drops. (The auth
+/// proof a split-authorisation transaction also carries is tier 10 and small — under 400 MiB in
+/// wasm32 — and is never what this number gates.)
 ///
-/// **Re-measured on chain 14's hidden-asset guest (2026-09-20)**, Apple M-series, `--release`,
-/// production FRI, `/usr/bin/time -l ./target/release/examples/prove_fixture <kind> production`
-/// — the *largest* of the three shapes a wallet builds, which is what a device has to clear:
+/// **Re-measured on fullnode v0.6.7 (2026-10-01)** — constraint set 8, bundle guest v3 — Apple
+/// M-series, `--release`, `/usr/bin/time -l ./target/release/examples/prove_fixture <kind>
+/// <profile>`, which makes the auth proof, then the bundle proof, then runs `Ledger::validate`:
 ///
-/// | fixture | proving | peak RSS |
-/// |---|---|---|
-/// | `transfer` (RAND) | 97.0 s | **5 656 723 456** |
-/// | `token` (asset 1) | 97.0 s | 5 645 041 664 |
-/// | `burn` | 99.1 s | 5 643 026 432 |
+/// | fixture | profile | proving | peak RSS |
+/// |---|---|---|---|
+/// | `transfer` (RAND) | production | 117.2 s | 6 121 111 552 |
+/// | `burn` | production | 112.2 s | 6 148 816 896 |
+/// | `transfer` (RAND) | test | 114.6 s | **6 159 302 656** |
+/// | `token` (asset 1) | test | 123.8 s | 6 127 730 688 |
+/// | `burn` | test | 127.6 s | 6 112 034 816 |
 ///
-/// Four slots cost about 0.4% more than the retired two-slot guest's 5 634 113 536 — the guest
-/// doubled its slots but the prover's peak is dominated by one low-degree extension either way —
-/// and a burn is now **one** proof rather than two, so the worst case a client must budget for
-/// went *down*. The published requirement (an 8 GiB device gate) is unchanged.
+/// Up from the 5 656 723 456 measured on chain 14's guest (2026-09-20) by about 9%: constraint set
+/// 8's `GAS` column and the v3 guest's wider witness (1 212 words) and program. The published
+/// requirement (an 8 GiB device gate) is unchanged.
 ///
-/// The constant is the largest measured run **rounded up to 5.7 GB**, not the sample itself. Peak
+/// The constant is the largest measured run **rounded up to 6.2 GB**, not the sample itself. Peak
 /// RSS varies run to run, with the allocator and with the OS version, so a constant equal to one
 /// sample would leave a `>=` comparison with no margin at all and would read as a threshold that
-/// had been tuned to pass. 5 700 000 000 is ~0.8% above the largest of the three runs, the same
-/// shape of headroom the chain-8 figure had. It is **descriptive, not the gate**: the operative
+/// had been tuned to pass. 6 200 000 000 is ~0.7% above the largest of the five runs, the same
+/// shape of headroom the earlier figures had. It is **descriptive, not the gate**: the operative
 /// device check is `MIN_PROVE_GIB` (8 GiB) in `ui/engine/backend-native.js`, and wasm32 cannot
-/// prove at all until this number drops below a 4 GiB address space.
-pub const PROVER_PEAK_MEMORY_BYTES: u64 = 5_700_000_000;
+/// prove the bundle at all until this number drops below a 4 GiB address space.
+pub const PROVER_PEAK_MEMORY_BYTES: u64 = 6_200_000_000;
 
 /// A bundle spends at most this many input notes **per group** — slots 0–1 carry the private
 /// asset, slots 2–3 carry RAND — so coin selection picks at most two notes of each. Unchanged

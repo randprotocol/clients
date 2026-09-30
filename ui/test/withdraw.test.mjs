@@ -165,12 +165,12 @@ test('the asset screen offers Withdraw for an RPL asset when the bridge says it 
 });
 
 test('no Withdraw action, and the reason instead, when canWithdraw says no', async (t) => {
-  const REASON = 'Proving needs about 5.7 GB of free memory; this computer reports 8 GB.';
+  const REASON = 'Proving needs about 6.2 GB of free memory; this computer reports 8 GB.';
   const b = unlockedBackend({ bridge: { canWithdraw: () => ({ ok: false, reason: REASON }) } });
   const { app, root } = await mountApp(t, b, { hash: '#asset/1' });
   await app.idle();
   assertGone(root.querySelector('[data-go="withdraw/1"]'), 'the Withdraw action');
-  assert.match(text(root), /5\.7 GB/, 'the reason is shown in its place');
+  assert.match(text(root), /6\.2 GB/, 'the reason is shown in its place');
 });
 
 test('a shell with no bridge group at all offers no Withdraw and asks it nothing', async (t) => {

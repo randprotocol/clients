@@ -1042,7 +1042,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    * Both groups' witnesses come from ONE `anchorAndWitnesses` call, because `prove_transfer` takes
    * a single `anchor_height`/`anchor_root` and the bundle is folded against one root.
    *
-   * A wasm shell reaches it only with a paired prover: a bundle proof peaks at ~5.7 GB and wasm32
+   * A wasm shell reaches it only with a paired prover: a bundle proof peaks at ~6.2 GB and wasm32
    * stops at 4 GiB, so the proof is made by `prove` — the backend's hook that seals the witness to
    * the prover through the core's `prepare_transfer` and returns `finish_proof`'s result, the same
    * shape `prove_transfer` returns. Without the hook the core proves here. Either way the request

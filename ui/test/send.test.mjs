@@ -97,10 +97,10 @@ function controlledSend(overrides = {}) {
 // ------------------------------------------------------------- the brief's Step 1 tests --------
 
 test('a shell that cannot prove shows the reason and no prove button', async (t) => {
-  const b = unlockedBackend({ send: { canProve: async () => ({ ok: false, reason: 'Proving needs about 5.7 GB; browsers allow 4 GB.' }) } });
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: false, reason: 'Proving needs about 6.2 GB; browsers allow 4 GB.' }) } });
   const { root } = await review(t, b);
   assertGone(root.querySelector('[data-action="prove"]'), 'root.querySelector([data-action="prove"])');
-  assert.match(root.textContent, /5\.7 GB/);
+  assert.match(root.textContent, /6\.2 GB/);
   assert.match(root.textContent, /desktop app/i);
 });
 
