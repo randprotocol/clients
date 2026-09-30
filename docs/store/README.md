@@ -129,7 +129,7 @@ Open source under GPL-3.0: github.com/randprotocol/clients
 **What's New in This Version**
 
 ```
-First TestFlight build. Built for Rand testnet chain 18.
+First TestFlight build. Built for Rand testnet chain 19.
 ```
 
 ### App Privacy ("nutrition label")
@@ -291,7 +291,7 @@ Open source under GPL-3.0: github.com/randprotocol/clients
 **Release notes (500)**
 
 ```
-First testing release. Built for Rand testnet chain 18.
+First testing release. Built for Rand testnet chain 19.
 ```
 
 ### App content declarations
