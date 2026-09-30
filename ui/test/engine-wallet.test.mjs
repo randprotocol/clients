@@ -927,3 +927,167 @@ test('proofParamsOf refuses a malformed hc_bundle instead of falling back to the
     });
   }
 });
+
+// ------------------------------------------------------------ the deposit scan, by header ----
+//
+// A bridge deposit is rebuilt from the `bridge_attest` action that created it, and the only way to
+// find one is to look in the blocks. One `rand_getBlockByHeight` per height did that for a chain of
+// a few thousand blocks; at a block a second it is a hundred thousand calls for a first scan, which
+// no rate-limited endpoint serves. `rand_getBlocks(from, to)` answers 1024 headers a call, each
+// with a `tx_count`, and on the live chain about one block in two hundred has a transaction in it:
+// the walk reads the headers and opens only those.
+
+/** `rand_getBlocks` over a chain of `head` blocks; `busy` is the set of heights with a transaction. */
+function headerNode(head, busy, log) {
+  return (from, to) => {
+    log.push([from, to]);
+    const rows = [];
+    for (let h = from; h <= Math.min(to, head); h += 1) rows.push({ height: h, hash: HEX64('ab'), tx_count: busy.has(h) ? 1 : 0 });
+    return rows;
+  };
+}
+
+test('the deposit scan walks the headers and opens only the blocks that carry a transaction', async () => {
+  const store = memoryStore();
+  const pages = [];
+  const opened = [];
+  const offered = [];
+  const client = stubClient({
+    head: () => ({ height: 5000, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    getBlocks: headerNode(5000, new Set([7, 2000]), pages),
+    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [{ action: { kind: 'bridge_attest', at: h } }] }; },
+  });
+  const core = stubCore({ rebuilt_deposit: ({ action }) => { offered.push(action.at); return null; } });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await wallet.scan(SPEND_KEY, {});
+
+  assert.deepEqual(opened, [7, 2000], 'a block with no transaction in it was opened');
+  assert.deepEqual(offered, [7, 2000], 'an attestation was not offered to the core');
+  assert.deepEqual(pages, [[0, 1023], [1024, 2047], [2048, 3071], [3072, 4095], [4096, 5000]]);
+  assert.equal(store.current.scanned_attest_height, 5001, 'the cursor is one past the last header read');
+});
+
+test('the walk is budgeted per scan, in requests, and the next scan carries on from where it stopped', async () => {
+  const store = memoryStore();
+  const pages = [];
+  const opened = [];
+  const head = 400_000;
+  const client = stubClient({
+    head: () => ({ height: head, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    getBlocks: headerNode(head, new Set([5, 6]), pages),
+    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [] }; },
+    // The spend pass is budgeted by its own rule; keep it out of the way of this count.
+    nullifiers: () => [],
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await wallet.scan(SPEND_KEY, {});
+
+  const spent = pages.length + opened.length;
+  assert.ok(spent <= 96, `${spent} requests went on deposits in one scan`);
+  assert.ok(spent >= 64, `only ${spent}: the budget is too small to cross a day of blocks`);
+  const after = store.current.scanned_attest_height;
+  assert.equal(after, pages.at(-1)[1] + 1, 'the cursor is not one past the last header read');
+  assert.ok(after < head);
+
+  pages.length = 0;
+  await wallet.scan(SPEND_KEY, {});
+  assert.equal(pages[0][0], after, 'the second scan did not resume at the cursor');
+});
+
+test('a budget spent in the middle of a page stops the cursor at the last block opened, not the page end', async () => {
+  const store = memoryStore();
+  const pages = [];
+  const opened = [];
+  const busy = new Set();
+  for (let h = 100; h < 400; h += 1) busy.add(h); // 300 busy blocks inside the first header page
+  const client = stubClient({
+    head: () => ({ height: 3000, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    getBlocks: headerNode(3000, busy, pages),
+    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [] }; },
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await wallet.scan(SPEND_KEY, {});
+
+  assert.ok(pages.length + opened.length <= 96);
+  const last = opened.at(-1);
+  assert.equal(store.current.scanned_attest_height, last + 1, 'the cursor moved over a busy block that was never opened');
+  assert.ok(last < 399);
+});
+
+test('a header page that is not the answer to the request moves nothing, and the notes are still read', async () => {
+  for (const [why, forge] of [
+    ['starts late', (rows) => rows.slice(1)],
+    ['has a gap', (rows) => rows.filter((r) => r.height !== 10)],
+    ['runs past the range', (rows) => [...rows, { height: rows.at(-1).height + 1, tx_count: 0 }, { height: rows.at(-1).height + 2, tx_count: 0 }]],
+    ['has no tx_count', (rows) => rows.map(({ height }) => ({ height }))],
+    ['is not a list', () => ({ rows: [] })],
+  ]) {
+    const store = memoryStore();
+    const honest = headerNode(50, new Set(), []);
+    const client = stubClient({
+      head: () => ({ height: 50, hash: HEX64('ab') }),
+      bridgeState: () => ({ enabled: true }),
+      getBlocks: (from, to) => forge(honest(from, to)),
+      treeInfo: () => ({ next_index: 1, root: HEX64('00'), nullifiers: 0 }),
+      commitments: (from) => (from === 0 ? [{ index: 0, cm: HEX64('c1'), height: 3, envelope: envelope() }] : []),
+    });
+    const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+    const st = await wallet.scan(SPEND_KEY, {});
+    assert.equal(store.current.scanned_attest_height, 0, `a page that ${why} moved the deposit cursor`);
+    assert.equal(store.current.scanned_index, 1, `a page that ${why} stopped the notes being read`);
+    assert.equal(st.bridgeUnknown, true, `a page that ${why} was not reported`);
+  }
+});
+
+test('a block the node will not open stops the walk there: what was found is kept, the rest waits', async () => {
+  const store = memoryStore();
+  const offered = [];
+  const client = stubClient({
+    head: () => ({ height: 3000, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    getBlocks: headerNode(3000, new Set([7, 2000]), []),
+    blockByHeight: (h) => {
+      if (h === 2000) { const e = new Error('https://node answered HTTP 429'); e.failure = 'http'; e.status = 429; throw e; }
+      return { height: h, transactions: [{ action: { kind: 'bridge_attest', at: h } }] };
+    },
+  });
+  const core = stubCore({ rebuilt_deposit: ({ action }) => { offered.push(action.at); return null; } });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+  const st = await wallet.scan(SPEND_KEY, {});
+
+  assert.deepEqual(offered, [7]);
+  assert.equal(store.current.scanned_attest_height, 2000, 'the cursor is at the block that could not be opened');
+  assert.equal(st.bridgeUnknown, true);
+  assert.ok(store.current.last_sync_ms > 0, 'the scan as a whole did not finish');
+});
+
+test('a node with no rand_getBlocks is read one block at a time, as before', async () => {
+  const store = memoryStore();
+  const opened = [];
+  const client = stubClient({
+    head: () => ({ height: 5000, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    getBlocks: () => { const e = new Error('unknown method rand_getBlocks'); e.code = -32601; throw e; },
+    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [] }; },
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await wallet.scan(SPEND_KEY, {});
+  assert.equal(opened.length, 512);
+  assert.equal(store.current.scanned_attest_height, 512);
+});
+
+test('a cancel during the header walk is a cancellation, not an unknown bridge', async () => {
+  const store = memoryStore();
+  const ctl = new AbortController();
+  const client = stubClient({
+    head: () => ({ height: 5000, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    getBlocks: () => { ctl.abort(); const e = new Error('The operation was aborted.'); e.name = 'AbortError'; throw e; },
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await assert.rejects(() => wallet.scan(SPEND_KEY, { signal: ctl.signal }), (err) => err.name === 'AbortError');
+  assert.equal(store.writes.length, 0);
+});

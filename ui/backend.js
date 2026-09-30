@@ -55,9 +55,11 @@
  *    to wait rather than race it; the wait ran out, so this is the cached data. The scanning tab's
  *    result arrives through `sync.onChanged?` — a backend that sets this should offer that too,
  *    or the banner promises a refresh nothing will deliver.
- *  - `bridgeUnknown?` — OPTIONAL, `true`. The bridge's state could not be read this scan, so the
- *    bridge-deposit cursor deliberately did not move (advancing it would skip blocks that were
- *    never examined). Nothing is wrong with the data; the next scan tries again.
+ *  - `bridgeUnknown?` — OPTIONAL, `true`. The node would not answer for every block the search
+ *    for bridge deposits asked about this scan — the bridge's state, a page of headers, or a
+ *    block — so the bridge-deposit cursor stopped at the last block it WAS answered about
+ *    (advancing it further would skip blocks that were never examined). Nothing is wrong with the
+ *    data, and the notes and spends were read regardless; the next scan carries on from there.
  *  - `identityUnknown?` — OPTIONAL, `true`. **Blocking**, like `wrongChain`: the node would not
  *    say which chain it is on (neither a chain id nor a genesis hash), and this wallet has none
  *    recorded yet — so nothing was read and nothing merged. A wallet that adopted an unnamed chain

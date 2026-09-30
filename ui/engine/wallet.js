@@ -27,7 +27,7 @@
 //     covers.
 import {
   checkHead, checkTreeInfo, checkCommitments, checkNullifiers, checkAnchor, checkWitness,
-  checkBlockHeader, checkBridgeState, checkSubmitted, checkGenesisHash, checkBlockActions,
+  checkBlockHeader, checkBlockHeaders, checkBridgeState, checkSubmitted, checkGenesisHash, checkBlockActions,
   checkTransaction, checkLimits, intField, NodeReplyError,
 } from './validate.js';
 import { isTransportFailure } from './rpc.js';
@@ -209,8 +209,22 @@ export const HEIGHT_SPAN = PAGE;
 const MAX_HEIGHT_PAGES_PER_SCAN = 512;
 /** …and the total a single scan may advance `scanned_height`, whatever the replies look like. */
 export const MAX_HEIGHTS_PER_SCAN = HEIGHT_SPAN * MAX_HEIGHT_PAGES_PER_SCAN;
-/** How many block headers `rebuildableDeposits` may examine in one scan (it is one call each). */
+/**
+ * How many blocks `rebuildableDeposits` may open in one scan when the node has no
+ * `rand_getBlocks` and every height costs a call — and how far the cursor may move in one scan
+ * over a chain that has no bridge at all.
+ */
 const MAX_ATTEST_HEIGHTS_PER_SCAN = 512;
+/** Headers asked of one `rand_getBlocks` call: the node's own cap (`MAX_BLOCK_HEADERS`). */
+const ATTEST_HEADER_PAGE = 1024;
+/**
+ * What one scan may spend looking for deposits, in REQUESTS — header pages and opened blocks
+ * together. Requests are what a rate-limited endpoint counts, and this pass runs before a single
+ * note is read: at 96 it crosses a day of blocks at a block a second (85 pages) and still leaves
+ * the notes and the spends their share of the endpoint's burst. A longer gap is closed over
+ * several scans, the cursor saved at each.
+ */
+const MAX_ATTEST_REQUESTS_PER_SCAN = 96;
 
 export function emptyNoteStore() {
   return {
@@ -517,10 +531,14 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     // the cursor still moves only as far as one scan's worth, for the same reason every other
     // cursor does: `head` is the node's claim, and a claim near 2^53 must not become a cursor.
     if (!enabled) return { deposits: out, through: Math.min(head, start + MAX_ATTEST_HEIGHTS_PER_SCAN - 1) };
-    // One `rand_getBlockByHeight` per height, so this is capped: a wallet that has been away for
-    // 50 000 blocks catches up over several scans instead of making 50 000 calls in one, and the
-    // cursor advances only as far as the blocks actually examined (the same rule as every other
-    // cursor here).
+    const walked = typeof client.getBlocks === 'function'
+      ? await depositsByHeader(client, spendKey, start, head, signal, onProgress, out)
+      : null;
+    if (walked) return walked;
+    // A node with no `rand_getBlocks`: one `rand_getBlockByHeight` per height, so this is capped —
+    // a wallet that has been away for 50 000 blocks catches up over several scans instead of
+    // making 50 000 calls in one, and the cursor advances only as far as the blocks actually
+    // examined (the same rule as every other cursor here).
     const last = Math.min(head, start + MAX_ATTEST_HEIGHTS_PER_SCAN - 1);
     let examined = start - 1;
     for (let h = start; h <= last; h++) {
@@ -533,6 +551,75 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       }
       examined = h;
       if ((h - start) % 64 === 63) onProgress?.({ phase: 'deposits', scanned: h, total: head });
+    }
+    return { deposits: out, through: examined };
+  }
+
+  /**
+   * The same search by header: `rand_getBlocks(from, to)` answers up to 1024 headers a call, each
+   * with a `tx_count`, and only a block that carries a transaction can carry a `bridge_attest`.
+   * On the chain this was measured on (2026-09-30: 100 352 blocks, 534 of them with a transaction)
+   * that is 98 + 534 requests where one call per height was 100 352 — the difference between a
+   * first scan a rate-limited public endpoint serves and one it refuses for ever.
+   *
+   * THE CURSOR RULE holds as it does everywhere here: `through` is the last height this wallet
+   * asked for, was answered about and validated — a header that says "empty", or a block that was
+   * opened. It never moves over a header page that is not an answer to its request, nor past a
+   * busy block that was not opened.
+   *
+   * What the node will not serve stops the walk WHERE IT STOPPED, and does not fail the scan: the
+   * deposits found below that point are kept, the cursor stays under it, the caller is told
+   * (`unknown`), and the notes and spends — which are most of a wallet — are read regardless. It
+   * used to be one refused block read, no balance at all.
+   *
+   * Returns `null`, having moved nothing, when the node does not know `rand_getBlocks`.
+   */
+  async function depositsByHeader(client, spendKey, start, head, signal, onProgress, out) {
+    let examined = start - 1;
+    let budget = MAX_ATTEST_REQUESTS_PER_SCAN;
+    // Only what the NODE said or failed to say is "unknown". The core refusing an action it was
+    // handed is this wallet's own failure and is not caught here.
+    const ask = async (run) => {
+      try {
+        return { value: await run() };
+      } catch (err) {
+        if (err && err.name === 'AbortError') throw err;
+        return { failed: err };
+      }
+    };
+    while (examined < head && budget > 0) {
+      throwIfAborted(signal);
+      const from = examined + 1;
+      const to = Math.min(head, from + ATTEST_HEADER_PAGE - 1);
+      const page = await ask(async () => checkBlockHeaders(await client.getBlocks(from, to, { signal }), { from, to }));
+      if (page.failed) {
+        // "No such method" as the very first answer is a node that predates it, not a failure.
+        const unsupported = page.failed.code === -32601 && !isTransportFailure(page.failed);
+        if (unsupported && budget === MAX_ATTEST_REQUESTS_PER_SCAN) return null;
+        return { deposits: out, through: examined, unknown: true };
+      }
+      budget -= 1;
+      const headers = page.value;
+      // The node named a tip at or above `from` and then had no header for it.
+      if (headers.length === 0) return { deposits: out, through: examined, unknown: true };
+      for (const header of headers) {
+        if (header.tx_count > 0) {
+          if (budget <= 0) return { deposits: out, through: examined }; // enough for one scan
+          throwIfAborted(signal);
+          budget -= 1;
+          // Every action is re-parsed into a plain, size-bounded object before it reaches the core.
+          const block = await ask(async () => checkBlockActions(await client.blockByHeight(header.height, { signal })));
+          if (block.failed) return { deposits: out, through: examined, unknown: true };
+          for (const action of block.value) {
+            if (action.kind !== 'bridge_attest') continue;
+            const note = await c.rebuiltDeposit(spendKey, action);
+            if (note) out.set(note.cm, note);
+          }
+        }
+        examined = header.height;
+      }
+      onProgress?.({ phase: 'deposits', scanned: examined, total: head });
+      if (headers.length < to - from + 1) break; // the node's own tip is below the one it named
     }
     return { deposits: out, through: examined };
   }

@@ -95,6 +95,41 @@ function abortError() {
   return err;
 }
 
+/**
+ * HTTP 429 — "ask again later". The one refusal that says nothing about the request and everything
+ * about the moment, so it is the one failure this file answers by waiting and asking the SAME
+ * endpoint the SAME thing again.
+ *
+ * It has to: a first scan is several hundred reads, and a public endpoint behind a rate limiter
+ * allows a burst and then about one a second (measured on rpc.randprotocol.org, 2026-09-30: ~100,
+ * then ~1/s, no Retry-After). Reported like any other transport failure, the first 429 ended the
+ * scan — with one endpoint configured there is nothing to fail over to — and the next scan began
+ * again from the same place and met the same wall.
+ *
+ * The waits double from one second to eight and stop after about three quarters of a minute in
+ * all; an endpoint still refusing then is reported as the 429 it is. A `Retry-After` in seconds is
+ * taken at its word up to the longest wait — a header is a claim, and an hour is not a wait.
+ *
+ * NOT for the two submitting methods. A 429 on `rand_mint` is the faucet's own answer about this
+ * wallet's allowance, and one on `rand_sendTransaction` is for the person sending to see at once;
+ * neither is a thing to repeat behind their back.
+ */
+export const THROTTLE_WAITS_MS = Object.freeze([1000, 2000, 4000, 8000, 8000, 8000, 8000, 8000]);
+const THROTTLE_MAX_WAIT_MS = Math.max(...THROTTLE_WAITS_MS);
+
+/** A wait that a caller's signal ends early, as the `AbortError` every request here uses. */
+function abortableSleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) { reject(abortError()); return; }
+    const onAbort = () => { clearTimeout(t); reject(abortError()); };
+    const t = setTimeout(() => {
+      if (signal) signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 /** One trailing-slash-normalised, de-duplicated, non-empty list, from a string or an array. */
 export function rpcUrlList(urls) {
   const raw = Array.isArray(urls) ? urls : [urls];
@@ -155,7 +190,8 @@ function mayRetryElsewhere(err, method) {
  * several.
  *
  * `urls` is a URL or a list of them, tried in order starting from the last one that worked.
- * `fetch` defaults to the global. `chainId`/`genesis` are what an endpoint must report before this
+ * `fetch` defaults to the global, and `sleep(ms, signal)` to a real wait (a test passes one that
+ * does not). `chainId`/`genesis` are what an endpoint must report before this
  * file will hand it out (see the header); either may be omitted, and with a single URL no probe is
  * ever made — there is nothing to fail over to, and the wallet's own `chainIdentity` check gates
  * the endpoint anyway.
@@ -164,7 +200,7 @@ function mayRetryElsewhere(err, method) {
  * abort that came from the *caller's* signal is reported as an `AbortError` (which the UI treats
  * as "no longer wanted") rather than as a node failure.
  */
-export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, genesis } = {}) {
+export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, genesis, sleep = abortableSleep } = {}) {
   const doFetch = fetchImpl || (typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : null);
   if (!doFetch) throw new Error('no fetch implementation available');
   const list = rpcUrlList(urls);
@@ -184,8 +220,28 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
   let current = 0;
 
   // ------------------------------------------------------------------------------ one request ---
+  /**
+   * One request to ONE url, waiting out an HTTP 429 (see `THROTTLE_WAITS_MS`). Every path in this
+   * file goes through here, so a throttled read is repeated where it was asked and nowhere else.
+   */
+  async function request(url, method, params = [], options = {}) {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        // eslint-disable-next-line no-await-in-loop -- one request at a time, by design
+        return await requestOnce(url, method, params, options);
+      } catch (err) {
+        const throttled = err instanceof RpcError && err.failure === 'http' && err.status === 429;
+        if (!throttled || SUBMITS.has(method) || attempt >= THROTTLE_WAITS_MS.length) throw err;
+        const asked = Number.isFinite(err.retryAfterMs) && err.retryAfterMs > 0 ? err.retryAfterMs : THROTTLE_WAITS_MS[attempt];
+        // eslint-disable-next-line no-await-in-loop -- the wait IS the point
+        await sleep(Math.min(asked, THROTTLE_MAX_WAIT_MS), options.signal);
+        if (options.signal && options.signal.aborted) throw abortError();
+      }
+    }
+  }
+
   /** One POST to ONE url. Never falls over to another: this is the only place bytes are sent. */
-  async function request(url, method, params = [], { signal } = {}) {
+  async function requestOnce(url, method, params = [], { signal } = {}) {
     if (!isAllowedRpcMethod(method)) throw new RpcError(`${method} is not allowed from this wallet`, -32601);
     if (signal && signal.aborted) throw abortError();
     const ctl = new AbortController();
@@ -207,6 +263,10 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
       if (!res.ok) {
         const err = new RpcError(`${url} answered HTTP ${res.status}`, -1, 'http');
         err.status = res.status;
+        if (res.status === 429) {
+          const after = Number(res.headers && typeof res.headers.get === 'function' ? res.headers.get('retry-after') : NaN);
+          if (Number.isFinite(after) && after > 0) err.retryAfterMs = after * 1000;
+        }
         throw err;
       }
       try {

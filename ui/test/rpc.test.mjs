@@ -387,3 +387,89 @@ test('an abort from the caller is a cancellation, never an endpoint failure', as
   await assert.rejects(() => inflight, (err) => err.name === 'AbortError');
   assert.deepEqual(fetch.to(B), [], 'a cancelled request was retried on another host');
 });
+
+// ------------------------------------------------------------------------ "ask again later" ----
+//
+// HTTP 429 is the one refusal that says nothing about the request and everything about the
+// moment: the public endpoint allows a burst of a hundred or so requests and then about one a
+// second, and a first scan is several hundred. Treated like any other transport failure it ended
+// the scan at the first 429, with nothing to fail over to and nothing saved.
+
+/** A `sleep` that records what it was asked to wait and does not wait. */
+function recordedSleep() {
+  const waits = [];
+  const fn = async (ms, signal) => {
+    waits.push(ms);
+    if (signal && signal.aborted) { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }
+  };
+  fn.waits = waits;
+  return fn;
+}
+
+test('HTTP 429 is "ask again later": the same read is repeated on the same endpoint after a wait', async () => {
+  let n = 0;
+  const fetch = transports({ [A]: chain(13, { rand_getHead: () => (++n <= 2 ? HTTP(429) : { height: 7, hash: 'ff'.repeat(32) }) }) });
+  const sleep = recordedSleep();
+  const head = await makeRpc(A, { fetch, sleep }).head();
+  assert.equal(head.height, 7);
+  assert.deepEqual(fetch.to(A), ['rand_getHead', 'rand_getHead', 'rand_getHead']);
+  assert.deepEqual(sleep.waits, [1000, 2000], 'the waits grow, and there is one per refusal');
+});
+
+test('a pinned client waits out a 429 too, and stays on its host', async () => {
+  let n = 0;
+  const fetch = transports({
+    [A]: chain(13, { rand_getHead: () => (++n <= 1 ? HTTP(429) : { height: 9, hash: 'ff'.repeat(32) }) }),
+    [B]: chain(13),
+  });
+  const sleep = recordedSleep();
+  const client = await makeRpc([A, B], { fetch, sleep, chainId: 13 }).acquire();
+  assert.equal((await client.head()).height, 9);
+  assert.deepEqual(fetch.to(B), [], 'a throttled read was taken to another host instead of waited out');
+});
+
+test('the waiting is bounded: an endpoint that only ever says 429 is reported as that', async () => {
+  const fetch = transports({ [A]: chain(13, { rand_getHead: HTTP(429) }) });
+  const sleep = recordedSleep();
+  await assert.rejects(
+    () => makeRpc(A, { fetch, sleep }).head(),
+    (err) => err instanceof RpcError && err.failure === 'http' && err.status === 429 && /HTTP 429/.test(err.message),
+  );
+  assert.equal(fetch.to(A).length, sleep.waits.length + 1, 'one request before the first wait and one after each');
+  const total = sleep.waits.reduce((a, b) => a + b, 0);
+  assert.ok(total >= 30_000 && total <= 90_000, `${total} ms of waiting for one request`);
+  assert.ok(Math.max(...sleep.waits) <= 8000, 'no single wait is longer than eight seconds');
+});
+
+test('a submission refused with 429 is reported at once, never repeated', async () => {
+  for (const method of SUBMIT_METHODS) {
+    const fetch = transports({ [A]: chain(13, { [method]: HTTP(429) }) });
+    const sleep = recordedSleep();
+    await assert.rejects(() => makeRpc(A, { fetch, sleep }).rpc(method, ['00']), /HTTP 429/);
+    assert.deepEqual(fetch.to(A), [method], `${method} was sent again after a 429`);
+    assert.deepEqual(sleep.waits, []);
+  }
+});
+
+test('a cancel during the wait is a cancellation, and no further request is made', async () => {
+  const fetch = transports({ [A]: chain(13, { rand_getHead: HTTP(429) }) });
+  const ctl = new AbortController();
+  const sleep = async (ms, signal) => {
+    ctl.abort();
+    if (signal && signal.aborted) { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }
+  };
+  await assert.rejects(() => makeRpc(A, { fetch, sleep }).head({ signal: ctl.signal }), (err) => err.name === 'AbortError');
+  assert.deepEqual(fetch.to(A), ['rand_getHead']);
+});
+
+test('Retry-After is taken at its word up to the longest wait, and no further', async () => {
+  const replies = [
+    { ok: false, status: 429, headers: { get: (k) => (k.toLowerCase() === 'retry-after' ? '3' : null) }, json: async () => ({}) },
+    { ok: false, status: 429, headers: { get: (k) => (k.toLowerCase() === 'retry-after' ? '3600' : null) }, json: async () => ({}) },
+    { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: 1, result: { height: 3, hash: 'ff'.repeat(32) } }) },
+  ];
+  const fetch = async () => replies.shift();
+  const sleep = recordedSleep();
+  assert.equal((await makeRpc(A, { fetch, sleep }).head()).height, 3);
+  assert.deepEqual(sleep.waits, [3000, 8000]);
+});

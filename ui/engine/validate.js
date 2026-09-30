@@ -405,6 +405,34 @@ export function checkBlockHeader(reply) {
 }
 
 /**
+ * `rand_getBlocks(from, to)` → the headers of that range, reduced to the two fields the deposit
+ * scan reads: `[{height, tx_count}]`.
+ *
+ * The node walks `from..=to` (capped at its own tip and at 1024 headers) and answers one header
+ * per block, in order, so an honest reply is a contiguous run that starts exactly at `from` and
+ * never passes `to`. It may be SHORTER than the range — the node's tip is its own — and the
+ * caller covers only what came back. Anything else is not an answer to this request: a reply that
+ * starts late or skips a height would carry the deposit cursor over blocks nobody looked at, which
+ * is a bridge deposit that never appears.
+ *
+ * `tx_count` is the node's word that a block is empty, exactly as the block itself would be; this
+ * protocol has no proof of absence (see THE CURSOR RULE in engine/wallet.js).
+ */
+export function checkBlockHeaders(reply, { from, to } = {}) {
+  const m = 'rand_getBlocks';
+  if (!Number.isSafeInteger(from) || from < 0 || !Number.isSafeInteger(to) || to < from) {
+    throw new NodeReplyError(`${m}: called without the range it was asked for`);
+  }
+  const rows = arrayReply(m, reply, to - from + 1);
+  return rows.map((row, i) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) fail(m, `header ${i} is not an object`, row);
+    const height = intField(m, `header ${i} height`, row.height);
+    if (height !== from + i) fail(m, `header ${i} is block ${height}, not the ${from + i} the range calls for`);
+    return { height, tx_count: intField(m, `header ${i} tx_count`, row.tx_count) };
+  });
+}
+
+/**
  * `rand_getGenesisHash` → the chain's genesis hash, hex.
  *
  * Chain id alone is not enough on a project that cuts chains as often as this one (the node's own
