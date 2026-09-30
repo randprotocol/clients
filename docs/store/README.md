@@ -38,8 +38,11 @@ The files are in `dist/release/v<version>/` after `scripts/release/build-local.s
   developer ($5 once), addons.mozilla.org (free). For a wallet, enrol Apple and Google **as an
   organisation**, not as an individual — see the first item under each store's "What can get it
   rejected".
-- **Screenshots.** None are in the repository. The list for each store is in its section; take
-  them from a wallet holding faucet RAND so that no screen is empty.
+- **Phone screenshots.** The browser and desktop set is in `docs/store/screenshots/extension/`
+  (five at 1280 × 800, made by `docs/store/make-screenshots.sh` from the real interface over the
+  dev harness's fixture wallet). The iOS and Android apps have their own native screens and no
+  screenshots in the repository: take them on a device or simulator, from a wallet holding
+  faucet RAND so that no screen is empty. The list is in each store's section.
 
 **The one sentence every listing keeps**
 
@@ -343,7 +346,7 @@ device, and a transaction submitted to the chain carries no personal data.
 | asset | spec | where |
 |---|---|---|
 | App icon | 512 × 512 PNG | `design/out/play-store-512.png` |
-| Feature graphic | 1024 × 500 | **to make**: the icon and "Rand Wallet" on the dither field; `design/make-icons.py` has the palette |
+| Feature graphic | 1024 × 500 | `design/out/play-feature-1024x500.png` (`design/make-store-art.py`) |
 | Phone screenshots | 2 to 8, 9:16, at least 1080 px wide | Home with a balance · Receive (QR) · Send review · Proving notification · Sent · Activity · Settings |
 
 Captions as in §1. Do not put "No. 1", prices, or store badges in any graphic.
@@ -462,8 +465,8 @@ unticked; the description and the privacy policy both say so, and they must keep
 | asset | spec |
 |---|---|
 | Store icon | 128 × 128: `extension/shared/icons/icon-128.png` |
-| Screenshots | 1 to 5, 1280 × 800: welcome · home with a balance · receive (QR) · send review · settings / viewing key |
-| Small promo tile | 440 × 280, **to make**: the icon and "Rand Wallet" on the dither field |
+| Screenshots | 1 to 5, 1280 × 800: `docs/store/screenshots/extension/1-welcome.png` … `5-activity.png` (welcome · home · receive · send · activity) |
+| Small promo tile | 440 × 280: `design/out/chrome-promo-440x280.png` (`design/make-store-art.py`) |
 
 ### Test instructions (the dashboard's "Test instructions" tab)
 
@@ -539,7 +542,7 @@ DATA. data_collection_permissions.required is ["none"] in the manifest.
 
 ### Screenshots
 
-As for Chrome; AMO takes any size, 1280 × 800 is fine.
+The same five files as Chrome's.
 
 ### What can get it rejected
 

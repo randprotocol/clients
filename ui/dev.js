@@ -22,6 +22,7 @@
 //                                which is the outcome-unknown screen
 //   ?assets=one|none|rpl       — assets.list(): only RAND (the picker is skipped) / no RAND at all
 //                                (the empty state) / a single RPL asset (the explanation)
+//   ?chainId=18                — the chain the fixture wallet is on (default: the fixture's own)
 //   ?chain=wrong               — the node answers rand_chainId with a different chain
 //   ?rpc=down                  — rpc.call() rejects, for the Test-connection failure state
 //   #hash                      — an initial route, same as any real navigation
@@ -90,6 +91,7 @@ async function init() {
     }
   }
   if (theme) await backend.settings.set({ theme });
+  if (params.get('chainId')) await backend.settings.set({ chainId: Number(params.get('chainId')) });
 
   if (activity === 'rich' && state === 'unlocked') {
     const rich = richActivityAndNotes();
