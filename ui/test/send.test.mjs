@@ -137,6 +137,33 @@ test('the first send through the RandProtocol prover shows its notice first; rea
   assert.match(location.hash, /^#sent\//);
 });
 
+test('Firefox: the notice asks for data-collection consent inside its click; declined, there is no prover', async (t) => {
+  for (const granted of [false, true]) {
+    const order = [];
+    let notice = true;
+    const b = unlockedBackend({
+      send: { canProve: async () => ({ ok: true, via: 'prover', prover: 'default', ...(notice ? { notice: true } : {}) }) },
+      prover: { acknowledgeDefault: () => { order.push('acknowledge'); notice = false; } },
+    });
+    b.platform.requestDataCollectionConsent = () => { order.push('request'); return Promise.resolve(granted); };
+    const { root, app } = await review(t, b);
+    const click = root.querySelector('[data-action="acknowledge-prover"]');
+    click.click();
+    assert.deepEqual(order, ['request'], 'the permission was not asked synchronously inside the click');
+    await app.idle();
+    if (!granted) {
+      assert.deepEqual(order, ['request'], 'a declined consent was remembered as read');
+      assertGone(root.querySelector('[data-action="prove"]'), 'the prove button after a declined consent');
+      assertGone(root.querySelector('[data-action="acknowledge-prover"]'), 'the notice after a declined consent');
+      assert.match(root.querySelector('[data-role="prover-declined"]').textContent, /Firefox did not allow.*Pair your own prover in Settings/s);
+      assert.equal(root.querySelector('[data-role="use-own-prover"]').getAttribute('data-go'), 'settings');
+    } else {
+      assert.deepEqual(order, ['request', 'acknowledge']);
+      assert.ok(root.querySelector('[data-action="prove"]'));
+    }
+  }
+});
+
 test('"Use my own prover" on the notice goes to Settings and sends nothing', async (t) => {
   const b = unlockedBackend({ send: { canProve: async () => ({ ok: true, via: 'prover', prover: 'default', notice: true }) } });
   const { root, app } = await review(t, b);

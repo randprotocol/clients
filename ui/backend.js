@@ -371,6 +371,12 @@
      · `prover.useDefault?()` — back to the RandProtocol prover: forgets a pairing and a choice of
        none. No password, nothing paired, nobody asked.
      · `prover.useNone?()` — no prover at all: proofs are made on this device or not at all.
+     · `platform.hasDataCollectionConsent?()` / `platform.requestDataCollectionConsent?()` — the
+       Firefox extension only: its `financialAndPaymentInfo` data-collection permission (a job to
+       the RandProtocol prover sends the viewing key to the developer's service). Until it is
+       granted `canProve()` keeps `notice: true` and no job goes to the pool; the notice's button
+       calls `requestDataCollectionConsent()` synchronously inside its click, and a refusal means
+       no prover (the screen points to Settings).
      · `prover.defaultNotice?()` → `{name, url, fingerprint, warning, read}` or `null`: the one-time
        notice before the first proof by the default prover (it receives the viewing key: it can read
        the whole history, past and future, and cannot spend). `prover.acknowledgeDefault?()`

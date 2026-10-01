@@ -29,7 +29,7 @@ globalThis.chrome = {
 const panel = { calls: [], openThrows: false, closed: 0 };
 globalThis.window = { close: () => { panel.closed += 1; } };
 
-const { makePlatform } = await import('../shared/lib/platform.js');
+const { makePlatform, PROVER_DATA_COLLECTION } = await import('../shared/lib/platform.js');
 
 test('a grantable origin answers the request itself', async () => {
   perms.requestThrows = false;
@@ -82,4 +82,44 @@ test('a side panel the browser refuses leaves the popup open and says so', async
   await assert.rejects(() => platform.openSidebar(), /user gesture/);
   assert.equal(panel.closed, 0, 'the popup closed with no side panel to take its place');
   panel.openThrows = false;
+});
+
+// ---- Firefox's data-collection consent for the RandProtocol prover (wallet 0.6.8) ----
+// A job to the default prover carries this wallet's viewing key to the developer's own service, so
+// Firefox's `financialAndPaymentInfo` data-collection permission is asked — from the first-send
+// notice's own click — and checked before any job. Chrome has no such permission: no code.
+
+test('Firefox asks for and checks the financialAndPaymentInfo data-collection permission', async () => {
+  const platform = makePlatform({ firefox: true });
+  perms.calls.length = 0;
+  perms.granted = false;
+  assert.equal(await platform.hasDataCollectionConsent(), false);
+  assert.deepEqual(perms.calls, [['contains', { data_collection: ['financialAndPaymentInfo'] }]]);
+  perms.granted = true;
+  assert.equal(await platform.hasDataCollectionConsent(), true);
+
+  // The request is made synchronously — inside the click, before anything is awaited.
+  perms.calls.length = 0;
+  perms.requestThrows = false;
+  const asked = platform.requestDataCollectionConsent();
+  assert.deepEqual(perms.calls, [['request', { data_collection: ['financialAndPaymentInfo'] }]], 'the request waited for something first');
+  assert.equal(await asked, true);
+  // A refusal (or a browser that throws) is a no.
+  perms.requestThrows = true;
+  assert.equal(await platform.requestDataCollectionConsent(), false);
+  assert.deepEqual(PROVER_DATA_COLLECTION, { data_collection: ['financialAndPaymentInfo'] });
+});
+
+test('Chrome has no data-collection permission and no such members', () => {
+  const platform = makePlatform({ firefox: false });
+  assert.equal('hasDataCollectionConsent' in platform, false);
+  assert.equal('requestDataCollectionConsent' in platform, false);
+});
+
+test('the Firefox manifest requires no data collection and makes financialAndPaymentInfo optional', async () => {
+  const { readFileSync } = await import('node:fs');
+  const m = JSON.parse(readFileSync(new URL('../../firefox/manifest.json', import.meta.url), 'utf8'));
+  const dc = m.browser_specific_settings.gecko.data_collection_permissions;
+  assert.deepEqual(dc.required, ['none']);
+  assert.deepEqual(dc.optional, ['financialAndPaymentInfo']);
 });

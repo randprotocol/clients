@@ -43,7 +43,7 @@ import {
 import {
   shellMarkup, assetStepMarkup, unsendableMarkup, noRandMarkup, detailsStepMarkup,
   reviewStepMarkup, provingStepMarkup, failedStepMarkup, unknownOutcomeStepMarkup,
-  noMemoNoticeMarkup, contactPickerMarkup, scanSheetMarkup,
+  noMemoNoticeMarkup, contactPickerMarkup, scanSheetMarkup, proverDeclinedMarkup, PROVER_CONSENT_DECLINED,
 } from './send/markup.js';
 import { canScanQr, scanQr, NO_CAMERA_TEXT } from '../lib/scan-qr.js';
 import { displayMemo } from '../lib/memo.js';
@@ -1013,7 +1013,27 @@ registerScreen('send', {
     const offAcknowledgeProver = on(root, '[data-action="acknowledge-prover"]', 'click', async (evt) => {
       evt.preventDefault();
       if (acknowledging || !canProve.notice || !ctx.backend.prover || typeof ctx.backend.prover.acknowledgeDefault !== 'function') return;
+      // Firefox: its consent to send the viewing key to the developer's service, asked HERE,
+      // synchronously inside this click (Firefox grants nothing outside the user's gesture).
+      const consent = typeof platform.requestDataCollectionConsent === 'function' ? platform.requestDataCollectionConsent() : null;
       acknowledging = true;
+      if (consent) {
+        let granted = false;
+        try { granted = (await consent) === true; } catch { granted = false; }
+        if (!live()) return;
+        if (!granted) {
+          // Declined: no prover here — nothing remembered, the way out is the user's own prover.
+          acknowledging = false;
+          canProve = { ok: false, reason: PROVER_CONSENT_DECLINED };
+          const box = stepEl.querySelector('[data-role="prover-notice"]');
+          const foot = box && box.parentElement;
+          if (foot) {
+            for (const el of foot.querySelectorAll('[data-role="prover-notice"], [data-action="acknowledge-prover"], [data-role="use-own-prover"]')) el.remove();
+            foot.insertAdjacentHTML('beforeend', proverDeclinedMarkup());
+          }
+          return;
+        }
+      }
       try {
         await ctx.backend.prover.acknowledgeDefault();
       } catch (err) {

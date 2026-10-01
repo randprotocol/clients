@@ -1819,11 +1819,23 @@ export function makeSharedBackend({
         },
       };
     }
-    const notice = !(await defaultNoticeRead());
+    // Firefox: the user's consent to send the viewing key to the developer's service is part of
+    // the notice — until it is given, the notice stands (its button asks for it).
+    const notice = !(await defaultNoticeRead()) || !(await dataCollectionConsented());
     return {
       answer: { ok: true, via: 'prover', prover: 'default', ...(notice ? { notice: true } : {}) },
       route: { mode: 'default', name: pairing.name, url: pairing.url, fingerprint: pairing.fingerprint },
     };
+  }
+
+  /**
+   * Whether the browser lets this wallet send its viewing key to the RandProtocol prover: always,
+   * except where the platform asks (Firefox's `financialAndPaymentInfo` data-collection permission,
+   * `platform.hasDataCollectionConsent`); a check that fails is "no".
+   */
+  async function dataCollectionConsented() {
+    if (!platform || typeof platform.hasDataCollectionConsent !== 'function') return true;
+    try { return (await platform.hasDataCollectionConsent()) === true; } catch { return false; }
   }
 
   /** The refusal of a send through the default prover before its one-time notice was read. */
@@ -1846,6 +1858,8 @@ export function makeSharedBackend({
     try { session = await requireUnlocked(); } catch (err) { err.definite = true; throw err; }
     // The default route's pairing is the build's own link, read again here through the core and
     // held to the pin; a paired prover's comes from the session's copy of the vault record.
+    // Never a job to the RandProtocol prover without the browser's consent where it asks for one.
+    if (route.mode === 'default' && !(await dataCollectionConsented())) throw noticeFirst();
     const pairing = route.mode === 'default' ? await builtInPairing() : pairingOf(session.prover);
     if (!pairing) {
       const err = new Error('Your prover\'s pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.');

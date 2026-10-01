@@ -364,6 +364,30 @@ test('the RandProtocol prover not answering is said plainly, with the way to pai
   assert.match(said.reason, /another key than the one this wallet pins/);
 });
 
+test('Firefox: no job goes to the RandProtocol prover without its data-collection consent', async () => {
+  let consent = false;
+  const env = await sendableWallet({ fetch: poolFetch() });
+  // The same backend, on a platform that asks (the Firefox extension's).
+  const platform = { ...stubPlatform(), hasDataCollectionConsent: async () => consent };
+  const backend = makeWasmBackend({
+    core: env.core, storage: env.storage, fetch: env.fetch, platform, locks: null, broadcast: null,
+    proverOptions: { poll: 1, maxWait: 5000 },
+  });
+  await backend.wallet.unlock(PASSWORD);
+  await backend.prover.acknowledgeDefault();
+  // Read, but not consented: the notice stands, and a send is refused before anything is sealed.
+  assert.deepEqual(await backend.send.canProve(), { ok: true, via: 'prover', prover: 'default', notice: true });
+  await assert.rejects(() => backend.send.send(SEND, () => {}), (err) => err.needsNotice === true);
+  assert.equal(coreCalled(env, 'prepare_transfer').length, 0);
+  assert.equal(count(env.fetch, 'prover_submit'), 0);
+  // Consented: the job goes.
+  consent = true;
+  assert.deepEqual(await backend.send.canProve(), { ok: true, via: 'prover', prover: 'default' });
+  const out = await backend.send.send(SEND, () => {});
+  assert.equal(out.hash, PROVED_TX_HASH);
+  assert.equal(count(env.fetch, 'prover_submit'), 1);
+});
+
 test('the RandProtocol prover busy is said plainly, once, with the way to pair your own', async () => {
   const busy = () => { throw Object.assign(new Error('busy'), { code: -32005, data: { depth: 2 } }); };
   const env = await sendableWallet({ fetch: poolFetch({ prover_submit: busy }) });

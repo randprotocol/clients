@@ -9,7 +9,14 @@
 import { ext, IS_FIREFOX } from './browser.js';
 import { makePasskey } from './passkey.js';
 
-export function makePlatform() {
+/**
+ * Firefox's data-collection permission the RandProtocol prover needs (the manifest's
+ * `data_collection_permissions.optional`): a job sent to it carries this wallet's viewing key to
+ * the developer's own service, so Firefox's consent is asked before the first one — never assumed.
+ */
+export const PROVER_DATA_COLLECTION = Object.freeze({ data_collection: ['financialAndPaymentInfo'] });
+
+export function makePlatform({ firefox = IS_FIREFOX } = {}) {
   const platform = {
     name: IS_FIREFOX ? 'firefox' : 'chrome',
     // A new tab, never this popup's window: an explorer must get no handle on the wallet.
@@ -35,6 +42,20 @@ export function makePlatform() {
       }
     },
   };
+  // Firefox only (Chrome has no data-collection permissions): whether the user let this wallet
+  // send its viewing key to the RandProtocol prover, and the request — made from the first-send
+  // notice's own click, synchronously (Firefox grants nothing outside the user's gesture), so
+  // `permissions.request` is called before this function awaits anything.
+  if (firefox) {
+    platform.hasDataCollectionConsent = async () => {
+      try { return (await ext.permissions.contains({ data_collection: [...PROVER_DATA_COLLECTION.data_collection] })) === true; } catch { return false; }
+    };
+    platform.requestDataCollectionConsent = () => {
+      let asked;
+      try { asked = ext.permissions.request({ data_collection: [...PROVER_DATA_COLLECTION.data_collection] }); } catch { return Promise.resolve(false); }
+      return Promise.resolve(asked).then((granted) => granted === true, () => false);
+    };
+  }
   // The side panel: Chrome's `sidePanel` (the manifest's `side_panel`, Chrome 116+) or Firefox's
   // `sidebarAction` (`sidebar_action`). Both open only inside the user's own click, so the call is
   // made synchronously from it — which is why Chrome's window id is looked up now, ahead of any

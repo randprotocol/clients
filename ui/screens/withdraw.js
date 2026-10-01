@@ -32,7 +32,7 @@ import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink, TX_HASH_RE } from '../lib/explorer.js';
 import { UNLISTED_TEXT, isUnlisted, backingsOf, feeDecimals, feeSymbol } from '../lib/assets.js';
 import { plainUnits, proveCost, provingLabel, phaseLabel, recordPhase, provingBanner } from './send/state.js';
-import { proverNoticeMarkup, proverUnreachableMarkup } from './send/markup.js';
+import { proverNoticeMarkup, proverUnreachableMarkup, proverDeclinedMarkup } from './send/markup.js';
 
 // ============================================================================ the vocabulary ===
 
@@ -866,7 +866,26 @@ registerScreen('withdraw', {
     const offAcknowledgeProver = on(root, '[data-action="acknowledge-prover"]', 'click', async (evt) => {
       evt.preventDefault();
       if (acknowledging || !can.notice || !ctx.backend.prover || typeof ctx.backend.prover.acknowledgeDefault !== 'function') return;
+      // Firefox: its consent to send the viewing key to the developer's service, asked HERE,
+      // synchronously inside this click.
+      const platform = ctx.backend.platform;
+      const consent = platform && typeof platform.requestDataCollectionConsent === 'function' ? platform.requestDataCollectionConsent() : null;
       acknowledging = true;
+      if (consent) {
+        let granted = false;
+        try { granted = (await consent) === true; } catch { granted = false; }
+        if (!live()) return;
+        if (!granted) {
+          acknowledging = false;
+          const box = stepEl.querySelector('[data-role="prover-notice"]');
+          const foot = box && box.parentElement;
+          if (foot) {
+            for (const el of foot.querySelectorAll('[data-role="prover-notice"], [data-action="acknowledge-prover"], [data-role="use-own-prover"]')) el.remove();
+            foot.insertAdjacentHTML('beforeend', proverDeclinedMarkup());
+          }
+          return;
+        }
+      }
       try { await ctx.backend.prover.acknowledgeDefault(); } catch { acknowledging = false; return; }
       acknowledging = false;
       if (!live()) return;

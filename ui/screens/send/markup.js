@@ -209,6 +209,22 @@ export function proverNoticeMarkup() {
     <button class="btn block" type="button" data-go="settings" data-role="use-own-prover">Use my own prover</button>`;
 }
 
+/**
+ * Firefox did not let the wallet send its viewing key to the RandProtocol prover (its
+ * `financialAndPaymentInfo` data-collection permission, asked from the notice's own click): this
+ * browser then has no prover, and the way out is one of the user's own.
+ */
+export const PROVER_CONSENT_DECLINED = 'Firefox did not allow this wallet to send your viewing key to the RandProtocol prover, so this browser has no prover to make the proof. Nothing was sent. Pair your own prover in Settings.';
+
+export function proverDeclinedMarkup() {
+  return h`
+    <div class="banner warn" data-role="prover-declined">
+      <span class="ic">${raw(icons.warning())}</span>
+      <span><span class="banner-title">No prover</span>${PROVER_CONSENT_DECLINED}</span>
+    </div>
+    <button class="btn block" type="button" data-go="settings" data-role="use-own-prover">Pair your own prover in Settings</button>`;
+}
+
 /** The RandProtocol prover is the way to prove here, and it did not answer: plainly, and the way out. */
 export function proverUnreachableMarkup(reason) {
   return h`
