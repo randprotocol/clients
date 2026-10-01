@@ -40,7 +40,7 @@ Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
 Every release is on [GitHub Releases](https://github.com/randprotocol/clients/releases/latest),
 and https://randprotocol.org/clients links the same files with their checksums. `<v>` below is
-the version, `0.7.0` today.
+the version, `0.7.1` today.
 
 | you have | download | then |
 |---|---|---|
@@ -73,7 +73,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing     # macOS
 sha256sum -c SHA256SUMS --ignore-missing         # Linux
 ```
 ```powershell
-Get-FileHash .\rand-wallet-0.7.0-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
+Get-FileHash .\rand-wallet-0.7.1-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
 ```
 
 A matching sum says the file is the one that was published. It does not say the file was built
@@ -195,7 +195,7 @@ The first build of any client compiles the prover and takes several minutes.
 ```bash
 git clone --recurse-submodules https://github.com/randprotocol/clients.git
 cd clients
-git checkout v0.7.0 && git submodule update --init   # a release, rather than main
+git checkout v0.7.1 && git submodule update --init   # a release, rather than main
 ```
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
