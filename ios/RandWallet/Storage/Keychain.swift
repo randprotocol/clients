@@ -3,8 +3,9 @@ import Security
 import LocalAuthentication
 
 /// The spend key in the Keychain — and, beside it under its own account, a paired prover's secret
-/// record (delegated proving, Phase 1: the token AND the key and URL a job is sealed to) —
-/// accessible only when this device is unlocked, never synced or migrated to another device.
+/// record (delegated proving: the token AND the key and URL a job is sealed to, and whether the
+/// link marked the prover the owner's own) — accessible only when this device is unlocked, never
+/// synced or migrated to another device.
 enum Keychain {
     private static let service = "org.randprotocol.wallet"
     private static let account = "spend_key"
@@ -23,10 +24,11 @@ enum Keychain {
     static var hasSpendKey: Bool { loadSpendKey() != nil }
     static func deleteSpendKey() { delete(account: account) }
 
-    /// The paired prover's secret record, `{token, kemEk, url, fingerprint}` as JSON. The token
-    /// travels only inside a job the core sealed to the prover's key; the key and URL here — not
-    /// `Settings.prover`, which is display only — decide where that job is sealed and sent. Never in
-    /// `Settings`, never in a log.
+    /// The paired prover's secret record, `{token, kemEk, url, fingerprint, own}` as JSON. The
+    /// token travels only inside a job the core sealed to the prover's key; the key, URL and `own`
+    /// here — not `Settings.prover`, which is display only — decide where that job is sealed and
+    /// sent, and whether an older chain's spend-key job may go at all. Never in `Settings`, never
+    /// in a log.
     static func saveProverSecret(_ secret: ProverSecret) throws {
         let json = String(decoding: try JSONEncoder().encode(secret), as: UTF8.self)
         try save(json, account: proverPairingAccount)

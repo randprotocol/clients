@@ -71,9 +71,19 @@ enum RandCore {
         let params = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] ?? [:]
         return try call("prove_transfer", params, as: ProveResult.self)
     }
+    /// What this chain's guests mean for a proof — `chain_guests {hc_bundle, hc_auth}`: the
+    /// witness a paired prover is sent (the viewing key on a split-authorisation chain, the spend
+    /// key on an older one) is the core's decision, made here and nowhere else. Refuses, before
+    /// anything is built, a pair this build cannot prove for (v3 without an auth guest, an auth
+    /// guest beside v1/v2, a malformed digest). `nil` is sent as JSON `null`.
+    static func chainGuests(hcBundle: String?, hcAuth: String?) throws -> ChainGuests {
+        try call("chain_guests", ["hc_bundle": hcBundle ?? NSNull(), "hc_auth": hcAuth ?? NSNull()], as: ChainGuests.self)
+    }
     /// Delegated proving: the transfer `prove_transfer` would build, its witness sealed to a
     /// paired prover. `params` carries the spend key and the pairing token — never log it. The
-    /// reply's `pending` carries neither.
+    /// reply's `pending` carries neither. On a split-authorisation chain this call also makes the
+    /// auth proof, on this device, from the spend key (about seven seconds natively): call it off
+    /// the main thread, and say so on the screen first.
     static func prepareTransfer(_ params: [String: Any]) throws -> (sealedHex: String, pending: Any) {
         guard let v = try call("prepare_transfer", params) as? [String: Any],
               let sealed = v["sealed_hex"] as? String, let pending = v["pending"] else {

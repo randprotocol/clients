@@ -1,10 +1,14 @@
 import Foundation
 
-// Delegated proving, Phase 1 (spec docs/superpowers/specs/2026-09-28-delegated-proving-design.md):
-// the wallet's side of a paired `rand-prover`, the Swift twin of `ui/engine/prover.js`. Nothing
-// here is chain crypto: the core parses the pairing link, fingerprints the prover's key, seals the
-// job (`prepare_transfer`) and opens and verifies the reply (`finish_proof`). This file is the URL
-// rule, the four JSON-RPC methods, their errors in the user's words, and the poll loop.
+// Delegated proving, Phases 1 and 2 (spec docs/superpowers/specs/2026-09-28-delegated-proving-design.md
+// §4–§5, split authorisation): the wallet's side of a paired `rand-prover`, the Swift twin of
+// `ui/engine/prover.js`. Nothing here is chain crypto: the core parses the pairing link,
+// fingerprints the prover's key, decides what witness the chain's guest takes (`chain_guests`),
+// makes the auth proof on this device and seals the job (`prepare_transfer`), and opens and
+// verifies the reply (`finish_proof`). On a split-authorisation chain (bundle guest v3: every chain
+// since 17) the job carries the viewing key and a salt, never the spend key — the prover can read
+// this wallet's whole history and cannot spend. This file is the URL rule, the four JSON-RPC
+// methods, their errors in the user's words, and the poll loop.
 
 /// The rule a prover's address is held to — the node's, and `ui/lib/url-rule.js`'s: https to any
 /// host, plain http only to this machine. A sealed job is opaque to a network, but its status and
@@ -47,14 +51,28 @@ struct ProverRefusal: LocalizedError, Equatable {
     var errorDescription: String? { message }
 }
 
+/// A JSON value held verbatim (Foundation's `JSONSerialization` objects; `NSNull` for `null`),
+/// comparable: `prover_info.fee`, which is handed to the core exactly as the prover answered.
+struct JSONValue: Equatable {
+    let value: Any
+    init(_ v: Any?) { value = v ?? NSNull() }
+    static let null = JSONValue(nil)
+    var isNull: Bool { value is NSNull }
+    static func == (a: JSONValue, b: JSONValue) -> Bool { (a.value as AnyObject).isEqual(b.value as AnyObject) }
+}
+
 /// `prover_info`, checked just enough to use (`readInfo` in the JS).
 struct ProverInfo: Equatable {
     var kemEk: String
     var kemFingerprint: String
+    /// `"viewing_key"` and/or `"spend_key"`: what jobs this prover takes.
     var witnessKinds: [String]
     var depth: Int
     var max: Int
     var proving: Int
+    /// The prover's fee as it answered: `null` (charges nothing) or `{amount, address}`. Passed to
+    /// the core verbatim; this build pays none, so any non-zero fee refuses the job.
+    var fee: JSONValue
 
     init(_ value: Any) throws {
         guard let o = value as? [String: Any] else {
@@ -68,6 +86,7 @@ struct ProverInfo: Equatable {
         depth = num(q["depth"])
         max = num(q["max"])
         proving = num(q["proving"])
+        fee = JSONValue(o["fee"])
     }
 }
 
@@ -79,6 +98,8 @@ final class ProverClient {
     static let unpaired = -32003
     static let witnessKind = -32004
     static let busy = -32005
+    /// The prover wants a fee this job did not pay (fullnode v0.6.3, `docs/prover.md`).
+    static let fee = -32006
 
     let url: URL
     private let session: URLSession
@@ -171,7 +192,10 @@ final class ProverClient {
         case unpaired:
             return ProverRefusal(message: "This prover does not know this pairing. Pair it again in Settings.")
         case witnessKind:
-            return ProverRefusal(message: "This prover does not accept a spend-key job. Pair your own prover in Settings.")
+            let reason = (e.data?["reason"] as? String).map { " (\(String($0.prefix(200))))" } ?? ""
+            return ProverRefusal(message: "This prover does not accept this kind of job\(reason). Pair another prover in Settings, or send from the rand command-line wallet.")
+        case fee:
+            return ProverRefusal(message: "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.")
         case unknownJob:
             return ProverRefusal(message: "The prover no longer has this proof (it restarted or the job expired). Send again.")
         default:
@@ -182,20 +206,28 @@ final class ProverClient {
 }
 
 /// What `prepare_transfer` takes for a remote proof: the very request `prove_transfer` would
-/// (its `profile` and `hc_bundle` the chain's, like a local proof's), plus the prover target and the
-/// chain's proof-size cap. It carries the spend key and the token — handed to the core, never logged.
+/// (its `profile`, `hc_bundle` and `hc_auth` the chain's, like a local proof's), plus the prover
+/// target and the chain's proof-size cap. It carries the spend key and the token — handed to the
+/// core, never logged. The target names NO `witness_kind`: which witness the job carries follows
+/// the chain's bundle guest and is the core's decision (the viewing key on a split-authorisation
+/// chain, the spend key on an older one — a request naming the other is refused, not obeyed). It
+/// does name `own` (the Keychain record's, `ProverPairingService.checkJob` having already refused
+/// a spend-key job to a pairing not marked so) and `fee` (`prover_info.fee` verbatim, which the
+/// core refuses when it is a fee).
 enum RemoteSendParams {
-    static func build(request: ProveRequest, route: ProverPairingService.Route, maxProofBytes: Int?) throws -> [String: Any] {
+    static func build(request: ProveRequest, route: ProverPairingService.Route, maxProofBytes: Int?,
+                      fee: JSONValue = .null) throws -> [String: Any] {
         guard let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] else {
             throw RandCore.CoreError(message: "the transfer request did not encode")
         }
-        return build(requestJSON: json, route: route, maxProofBytes: maxProofBytes)
+        return build(requestJSON: json, route: route, maxProofBytes: maxProofBytes, fee: fee)
     }
 
     /// The same, from the request as JSON (`prove_transfer`'s parameters).
-    static func build(requestJSON: [String: Any], route: ProverPairingService.Route, maxProofBytes: Int?) -> [String: Any] {
+    static func build(requestJSON: [String: Any], route: ProverPairingService.Route, maxProofBytes: Int?,
+                      fee: JSONValue = .null) -> [String: Any] {
         var params = requestJSON
-        var target: [String: Any] = ["kem_ek": route.pairing.kemEk, "token": route.token, "witness_kind": "spend_key"]
+        var target: [String: Any] = ["kem_ek": route.pairing.kemEk, "token": route.token, "own": route.pairing.own, "fee": fee.value]
         if let hc = requestJSON["hc_bundle"] as? String { target["hc_bundle"] = hc }
         params["prover"] = target
         if let maxProofBytes { params["max_proof_bytes"] = maxProofBytes }
@@ -223,8 +255,10 @@ enum RemoteProofPhase: Equatable {
 /// One remote proof: submit the sealed job, poll until the prover answers, hand the reply to the
 /// core's `finish_proof` (which opens it, checks the digest and the size, and verifies the proof).
 /// A reply that fails any of that never reaches the node. Transport failures are retried until
-/// `maxWait` (the prover may be restarting); a JSON-RPC error stops. There is no resume on mobile
-/// in Phase 1: the job lives in this call, and an app the system kills loses it (nothing is sent).
+/// `maxWait` (the prover may be restarting); a JSON-RPC error stops. There is no resume on mobile:
+/// the job — and `pending`, which on a split-authorisation chain holds the transaction with its
+/// auth proof, some 2.8 MB of hex — lives in this call, in memory, and an app the system kills
+/// loses it (nothing is sent).
 struct RemoteProver {
     let client: ProverClient
     var poll: TimeInterval = 1

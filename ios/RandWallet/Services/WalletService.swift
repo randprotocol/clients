@@ -13,6 +13,9 @@ final class WalletService: ObservableObject {
         case selecting
         case fetchingWitnesses
         case proving(started: Date)
+        /// Split authorisation, on the way to a paired prover: the auth proof is being made on this
+        /// device, from the spend key, inside the core's `prepare_*` (about seven seconds).
+        case authorising(prover: String, started: Date)
         /// A paired prover makes the proof: `position` while the job waits in its queue, `nil`
         /// while it is handed over or being proved.
         case provingRemotely(prover: String, position: Int?, started: Date)
@@ -221,8 +224,9 @@ final class WalletService: ObservableObject {
         let addr = try RandCore.parseAddress(to)
         guard addr.valid else { throw RpcClient.RpcError(code: 0, message: addr.error ?? "invalid address") }
         defer { phase = .idle }
-        // Where the proof is made, decided before any work: this device, or a prover the user
-        // paired as their own (delegated proving, Phase 1).
+        // Where the proof is made, decided before any work: this device, or the paired prover
+        // (delegated proving; on a split-authorisation chain any paired prover, own or not — the
+        // job carries the viewing key and a salt, never the spend key).
         let route = try await proveRoute()
 
         phase = .syncing
@@ -259,12 +263,13 @@ final class WalletService: ObservableObject {
         if !SendLinkRules.memoSupported(envelopeBytes: limits.envelopeBytes, chainId: chainId) && !memo.isEmpty {
             throw RpcClient.RpcError(code: 0, message: Memo.noMemoNotice)
         }
-        // The chain's guest and FRI profile, read once for either route: a proof on another guest
-        // or profile is refused by the chain, whoever makes it.
-        let (hcBundle, profile) = try await rpc.proofParams()
+        // The chain's guests and FRI profile, read once for either route: a proof on another
+        // guest or profile is refused by the chain, whoever makes it. `hcAuth` beside `hcBundle`
+        // (split authorisation): the core refuses a pair it cannot prove for before building.
+        let params = try await rpc.proofParams()
         let request = ProveRequest(spendKey: sk, chainId: chainId, to: to, amount: String(amount), fee: String(fee),
-                                   anchorHeight: anchor.height, anchorRoot: anchor.root, inputs: inputs, profile: profile,
-                                   memo: memo, envelopeBytes: limits.envelopeBytes, hcBundle: hcBundle,
+                                   anchorHeight: anchor.height, anchorRoot: anchor.root, inputs: inputs, profile: params.profile,
+                                   memo: memo, envelopeBytes: limits.envelopeBytes, hcBundle: params.hcBundle, hcAuth: params.hcAuth,
                                    bundleGasLimit: limits.bundleGasLimit)
         let started = Date()
         let proof: ProveResult
@@ -320,7 +325,8 @@ final class WalletService: ObservableObject {
     typealias ProveRoute = ProverPairingService.Route
 
     /// `ProverPairingService.route` with this device's memory, the stored (display) pairing, its
-    /// probe and the Keychain's record — the token, key and URL a job is sealed and sent to.
+    /// probe and the Keychain's record — the token, key and URL a job is sealed and sent to, and
+    /// the `own` a spend-key job (an older chain's) is gated on.
     func proveRoute() async throws -> ProveRoute? {
         try await ProverPairingService.route(deviceCanProve: ProverRequirements.deviceHasEnoughMemory,
                                              pairing: settings.prover,
@@ -330,22 +336,36 @@ final class WalletService: ObservableObject {
 
     /// The same transfer `prove_transfer` would build, its witness sealed by the core to the
     /// paired prover's key; the reply opened, checked and verified by the core (`finish_proof`)
-    /// before its result is used exactly where a local proof's would be. The spend key leaves this
-    /// process only inside the sealed job. No resume: the job lives in this call.
+    /// before its result is used exactly where a local proof's would be. On a split-authorisation
+    /// chain the job carries the viewing key and a salt and the spend authorisation — the auth
+    /// proof — is made here first, inside `prepare_transfer`, from the spend key, which never
+    /// leaves this process; on an older chain the spend key leaves it only inside the sealed job,
+    /// and only to a prover paired as the user's own (`checkJob`). No resume: the job lives in
+    /// this call.
     private func proveRemotely(_ request: ProveRequest, route: ProveRoute, rpc: RpcClient, started: Date) async throws -> ProveResult {
         let name = route.pairing.name
         phase = .provingRemotely(prover: name, position: nil, started: started)
         let maxProofBytes = try await rpc.maxProofBytes()
-        let job = try RemoteSendParams.build(request: request, route: route, maxProofBytes: maxProofBytes)
-        let prepared = try await Task.detached(priority: .userInitiated) { try RandCore.prepareTransfer(job) }.value
         let client = try ProverClient(url: route.pairing.url)
+        // The chain's witness kind, the pairing's `own`, and the prover as it is now (its key, its
+        // job kinds, its fee) — every refusal here happens before the auth proof is made.
+        let check = try await ProverPairingService.checkJob(route: route, hcBundle: request.hcBundle, hcAuth: request.hcAuth,
+                                                            info: { try await client.info() })
+        let job = try RemoteSendParams.build(request: request, route: route, maxProofBytes: maxProofBytes, fee: check.fee)
 
+        // The screen awake and a background-task assertion from the auth proof on: a brief trip to
+        // the home screen during it, or during the wait on the prover, does not kill the send.
         UIApplication.shared.isIdleTimerDisabled = true
         let bg = UIApplication.shared.beginBackgroundTask(withName: "remote-prove")
         defer {
             UIApplication.shared.isIdleTimerDisabled = false
             if bg != .invalid { UIApplication.shared.endBackgroundTask(bg) }
         }
+        // Split authorisation: `prepare_transfer` makes the auth proof here, from the spend key,
+        // before the job is sealed — its own step on the screen, so the wait says where it is.
+        if check.guests.splitAuthorisation { phase = .authorising(prover: name, started: started) }
+        let prepared = try await Task.detached(priority: .userInitiated) { try RandCore.prepareTransfer(job) }.value
+        phase = .provingRemotely(prover: name, position: nil, started: started)
         return try await RemoteProver(client: client).prove(
             sealedHex: prepared.sealedHex, pending: prepared.pending,
             finish: { pending, reply in try RandCore.finishProof(pending: pending, replyHex: reply) },

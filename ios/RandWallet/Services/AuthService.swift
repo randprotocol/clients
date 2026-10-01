@@ -38,8 +38,12 @@ final class AuthService: ObservableObject {
         backgroundedAt = nil
         let minutes = settings.autoLockMinutes
         if minutes > 0, Date().timeIntervalSince(at) > Double(minutes) * 60, isUnlocked {
-            // Never lock while a proof is running: the user was told to keep the app open.
-            if case .proving = wallet.phase { return }
+            // Never lock while a proof is running — here, the auth proof on the way to a paired
+            // prover, or the wait on that prover: the user was told to keep the app open.
+            switch wallet.phase {
+            case .proving, .authorising, .provingRemotely: return
+            default: break
+            }
             lock()
         }
     }

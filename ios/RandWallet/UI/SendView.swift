@@ -240,12 +240,13 @@ struct SendView: View {
             Text("Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.")
                 .font(.ui(13)).foregroundColor(Theme.textMute).multilineTextAlignment(.center)
             if let p = remoteProver {
-                // Delegated proving, Phase 1: this device cannot fit the proof, and a prover the
-                // user paired as their own will make it.
-                Text("This device does not have the memory for this proof, so your prover, \(p.name), will make it. Your spend key goes to it inside a sealed job; this phone checks the proof before anything is sent.")
+                // Delegated proving (split authorisation): this device cannot fit the bundle
+                // proof, and the paired prover — the user's own or not — will make it. The job
+                // carries the viewing key and a salt; the spend authorisation is proved here.
+                Text("This device does not have the memory for this proof, so your prover, \(p.name), will make it. It receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent.")
                     .font(.ui(13)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
             } else if !ProverRequirements.deviceHasEnoughMemory {
-                Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Pair a prover you run yourself in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.")
+                Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.")
                     .font(.ui(13)).foregroundColor(Theme.warning).multilineTextAlignment(.center)
             }
             Spacer()
@@ -262,18 +263,23 @@ struct SendView: View {
             Text(phaseTitle).font(.title).foregroundColor(Theme.textStrong)
             Text(phaseDetail).font(.body15).foregroundColor(Theme.textSoft).multilineTextAlignment(.center).padding(.horizontal, 24)
             if case .proving(let started) = wallet.phase { ElapsedText(since: started) }
+            if case .authorising(_, let started) = wallet.phase { ElapsedText(since: started) }
             if case .provingRemotely(_, _, let started) = wallet.phase { ElapsedText(since: started) }
             Spacer()
         }
         .padding(20)
     }
 
-    /// The prover a send will use: only where this device cannot prove and the pairing is the
-    /// user's own (whether it answers is checked when the send starts).
+    /// The prover a send will use: only where this device cannot prove, and then the paired
+    /// prover, the user's own or not (whether it answers, charges nothing and takes this chain's
+    /// jobs is checked when the send starts).
     private var remoteProver: ProverPairing? {
-        guard !ProverRequirements.deviceHasEnoughMemory, let p = settings.prover, p.own else { return nil }
+        guard !ProverRequirements.deviceHasEnoughMemory, let p = settings.prover else { return nil }
         return p
     }
+
+    /// `ui/screens/send/state.js`'s `AUTHORISING_LABEL`: the auth proof, made on this device.
+    static let authorisingLabel = "Authorising the spend on this device…"
 
     private var phaseTitle: String {
         switch wallet.phase {
@@ -281,6 +287,7 @@ struct SendView: View {
         case .selecting: return "Choosing notes…"
         case .fetchingWitnesses: return "Fetching witnesses…"
         case .proving: return "Proving your transfer…"
+        case .authorising: return Self.authorisingLabel
         case .provingRemotely(let name, let position, _):
             if let n = position { return "Waiting at position \(n) on \(name)" }
             return "Proving on \(name)…"
@@ -292,6 +299,7 @@ struct SendView: View {
     private var phaseDetail: String {
         switch wallet.phase {
         case .proving: return "About a minute or two on this device. Keep the app open."
+        case .authorising(let name, _): return "The spend authorisation is proved here, from your spend key, before the job goes to \(name). About ten seconds. Keep the app open."
         case .provingRemotely: return "Your prover makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent."
         case .waitingForCommit(let h): return "Transaction \(h.shortened(head: 8, tail: 6)) is in the mempool."
         default: return ""
@@ -332,9 +340,9 @@ struct SendView: View {
 }
 
 /// What a bundle proof costs, so the review step can say whether this device can run it.
-/// `peakMemoryBytes` mirrors `wallet_core::PROVER_PEAK_MEMORY_BYTES` (measured 2026-09-20, chain 14).
+/// `peakMemoryBytes` mirrors `wallet_core::PROVER_PEAK_MEMORY_BYTES` (6.2 GB, constraint set 8).
 enum ProverRequirements {
-    static let peakMemoryBytes: UInt64 = 5_700_000_000
+    static let peakMemoryBytes: UInt64 = 6_200_000_000
     static var deviceMemoryBytes: UInt64 { ProcessInfo.processInfo.physicalMemory }
     /// iOS lets a foreground app use roughly half to two thirds of physical memory.
     static var deviceHasEnoughMemory: Bool { deviceMemoryBytes / 3 * 2 >= peakMemoryBytes }

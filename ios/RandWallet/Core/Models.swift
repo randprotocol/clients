@@ -19,6 +19,15 @@ struct CoreConstants: Decodable {
     let bundleGasLimit: UInt64
     /// Fullnode issue #64: the chains on which a node's memo claim is never believed.
     let legacyEnvelopeChainIds: [UInt64]
+    /// The guests of the chain this build's defaults describe: bundle guest v3 and the auth guest
+    /// (split authorisation, fullnode v0.6.3). Optional so an older core's reply still decodes.
+    let hcBundle: String?
+    let hcAuth: String?
+    /// A transaction carries an auth proof this device makes itself beside the bundle proof.
+    let splitAuthorisation: Bool?
+    /// What a prover learns from a viewing-key job — the sentence every shell shows before a
+    /// pairing is saved (`wallet_core::PROVER_HISTORY_WARNING`).
+    let proverHistoryWarning: String?
 
     enum CodingKeys: String, CodingKey {
         case version
@@ -34,6 +43,25 @@ struct CoreConstants: Decodable {
         case anchorWindow = "anchor_window"
         case bundleGasLimit = "bundle_gas_limit"
         case legacyEnvelopeChainIds = "legacy_envelope_chain_ids"
+        case hcBundle = "hc_bundle"
+        case hcAuth = "hc_auth"
+        case splitAuthorisation = "split_authorisation"
+        case proverHistoryWarning = "prover_history_warning"
+    }
+}
+
+/// `chain_guests`: what a chain's guests mean for a proof, decided by the core and nowhere else.
+struct ChainGuests: Decodable, Equatable {
+    let hcBundle: String
+    /// `nil` on a chain without split authorisation.
+    let hcAuth: String?
+    let splitAuthorisation: Bool
+    /// `"viewing_key"` (a split-authorisation chain: a paired prover gets `nk` and a salt) or
+    /// `"spend_key"` (an older chain: only a prover paired as the owner's own may have it).
+    let witnessKind: String
+
+    enum CodingKeys: String, CodingKey {
+        case hcBundle = "hc_bundle", hcAuth = "hc_auth", splitAuthorisation = "split_authorisation", witnessKind = "witness_kind"
     }
 }
 
@@ -123,9 +151,15 @@ struct ProveRequest: Encodable {
     /// The chain's `envelope_bytes` from `rand_getLimits`; `nil` seals the legacy envelope, and
     /// the core refuses a non-empty memo then, before proving.
     let envelopeBytes: Int?
-    /// The chain's bundle guest, `rand_status.hc_bundle` (64 hex); `nil` (omitted) leaves the core
-    /// on this build's default guest. A proof of the wrong guest is refused by the chain.
+    /// The chain's bundle guest, `rand_status.hc_bundle` (64 hex); `nil` together with `hcAuth`
+    /// (both omitted) leaves the core on the guests of the chain its defaults describe. A proof of
+    /// the wrong guest is refused by the chain.
     var hcBundle: String? = nil
+    /// The chain's auth guest, `rand_status.hc_auth` (64 hex, or `nil` on a chain without split
+    /// authorisation). Sent as an explicit `null` whenever `hcBundle` is known: "this chain names
+    /// no auth guest" is what the core must hear to refuse a v3 bundle guest it could not
+    /// authorise a spend for (`ui/engine/wallet.js`'s `guestFields`).
+    var hcAuth: String? = nil
     /// The chain's `bundle_gas_limit` from `rand_getLimits` (chain 18, constraint set 8): the gas
     /// every bundle proof must declare on a chain with a `gas` section; `nil` is a chain without
     /// one. The core refuses a value its guest does not declare before building anything.
@@ -134,7 +168,8 @@ struct ProveRequest: Encodable {
     enum CodingKeys: String, CodingKey {
         case spendKey = "spend_key", chainId = "chain_id", to, amount, fee
         case anchorHeight = "anchor_height", anchorRoot = "anchor_root", inputs, profile
-        case memo, envelopeBytes = "envelope_bytes", hcBundle = "hc_bundle", bundleGasLimit = "bundle_gas_limit"
+        case memo, envelopeBytes = "envelope_bytes", hcBundle = "hc_bundle", hcAuth = "hc_auth"
+        case bundleGasLimit = "bundle_gas_limit"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -151,7 +186,12 @@ struct ProveRequest: Encodable {
         try c.encode(memo, forKey: .memo)
         // An explicit null, as the other clients send it.
         try c.encode(envelopeBytes, forKey: .envelopeBytes)
-        try c.encodeIfPresent(hcBundle, forKey: .hcBundle)
+        // The two guest fields: neither when the node names neither (the core's defaults), else
+        // `hc_bundle` when known and `hc_auth` always — an explicit `null` on a chain without one.
+        if hcBundle != nil || hcAuth != nil {
+            try c.encodeIfPresent(hcBundle, forKey: .hcBundle)
+            try c.encode(hcAuth, forKey: .hcAuth)
+        }
         try c.encode(bundleGasLimit, forKey: .bundleGasLimit)
     }
 }
@@ -174,11 +214,15 @@ struct ProveResult: Decodable {
     /// core names, never a fixed index.
     let paymentTxKey: String?
     let spentIndices: [UInt64]
+    /// Split authorisation: the auth proof's size, made on this device from the spend key beside
+    /// the bundle proof (`nil` from a core that predates it, `0` on a chain without it).
+    let authProofBytes: Int?
 
     enum CodingKeys: String, CodingKey {
         case txHex = "tx_hex", hash, time, amount, change, fee, tier
         case proofBytes = "proof_bytes", txBytes = "tx_bytes", nullifiers, commitments
         case txKeys = "tx_keys", paymentTxKey = "payment_tx_key", spentIndices = "spent_indices"
+        case authProofBytes = "auth_proof_bytes"
     }
 }
 

@@ -139,18 +139,47 @@ final class RpcClient {
         return n
     }
 
-    /// The chain's proof parameters from `rand_status`: its bundle guest (`hc_bundle`, 64 hex, or
-    /// `nil` for this build's default) and its FRI profile (`"test"` only when the node says so).
-    func proofParams() async throws -> (hcBundle: String?, profile: String) {
+    /// The chain's proof parameters from ONE `rand_status` (`ui/engine/wallet.js`'s
+    /// `proofParamsOf`): its bundle guest (`hc_bundle`), its auth guest (`hc_auth` — split
+    /// authorisation, fullnode v0.6.3: a transaction carries an auth proof this device makes from
+    /// the spend key beside a bundle proof that needs only the viewing key; `nil` on a chain
+    /// without it) and its FRI profile (`"test"` only when the node says so). Absent or `null` is
+    /// `nil` (a node that does not report it, or predates `rand_status`, leaves the core on its
+    /// defaults); PRESENT but malformed is a node this wallet cannot read, refused up front —
+    /// never silently replaced by the default guest, which on a chain that moved guests is a
+    /// proof its validators refuse.
+    struct ProofParams: Equatable {
+        let hcBundle: String?
+        let hcAuth: String?
+        let profile: String
+    }
+
+    func proofParams() async throws -> ProofParams {
         let st: [String: Any]
         do {
             st = try await status()
         } catch let e as RpcError where e.code == -32601 {
-            return (nil, "production")
+            return ProofParams(hcBundle: nil, hcAuth: nil, profile: "production")
         }
-        let hc = (st["hc_bundle"] as? String ?? "").trimmingCharacters(in: .whitespaces).lowercased()
-        let valid = hc.count == 64 && hc.allSatisfy { $0.isHexDigit }
-        return (valid ? hc : nil, st["fri_profile"] as? String == "test" ? "test" : "production")
+        return try Self.proofParams(fromStatus: st)
+    }
+
+    static func proofParams(fromStatus st: [String: Any]) throws -> ProofParams {
+        ProofParams(hcBundle: try guestDigest("hc_bundle", fromStatus: st),
+                    hcAuth: try guestDigest("hc_auth", fromStatus: st),
+                    profile: st["fri_profile"] as? String == "test" ? "test" : "production")
+    }
+
+    /// A guest digest field of `rand_status`: 64 hex lowercased, `nil` when `null` or absent,
+    /// refused otherwise.
+    private static func guestDigest(_ field: String, fromStatus st: [String: Any]) throws -> String? {
+        guard let raw = st[field], !(raw is NSNull) else { return nil }
+        let hc = ((raw as? String) ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        guard hc.count == 64, hc.allSatisfy({ $0.isHexDigit }) else {
+            let shown = (raw as? String).map { String($0.prefix(80)) } ?? "\(type(of: raw))"
+            throw RpcError(code: 0, message: "rand_status: \(field) is not 64 hex characters (\(shown))")
+        }
+        return hc
     }
 
     func chainId() async throws -> UInt64 { try u64(await call("rand_chainId")) }
