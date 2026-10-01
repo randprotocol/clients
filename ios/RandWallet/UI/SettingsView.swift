@@ -18,8 +18,10 @@ struct SettingsView: View {
     @State private var showReveal = false
     @State private var confirmForget = false
     @State private var confirmRescan = false
-    // The prover (delegated proving, spec 2026-09-28 §4.4). The link holds a secret: it lives in
-    // this field until Save, and the field is emptied once it is paired.
+    // The prover (delegated proving, spec 2026-09-28 §4.4 and §5, split authorisation: the job
+    // carries the viewing key and a salt, so the prover can read this wallet's history and cannot
+    // spend). The link holds a secret: it lives in this field until Save, and the field is emptied
+    // once it is paired.
     @State private var proverLink = ""
     @State private var pairing = false
     @State private var proverStatus: (ok: Bool, title: String, message: String)?
@@ -121,13 +123,19 @@ struct SettingsView: View {
     @ViewBuilder private var proverSection: some View {
         Section {
             if let p = settings.prover {
-                row("Proofs are made by", "My own prover · \(p.name)")
+                // "My own" only for a pairing whose link said so: a prover somebody else runs
+                // makes the proofs too (the job carries the viewing key), and the line under it
+                // says what it sees.
+                row("Proofs are made by", "\(p.own ? "My own prover" : "Paired prover") · \(p.name)")
+                if !p.own {
+                    Text(ProverPairingService.notOwnNote).font(.ui(13)).foregroundColor(Theme.textSoft)
+                }
                 row("Fingerprint", p.fingerprint)
                 Text(probeLine).font(.ui(13)).foregroundColor(Theme.textSoft)
                 Button("Forget this prover", role: .destructive) { forgetProver() }
             } else {
                 row("Proofs are made by", "This device")
-                Text("Where this device cannot make a proof, pair a prover you run yourself — rand-prover on your own machine, reachable from this phone over https.")
+                Text("Where this device cannot make a proof, pair a prover — rand-prover on a machine of yours, or one somebody else runs, reachable from this phone over https. It receives your viewing key and a salt, never your spend key: it can read this wallet's whole history and cannot spend.")
                     .font(.ui(13)).foregroundColor(Theme.textSoft)
             }
             HStack(spacing: 8) {
@@ -140,7 +148,7 @@ struct SettingsView: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Theme.negative)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Your spend key goes to this prover").font(.ui(14, .semibold)).foregroundColor(Theme.text)
+                    Text("A prover sees your history").font(.ui(14, .semibold)).foregroundColor(Theme.text)
                     Text(ProverPairingService.warning).font(.ui(13)).foregroundColor(Theme.text)
                 }
             }
@@ -174,11 +182,8 @@ struct SettingsView: View {
             let (paired, token) = try await ProverPairingService.pair(link)
             try ProverPairingService.save(paired, token: token, settings: settings)
             proverLink = "" // the token goes with it
-            if let w = seen.warning {
-                proverStatus = (false, "Saved; not usable in this build", w)
-            } else {
-                proverStatus = (true, "Paired", "Proofs this device cannot make go to \(paired.name). Its fingerprint is \(paired.fingerprint) — check that your prover shows the same.")
-            }
+            let note = seen.note.map { " \($0)" } ?? ""
+            proverStatus = (true, "Paired", "Proofs this device cannot make go to \(paired.name).\(note) Its fingerprint is \(paired.fingerprint) — check that your prover shows the same.")
             await probeProver()
         } catch {
             proverStatus = (false, "Not paired", error.localizedDescription)

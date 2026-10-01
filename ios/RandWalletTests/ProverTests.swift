@@ -1,8 +1,10 @@
 import XCTest
 @testable import RandWallet
 
-/// Delegated proving, Phase 1: a pairing link read by the real core, the URL rule, and the prover
-/// client and poll loop against a stubbed prover (`StubProver`, a `URLProtocol`).
+/// Delegated proving, Phases 1 and 2 (split authorisation): a pairing link read by the real core,
+/// the URL rule, the route, the checks made before a job is built (the chain's witness kind from
+/// the core, `own`, the prover's fee) and the prover client and poll loop against a stubbed prover
+/// (`StubProver`, a `URLProtocol`).
 final class ProverTests: XCTestCase {
     /// The vector `web/wallet/test/core.integration.test.mjs` pins: 1 184 bytes of 0x07 (the
     /// parser checks only the length) fingerprint to `Z254-BQX0-VPMT-8YJR`.
@@ -57,10 +59,13 @@ final class ProverTests: XCTestCase {
         XCTAssertThrowsError(try ProverPairingService.parse("https://127.0.0.1:8546"))
     }
 
-    func testPreviewHoldsTheURLRuleAndWarnsOnANotOwnLink() throws {
+    func testPreviewHoldsTheURLRuleAndNotesANotOwnLink() throws {
         let seen = try ProverPairingService.preview(Self.link())
-        XCTAssertEqual(seen, .init(url: "https://prover.example:8600", fingerprint: Self.fingerprint, own: true, warning: nil))
-        XCTAssertEqual(try ProverPairingService.preview(Self.link(own: false)).warning, ProverPairingService.notOwnWarning)
+        XCTAssertEqual(seen, .init(url: "https://prover.example:8600", fingerprint: Self.fingerprint, own: true, note: nil))
+        XCTAssertEqual(try ProverPairingService.preview(Self.link(own: false)).note, ProverPairingService.notOwnNote)
+        XCTAssertEqual(ProverPairingService.notOwnNote, "Not marked as your own: it can read this wallet's whole history. It cannot spend.")
+        // The warning shown before ANY pairing is saved is the core's sentence, word for word.
+        XCTAssertEqual(ProverPairingService.warning, "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.")
         XCTAssertThrowsError(try ProverPairingService.preview(Self.link(url: "http://192.168.1.5:8600"))) { e in
             XCTAssertEqual(e.localizedDescription, "Use https for a prover — plain http is only allowed for a prover on this machine.")
         }
@@ -123,6 +128,15 @@ final class ProverTests: XCTestCase {
         StubProver.handler = { _, _ in .error(-32003, "unpaired", nil) }
         do { _ = try await client.submit("00"); XCTFail() } catch {
             XCTAssertEqual(ProverClient.refusal(error).localizedDescription, "This prover does not know this pairing. Pair it again in Settings.")
+        }
+        // -32006: the prover wanted a fee this job did not pay — definite, in words.
+        StubProver.handler = { _, _ in .error(-32006, "fee", ["reason": "fee output missing"]) }
+        do { _ = try await client.submit("00"); XCTFail() } catch {
+            XCTAssertEqual(ProverClient.refusal(error).localizedDescription, "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.")
+        }
+        StubProver.handler = { _, _ in .error(-32004, "witness kind", ["reason": "spend_key not accepted"]) }
+        do { _ = try await client.submit("00"); XCTFail() } catch {
+            XCTAssertEqual(ProverClient.refusal(error).localizedDescription, "This prover does not accept this kind of job (spend_key not accepted). Pair another prover in Settings, or send from the rand command-line wallet.")
         }
         StubProver.handler = { _, _ in .result(["job": "../etc"]) }
         do { _ = try await client.submit("00"); XCTFail() } catch {
@@ -217,60 +231,235 @@ final class ProverTests: XCTestCase {
 
     // MARK: fix round 1 — the chain's parameters, the remote params, the route, redirects
 
+    /// A digest shaped like a guest's, for the wire tests; not a guest the core knows.
     static let v2 = String(repeating: "ab", count: 32)
+    /// Chain 17's and 18's guests: bundle guest v3 and the auth guest (split authorisation).
+    static let v3 = "60af094acfe65d85fdb18fb3d06cf9085dcf28c96e59e87f1ee527226e6e3fce"
+    static let auth = "1e4e347f44cf86750b30a9a4bdf9ec9256efe353d4ff8017451eca7d195639c1"
 
-    func testTheLocalRequestCarriesTheChainsProfileAndGuest() async throws {
+    /// A bundle guest this core knows that is NOT v3 — v1 or v2, whose witness carries the spend
+    /// key — from `version.hc_bundles`; the digest is the core's, never a literal here.
+    static func oldGuest() throws -> String {
+        guard let v = try RandCore.call("version") as? [String: Any], let all = v["hc_bundles"] as? [String],
+              let old = all.first(where: { $0 != v3 }) else { throw XCTSkip("the core names no pre-v3 guest") }
+        return old
+    }
+
+    static func request(hcBundle: String? = nil, hcAuth: String? = nil) -> ProveRequest {
+        ProveRequest(spendKey: "5a", chainId: 16, to: "rand1x", amount: "1", fee: "1", anchorHeight: 1, anchorRoot: "00",
+                     inputs: [], profile: "test", memo: "", envelopeBytes: nil, hcBundle: hcBundle, hcAuth: hcAuth)
+    }
+
+    static func json(_ r: ProveRequest) throws -> [String: Any] {
+        try XCTUnwrap(try JSONSerialization.jsonObject(with: JSONEncoder().encode(r)) as? [String: Any])
+    }
+
+    func testTheLocalRequestCarriesTheChainsProfileAndGuests() async throws {
         StubProver.handler = { method, _ in
             XCTAssertEqual(method, "rand_status")
-            return .result(["height": 5, "fri_profile": "test", "hc_bundle": Self.v2.uppercased()])
+            return .result(["height": 5, "fri_profile": "test", "hc_bundle": Self.v3.uppercased(), "hc_auth": " \(Self.auth.uppercased())"])
         }
         let rpc = RpcClient(url: URL(string: "https://node.example")!, session: StubProver.session())
-        let (hc, profile) = try await rpc.proofParams()
-        XCTAssertEqual(hc, Self.v2)
-        XCTAssertEqual(profile, "test")
-        let req = ProveRequest(spendKey: "5a", chainId: 16, to: "rand1x", amount: "1", fee: "1", anchorHeight: 1, anchorRoot: "00",
-                               inputs: [], profile: profile, memo: "", envelopeBytes: nil, hcBundle: hc)
-        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(req)) as? [String: Any]
-        XCTAssertEqual(json?["profile"] as? String, "test")
-        XCTAssertEqual(json?["hc_bundle"] as? String, Self.v2)
-        // A node that reports neither: production, and no hc_bundle key at all (the core's default).
+        let p = try await rpc.proofParams()
+        XCTAssertEqual(p, .init(hcBundle: Self.v3, hcAuth: Self.auth, profile: "test"))
+        let json = try Self.json(Self.request(hcBundle: p.hcBundle, hcAuth: p.hcAuth))
+        XCTAssertEqual(json["profile"] as? String, "test")
+        XCTAssertEqual(json["hc_bundle"] as? String, Self.v3)
+        XCTAssertEqual(json["hc_auth"] as? String, Self.auth)
+        // A node that names a bundle guest and `hc_auth: null` (a pre-v3 chain): `hc_auth` is sent
+        // as an explicit null — "this chain names no auth guest" is what the core must hear.
+        StubProver.handler = { _, _ in .result(["height": 5, "hc_bundle": Self.v2, "hc_auth": NSNull()]) }
+        let pre = try await rpc.proofParams()
+        XCTAssertEqual(pre, .init(hcBundle: Self.v2, hcAuth: nil, profile: "production"))
+        let preJson = try Self.json(Self.request(hcBundle: pre.hcBundle, hcAuth: pre.hcAuth))
+        XCTAssertEqual(preJson["hc_bundle"] as? String, Self.v2)
+        XCTAssertTrue(preJson["hc_auth"] is NSNull, "hc_auth must be an explicit null beside a known hc_bundle")
+        // A node that reports neither: production, and neither key at all (the core's defaults).
         StubProver.handler = { _, _ in .result(["height": 5]) }
-        let (none, prod) = try await rpc.proofParams()
-        XCTAssertNil(none)
-        XCTAssertEqual(prod, "production")
-        let bare = ProveRequest(spendKey: "5a", chainId: 16, to: "rand1x", amount: "1", fee: "1", anchorHeight: 1, anchorRoot: "00",
-                                inputs: [], profile: prod, memo: "", envelopeBytes: nil)
-        let bareJson = try JSONSerialization.jsonObject(with: JSONEncoder().encode(bare)) as? [String: Any]
-        XCTAssertNil(bareJson?["hc_bundle"])
+        let none = try await rpc.proofParams()
+        XCTAssertEqual(none, .init(hcBundle: nil, hcAuth: nil, profile: "production"))
+        let bareJson = try Self.json(Self.request())
+        XCTAssertNil(bareJson["hc_bundle"])
+        XCTAssertNil(bareJson["hc_auth"])
+        // Present but malformed — either field — is a node this wallet cannot read, never the default guest.
+        StubProver.handler = { _, _ in .result(["height": 5, "hc_bundle": Self.v3, "hc_auth": "not-a-digest"]) }
+        do { _ = try await rpc.proofParams(); XCTFail("a malformed hc_auth was accepted") } catch {
+            XCTAssertEqual(error.localizedDescription, "rand_status: hc_auth is not 64 hex characters (not-a-digest)")
+        }
+        StubProver.handler = { _, _ in .result(["height": 5, "hc_bundle": 7]) }
+        do { _ = try await rpc.proofParams(); XCTFail("a malformed hc_bundle was accepted") } catch {
+            XCTAssertTrue(error.localizedDescription.hasPrefix("rand_status: hc_bundle is not 64 hex characters"))
+        }
+    }
+
+    /// `hc_auth` reaches the local prove request exactly as `hc_bundle` does: the request
+    /// `RandCore.proveTransfer` encodes is what the core's `chain_guests` reads, and the core
+    /// answers split authorisation for chain 18's pair.
+    func testHcAuthReachesTheLocalProveRequest() throws {
+        let json = try Self.json(Self.request(hcBundle: Self.v3, hcAuth: Self.auth))
+        XCTAssertEqual(json["hc_auth"] as? String, Self.auth)
+        let guests = try RandCore.chainGuests(hcBundle: json["hc_bundle"] as? String, hcAuth: json["hc_auth"] as? String)
+        XCTAssertEqual(guests, ChainGuests(hcBundle: Self.v3, hcAuth: Self.auth, splitAuthorisation: true, witnessKind: "viewing_key"))
+        // The real core: v3 named WITHOUT its auth guest is refused before anything is proved —
+        // the very refusal an omitted `hc_auth` would silence (`prove_transfer` asks the same
+        // `chain_guests` first).
+        XCTAssertThrowsError(try RandCore.chainGuests(hcBundle: Self.v3, hcAuth: nil))
+        // The reply carries the auth proof's size beside the bundle proof's.
+        let reply = #"{"tx_hex":"00","hash":"00","time":1,"amount":"1","change":"0","fee":"1","tier":14,"proof_bytes":10,"tx_bytes":12,"# +
+            #""nullifiers":[],"commitments":[],"tx_keys":[],"payment_tx_key":null,"spent_indices":[],"auth_proof_bytes":1366827}"#
+        XCTAssertEqual(try JSONDecoder().decode(ProveResult.self, from: Data(reply.utf8)).authProofBytes, 1_366_827)
     }
 
     private static let route = ProverPairingService.Route(
         pairing: ProverPairing(name: "prover.example:8600", url: "https://prover.example:8600", kemEk: kemEk, fingerprint: fingerprint, own: true),
         token: token)
+    private static var notOwnRoute: ProverPairingService.Route {
+        var p = route.pairing
+        p.own = false
+        return .init(pairing: p, token: token)
+    }
 
     func testTheRemoteParamsCarryThePairingTheCapAndTheChainsParameters() throws {
-        let req = ProveRequest(spendKey: "5a", chainId: 16, to: "rand1x", amount: "1", fee: "1", anchorHeight: 1, anchorRoot: "00",
-                               inputs: [], profile: "test", memo: "", envelopeBytes: nil, hcBundle: Self.v2)
+        let req = Self.request(hcBundle: Self.v3, hcAuth: Self.auth)
         let p = try RemoteSendParams.build(request: req, route: Self.route, maxProofBytes: 2_000_000)
         let target = p["prover"] as? [String: Any]
         XCTAssertEqual(target?["kem_ek"] as? String, Self.kemEk)
         XCTAssertEqual(target?["token"] as? String, Self.token)
-        XCTAssertEqual(target?["witness_kind"] as? String, "spend_key")
-        XCTAssertEqual(target?["hc_bundle"] as? String, Self.v2)
-        XCTAssertEqual(p["hc_bundle"] as? String, Self.v2)
+        // Phase 2: the witness kind is the core's decision from the chain's guest, never named here.
+        XCTAssertNil(target?["witness_kind"])
+        XCTAssertEqual(target?["own"] as? Bool, true)
+        XCTAssertTrue(target?["fee"] is NSNull)
+        XCTAssertEqual(target?["hc_bundle"] as? String, Self.v3)
+        XCTAssertEqual(p["hc_bundle"] as? String, Self.v3)
+        XCTAssertEqual(p["hc_auth"] as? String, Self.auth)
         XCTAssertEqual(p["max_proof_bytes"] as? Int, 2_000_000)
         XCTAssertEqual(p["profile"] as? String, "test")
         XCTAssertEqual(p["spend_key"] as? String, "5a")
         let noCap = try RemoteSendParams.build(request: req, route: Self.route, maxProofBytes: nil)
         XCTAssertNil(noCap["max_proof_bytes"])
+        // The fee is passed through as the prover answered it — the core reads it, not the shell.
+        let quoted = JSONValue(["amount": "0", "address": "rand1x"])
+        let withFee = try RemoteSendParams.build(request: req, route: Self.notOwnRoute, maxProofBytes: nil, fee: quoted)
+        XCTAssertEqual((withFee["prover"] as? [String: Any])?["own"] as? Bool, false)
+        XCTAssertEqual(JSONValue((withFee["prover"] as? [String: Any])?["fee"]), quoted)
     }
 
-    /// The real core seals a real transfer to the pairing's key; what reaches the prover's wire
-    /// is the sealed job and job ids — never the spend key, never the token.
+    // MARK: Phase 2 — the job checks made before anything is built (`proveHookFor` in the JS)
+
+    private static func info(_ kinds: [String], fee: Any? = nil) throws -> ProverInfo {
+        var o: [String: Any] = ["kem_ek": kemEk, "witness_kinds": kinds, "queue": ["depth": 0, "max": 8]]
+        if let fee { o["fee"] = fee }
+        return try ProverInfo(o)
+    }
+
+    /// A split-authorisation chain (chain 18's `hc_bundle` v3 + `hc_auth`): the job is a
+    /// viewing-key job, so a pairing NOT marked as the user's own takes it — `own: false` on the
+    /// target, no `witness_kind` — and the real core seals it, making the auth proof here first.
+    func testAV3ChainSendsAViewingKeyJobToANotOwnPairing() async throws {
+        var asked = 0
+        let check = try await ProverPairingService.checkJob(route: Self.notOwnRoute, hcBundle: Self.v3, hcAuth: Self.auth,
+                                                            info: { asked += 1; return try Self.info(["viewing_key"]) })
+        XCTAssertEqual(asked, 1, "the prover is asked once, at the point the job is built")
+        XCTAssertEqual(check.guests.witnessKind, "viewing_key")
+        XCTAssertTrue(check.guests.splitAuthorisation, "the auth proof is made on this device first")
+        XCTAssertEqual(check.fee, .null)
+
+        var fixture = try XCTUnwrap(try RandCore.call("fixture_prove_request", ["profile": "test"]) as? [String: Any])
+        fixture["hc_bundle"] = Self.v3
+        fixture["hc_auth"] = Self.auth
+        let spendKey = try XCTUnwrap(fixture["spend_key"] as? String)
+        let params = RemoteSendParams.build(requestJSON: fixture, route: Self.notOwnRoute, maxProofBytes: nil, fee: check.fee)
+        let target = try XCTUnwrap(params["prover"] as? [String: Any])
+        XCTAssertEqual(target["own"] as? Bool, false)
+        XCTAssertNil(target["witness_kind"])
+        // The real core: a viewing-key job for a prover that is not the owner's own, accepted.
+        let prepared = try RandCore.prepareTransfer(params)
+        let pending = try XCTUnwrap(prepared.pending as? [String: Any])
+        XCTAssertEqual(pending["witness_kind"] as? String, "viewing_key")
+        XCTAssertEqual(pending["hc_bundle"] as? String, Self.v3)
+        let txHex = try XCTUnwrap(pending["tx_hex"] as? String)
+        XCTAssertGreaterThan(txHex.count, 100_000, "the pending transaction carries its auth proof")
+        XCTAssertFalse(txHex.contains(spendKey))
+        XCTAssertFalse(prepared.sealedHex.contains(spendKey))
+    }
+
+    /// An older chain (a v1/v2 bundle guest, `hc_auth` null): the job would carry the spend key,
+    /// which goes only to a prover paired as the user's own — refused before the prover is asked
+    /// and before `prepare_*` (and the core refuses it too, `NOT_OWN`).
+    func testAnOldChainRefusesANotOwnPairingBeforeTheJobIsBuilt() async throws {
+        let old = try Self.oldGuest()
+        XCTAssertEqual(try RandCore.chainGuests(hcBundle: old, hcAuth: nil).witnessKind, "spend_key")
+        var asked = 0
+        do {
+            _ = try await ProverPairingService.checkJob(route: Self.notOwnRoute, hcBundle: old, hcAuth: nil,
+                                                        info: { asked += 1; return try Self.info(["viewing_key", "spend_key"]) })
+            XCTFail("a spend-key job was allowed to a pairing not marked own")
+        } catch {
+            XCTAssertEqual(error as? ProverRefusal, ProverRefusal(message: "On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the rand command-line wallet."))
+        }
+        XCTAssertEqual(asked, 0, "refused before the prover was asked")
+        // The core says the same of the job itself, whatever the shell forgot to check.
+        var fixture = try XCTUnwrap(try RandCore.call("fixture_prove_request", ["profile": "test"]) as? [String: Any])
+        fixture["hc_bundle"] = old
+        fixture["hc_auth"] = NSNull()
+        XCTAssertThrowsError(try RandCore.prepareTransfer(RemoteSendParams.build(requestJSON: fixture, route: Self.notOwnRoute, maxProofBytes: nil)))
+        // The same chain with a pairing marked own: the job is a spend-key one and goes.
+        let own = try await ProverPairingService.checkJob(route: Self.route, hcBundle: old, hcAuth: nil,
+                                                          info: { try Self.info(["viewing_key", "spend_key"]) })
+        XCTAssertEqual(own.guests.witnessKind, "spend_key")
+        XCTAssertFalse(own.guests.splitAuthorisation)
+        // A prover too old for a viewing-key job, on a v3 chain, is refused in those words.
+        do {
+            _ = try await ProverPairingService.checkJob(route: Self.route, hcBundle: Self.v3, hcAuth: Self.auth, info: { try Self.info(["spend_key"]) })
+            XCTFail()
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another.")
+        }
+        // A prover that moved to another key since pairing is refused here too.
+        do {
+            _ = try await ProverPairingService.checkJob(route: Self.route, hcBundle: Self.v3, hcAuth: Self.auth,
+                                                        info: { try ProverInfo(["kem_ek": String(repeating: "08", count: 1184), "witness_kinds": ["viewing_key"]]) })
+            XCTFail()
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "The prover at that address now has a different key. Pair it again in Settings.")
+        }
+    }
+
+    /// This build pays no prover fee: a prover quoting one is refused at the route (so the review
+    /// step says so) and again at the job (its fee is its own to change), before the auth proof
+    /// is made. A fee of zero is no fee.
+    func testAProverQuotingAFeeIsRefused() async throws {
+        let quote: [String: Any] = ["amount": "1000000", "address": "rand1x"]
+        do {
+            _ = try await ProverPairingService.checkJob(route: Self.notOwnRoute, hcBundle: Self.v3, hcAuth: Self.auth,
+                                                        info: { try Self.info(["viewing_key"], fee: quote) })
+            XCTFail("a fee-charging prover was handed a job")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "This prover charges a fee, which this version of the wallet does not pay (it charges a fee of 0.001 RAND per proof, which this version of the wallet does not pay). Pair a prover that charges nothing, or send from the rand command-line wallet.")
+        }
+        XCTAssertNil(ProverPairingService.feeRefusal(.null))
+        XCTAssertNil(ProverPairingService.feeRefusal(JSONValue(["amount": "0", "address": "rand1x"])))
+        XCTAssertEqual(ProverPairingService.feeRefusal(JSONValue(["amount": "not a number"])), "it charges a fee per proof, which this version of the wallet does not pay")
+        let free = try await ProverPairingService.checkJob(route: Self.notOwnRoute, hcBundle: Self.v3, hcAuth: Self.auth,
+                                                           info: { try Self.info(["viewing_key"], fee: ["amount": "0", "address": "rand1x"]) })
+        XCTAssertEqual(free.fee, JSONValue(["amount": "0", "address": "rand1x"]), "a zero fee is passed through as answered")
+        do {
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: Self.route.pairing,
+                                                     probe: { _ in .ok(try! Self.info(["viewing_key"], fee: quote)) }, secret: { Self.secret })
+            XCTFail()
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. Your paired prover is not available: it charges a fee of 0.001 RAND per proof, which this version of the wallet does not pay.")
+        }
+    }
+
+    /// The real core seals a real transfer to the pairing's key (the default chain's: v3, so the
+    /// auth proof is made here and the job carries the viewing key); what reaches the prover's
+    /// wire is the sealed job and job ids — never the spend key, never the token.
     func testTheSpendKeyAndTokenNeverReachTheProversWire() async throws {
         guard var fixture = try RandCore.call("fixture_prove_request", ["profile": "test"]) as? [String: Any],
               let spendKey = fixture["spend_key"] as? String else { return XCTFail("no fixture") }
         fixture.removeValue(forKey: "hc_bundle")
+        fixture.removeValue(forKey: "hc_auth")
         let params = RemoteSendParams.build(requestJSON: fixture, route: Self.route, maxProofBytes: nil)
         let prepared = try RandCore.prepareTransfer(params)
         StubProver.handler = { method, _ in
@@ -294,34 +483,39 @@ final class ProverTests: XCTestCase {
         XCTAssertFalse(pendingText.contains(spendKey), "pending carries no spend key")
     }
 
-    static let secret = ProverSecret(token: token, kemEk: kemEk, url: "https://prover.example:8600", fingerprint: fingerprint)
+    static let secret = ProverSecret(token: token, kemEk: kemEk, url: "https://prover.example:8600", fingerprint: fingerprint, own: true)
+    static let notOwnSecret = ProverSecret(token: token, kemEk: kemEk, url: "https://prover.example:8600", fingerprint: fingerprint, own: false)
 
-    private static func info(_ kinds: [String]) throws -> ProverInfo {
-        try ProverInfo(["kem_ek": kemEk, "witness_kinds": kinds, "queue": ["depth": 0, "max": 8]])
-    }
-
-    func testTheRouteGatesOnOwnSpendKeyJobsAndTheToken() async throws {
+    /// The route: the device first; then the paired prover, own or not, answering and taking a job
+    /// this wallet can send it (a viewing-key job, or a spend-key one for a pairing marked own).
+    func testTheRouteTakesAnyPairedProverThatTakesThisWalletsJobs() async throws {
         let own = Self.route.pairing
-        var notOwn = own
-        notOwn.own = false
         var probed = 0
-        let okProbe: (ProverPairing) async -> ProverPairingService.Probe = { _ in probed += 1; return .ok(try! Self.info(["spend_key"])) }
+        let okProbe: (ProverPairing) async -> ProverPairingService.Probe = { _ in probed += 1; return .ok(try! Self.info(["viewing_key", "spend_key"])) }
 
         let device = try await ProverPairingService.route(deviceCanProve: true, pairing: own, probe: okProbe, secret: { Self.secret })
         XCTAssertNil(device)
         XCTAssertEqual(probed, 0, "a device that can prove asks nobody")
         let none = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: okProbe, secret: { Self.secret })
         XCTAssertNil(none)
-        let notMine = try await ProverPairingService.route(deviceCanProve: false, pairing: notOwn, probe: okProbe, secret: { Self.secret })
-        XCTAssertNil(notMine, "a pairing not marked own never gets a spend-key job")
         XCTAssertEqual(probed, 0)
 
+        // Phase 2: a pairing NOT marked own routes — viewing-key jobs are what a v3 chain sends.
+        let notMine = try await ProverPairingService.route(deviceCanProve: false, pairing: own,
+                                                           probe: { _ in .ok(try! Self.info(["viewing_key"])) }, secret: { Self.notOwnSecret })
+        XCTAssertEqual(notMine?.pairing.own, false, "own comes from the Keychain record, not Settings")
+        XCTAssertEqual(notMine?.token, Self.token)
+        // A pairing marked own routes on a prover that takes only spend-key jobs (an older prover).
+        let mine = try await ProverPairingService.route(deviceCanProve: false, pairing: own,
+                                                        probe: { _ in .ok(try! Self.info(["spend_key"])) }, secret: { Self.secret })
+        XCTAssertEqual(mine?.pairing.own, true)
+        // A pairing not marked own on such a prover has no job this wallet could send it.
         do {
             _ = try await ProverPairingService.route(deviceCanProve: false, pairing: own,
-                                                     probe: { _ in .ok(try! Self.info(["viewing_key"])) }, secret: { Self.secret })
+                                                     probe: { _ in .ok(try! Self.info(["spend_key"])) }, secret: { Self.notOwnSecret })
             XCTFail()
         } catch {
-            XCTAssertEqual(error as? ProverRefusal, ProverRefusal(message: "This device does not have the memory for this proof. Your paired prover is not available: it does not take a spend-key job."))
+            XCTAssertEqual(error as? ProverRefusal, ProverRefusal(message: "This device does not have the memory for this proof. Your paired prover is not available: it does not take this wallet's jobs."))
         }
         do {
             _ = try await ProverPairingService.route(deviceCanProve: false, pairing: own,
@@ -346,32 +540,46 @@ final class ProverTests: XCTestCase {
     /// `Settings.prover` is plaintext (UserDefaults): anything that can write it could name another
     /// key and URL. The route, the probe and the sealed job's target all come from the Keychain
     /// record instead; only the name and `own` are read from Settings.
-    func testATamperedSettingsKemEkDoesNotMoveTheSealTarget() async throws {
+    func testATamperedSettingsKemEkDoesNotMoveTheSealTargetNorOwnTheGate() async throws {
         var tampered = Self.route.pairing
         tampered.kemEk = String(repeating: "66", count: 1184)
         tampered.url = "https://evil.example"
         tampered.fingerprint = "EVIL-EVIL-EVIL-EVIL"
+        tampered.own = true // the record says false: a tampered copy cannot promote a pairing
         var probedAt: ProverPairing?
         let route = try await ProverPairingService.route(
             deviceCanProve: false, pairing: tampered,
-            probe: { probedAt = $0; return .ok(try! Self.info(["spend_key"])) },
-            secret: { Self.secret })
+            probe: { probedAt = $0; return .ok(try! Self.info(["viewing_key", "spend_key"])) },
+            secret: { Self.notOwnSecret })
         XCTAssertEqual(probedAt?.url, Self.secret.url, "the probe asked the tampered URL")
         XCTAssertEqual(probedAt?.kemEk, Self.kemEk)
         XCTAssertEqual(route?.pairing.kemEk, Self.kemEk, "the route took the tampered key")
         XCTAssertEqual(route?.pairing.url, Self.secret.url)
+        XCTAssertEqual(route?.pairing.own, false, "the route took Settings' own")
         XCTAssertEqual(route?.pairing.name, tampered.name, "the display name is still Settings'")
-        let req = ProveRequest(spendKey: "5a", chainId: 16, to: "rand1x", amount: "1", fee: "1", anchorHeight: 1, anchorRoot: "00",
-                               inputs: [], profile: "test", memo: "", envelopeBytes: nil)
-        let params = try RemoteSendParams.build(request: req, route: try XCTUnwrap(route), maxProofBytes: nil)
+        let params = try RemoteSendParams.build(request: Self.request(), route: try XCTUnwrap(route), maxProofBytes: nil)
         XCTAssertEqual((params["prover"] as? [String: Any])?["kem_ek"] as? String, Self.kemEk, "the job was sealed to the tampered key")
+        XCTAssertEqual((params["prover"] as? [String: Any])?["own"] as? Bool, false)
+        // And on an old chain the promoted copy still gets no spend-key job.
+        let old = try Self.oldGuest()
+        do {
+            _ = try await ProverPairingService.checkJob(route: try XCTUnwrap(route), hcBundle: old, hcAuth: nil, info: { try Self.info(["spend_key"]) })
+            XCTFail("a tampered own let a spend-key job out")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.hasPrefix("On this chain a proof needs the spend key"))
+        }
     }
 
     func testTheKeychainRecordRoundTripsAndABareTokenIsNoPairing() throws {
         let json = String(decoding: try JSONEncoder().encode(Self.secret), as: UTF8.self)
         XCTAssertEqual(ProverSecret.decode(json), Self.secret)
+        XCTAssertEqual(ProverSecret.decode(json)?.own, true)
         XCTAssertNil(ProverSecret.decode(Self.token), "a pre-release bare token names no seal target")
         XCTAssertNil(ProverSecret.decode(#"{"token":"","kemEk":"a","url":"b","fingerprint":"c"}"#))
+        // A record stored before `own` was kept (Phase 1) reads false: viewing-key jobs only.
+        let phase1 = ProverSecret.decode(#"{"token":"t","kemEk":"a","url":"b","fingerprint":"c"}"#)
+        XCTAssertEqual(phase1, ProverSecret(token: "t", kemEk: "a", url: "b", fingerprint: "c", own: false))
+        XCTAssertEqual(phase1?.own, false)
     }
 
     func testARedirectIsNotFollowed() async throws {

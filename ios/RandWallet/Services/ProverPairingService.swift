@@ -1,13 +1,37 @@
 import Foundation
 
-/// The half of a pairing that decides where the spend key goes — the bearer token and the prover's
-/// key and URL — kept together in the Keychain (`Keychain.saveProverSecret`). A send seals to this
-/// `kemEk` and posts to this `url`; `Settings.prover` is only what the screens show.
+/// The half of a pairing that decides where a job goes — the bearer token, the prover's key and
+/// URL, and whether the link marked it the owner's own — kept together in the Keychain
+/// (`Keychain.saveProverSecret`). A send seals to this `kemEk` and posts to this `url`, and
+/// `own` here (never the display copy's) is what lets a spend-key job go out on a chain without
+/// split authorisation; `Settings.prover` is only what the screens show.
 struct ProverSecret: Codable, Equatable {
     var token: String
     var kemEk: String
     var url: String
     var fingerprint: String
+    /// The link carried `own=1`. A record stored before this field was kept reads `false`: such a
+    /// pairing still takes every viewing-key job, and never a spend-key one until paired again.
+    var own: Bool = false
+
+    init(token: String, kemEk: String, url: String, fingerprint: String, own: Bool = false) {
+        self.token = token
+        self.kemEk = kemEk
+        self.url = url
+        self.fingerprint = fingerprint
+        self.own = own
+    }
+
+    enum CodingKeys: String, CodingKey { case token, kemEk, url, fingerprint, own }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        token = try c.decode(String.self, forKey: .token)
+        kemEk = try c.decode(String.self, forKey: .kemEk)
+        url = try c.decode(String.self, forKey: .url)
+        fingerprint = try c.decode(String.self, forKey: .fingerprint)
+        own = try c.decodeIfPresent(Bool.self, forKey: .own) ?? false
+    }
 
     /// The record as stored, or `nil` for anything else (a pre-release bare token included).
     static func decode(_ text: String) -> ProverSecret? {
@@ -17,8 +41,9 @@ struct ProverSecret: Codable, Equatable {
     }
 }
 
-/// A paired prover as Settings keeps it: public fields only, for display. The token — and the key
-/// and URL a job is actually sealed to and sent to — are in the Keychain (`ProverSecret`).
+/// A paired prover as Settings keeps it: public fields only, for display. The token — and the key,
+/// URL and `own` a job is actually sealed to, sent to and gated on — are in the Keychain
+/// (`ProverSecret`).
 struct ProverPairing: Codable, Equatable {
     /// What the proving screen calls it: the prover's host (and port).
     var name: String
@@ -26,7 +51,11 @@ struct ProverPairing: Codable, Equatable {
     /// The prover's ML-KEM-768 encapsulation key, lowercase hex (1 184 bytes).
     var kemEk: String
     var fingerprint: String
-    /// The link was made with `own=1`. Phase 1 sends a spend-key job to such a prover only.
+    /// The link was made with `own=1`: the user says this prover is a machine of theirs. On a
+    /// split-authorisation chain (every chain since 17) any paired prover makes the proofs — the
+    /// job carries the viewing key and a salt, never the spend key — and this only decides what
+    /// Settings calls it; on an older chain, whose job carries the spend key, only such a prover
+    /// is sent one. For display: the route reads the Keychain record's copy.
     var own: Bool
 }
 
@@ -36,10 +65,20 @@ struct ProverPairing: Codable, Equatable {
 /// from that key (the prover's own `kem_fingerprint` is its word, not evidence). Only then is
 /// anything stored.
 enum ProverPairingService {
-    /// Copy, Phase 1 (spec §4.4), shown before a pairing is saved.
-    static let warning = "This prover will receive your spend key each time it makes a proof. Anyone who controls it can spend your funds. Pair only a machine you run yourself."
+    /// What a prover learns from a viewing-key job (delegated proving, Phase 2 — split
+    /// authorisation): the core's sentence, `version`'s `prover_history_warning`, so every shell
+    /// says the same thing; this string is its fallback, word for word. Shown before ANY pairing
+    /// is saved, the user's own or not (a prover of the user's own learns exactly as much; it is
+    /// theirs).
+    static let historyWarningFallback = "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own."
+    static var warning: String {
+        let w = (try? RandCore.constants())?.proverHistoryWarning?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return w.isEmpty ? historyWarningFallback : w
+    }
 
-    static let notOwnWarning = "This link does not mark the prover as your own, so this version of the wallet will never send it a job: pair only a prover you run yourself, from a link it made with own=1."
+    /// Under a pairing that is not the user's own: what that prover can do, in one line
+    /// (`ui/screens/settings.js`'s `PROVER_NOT_OWN_NOTE`).
+    static let notOwnNote = "Not marked as your own: it can read this wallet's whole history. It cannot spend."
 
     struct ParsedLink {
         let kemEk: String
@@ -53,8 +92,8 @@ enum ProverPairingService {
         let url: String
         let fingerprint: String
         let own: Bool
-        /// Set when the link is not marked `own`: such a pairing is saved but never used.
-        let warning: String?
+        /// Set when the link is not marked `own`: `notOwnNote`, for the line under the pairing.
+        let note: String?
     }
 
     enum Probe: Equatable {
@@ -83,7 +122,7 @@ enum ProverPairingService {
     static func preview(_ link: String) throws -> Preview {
         let p = try parse(link)
         let url = try checkedURL(p.url)
-        return Preview(url: url, fingerprint: p.fingerprint, own: p.own, warning: p.own ? nil : notOwnWarning)
+        return Preview(url: url, fingerprint: p.fingerprint, own: p.own, note: p.own ? nil : notOwnNote)
     }
 
     /// Whether the prover's reported key is the pairing's.
@@ -115,7 +154,8 @@ enum ProverPairingService {
     /// copy in Settings: a pairing is never visible without the record a send needs.
     @MainActor
     static func save(_ pairing: ProverPairing, token: String, settings: Settings) throws {
-        try Keychain.saveProverSecret(ProverSecret(token: token, kemEk: pairing.kemEk.lowercased(), url: pairing.url, fingerprint: pairing.fingerprint))
+        try Keychain.saveProverSecret(ProverSecret(token: token, kemEk: pairing.kemEk.lowercased(), url: pairing.url,
+                                                   fingerprint: pairing.fingerprint, own: pairing.own))
         settings.prover = pairing
     }
 
@@ -139,37 +179,114 @@ enum ProverPairingService {
         return .ok(info)
     }
 
-    /// A remote route: the pairing — its `url`, `kemEk` and `fingerprint` the Keychain record's, only
-    /// `name` and `own` from Settings — and its token.
+    /// A remote route: the pairing — its `url`, `kemEk`, `fingerprint` and `own` the Keychain
+    /// record's, only `name` from Settings — and its token.
     struct Route {
         let pairing: ProverPairing
         let token: String
     }
 
-    /// Where a send's proof is made. `nil` = this device: it can prove, or no prover is paired as
-    /// the user's own (Phase 1 sends a spend-key job nowhere else). A paired own prover whose
-    /// Keychain record is gone, that does not answer, answers with another key, or takes no
-    /// spend-key job refuses the send here, before anything is built: nothing is sent. The probe
-    /// and the route use the Keychain record's URL and key (`secret`), never `pairing`'s, which is
+    /// `prover_info.fee` as a sentence when it is a fee, `nil` when the prover charges nothing
+    /// (`null`, or an amount of zero). This build pays no prover fee.
+    static func feeRefusal(_ fee: JSONValue) -> String? {
+        if fee.isNull { return nil }
+        let amount = (fee.value as? [String: Any])?["amount"] as? String ?? ""
+        if !amount.isEmpty && amount.allSatisfy({ $0 == "0" }) { return nil }
+        var shown = ""
+        if (1...20).contains(amount.count), amount.allSatisfy({ $0.isNumber }), let f = try? RandCore.formatAmount(units: amount) {
+            shown = " of \(f) RAND"
+        }
+        return "it charges a fee\(shown) per proof, which this version of the wallet does not pay"
+    }
+
+    /// Where a send's proof is made (`proveRoute` in the JS). `nil` = this device: it can prove,
+    /// or no prover is paired. Otherwise the paired prover — the user's own or not — answering
+    /// with the pairing's key, charging nothing, and taking a job this wallet can send it: a
+    /// viewing-key job (a split-authorisation chain: the prover gets `nk` and a salt, can read
+    /// this wallet's history and cannot spend), or, for a prover paired as the user's own, a
+    /// spend-key one (an older chain). Which of the two a given send needs is the chain's and is
+    /// settled by the core when the job is made (`checkJob`); this only rules out a prover that
+    /// could take neither. A pairing whose Keychain record is gone, or a prover that fails any of
+    /// this, refuses the send here, before anything is built: nothing is sent. The probe and the
+    /// route use the Keychain record's URL, key and `own` (`secret`), never `pairing`'s, which is
     /// the plaintext display copy in Settings.
     static func route(deviceCanProve: Bool, pairing display: ProverPairing?,
                       probe: (ProverPairing) async -> Probe, secret: () -> ProverSecret?) async throws -> Route? {
         if deviceCanProve { return nil }
-        guard let d = display, d.own else { return nil }
+        guard let d = display else { return nil }
         guard let s = secret(), !s.token.isEmpty else {
             throw ProverRefusal(message: "Your prover's pairing could not be opened. Pair the prover again in Settings.")
         }
-        let p = ProverPairing(name: d.name, url: s.url, kemEk: s.kemEk, fingerprint: s.fingerprint, own: true)
+        let p = ProverPairing(name: d.name, url: s.url, kemEk: s.kemEk, fingerprint: s.fingerprint, own: s.own)
         let reason = "This device does not have the memory for this proof."
+        let why: String?
         switch await probe(p) {
-        case .unavailable(let why):
-            throw ProverRefusal(message: "\(reason) Your paired prover is not available: \(why).")
-        case .ok(let info) where !info.witnessKinds.contains("spend_key"):
-            throw ProverRefusal(message: "\(reason) Your paired prover is not available: it does not take a spend-key job.")
-        case .ok:
-            break
+        case .unavailable(let w):
+            why = w
+        case .ok(let info):
+            if let fee = feeRefusal(info.fee) {
+                why = fee
+            } else if info.witnessKinds.contains("viewing_key") || (p.own && info.witnessKinds.contains("spend_key")) {
+                why = nil
+            } else {
+                why = "it does not take this wallet's jobs"
+            }
         }
+        if let why { throw ProverRefusal(message: "\(reason) Your paired prover is not available: \(why).") }
         return Route(pairing: p, token: s.token)
+    }
+
+    /// What one send's job is allowed to be, decided at the one point a job is built
+    /// (`proveHookFor` in the JS), before anything is proved:
+    /// 1. what this chain's bundle guest takes, from the core (`chain_guests`): the viewing key on
+    ///    a split-authorisation chain, the spend key on an older one — and the core refuses,
+    ///    here, a chain whose guests this build cannot prove for;
+    /// 2. a spend-key witness goes to a prover paired as the user's own and to no other — the core
+    ///    refuses it too (`NOT_OWN`); this says so before the prover is even asked;
+    /// 3. the prover as it is NOW (`info`, a fresh `prover_info`): still the key this wallet
+    ///    paired, taking this kind of job, and charging nothing. Its fee is its own to change at
+    ///    any time, so it is read here and handed to the core verbatim, which refuses any.
+    /// Returns the chain's guests (`splitAuthorisation` says whether `prepare_*` will make the auth
+    /// proof on this device first) and the fee to pass through.
+    struct JobCheck: Equatable {
+        let guests: ChainGuests
+        /// `prover_info.fee` as answered — `nil` (JSON `null`) when it charges nothing.
+        let fee: JSONValue
+    }
+
+    static func checkJob(route: Route, hcBundle: String?, hcAuth: String?,
+                         info: () async throws -> ProverInfo) async throws -> JobCheck {
+        let guests: ChainGuests
+        do {
+            guests = try RandCore.chainGuests(hcBundle: hcBundle, hcAuth: hcAuth)
+        } catch {
+            let m = error.localizedDescription
+            throw ProverRefusal(message: m.isEmpty ? "This wallet cannot prove for this chain." : m)
+        }
+        let wants = guests.witnessKind
+        if wants == "spend_key" && !route.pairing.own {
+            throw ProverRefusal(message: "On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the rand command-line wallet.")
+        }
+        let now: ProverInfo
+        do {
+            now = try await info()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw ProverRefusal(message: "Your prover did not answer: \(error.localizedDescription)")
+        }
+        guard sameKey(now, kemEk: route.pairing.kemEk, fingerprint: route.pairing.fingerprint) else {
+            throw ProverRefusal(message: "The prover at that address now has a different key. Pair it again in Settings.")
+        }
+        guard now.witnessKinds.contains(wants) else {
+            throw ProverRefusal(message: wants == "viewing_key"
+                ? "Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another."
+                : "Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the rand command-line wallet.")
+        }
+        if let fee = feeRefusal(now.fee) {
+            throw ProverRefusal(message: "This prover charges a fee, which this version of the wallet does not pay (\(fee)). Pair a prover that charges nothing, or send from the rand command-line wallet.")
+        }
+        return JobCheck(guests: guests, fee: now.fee)
     }
 
     /// The one status line Settings shows under the pairing.

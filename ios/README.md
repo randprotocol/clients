@@ -11,12 +11,13 @@ RandWallet/
   Storage/     NoteStore (Application Support, complete file protection), Keychain, Settings,
                Contacts (Keychain-backed JSON, the CLI's rules)
   Services/    WalletService (scan / send / faucet), AuthService (lock, Face ID), ProverClient and
-               ProverPairingService (a paired prover: JSON-RPC, the poll loop, pairing)
+               ProverPairingService (a paired prover: JSON-RPC, the poll loop, pairing, the route
+               and the checks made before a job is built)
   UI/          Welcome · Lock · Home · Receive · Send → Review → Proving → Sent · Activity · Settings
                · Contacts; `randpay:` links open Send pre-filled (never sent without Confirm)
 RandWalletTests/   NoteStore logic, an FFI smoke test, the link / contact rules, and ProverTests (a
-                   pairing link through the core; the prover client, route and remote send path
-                   against a URLProtocol stub)
+                   pairing link through the core; the prover client, route, the split-authorisation
+                   job checks and the remote send path against a URLProtocol stub)
 ```
 
 ## Build and run
@@ -39,7 +40,17 @@ on the simulator a local node at `http://127.0.0.1:8545` works directly, and an 
 testnet droplet works the same way.
 
 Proving a transfer runs on the phone's CPU and takes a minute or two (single-threaded tier-14
-STARK). The Send flow keeps the screen awake and asks the user to keep the app open.
+STARK) and about 6.2 GB of memory. The Send flow keeps the screen awake and asks the user to keep
+the app open. A phone without that memory can hand the bundle proof to a paired `rand-prover`
+(Settings → Prover, `../docs/prover.md`): on a split-authorisation chain (bundle guest v3, every
+chain since 17) the job the core seals carries the **viewing key and a salt, never the spend
+key** — the prover can read this wallet's whole history and cannot spend, so a prover somebody
+else runs will do — and the spend authorisation (the auth proof, tier 10, about seven seconds)
+is made on the phone inside the core's `prepare_transfer` before the job goes out. The phone
+verifies the proof that comes back before anything is submitted. A pairing link made with
+`rand-prover pair --own` is shown as "My own prover"; any other as "Paired prover" with a note
+saying what it can read. This build pays no prover fee: a prover quoting one is refused before
+the auth proof is made.
 
 ## TestFlight
 
@@ -73,8 +84,15 @@ only network host is the RPC URL the user configures, plus randscan.org when a l
 
 - The spend key is the only wallet secret, kept in the Keychain with
   `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`; the viewing key and address are derived on unlock.
-  A paired prover's token (Settings → Prover, `../docs/prover.md` §6) sits beside it under its own
-  account, with the same accessibility; the pairing's public fields are in `UserDefaults`.
+  It never leaves the process: a paired prover is sent the viewing key and a salt (a
+  split-authorisation chain), or — on an older chain only, and only to a prover paired as your own
+  — the spend key, inside a job sealed to the prover's key. A paired prover's record (the token,
+  the key and URL a job is sealed and sent to, and whether the link marked it your own; Settings →
+  Prover, `../docs/prover.md` §6) sits beside the spend key under its own account, with the same
+  accessibility; the pairing's public fields are in `UserDefaults`, for display only.
+- A remote proof's pending record (the transaction with its auth proof, about 2.8 MB of hex) is
+  held in memory for the length of the send and never written anywhere; an app the system kills
+  mid-proof loses it, and nothing is sent.
 - Unlock is Face ID / Touch ID with the device passcode as fallback; auto-lock after the interval
   in Settings when backgrounded (never during a proof).
 - The note store is a cache of chain data and is written with complete file protection.

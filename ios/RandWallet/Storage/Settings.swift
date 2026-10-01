@@ -22,11 +22,11 @@ final class Settings: ObservableObject {
     @Published var autoLockMinutes: Int { didSet { defaults.set(autoLockMinutes, forKey: "autoLockMinutes") } }
     @Published var theme: Theme { didSet { defaults.set(theme.rawValue, forKey: "theme") } }
     @Published var hasBackedUpKey: Bool { didSet { defaults.set(hasBackedUpKey, forKey: "hasBackedUpKey") } }
-    /// The paired prover (delegated proving, Phase 1), or `nil`: proofs are made on this device.
-    /// Its five public fields only, and DISPLAY ONLY: the token, and the key and URL a job is sealed
-    /// and sent to, are in the Keychain (`Keychain.saveProverSecret`), so a tampered copy here
-    /// cannot redirect a job. Written by `ProverPairingService` alone, which checks the prover's key
-    /// first.
+    /// The paired prover (delegated proving), or `nil`: proofs are made on this device. Its five
+    /// public fields only, and DISPLAY ONLY: the token, the key and URL a job is sealed and sent
+    /// to, and the `own` a spend-key job is gated on, are in the Keychain
+    /// (`Keychain.saveProverSecret`), so a tampered copy here cannot redirect a job or promote a
+    /// pairing. Written by `ProverPairingService` alone, which checks the prover's key first.
     @Published var prover: ProverPairing? {
         didSet {
             if let p = prover, let data = try? JSONEncoder().encode(p) { defaults.set(data, forKey: "prover") }
