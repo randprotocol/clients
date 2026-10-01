@@ -113,7 +113,14 @@ function networkMarkup(settings) {
 export const PROVER_WARNING = 'This prover will be able to read this wallet\'s whole history — every payment '
   + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.';
 /** What the RandProtocol prover (the default) sees, in one line, wherever it is offered or in use. */
-export const PROVER_DEFAULT_NOTE = 'It receives this wallet\'s viewing key, so it can read your whole history, past and future. It cannot spend.';
+export const PROVER_DEFAULT_NOTE = 'Each one that proves a send receives this wallet\'s viewing key, so it can read your whole history, past and future. None can spend.';
+
+/** The pool's members as rows: name and the fingerprint the build pins for it. Text only. */
+function poolMembersMarkup(members) {
+  const list = Array.isArray(members) ? members : [];
+  return list.map((m) => h`<div class="kv" data-role="prover-pool-member"><span class="k">${m.name || ''}</span><span class="v mono">${m.fingerprint || ''}</span></div>`).join('');
+}
+const machines = (members) => (Array.isArray(members) && members.length ? `${members.length} machines` : 'machines');
 /** Under a pairing that is not the user's own: what that prover can do, in one line. */
 export const PROVER_NOT_OWN_NOTE = 'Not marked as your own: it can read this wallet\'s whole history. It cannot spend.';
 
@@ -129,10 +136,10 @@ function proverStateMarkup(prover, { trusted = null, choose = false } = {}) {
       ? raw('<button class="btn block" type="button" data-role="use-no-prover">Use no prover</button>')
       : '';
     return h`
-      <div class="kv"><span class="k">Proofs are made by</span><span class="v">This device, or where it cannot · ${prover.name || 'RandProtocol'} prover</span></div>
-      <div class="kv"><span class="k">Fingerprint</span><span class="v mono">${prover.fingerprint || ''}</span></div>
-      <p class="caption" data-role="prover-default-note">The prover RandProtocol runs for everyone (${prover.url || ''}), used until you choose another. It charges nothing. ${PROVER_DEFAULT_NOTE}</p>
-      <p class="caption" data-role="prover-probe">Asking the prover…</p>
+      <div class="kv"><span class="k">Proofs are made by</span><span class="v">This device, or where it cannot · ${prover.name || 'RandProtocol'} provers</span></div>
+      ${raw(poolMembersMarkup(prover.members))}
+      <p class="caption" data-role="prover-default-note">The RandProtocol provers: ${machines(prover.members)} run by the validators, each with its own key, used until you choose another. They charge nothing. ${PROVER_DEFAULT_NOTE}</p>
+      <p class="caption" data-role="prover-probe">Asking the provers…</p>
       ${off}`;
   }
   if (prover && prover.mode === 'remote') {
@@ -144,7 +151,7 @@ function proverStateMarkup(prover, { trusted = null, choose = false } = {}) {
       : h`Paired prover · ${prover.name || prover.url || ''}`;
     const note = own ? '' : raw(h`<p class="caption" data-role="prover-not-own">${PROVER_NOT_OWN_NOTE}</p>`);
     const back = choose && trusted
-      ? raw(h`<p class="caption">Forgetting it goes back to the ${trusted.name || 'RandProtocol'} prover.</p>`)
+      ? raw(h`<p class="caption">Forgetting it goes back to the ${trusted.name || 'RandProtocol'} provers.</p>`)
       : '';
     return h`
       <div class="kv"><span class="k">Proofs are made by</span><span class="v">${raw(who)}</span></div>
@@ -159,8 +166,9 @@ function proverStateMarkup(prover, { trusted = null, choose = false } = {}) {
   const useIt = choose && trusted
     ? raw(h`
       <div class="stack tight" data-role="trusted-prover">
-        <p class="caption">Or use the prover RandProtocol runs for everyone — <span class="mono" data-role="trusted-prover-url">${trusted.url}</span>, fingerprint <span class="mono" data-role="trusted-prover-fingerprint">${trusted.fingerprint}</span>. It charges nothing. ${PROVER_DEFAULT_NOTE}</p>
-        <button class="btn" type="button" data-role="use-trusted-prover">Use the RandProtocol prover</button>
+        <p class="caption">Or use the RandProtocol provers — ${machines(trusted.members)} run by the validators, each with its own key. They charge nothing. ${PROVER_DEFAULT_NOTE}</p>
+        ${raw(poolMembersMarkup(trusted.members))}
+        <button class="btn" type="button" data-role="use-trusted-prover">Use the RandProtocol provers</button>
       </div>`)
     : '';
   return h`
@@ -684,11 +692,11 @@ registerScreen('settings', {
         return;
       }
       if (!live()) return;
-      settings = { ...settings, prover: await rereadProver({ mode: 'default', name: trusted.name, url: trusted.url, fingerprint: trusted.fingerprint }) };
+      settings = { ...settings, prover: await rereadProver({ mode: 'default', name: trusted.name, members: trusted.members }) };
       if (!live()) return;
       paintProverState();
-      showStatus('warn', `Using the ${trusted.name || 'RandProtocol'} prover`,
-        `Proofs this device cannot make go to it. ${trusted.warning || PROVER_WARNING}`, proverStatusEl);
+      showStatus('warn', `Using the ${trusted.name || 'RandProtocol'} provers`,
+        `Proofs this device cannot make go to one of them; each one that proves a send sees that wallet's viewing key. ${trusted.warning || PROVER_WARNING}`, proverStatusEl);
     });
 
     const offUseNone = on(body, '[data-role="use-no-prover"]', 'click', async (evt) => {
@@ -736,7 +744,7 @@ registerScreen('settings', {
       if (!live()) return;
       paintProverState();
       showStatus('positive', 'Forgotten', settings.prover.mode === 'default'
-        ? `The prover's pairing is gone from this wallet. Proofs this device cannot make go to the ${settings.prover.name || 'RandProtocol'} prover again.`
+        ? `The prover's pairing is gone from this wallet. Proofs this device cannot make go to the ${settings.prover.name || 'RandProtocol'} provers again.`
         : 'Proofs are made on this device again. The prover\'s pairing is gone from this wallet.', proverStatusEl);
     });
 

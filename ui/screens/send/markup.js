@@ -191,20 +191,28 @@ export function scanSheetMarkup() {
 }
 
 /**
- * The one-time notice before the first proof made by the RandProtocol prover, the default where
- * this device cannot prove (wallet 0.6.8): what it learns, that it cannot spend, and the way to
+ * The one-time notice before the first proof made by the RandProtocol provers, the default where
+ * this device cannot prove (wallet 0.6.8; a pool of keyed members since 0.6.9): what it learns, that it cannot spend, and the way to
  * use a prover of your own instead — right there, before anything is sent. `canProve.notice`
  * (the engine's) decides when it is shown; acknowledging it is remembered for this wallet.
  */
-export const DEFAULT_PROVER_NOTICE = 'This device cannot make the proof, so the prover RandProtocol runs for everyone makes it. '
-  + 'It receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. '
-  + 'It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.';
+/** The RandProtocol provers, named the one way every surface names them (wallet 0.6.9). */
+export function poolPhrase(n) {
+  const count = Number.isSafeInteger(n) && n > 0 ? `${n} machines` : 'machines';
+  return `the RandProtocol provers (${count} run by the validators; each one that proves a send sees that wallet's viewing key)`;
+}
 
-export function proverNoticeMarkup() {
+export function defaultProverNotice(n) {
+  return `This device cannot make the proof, so one of ${poolPhrase(n)} makes it. `
+    + 'The one that does receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. '
+    + 'It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.';
+}
+
+export function proverNoticeMarkup(n) {
   return h`
     <div class="banner warn" data-role="prover-notice">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">The RandProtocol prover can read your history</span>${DEFAULT_PROVER_NOTICE}</span>
+      <span><span class="banner-title">The RandProtocol provers can read your history</span>${defaultProverNotice(n)}</span>
     </div>
     <button class="btn btn-primary block" type="button" data-action="acknowledge-prover">I understand — continue</button>
     <button class="btn block" type="button" data-go="settings" data-role="use-own-prover">Use my own prover</button>`;
@@ -215,7 +223,7 @@ export function proverNoticeMarkup() {
  * `financialAndPaymentInfo` data-collection permission, asked from the notice's own click): this
  * browser then has no prover, and the way out is one of the user's own.
  */
-export const PROVER_CONSENT_DECLINED = 'Firefox did not allow this wallet to send your viewing key to the RandProtocol prover, so this browser has no prover to make the proof. Nothing was sent. Pair your own prover in Settings.';
+export const PROVER_CONSENT_DECLINED = 'Firefox did not allow this wallet to send your viewing key to the RandProtocol provers, so this browser has no prover to make the proof. Nothing was sent. Pair your own prover in Settings.';
 
 export function proverDeclinedMarkup() {
   return h`
@@ -231,7 +239,7 @@ export function proverUnreachableMarkup(reason) {
   return h`
     <div class="banner warn" data-role="prover-unreachable">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">The RandProtocol prover cannot be reached</span>${reason || 'It did not answer.'}</span>
+      <span><span class="banner-title">${raw(/all busy/.test(String(reason || '')) ? 'The RandProtocol provers are busy' : 'The RandProtocol provers cannot be reached')}</span>${reason || 'They did not answer.'}</span>
     </div>
     <button class="btn block" type="button" data-go="settings" data-role="use-own-prover">Pair your own prover in Settings</button>`;
 }
@@ -263,7 +271,7 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
       </label>`)
     : '';
   const footer = canProve.ok && canProve.notice
-    ? raw(proverNoticeMarkup())
+    ? raw(proverNoticeMarkup(canProve.provers))
     : !canProve.ok && canProve.unreachable
       ? raw(proverUnreachableMarkup(canProve.reason))
       : canProve.ok

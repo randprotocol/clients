@@ -124,12 +124,16 @@
  * first; where it cannot prove (the wasm shells: the proof needs ~6 GB and wasm32 stops at 4 GiB; a
  * desktop without the memory) the paired prover — the user's own or not, since split
  * authorisation — that answers `prover.probe()`, charges no fee and takes a job this wallet can
- * send it makes it `{ok: true, via: 'prover'}`. With nothing paired (wallet 0.6.8) the
- * RandProtocol prover the build ships is the default: `{ok: true, via: 'prover', prover:
- * 'default', notice?: true}` when it answers with the pinned key — `notice` until this wallet has
- * read the one-time notice (`prover.acknowledgeDefault`; `send.send` rejects `needsNotice` before
- * then) — and `{ok: false, unreachable: true, reason}` when it does not, the reason naming it and
- * pointing to Settings. `bridge.canWithdraw()` carries `prover` and `notice` the same way. `ok:
+ * send it makes it `{ok: true, via: 'prover'}`. With nothing paired (since wallet 0.6.8) the
+ * RandProtocol provers the build ships are the default — since 0.6.9 a pool of members, each with
+ * its own pinned key (`version.trusted_prover_pool`), asked in a random order: `{ok: true, via:
+ * 'prover', prover: 'default', provers: N, notice?: true}` when one answers with ITS pinned key,
+ * no fee, viewing-key jobs and room in its queue — `notice` until this wallet has read the one-time
+ * notice (`prover.acknowledgeDefault`; `send.send` rejects `needsNotice` before then) — and
+ * `{ok: false, busy | unreachable: true, provers: N, reason}` when none does, the reason naming them
+ * and pointing to Settings. A job is sealed to one member's key and polled there to the end; a
+ * member busy or away at submit is skipped for the next. `bridge.canWithdraw()` and
+ * `program.canInvoke()` carry `prover`, `provers` and `notice` the same way. `ok:
  * false` means neither can; `reason` is shown to the user verbatim, so it is
  * written for them, not for a log (the wasm shells' names both ways out: pair a prover, or use the
  * desktop app). It may ask the paired prover, never the node. **A shell whose `canProve()` is
@@ -364,11 +368,11 @@
  *     · `prover.forget()` — removes `settings.prover`, the vault's token and the session's copy;
        the wallet falls back to the default (below).
      · `settings.prover` reads `{mode: 'remote', name, url, kemEk, fingerprint, own}` for a paired
-       prover (preferred over the default), `{mode: 'default', name, url, fingerprint}` with nothing
-       chosen where the build ships the RandProtocol prover (wallet 0.6.8's default — it makes the
-       proofs this device cannot), and `{mode: 'device'}` for no prover (`useNone`, or a build that
-       ships none).
-     · `prover.useDefault?()` — back to the RandProtocol prover: forgets a pairing and a choice of
+       prover (preferred over the default), `{mode: 'default', name, members: [{name, url,
+       fingerprint}]}` with nothing chosen where the build ships the RandProtocol provers (the
+       default — they make the proofs this device cannot), and `{mode: 'device'}` for no prover
+       (`useNone`, or a build that ships none).
+     · `prover.useDefault?()` — back to the RandProtocol provers: forgets a pairing and a choice of
        none. No password, nothing paired, nobody asked.
      · `prover.useNone?()` — no prover at all: proofs are made on this device or not at all.
      · `platform.hasDataCollectionConsent?()` / `platform.requestDataCollectionConsent?()` — the
@@ -377,18 +381,14 @@
        granted `canProve()` keeps `notice: true` and no job goes to the pool; the notice's button
        calls `requestDataCollectionConsent()` synchronously inside its click, and a refusal means
        no prover (the screen points to Settings).
-     · `prover.defaultNotice?()` → `{name, url, fingerprint, warning, read}` or `null`: the one-time
-       notice before the first proof by the default prover (it receives the viewing key: it can read
-       the whole history, past and future, and cannot spend). `prover.acknowledgeDefault?()`
+     · `prover.defaultNotice?()` → `{name, members, warning, read}` or `null`: the one-time notice
+       before the first proof by the default provers (the one that proves receives the viewing key:
+       it can read the whole history, past and future, and cannot spend). `prover.acknowledgeDefault?()`
        records that this wallet read it (until a wipe).
- *     · `prover.trusted?()` → `{name, url, fingerprint, warning}` or `null`: the prover the build
- *       ships the address of (the core's `version.trusted_prover` — the RandProtocol validators'
- *       pool, viewing-key jobs only, no fee), for a screen to offer in one step. Asking pairs
- *       nothing. `warning` is the history sentence a screen shows before `pairTrusted`.
- *     · `prover.pairTrusted?(password)` → the new `settings.prover`: `pair()` on the built-in
- *       link, after holding it (through the core) to the fingerprint the build pins — the
- *       prover must answer with that key, or nothing is stored. Never called by the backend
- *       itself: the wallet never pairs a prover by itself, and `forget()` undoes it like any.
+ *     · `prover.trusted?()` → `{name, members: [{name, url, fingerprint}], warning}` or `null`:
+ *       the RandProtocol provers the build pins (`version.trusted_prover_pool`, viewing-key jobs
+ *       only, no fee), never their links. Asking pairs and asks nothing. (0.6.8's `pairTrusted`,
+ *       which paired the one shared key, is gone.)
  *  - `send.pending?()` → `{job, name, kind, startedAt}` or `null`: a remote proof still in flight —
  *    typically a popup closed mid-proof. It lives in session storage and is forgotten on lock.
  *  - `send.resume?(onPhase, options?)` → `{hash, txKey}` (a transfer) or `{hash}` (a withdrawal):

@@ -4,7 +4,7 @@
 // the request (ui/engine/invoke.js's `invokeEffects`), not the site's summary.
 import { ext } from './lib/browser.js';
 import { extensionBackend } from './backend-extension.js';
-import { makeInvokeFlow, PROVER_NOTICE } from './lib/invoke-flow.js';
+import { makeInvokeFlow, proverNotice } from './lib/invoke-flow.js';
 import { markSvg } from './ui/lib/entropy.js';
 import { formatUnits, shortHex, elapsed } from './ui/lib/format.js';
 import { expectedMs, progressAt, remainingText, recordDuration } from './ui/lib/progress.js';
@@ -122,13 +122,13 @@ function render(state) {
     const note = el('p', 'caption', state.via !== 'prover'
       ? 'Proving takes a few minutes. Keep this window open until it says sent.'
       : state.prover === 'default'
-        ? 'The RandProtocol prover makes the large proof; this browser makes the small ones. It takes a few minutes.'
+        ? 'One of the RandProtocol provers makes the large proof; this browser makes the small ones. It takes a few minutes.'
         : 'Your paired prover makes the large proof; this browser makes the small ones. It takes a few minutes.');
     const actions = el('div', 'onboard-actions');
     if (state.notice) {
       // The RandProtocol prover's one-time notice in Approve's place: read it, or leave for your
       // own prover (Settings in the wallet) — and the request stays waiting meanwhile.
-      const warn = el('p', 'caption', PROVER_NOTICE);
+      const warn = el('p', 'caption', proverNotice(state.provers));
       const ok = el('button', 'btn btn-primary block', 'I understand — continue');
       ok.type = 'button';
       ok.addEventListener('click', () => { void flow.acknowledge(); });

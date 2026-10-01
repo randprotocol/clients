@@ -665,16 +665,19 @@ test('a link that is not marked own is paired, and the engine\'s history warning
   assert.match(state.querySelector('[data-role="prover-not-own"]').textContent, /can read this wallet's whole history\. It cannot spend\./);
 });
 
-test('the RandProtocol prover is the default: named, with what it sees, and turned off in one tap', async (t) => {
+test('the RandProtocol provers are the default: every member named with its own fingerprint, what they see, off in one tap', async (t) => {
   const b = unlockedBackend();
   await b.prover.useDefault(); // what the engine reads with nothing chosen (wallet 0.6.8)
   const { app, root } = await settings(t, b);
   await app.idle();
   const state = root.querySelector('[data-role="prover-state"]');
-  assert.match(state.textContent, /RandProtocol prover/);
-  assert.match(state.textContent, /prover\.randprotocol\.org/);
-  assert.match(state.textContent, /[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/);
-  assert.match(state.textContent, /viewing key, so it can read your whole history, past and future\. It cannot spend\./);
+  assert.match(state.textContent, /RandProtocol provers/);
+  assert.match(state.textContent, /3 machines run by the validators, each with its own key/);
+  const rows = [...state.querySelectorAll('[data-role="prover-pool-member"]')].map((r) => r.textContent);
+  assert.equal(rows.length, 3, 'one row per member');
+  for (const [i, n] of ['a', 'b', 'c'].entries()) assert.match(rows[i], new RegExp(`^${n}[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$`));
+  assert.equal(new Set(rows.map((r) => r.slice(1))).size, 3, 'two members share a fingerprint');
+  assert.match(state.textContent, /Each one that proves a send receives this wallet's viewing key, so it can read your whole history, past and future\. None can spend\./);
   assert.ok(state.querySelector('[data-role="prover-probe"]'), 'the default is asked whether it answers');
   assertGone(state.querySelector('[data-role="forget-prover"]'), 'Forget for a prover nobody paired');
   // Pairing your own stays right there, under its own heading.
@@ -687,28 +690,31 @@ test('the RandProtocol prover is the default: named, with what it sees, and turn
   assert.match(root.querySelector('[data-role="prover-status"]').textContent, /No prover.*on this device only/);
   const after = root.querySelector('[data-role="prover-state"]');
   assert.match(after.textContent, /This device/);
-  assert.doesNotMatch(after.textContent, /RandProtocol prover ·/);
+  assert.doesNotMatch(after.textContent, /or where it cannot/);
+  assertGone(after.querySelector('[data-role="use-no-prover"]'), 'Use no prover after choosing none');
+  assert.ok(after.querySelector('[data-role="use-trusted-prover"]'), 'the way back to the pool');
 });
 
-test('with no prover, Use the RandProtocol prover turns the default back on in one tap, no password', async (t) => {
+test('with no prover, Use the RandProtocol provers turns the default back on in one tap, no password', async (t) => {
   const b = unlockedBackend();
   await b.prover.useNone();
   const { app, root } = await settings(t, b);
   await app.idle();
   const box = root.querySelector('[data-role="trusted-prover"]');
   assert.ok(box, 'the action is offered once the engine names a trusted prover');
-  assert.match(box.textContent, /prover\.randprotocol\.org/);
-  assert.match(box.textContent, /fingerprint [A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/);
-  assert.match(box.textContent, /read your whole history, past and future\. It cannot spend\./);
+  assert.match(box.textContent, /3 machines run by the validators, each with its own key/);
+  assert.equal(box.querySelectorAll('[data-role="prover-pool-member"]').length, 3);
+  assert.match(box.textContent, /read your whole history, past and future\. None can spend\./);
   box.querySelector('[data-role="use-trusted-prover"]').click();
   await app.idle();
   assert.equal(b.calls.filter((c) => c[0] === 'prover.useDefault').length, 1);
   assert.equal(b.calls.filter((c) => c[0] === 'prover.pairTrusted' || c[0] === 'prover.pair').length, 0, 'nothing is paired, the link never passes through the screen');
   const status = root.querySelector('[data-role="prover-status"]').textContent;
-  assert.match(status, /Using the RandProtocol prover/);
+  assert.match(status, /Using the RandProtocol provers/);
+  assert.match(status, /each one that proves a send sees that wallet's viewing key/);
   assert.ok(status.includes(PROVER_WARNING));
-  assert.match(root.querySelector('[data-role="prover-state"]').textContent, /RandProtocol prover/);
-  assert.equal(root.innerHTML.includes('c3'.repeat(32)), false, 'the built-in token is in the page');
+  assert.match(root.querySelector('[data-role="prover-state"]').textContent, /RandProtocol provers/);
+  assert.equal(/token=|randprover:[A-Za-z0-9]/.test(root.innerHTML), false, 'a built-in link is in the page');
 });
 
 test('a backend without a trusted prover offers no such action, and one that refuses changes nothing', async (t) => {
@@ -757,7 +763,7 @@ test('Scan fills the pairing link where the platform has a camera', async (t) =>
   assert.equal(root.querySelector('[name=proverLink]').value, proverLink());
 });
 
-test('Forget returns proving to the default, the RandProtocol prover', async (t) => {
+test('Forget returns proving to the default, the RandProtocol provers', async (t) => {
   const b = unlockedBackend();
   b.calls.length = 0;
   await b.prover.pair(proverLink(), PASSWORD);
@@ -767,8 +773,8 @@ test('Forget returns proving to the default, the RandProtocol prover', async (t)
   await app.idle();
   assert.ok(b.calls.some((c) => c[0] === 'prover.forget'));
   // Forgetting your own prover goes back to the default, and says so.
-  assert.match(root.querySelector('[data-role="prover-state"]').textContent, /RandProtocol prover/);
-  assert.match(root.querySelector('[data-role="prover-status"]').textContent, /go to the RandProtocol prover again/);
+  assert.match(root.querySelector('[data-role="prover-state"]').textContent, /RandProtocol provers/);
+  assert.match(root.querySelector('[data-role="prover-status"]').textContent, /go to the RandProtocol provers again/);
   assertGone(root.querySelector('[data-role="forget-prover"]'), 'Forget after forgetting');
 });
 

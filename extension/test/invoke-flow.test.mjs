@@ -102,3 +102,12 @@ test('the RandProtocol prover\'s notice stands in Approve\'s place; read (Firefo
     assert.equal(h.flow.state.step, 'done');
   }
 });
+
+test('the approval window names the RandProtocol provers by count, as every surface does', async () => {
+  const { proverNotice } = await import('../shared/lib/invoke-flow.js');
+  const h = harness({ program: { canInvoke: async () => ({ ok: true, via: 'prover', prover: 'default', provers: 4, notice: true }) } });
+  await h.flow.start();
+  assert.equal(h.flow.state.provers, 4);
+  assert.match(proverNotice(4), /one of the RandProtocol provers \(4 machines run by the validators; each one that proves a send sees that wallet's viewing key\)/);
+  assert.match(proverNotice(4), /It cannot spend/);
+});

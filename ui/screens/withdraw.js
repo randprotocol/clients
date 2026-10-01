@@ -368,7 +368,7 @@ function amountStepMarkup(asset, draft) {
     </form>`;
 }
 
-function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [], notice = false }) {
+function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [], notice = false, provers = 0 }) {
   const amountOf = (u) => `${formatUnits(u, 9, asset.decimals)} ${asset.symbol}`;
   const relayer = BigInt(estimate.relayerFee || '0');
   const relayerRow = relayer > 0n
@@ -403,7 +403,7 @@ function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [
     ${raw(notice
     // The one-time notice before the first proof by the RandProtocol prover (the default where
     // this device cannot prove), in the Withdraw button's place until it is read.
-    ? proverNoticeMarkup()
+    ? proverNoticeMarkup(provers)
     : h`<button class="btn btn-primary block" type="button" data-action="prove" disabled>${raw(icons.bridge())}Withdraw</button>
     <p class="caption">${proveCost(estimate.proofs)}</p>`)}
     <button class="btn btn-ghost block" type="button" data-role="edit">Edit</button>`;
@@ -647,7 +647,7 @@ registerScreen('withdraw', {
       else if (next === 'review') {
         stepEl.innerHTML = reviewStepMarkup({
           asset, display: draft.display, toChain: draft.toChain, units: reviewUnits, estimate: draft.estimate, assets,
-          notice: !!can.notice,
+          notice: !!can.notice, provers: can.provers,
         });
       } else if (next === 'proving') paintProving();
       else if (next === 'failed') {

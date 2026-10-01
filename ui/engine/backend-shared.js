@@ -86,7 +86,7 @@ import { LEGACY_ENVELOPE_CHAIN_IDS } from '../lib/memo.js';
 import { listContacts, addContact, removeContact, nameOf as contactNameOf, addressOf as contactAddressOf, CONTACTS_KEY } from '../lib/contacts.js';
 import { checkFee, checkTokens, checkSubmitted, checkBridgeState, checkLimits, MAX_TOKEN_PAGE, NodeReplyError } from './validate.js';
 import {
-  PENDING_PROOF_KEY, checkProverUrl, makeProverClient, readInfo, remoteProve, pollRemoteProof,
+  PENDING_PROOF_KEY, checkProverUrl, makeProverClient, readInfo, remoteProve, startRemoteProof, pollRemoteProof,
   pendingProof, cancelPendingProof,
 } from './prover.js';
 import { runPhased } from './execute.js';
@@ -454,25 +454,33 @@ export function makeSharedBackend({
   }
 
   /**
-   * The prover every client ships the address of (`version.trusted_prover`), as the core reports
-   * it — `{name, url, fingerprint, link}` — or `null` when this build carries none. The link holds
-   * the pool's pairing token, which every copy of the wallet ships: it is not this wallet's secret,
-   * but it is still never handed to a screen.
+   * The RandProtocol provers every client ships (`version.trusted_prover_pool`, wallet 0.6.9;
+   * audit v7 VK-9): `{name, members: [{name, url, fingerprint, link}]}` — each member with its OWN
+   * key — or `null` when this build carries none. A member's link holds its public pairing token,
+   * which every copy of the wallet ships: not this wallet's secret, but never handed to a screen.
    */
-  async function builtInProver() {
-    const t = (await constants()).trusted_prover;
-    if (!t || typeof t !== 'object' || typeof t.link !== 'string' || !t.link) return null;
-    return {
-      name: String(t.name || 'RandProtocol'), url: String(t.url || ''), fingerprint: String(t.fingerprint || ''), link: t.link,
-    };
+  async function builtInPool() {
+    const t = (await constants()).trusted_prover_pool;
+    if (!t || typeof t !== 'object' || !Array.isArray(t.members)) return null;
+    const members = t.members
+      .filter((m) => m && typeof m === 'object' && typeof m.link === 'string' && m.link && typeof m.url === 'string' && typeof m.fingerprint === 'string')
+      .map((m) => ({ name: String(m.name || ''), url: m.url, fingerprint: m.fingerprint, link: m.link }));
+    if (members.length === 0) return null;
+    return { name: String(t.name || 'RandProtocol'), members };
+  }
+
+  /** What a screen may see of the pool: no links. */
+  function poolForScreens(pool) {
+    return { name: pool.name, members: pool.members.map(({ name, url, fingerprint }) => ({ name, url, fingerprint })) };
   }
 
   /**
    * `settings.prover` as read back, from what is stored (written by the `prover` group alone):
    *   * `{mode: 'remote', name, url, kemEk, fingerprint, own}` — a prover the user paired, which is
    *     preferred over the default;
-   *   * `{mode: 'default', name, url, fingerprint}` — nothing chosen, and this build ships the
-   *     RandProtocol prover: it makes the proofs this device cannot (wallet 0.6.8's default);
+   *   * `{mode: 'default', name, members: [{name, url, fingerprint}]}` — nothing chosen, and this
+   *     build ships the RandProtocol provers: they make the proofs this device cannot (the default
+   *     since wallet 0.6.8; a pool of members with their own keys since 0.6.9);
    *   * `{mode: 'device'}` — the user chose no prover (`prover.useNone`), or the build ships none.
    * A stored `{mode: 'device'}` is what every earlier build wrote back on any `settings.set`, never
    * a choice, so it reads as the default. Nothing else stored under it (a token, above all) is read.
@@ -486,8 +494,8 @@ export function makeSharedBackend({
       };
     }
     if (p && typeof p === 'object' && p.mode === 'none') return { mode: 'device' };
-    const t = await builtInProver();
-    return t ? { mode: 'default', name: t.name, url: t.url, fingerprint: t.fingerprint } : { mode: 'device' };
+    const pool = await builtInPool();
+    return pool ? { mode: 'default', ...poolForScreens(pool) } : { mode: 'device' };
   }
 
   async function getSettings() {
@@ -1579,26 +1587,75 @@ export function makeSharedBackend({
   }
 
   /**
-   * The built-in prover as a pairing — `{token, kemEk, url, fingerprint, own: false, name}` — read
-   * through the core from the link the build ships and held to the fingerprint the build pins, to
-   * the URL rule and to `own=0`, so a link that somehow named another key is refused before the
-   * prover is asked anything. Rejects (definite) when the build ships none or the link fails a pin.
+   * The pool's members as pairings — `[{token, kemEk, url, fingerprint, own: false, name, member}]`
+   * — each read through the core from the link the build ships and held to that member's pinned
+   * fingerprint, its pinned URL, the URL rule and `own=0`: a member whose link fails any of it is
+   * left out (the others keep working), and is never asked anything. In `memberOrder` (a fresh
+   * random order per call unless `proverOptions.memberOrder` says otherwise — the test seam).
+   * Rejects (definite) when no member is left.
    */
-  async function builtInPairing() {
+  async function poolPairings() {
     const fail = (message) => { const err = new Error(message); err.definite = true; return err; };
-    const t = await builtInProver();
-    if (!t) throw fail('This build ships no prover to use.');
-    const parsed = await c.parseProverLink(t.link);
-    if (!t.fingerprint || String(parsed.fingerprint) !== t.fingerprint) {
-      throw fail('The built-in prover link does not name the key this wallet pins; not pairing it.');
+    const pool = await builtInPool();
+    if (!pool) throw fail('This build ships no prover to use.');
+    const out = [];
+    for (const m of pool.members) {
+      let parsed;
+      try { parsed = await c.parseProverLink(m.link); } catch { continue; }
+      if (!m.fingerprint || String(parsed.fingerprint) !== m.fingerprint) continue;
+      if (parsed.own === true) continue;
+      const checked = checkProverUrl(parsed.url);
+      if (checked.error || checked.url !== checkProverUrl(m.url).url) continue;
+      out.push({
+        token: String(parsed.token), kemEk: String(parsed.kem_ek).toLowerCase(), url: checked.url,
+        fingerprint: String(parsed.fingerprint), own: false, name: `${pool.name} (${m.name})`, member: m.name, pool: pool.name,
+      });
     }
-    if (parsed.own === true) throw fail('The built-in prover link is marked as your own, which a shared prover is not; not pairing it.');
-    const checked = checkProverUrl(parsed.url);
-    if (checked.error) throw fail(checked.error);
-    return {
-      token: String(parsed.token), kemEk: String(parsed.kem_ek).toLowerCase(), url: checked.url,
-      fingerprint: String(parsed.fingerprint), own: false, name: t.name,
-    };
+    if (out.length === 0) throw fail('None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.');
+    return memberOrder(out);
+  }
+
+  /** A fresh random order (Fisher–Yates) — or the test seam's. */
+  function memberOrder(members) {
+    if (proverOptions && typeof proverOptions.memberOrder === 'function') return proverOptions.memberOrder(members.slice());
+    const a = members.slice();
+    for (let i = a.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  /**
+   * Whether one member can take a job NOW: `{ok: true, info}` or `{ok: false, busy?, reason}` —
+   * not answering, another key than its pin, a fee, no viewing-key jobs, or a full queue
+   * (`queue.depth >= queue.max`).
+   */
+  async function memberReady(m, { signal } = {}) {
+    let info;
+    try {
+      info = readInfo(await proverClientFor(m.url).info(signal ? { signal } : undefined));
+    } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
+      return { ok: false, reason: `${m.member} did not answer` };
+    }
+    if (!(await sameProverKey(info, m.kemEk, m.fingerprint))) return { ok: false, reason: `${m.member} answered with another key than the one this wallet pins` };
+    const fee = await feeRefusal(info.fee);
+    if (fee) return { ok: false, reason: `${m.member}: ${fee}` };
+    if (!info.witnessKinds.includes('viewing_key')) return { ok: false, reason: `${m.member} does not take this wallet's jobs` };
+    if (info.queue && info.queue.max > 0 && info.queue.depth >= info.queue.max) return { ok: false, busy: true, reason: `${m.member} is busy` };
+    return { ok: true, info };
+  }
+
+  /** "Every member is busy" / "none can be reached", plainly, with the way out. */
+  function poolUnavailable(poolName, results, lead = '') {
+    const allBusy = results.length > 0 && results.every((r) => r.busy);
+    const err = new Error(allBusy
+      ? `${lead}The ${poolName} provers are all busy right now; try again in a minute, or pair your own prover in Settings.`
+      : `${lead}The ${poolName} provers cannot be reached right now (${results.map((r) => r.reason).join('; ')}). Try again later, or pair your own prover in Settings.`);
+    err.definite = true;
+    if (allBusy) err.busy = true; else err.unreachable = true;
+    return err;
   }
 
   /** Whether THIS wallet has read the one-time notice about the RandProtocol prover. */
@@ -1671,52 +1728,44 @@ export function makeSharedBackend({
       if (paired) return probeAt(paired);
       const p = (await getSettings()).prover;
       if (p && p.mode === 'default') {
-        // The RandProtocol prover, by the key the build pins — not the display copy.
-        let b;
-        try { b = await builtInPairing(); } catch (err) { return { ok: false, reason: (err && err.message) || String(err) }; }
-        return probeAt({ mode: 'remote', url: b.url, kemEk: b.kemEk, fingerprint: b.fingerprint });
+        // The RandProtocol provers, each by the key the build pins for it: the first that can
+        // take a job answers for the pool, with its name.
+        let members;
+        try { members = await poolPairings(); } catch (err) { return { ok: false, reason: (err && err.message) || String(err) }; }
+        const results = [];
+        for (const m of members) {
+          const r = await memberReady(m);
+          if (r.ok) return { ok: true, member: m.member, queue: r.info.queue, witnessKinds: r.info.witnessKinds, fee: r.info.fee, hcBundles: r.info.hcBundles };
+          results.push(r);
+        }
+        const err = poolUnavailable(members[0].pool, results);
+        return { ok: false, reason: err.message, ...(err.busy ? { busy: true } : {}) };
       }
       return probeAt(p);
     },
 
     /**
-     * The prover every client ships the address of (the core's `version.trusted_prover`: the
-     * RandProtocol validators' pool, viewing-key jobs only, no fee) — `{name, url, fingerprint,
-     * warning}` for a screen to show beside its one-step action, or `null` when this build
-     * carries none. Nothing is paired by asking.
+     * The RandProtocol provers every client ships (the core's `version.trusted_prover_pool`: the
+     * validators' machines, each with its own key, viewing-key jobs only, no fee) — `{name,
+     * members: [{name, url, fingerprint}], warning}` for a screen, or `null` when this build
+     * carries none. Nothing is paired or asked by asking.
      */
     async trusted() {
-      const t = (await constants()).trusted_prover;
-      if (!t || typeof t !== 'object' || typeof t.link !== 'string' || !t.link) return null;
-      return {
-        name: String(t.name || 'RandProtocol'), url: String(t.url || ''), fingerprint: String(t.fingerprint || ''),
-        warning: await historyWarning(),
-      };
+      const pool = await builtInPool();
+      if (!pool) return null;
+      return { ...poolForScreens(pool), warning: await historyWarning() };
     },
 
     /**
-     * Pair the trusted prover: `pair()` on the built-in link — the same checks, the same vault
-     * record, the same `settings.prover` — after holding the link, through the core, to the
-     * fingerprint the build pins, so a link that somehow named another key is refused before
-     * the prover is asked anything. Never called by the engine itself: only a screen does, after
-     * showing the history warning, and `forget()` undoes it like any pairing.
-     */
-    async pairTrusted(password) {
-      const t = await builtInProver();
-      await builtInPairing();
-      return prover.pair(t.link, password, { name: t.name });
-    },
-
-    /**
-     * The one-time notice before the first send through the RandProtocol prover:
-     * `{name, url, fingerprint, warning, read}` — `read` is whether this wallet has acknowledged
+     * The one-time notice before the first send through the RandProtocol provers:
+     * `{name, members, warning, read}` — `read` is whether this wallet has acknowledged
      * it — or `null` when the build ships no such prover. The send and withdraw screens show it
      * when `canProve()` answers `notice: true`, with a way to pair the user's own prover instead.
      */
     async defaultNotice() {
-      const t = await builtInProver();
-      if (!t) return null;
-      return { name: t.name, url: t.url, fingerprint: t.fingerprint, warning: await historyWarning(), read: await defaultNoticeRead() };
+      const pool = await builtInPool();
+      if (!pool) return null;
+      return { ...poolForScreens(pool), warning: await historyWarning(), read: await defaultNoticeRead() };
     },
 
     /** The user read the notice: remembered for this wallet (its `pk`), until a wipe. */
@@ -1786,45 +1835,39 @@ export function makeSharedBackend({
   }
 
   /**
-   * The default route (wallet 0.6.8): the RandProtocol prover makes the proofs this device cannot,
-   * with nothing paired. `{ok: true, via: 'prover', prover: 'default', notice?: true}` when it
-   * answers with the key the build pins, charges nothing and takes viewing-key jobs — `notice` until
-   * this wallet has read the one-time notice — and otherwise a plain `{ok: false, unreachable: true,
-   * reason}` that names it and points to Settings.
+   * The default route: the RandProtocol provers make the proofs this device cannot, with nothing
+   * paired (wallet 0.6.8; per-member keys since 0.6.9). The members are asked in a random order:
+   * the first that answers with ITS pinned key, charges nothing, takes viewing-key jobs and has
+   * room in its queue makes it `{ok: true, via: 'prover', prover: 'default', notice?: true}` —
+   * `notice` until this wallet has read the one-time notice — and the route carries every member,
+   * in that order, for the hook to fall through on a busy submit. When none can, a plain `{ok:
+   * false, unreachable | busy, reason}` that names them and points to Settings.
    */
   async function defaultRoute(device) {
-    let pairing;
-    try { pairing = await builtInPairing(); } catch (err) {
-      return { answer: { ok: false, reason: `${(device && device.reason) || 'This device cannot prove.'} ${(err && err.message) || err}` } };
+    const lead = device && device.reason ? `${device.reason} ` : '';
+    let members;
+    try { members = await poolPairings(); } catch (err) {
+      return { answer: { ok: false, reason: `${lead}${(err && err.message) || err}` } };
     }
-    let why = null;
-    let info;
-    try {
-      info = readInfo(await proverClientFor(pairing.url).info());
-    } catch (err) {
-      why = `it did not answer: ${(err && err.message) || err}`;
+    const results = [];
+    let first = -1;
+    for (let i = 0; i < members.length; i += 1) {
+      const r = await memberReady(members[i]);
+      if (r.ok) { first = i; break; }
+      results.push(r);
     }
-    if (!why && !(await sameProverKey(info, pairing.kemEk, pairing.fingerprint))) {
-      why = 'it answered with another key than the one this wallet pins';
-    }
-    if (!why) why = (await feeRefusal(info.fee)) || (info.witnessKinds.includes('viewing_key') ? null : 'it does not take this wallet\'s jobs');
-    if (why) {
-      // Plainly: what this device cannot do, that the default prover is not there now, and the
-      // way out that does not wait for it — a prover of the user's own.
-      const lead = device && device.reason ? `${device.reason} ` : '';
-      return {
-        answer: {
-          ok: false, unreachable: true,
-          reason: `${lead}The ${pairing.name} prover cannot be reached right now (${why}). Try again later, or pair your own prover in Settings.`,
-        },
-      };
+    if (first < 0) {
+      const err = poolUnavailable(members[0].pool, results, lead);
+      return { answer: { ok: false, ...(err.busy ? { busy: true } : { unreachable: true }), provers: members.length, reason: err.message } };
     }
     // Firefox: the user's consent to send the viewing key to the developer's service is part of
     // the notice — until it is given, the notice stands (its button asks for it).
     const notice = !(await defaultNoticeRead()) || !(await dataCollectionConsented());
+    // The member that answered first leads; the rest follow in their random order.
+    const ordered = [members[first], ...members.filter((_, i) => i !== first)];
     return {
-      answer: { ok: true, via: 'prover', prover: 'default', ...(notice ? { notice: true } : {}) },
-      route: { mode: 'default', name: pairing.name, url: pairing.url, fingerprint: pairing.fingerprint },
+      answer: { ok: true, via: 'prover', prover: 'default', provers: members.length, ...(notice ? { notice: true } : {}) },
+      route: { mode: 'default', name: members[0].pool, members: ordered },
     };
   }
 
@@ -1840,7 +1883,7 @@ export function makeSharedBackend({
 
   /** The refusal of a send through the default prover before its one-time notice was read. */
   function noticeFirst() {
-    const err = new Error('Before the first send through the RandProtocol prover, read what it can see: it gets this wallet\'s viewing key. Continue on the send screen, or pair your own prover in Settings.');
+    const err = new Error('Before the first send through the RandProtocol provers, read what they can see: the one that proves it gets this wallet\'s viewing key. Continue on the send screen, or pair your own prover in Settings.');
     err.definite = true;
     err.needsNotice = true;
     return err;
@@ -1848,7 +1891,7 @@ export function makeSharedBackend({
 
   /**
    * The engine's `prove` hook for one send or withdrawal through `route`, or `undefined` for the
-   * device. The seal target — the prover's key and URL — and the token come from the SESSION's
+   * device; the RandProtocol provers have their own (`poolProveHook`). The seal target — the prover's key and URL — and the token come from the SESSION's
    * copy of the vault record, never from `route` (= `settings.prover`, plaintext, display only):
    * `route` contributes the name a screen shows and nothing else.
    */
@@ -1860,7 +1903,8 @@ export function makeSharedBackend({
     // held to the pin; a paired prover's comes from the session's copy of the vault record.
     // Never a job to the RandProtocol prover without the browser's consent where it asks for one.
     if (route.mode === 'default' && !(await dataCollectionConsented())) throw noticeFirst();
-    const pairing = route.mode === 'default' ? await builtInPairing() : pairingOf(session.prover);
+    if (route.mode === 'default') return poolProveHook(route);
+    const pairing = pairingOf(session.prover);
     if (!pairing) {
       const err = new Error('Your prover\'s pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.');
       err.definite = true;
@@ -1913,22 +1957,63 @@ export function makeSharedBackend({
       const prepared = kind === 'burn'
         ? await c.prepareBurn(params)
         : kind === 'invoke' ? await c.prepareInvoke(params) : await c.prepareTransfer(params);
+      return remoteProve({
+        client: proverClient, core, prepared, storage,
+        meta: { kind, name: route.name, ...(meta || {}) },
+        onPhase, signal, locks: locksApi, ...proverTiming,
+      });
+    };
+  }
+
+  /**
+   * The `prove` hook through the RandProtocol provers. The members in the route's order: for each,
+   * `prover_info` again (ITS pinned key, no fee, viewing-key jobs, room in the queue — a member that
+   * fails is skipped), the job sealed by the core to THAT member's key (`prepare_*`, which makes the
+   * auth proof here each time), and submitted to it — the transport retry per member; a member that
+   * answers busy (-32005) or refuses, or cannot be reached at all, is skipped and the next one asked.
+   * Once a member has named a job id, it is polled to the end — never another member mid-job. When
+   * every member is busy or away: said plainly, with the way to pair your own; never a loop.
+   */
+  function poolProveHook(route) {
+    const refuse = (message) => { const err = new Error(message); err.definite = true; return err; };
+    return async ({ kind, request, maxProofBytes, hcBundle, hcAuth, meta, onPhase, signal }) => {
+      let guests;
       try {
-        return await remoteProve({
-          client: proverClient, core, prepared, storage,
-          meta: { kind, name: route.name, ...(meta || {}) },
-          onPhase, signal, locks: locksApi, ...proverTiming,
-        });
-      } catch (err) {
-        // The shared pool full is the one refusal a default user will meet often: said plainly,
-        // with the way out that does not wait — and never retried in a loop (the user sends again).
-        if (route.mode === 'default' && err && err.busy) {
-          const busy = refuse(`The ${route.name} prover is busy; try again in a minute, or pair your own prover in Settings.`);
-          busy.busy = true;
-          throw busy;
-        }
-        throw err;
+        guests = await c.chainGuests({ hc_bundle: hcBundle ?? null, hc_auth: hcAuth ?? null });
+      } catch (err) { throw refuse((err && err.message) || 'This wallet cannot prove for this chain.'); }
+      if (guests.witness_kind !== 'viewing_key') {
+        throw refuse('On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the desktop app.');
       }
+      const results = [];
+      for (const m of route.members) {
+        const ready = await memberReady(m, { signal });
+        if (!ready.ok) { results.push(ready); continue; }
+        const params = {
+          ...request,
+          prover: { kem_ek: m.kemEk, token: m.token, own: false, fee: ready.info.fee, ...(hcBundle ? { hc_bundle: hcBundle } : {}) },
+          ...(maxProofBytes ? { max_proof_bytes: maxProofBytes } : {}),
+        };
+        if (guests.split_authorisation && typeof onPhase === 'function') onPhase('prove', { prover: m.name, authorising: true });
+        const prepared = kind === 'burn'
+          ? await c.prepareBurn(params)
+          : kind === 'invoke' ? await c.prepareInvoke(params) : await c.prepareTransfer(params);
+        const client = proverClientFor(m.url);
+        const announced = { prover: m.name };
+        if (typeof onPhase === 'function') onPhase('prove', announced);
+        let record;
+        try {
+          record = await startRemoteProof({ client, prepared, storage, meta: { kind, name: m.name, ...(meta || {}) }, signal });
+        } catch (err) {
+          if (err && err.name === 'AbortError') throw err;
+          // Nothing was accepted: busy, a refusal, or no answer at all — the next member.
+          results.push({ busy: !!(err && err.busy), reason: `${m.member}: ${(err && err.message) || err}` });
+          continue;
+        }
+        return pollRemoteProof({
+          client, core, record, storage, onPhase, signal, locks: locksApi, announced, ...proverTiming,
+        });
+      }
+      throw poolUnavailable(route.name, results);
     };
   }
 
@@ -2267,7 +2352,7 @@ export function makeSharedBackend({
       // `via` exactly as `canProve` reports it: a burn through a paired prover is proved there,
       // and the withdraw screen says so the way the send screen does.
       return prove.via
-        ? { ok: true, via: prove.via, ...(prove.prover ? { prover: prove.prover } : {}), ...(prove.notice ? { notice: true } : {}) }
+        ? { ok: true, via: prove.via, ...(prove.prover ? { prover: prove.prover, provers: prove.provers } : {}), ...(prove.notice ? { notice: true } : {}) }
         : { ok: true };
     },
 
@@ -2372,7 +2457,7 @@ export function makeSharedBackend({
       // The RandProtocol prover's one-time notice (and Firefox's consent) comes before the first
       // invoke through it too: the window shows it in Approve's place.
       return prove.via
-        ? { ok: true, via: prove.via, ...(prove.prover ? { prover: prove.prover } : {}), ...(prove.notice ? { notice: true } : {}) }
+        ? { ok: true, via: prove.via, ...(prove.prover ? { prover: prove.prover, provers: prove.provers } : {}), ...(prove.notice ? { notice: true } : {}) }
         : { ok: true };
     },
 

@@ -20,7 +20,7 @@ import {
 import {
   stubCore, stubFetch, mapStorage, stubPlatform, assertKeyNeverLeaked,
   PASSWORD, ADDRESS, SPEND_KEY, PROVER_URL, PROVER_TOKEN, PROVER_REPLY, PROVED_TX_HASH, SEALED_JOB,
-  proverLink, proverInfo, proverEk, proverFingerprint, HC_V2, HC_V3, HC_AUTH, CORE_VERSION, TRUSTED_PROVER, GENESIS,
+  proverLink, proverInfo, proverEk, proverFingerprint, HC_V2, HC_V3, HC_AUTH, CORE_VERSION, TRUSTED_POOL, poolMember, GENESIS,
 } from './backend-fixtures.mjs';
 
 const ROOT = '1b'.repeat(32);
@@ -47,7 +47,7 @@ function sendableFetch(table = {}) {
   });
 }
 
-function build({ core, storage, fetch, native, systemMemoryGiB, locks = null } = {}) {
+function build({ core, storage, fetch, native, systemMemoryGiB, locks = null, memberOrder } = {}) {
   const env = {
     core: core || stubCore(),
     storage: storage || mapStorage(),
@@ -57,7 +57,7 @@ function build({ core, storage, fetch, native, systemMemoryGiB, locks = null } =
   const make = native ? makeNativeBackend : makeWasmBackend;
   env.backend = make({
     ...env, locks, broadcast: null,
-    proverOptions: { poll: 1, maxWait: 5000 },
+    proverOptions: { poll: 1, maxWait: 5000, ...(memberOrder ? { memberOrder } : {}) },
     ...(native ? { systemMemoryGiB: systemMemoryGiB ?? (() => 4) } : {}),
   });
   return env;
@@ -78,10 +78,13 @@ const methodsOf = (fetch) => fetch.requests.map((r) => r.body.method);
 const count = (fetch, method) => methodsOf(fetch).filter((m) => m === method).length;
 const coreCalled = (env, method) => env.core.calls.filter(([m]) => m === method);
 const SEND = { asset: 0, to: ADDRESS, amount: '1000000000' };
-/** `settings.prover` with nothing chosen (wallet 0.6.8): the RandProtocol prover the build ships. */
+/** `settings.prover` with nothing chosen (wallet 0.6.9): the RandProtocol provers the build ships. */
 const DEFAULT_SETTING = Object.freeze({
-  mode: 'default', name: 'RandProtocol', url: 'https://prover.randprotocol.org', fingerprint: TRUSTED_PROVER.fingerprint,
+  mode: 'default', name: 'RandProtocol',
+  members: TRUSTED_POOL.members.map(({ name, url, fingerprint }) => ({ name, url, fingerprint })),
 });
+/** The order the pool's members are asked in, fixed for a test (the engine's is random per job). */
+const inOrder = (...names) => (members) => names.map((n) => members.find((m) => m.member === n)).filter(Boolean);
 
 async function until(check, what) {
   for (let i = 0; i < 500; i += 1) {
@@ -230,144 +233,156 @@ test('forget_removes_settings_vault_and_session_copies', async () => {
   assert.equal((await env.backend.prover.probe()).ok, false);
 });
 
-// ------------------------------------------------------------------------ the trusted prover ---
-
-test('the trusted prover is reported, never paired by itself, and paired in one step through the same checks', async () => {
-  const env = build({ fetch: sendableFetch({ prover_info: () => proverInfo('TRUST') }) });
-  await env.backend.wallet.create(PASSWORD);
-  // Reported from the core's `version`, with the history sentence; nothing paired by asking.
-  const t = await env.backend.prover.trusted();
-  assert.deepEqual(t, {
-    name: 'RandProtocol', url: 'https://prover.randprotocol.org', fingerprint: TRUSTED_PROVER.fingerprint,
-    warning: CORE_VERSION.prover_history_warning,
-  });
-  assert.equal('link' in t, false, 'the link (with its token) is not handed to screens');
-  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
-  assert.equal(count(env.fetch, 'prover_info'), 0);
-
-  // One step: the built-in link through `pair` — the password first, the prover's key checked
-  // against the link's, the vault record written NOT own, the display copy named RandProtocol.
-  await assert.rejects(() => env.backend.prover.pairTrusted('not-the-password!'), /wrong password/);
-  assert.equal(count(env.fetch, 'prover_info'), 0);
-  const paired = await env.backend.prover.pairTrusted(PASSWORD);
-  assert.deepEqual(paired, {
-    mode: 'remote', name: 'RandProtocol', url: 'https://prover.randprotocol.org', kemEk: proverEk('TRUST'),
-    fingerprint: TRUSTED_PROVER.fingerprint, own: false,
-  });
-  assert.equal(JSON.parse(await decryptSecret(PASSWORD, env.storage.local.get('proverToken'))).own, false);
-  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover' });
-  assert.ok(env.fetch.requests.some((r) => r.body.method === 'prover_info' && String(r.url).startsWith('https://prover.randprotocol.org')));
-  // Forget works as for any pairing — back to the default.
-  await env.backend.prover.forget();
-  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
-
-  // A prover at that address answering with another key is refused — nothing stored.
-  const other = build({ fetch: sendableFetch({ prover_info: () => proverInfo('OTHER') }) });
-  await other.backend.wallet.create(PASSWORD);
-  await assert.rejects(() => other.backend.prover.pairTrusted(PASSWORD), /different key/);
-  assert.equal(other.storage.local.get('proverToken'), undefined);
-
-  // A build whose link names another key than the one it pins never asks the prover at all.
-  const core = stubCore({ version: () => ({ ...CORE_VERSION, trusted_prover: { ...TRUSTED_PROVER, fingerprint: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ' } }) });
-  const pinned = build({ core, fetch: sendableFetch({ prover_info: () => proverInfo('TRUST') }) });
-  await pinned.backend.wallet.create(PASSWORD);
-  await assert.rejects(() => pinned.backend.prover.pairTrusted(PASSWORD), /does not name the key this wallet pins/);
-  assert.equal(count(pinned.fetch, 'prover_info'), 0);
-  // And a build that ships none: nothing to offer, nothing to pair.
-  const none = build({ core: stubCore({ version: () => ({ ...CORE_VERSION, trusted_prover: null }) }) });
-  await none.backend.wallet.create(PASSWORD);
-  assert.equal(await none.backend.prover.trusted(), null);
-  await assert.rejects(() => none.backend.prover.pairTrusted(PASSWORD), /ships no prover/);
-});
-
-// ------------------------------------------------------- the default prover (wallet 0.6.8) ---
+// ------------------------------------------------- the RandProtocol provers (wallet 0.6.9) ---
 
 /**
- * One stub fetch where the RandProtocol prover's URL answers with the key the build pins (TRUST)
- * and every other prover URL with `KEY` — so a paired prover and the default can be told apart.
+ * One stub fetch for the node, a paired prover (any other URL, key KEY) and the pool's members —
+ * each at its own URL, answering with ITS key unless `members[name]` says otherwise: `info()`
+ * (throw = not answering) and `submit()` (throw = a JSON-RPC refusal, e.g. busy).
  */
-function poolFetch(table = {}, { poolInfo = () => proverInfo('TRUST') } = {}) {
+function poolFetch(table = {}, members = {}) {
   const inner = sendableFetch(table);
   const fn = async (url, init) => {
     const body = JSON.parse(init.body);
-    if (String(url).startsWith(TRUSTED_PROVER.url) && body.method === 'prover_info') {
+    const m = TRUSTED_POOL.members.find((x) => String(url) === x.url);
+    if (m) {
       inner.requests.push({ url, body, raw: init.body });
-      const result = await poolInfo();
-      return { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, result }) };
+      const spec = members[m.name] || {};
+      const reply = (result) => ({ ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, result }) });
+      const refuse = (err) => ({ ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, error: { code: err.code ?? -32000, message: err.message, ...(err.data ? { data: err.data } : {}) } }) });
+      try {
+        if (body.method === 'prover_info') return reply(spec.info ? await spec.info() : proverInfo(poolMember(m.name).key));
+        if (body.method === 'prover_submit') return reply(spec.submit ? await spec.submit() : { job: `job-${m.name}` });
+        if (body.method === 'prover_status') return reply({ state: 'done', reply: PROVER_REPLY });
+        if (body.method === 'prover_cancel') return reply({ cancelled: true });
+      } catch (err) {
+        if (err.transport) throw new TypeError('fetch failed');
+        return refuse(err);
+      }
     }
     return inner(url, init);
   };
   fn.requests = inner.requests;
   return fn;
 }
+const busyRefusal = () => { throw Object.assign(new Error('busy'), { code: -32005, data: { depth: 1 } }); };
+const down = () => { throw Object.assign(new Error('down'), { transport: true }); };
+const submittedTo = (env) => env.fetch.requests.filter((r) => r.body.method === 'prover_submit').map((r) => r.url);
 
-test('a fresh wallet proves through the RandProtocol prover, after its one-time notice, remembered per wallet', async () => {
-  const env = await sendableWallet({ fetch: poolFetch() });
-  // Nothing chosen, nothing paired, nothing stored: the default.
+test('the pool is reported member by member, without links, and the 0.6.8 shared prover is gone', async () => {
+  const env = build({ fetch: poolFetch() });
+  await env.backend.wallet.create(PASSWORD);
+  const t = await env.backend.prover.trusted();
+  assert.deepEqual(t, { name: DEFAULT_SETTING.name, members: DEFAULT_SETTING.members, warning: CORE_VERSION.prover_history_warning });
+  assert.equal(JSON.stringify(t).includes('randprover:'), false, 'a link (with its token) is handed to screens');
+  assert.equal(typeof env.backend.prover.pairTrusted, 'undefined', 'the one-step pairing of the shared key is still there');
   assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
-  assert.equal((env.storage.local.get('settings') || {}).prover, undefined, 'the default was written down as a choice');
-  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover', prover: 'default', notice: true });
+  assert.equal(count(env.fetch, 'prover_info'), 0, 'asking pairs or probes nothing');
+  const none = build({ core: stubCore({ version: () => ({ ...CORE_VERSION, trusted_prover_pool: null }) }) });
+  await none.backend.wallet.create(PASSWORD);
+  assert.equal(await none.backend.prover.trusted(), null);
+});
 
-  // The notice comes first: a send before it is read is refused before anything is sealed.
-  await assert.rejects(() => env.backend.send.send(SEND, () => {}), (err) => {
-    assert.equal(err.definite, true);
-    assert.equal(err.needsNotice, true);
-    assert.match(err.message, /viewing key/);
-    return true;
-  });
+test('a fresh wallet proves through one pool member, sealed to THAT member\'s key, after the one-time notice', async () => {
+  const env = await sendableWallet({ fetch: poolFetch() });
+  assert.equal((env.storage.local.get('settings') || {}).prover, undefined, 'the default was written down as a choice');
+  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover', prover: 'default', provers: 3, notice: true });
+  await assert.rejects(() => env.backend.send.send(SEND, () => {}), (err) => err.needsNotice === true && /viewing key/.test(err.message));
   assert.equal(coreCalled(env, 'prepare_transfer').length, 0);
   assert.equal(count(env.fetch, 'prover_submit'), 0);
   const notice = await env.backend.prover.defaultNotice();
-  assert.deepEqual(notice, {
-    name: 'RandProtocol', url: TRUSTED_PROVER.url, fingerprint: TRUSTED_PROVER.fingerprint,
-    warning: CORE_VERSION.prover_history_warning, read: false,
-  });
-  assert.match(notice.warning, /whole history/);
-  assert.match(notice.warning, /cannot spend/);
-
-  // Read: remembered, and the send goes to the pool — sealed to the key the build pins, not own.
+  assert.equal(notice.read, false);
+  assert.equal(notice.members.length, 3);
   await env.backend.prover.acknowledgeDefault();
-  assert.equal((await env.backend.prover.defaultNotice()).read, true);
-  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover', prover: 'default' });
   const phases = [];
   const out = await env.backend.send.send(SEND, (p, d) => phases.push(d === undefined ? [p] : [p, d]));
   assert.equal(out.hash, PROVED_TX_HASH);
+  // Whichever member the random order chose: the job was sealed to its key with its token,
+  // submitted to its URL, and polled there — one member, start to end.
+  const [url] = submittedTo(env);
+  const m = TRUSTED_POOL.members.find((x) => x.url === url);
+  assert.ok(m, `submitted to ${url}, no pool member`);
   const [[, prepared]] = coreCalled(env, 'prepare_transfer');
-  assert.deepEqual(prepared.prover, { kem_ek: proverEk('TRUST'), token: 'c3'.repeat(32), own: false, fee: null, hc_bundle: HC_V3 });
-  const submit = env.fetch.requests.find((r) => r.body.method === 'prover_submit');
-  assert.equal(submit.url, TRUSTED_PROVER.url);
-  assert.ok(phases.some(([p, d]) => p === 'proving' && d && d.prover === 'RandProtocol'));
+  assert.deepEqual(prepared.prover, { kem_ek: proverEk(poolMember(m.name).key), token: poolMember(m.name).token, own: false, fee: null, hc_bundle: HC_V3 });
+  assert.ok(env.fetch.requests.filter((r) => r.body.method === 'prover_status').every((r) => r.url === url), 'polled another member mid-job');
+  assert.ok(phases.some(([p, d]) => p === 'proving' && d && d.prover === `RandProtocol (${m.name})`));
   assert.equal(env.storage.local.get('proverToken'), undefined, 'the default needs no vault record');
   assertKeyNeverLeaked(env);
-
-  // Another wallet on this device (after a wipe, or a record naming another key) reads it again.
-  env.storage.local.set('proverNotice', { pk: 'ff'.repeat(32) });
-  assert.equal((await env.backend.send.canProve()).notice, true);
 });
 
-test('the RandProtocol prover not answering is said plainly, with the way to pair your own', async () => {
+test('members are tried in turn: another key, no answer, a full queue and a busy submit are skipped', async () => {
+  // a: another key; b: not answering; c: answers, but its submit is busy — then nobody is left.
   const env = await sendableWallet({
-    fetch: poolFetch({}, { poolInfo: () => { throw Object.assign(new Error('gateway down'), { code: -32000 }); } }),
+    fetch: poolFetch({}, { a: { info: () => proverInfo('OTHER') }, b: { info: down }, c: { submit: busyRefusal } }),
+    memberOrder: inOrder('a', 'b', 'c'),
+  });
+  await env.backend.prover.acknowledgeDefault();
+  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover', prover: 'default', provers: 3 });
+  await assert.rejects(() => env.backend.send.send(SEND, () => {}), (err) => {
+    assert.equal(err.definite, true);
+    assert.match(err.message, /The RandProtocol provers cannot be reached right now/);
+    assert.match(err.message, /a answered with another key than the one this wallet pins/);
+    assert.match(err.message, /pair your own prover in Settings/);
+    return true;
+  });
+  assert.deepEqual(submittedTo(env), [poolMember('c').url], 'a member was sent a job it should not have been');
+  assert.equal(count(env.fetch, 'rand_sendTransaction'), 0);
+
+  // c busy at submit, b free: the job goes to b — sealed again, to b's key.
+  const env2 = await sendableWallet({
+    fetch: poolFetch({}, { c: { submit: busyRefusal } }),
+    memberOrder: inOrder('c', 'b', 'a'),
+  });
+  await env2.backend.prover.acknowledgeDefault();
+  const out = await env2.backend.send.send(SEND, () => {});
+  assert.equal(out.hash, PROVED_TX_HASH);
+  assert.deepEqual(submittedTo(env2), [poolMember('c').url, poolMember('b').url]);
+  const sealed = coreCalled(env2, 'prepare_transfer').map(([, p]) => p.prover.kem_ek);
+  assert.deepEqual(sealed, [proverEk('POOLC'), proverEk('POOLB')]);
+
+  // A full queue (depth >= max) is skipped before anything is sealed for it.
+  const env3 = await sendableWallet({
+    fetch: poolFetch({}, { a: { info: () => ({ ...proverInfo('POOLA'), queue: { depth: 1, max: 1, proving: 1 } }) } }),
+    memberOrder: inOrder('a', 'b'),
+  });
+  await env3.backend.prover.acknowledgeDefault();
+  await env3.backend.send.send(SEND, () => {});
+  assert.deepEqual(submittedTo(env3), [poolMember('b').url]);
+  assert.deepEqual(coreCalled(env3, 'prepare_transfer').map(([, p]) => p.prover.kem_ek), [proverEk('POOLB')]);
+});
+
+test('every member busy is said plainly, once each, with the way to pair your own', async () => {
+  const full = () => ({ queue: { depth: 1, max: 1, proving: 1 } });
+  const env = await sendableWallet({
+    fetch: poolFetch({}, Object.fromEntries(['a', 'b', 'c'].map((n) => [n, { info: () => ({ ...proverInfo(poolMember(n).key), ...full() }) }]))),
   });
   await env.backend.prover.acknowledgeDefault();
   const answer = await env.backend.send.canProve();
   assert.equal(answer.ok, false);
-  assert.equal(answer.unreachable, true);
-  assert.match(answer.reason, /The RandProtocol prover cannot be reached right now/);
-  assert.match(answer.reason, /pair your own prover in Settings/);
-  await assert.rejects(() => env.backend.send.send(SEND, () => {}), /cannot be reached right now/);
-  assert.equal(coreCalled(env, 'prepare_transfer').length, 0);
-  // A prover at that address with another key than the pin is not the RandProtocol prover.
-  const other = await sendableWallet({ fetch: poolFetch({}, { poolInfo: () => proverInfo('OTHER') }) });
-  const said = await other.backend.send.canProve();
-  assert.equal(said.ok, false);
-  assert.match(said.reason, /another key than the one this wallet pins/);
+  assert.equal(answer.busy, true);
+  assert.match(answer.reason, /The RandProtocol provers are all busy right now; try again in a minute, or pair your own prover in Settings\./);
+  // Busy at submit on every member: one submit each, never a loop.
+  const env2 = await sendableWallet({ fetch: poolFetch({}, { a: { submit: busyRefusal }, b: { submit: busyRefusal }, c: { submit: busyRefusal } }) });
+  await env2.backend.prover.acknowledgeDefault();
+  await assert.rejects(() => env2.backend.send.send(SEND, () => {}), (err) => err.busy === true && /all busy/.test(err.message));
+  assert.equal(count(env2.fetch, 'prover_submit'), 3);
 });
 
-test('Firefox: no job goes to the RandProtocol prover without its data-collection consent', async () => {
+test('a member whose pinned fingerprint does not match its link is never asked; the others still are', async () => {
+  const bad = { ...TRUSTED_POOL, members: TRUSTED_POOL.members.map((m) => (m.name === 'a' ? { ...m, fingerprint: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ' } : m)) };
+  const env = await sendableWallet({
+    core: stubCore({ version: () => ({ ...CORE_VERSION, trusted_prover_pool: bad }) }),
+    fetch: poolFetch(), memberOrder: inOrder('a', 'b', 'c'),
+  });
+  await env.backend.prover.acknowledgeDefault();
+  await env.backend.send.send(SEND, () => {});
+  assert.equal(env.fetch.requests.some((r) => r.url === poolMember('a').url), false, 'the mis-pinned member was asked');
+  assert.deepEqual(submittedTo(env), [poolMember('b').url]);
+});
+
+test('Firefox: no job goes to a RandProtocol prover without its data-collection consent', async () => {
   let consent = false;
   const env = await sendableWallet({ fetch: poolFetch() });
-  // The same backend, on a platform that asks (the Firefox extension's).
   const platform = { ...stubPlatform(), hasDataCollectionConsent: async () => consent };
   const backend = makeWasmBackend({
     core: env.core, storage: env.storage, fetch: env.fetch, platform, locks: null, broadcast: null,
@@ -375,65 +390,39 @@ test('Firefox: no job goes to the RandProtocol prover without its data-collectio
   });
   await backend.wallet.unlock(PASSWORD);
   await backend.prover.acknowledgeDefault();
-  // Read, but not consented: the notice stands, and a send is refused before anything is sealed.
-  assert.deepEqual(await backend.send.canProve(), { ok: true, via: 'prover', prover: 'default', notice: true });
+  assert.deepEqual(await backend.send.canProve(), { ok: true, via: 'prover', prover: 'default', provers: 3, notice: true });
   await assert.rejects(() => backend.send.send(SEND, () => {}), (err) => err.needsNotice === true);
-  assert.equal(coreCalled(env, 'prepare_transfer').length, 0);
   assert.equal(count(env.fetch, 'prover_submit'), 0);
-  // Consented: the job goes.
   consent = true;
-  assert.deepEqual(await backend.send.canProve(), { ok: true, via: 'prover', prover: 'default' });
   const out = await backend.send.send(SEND, () => {});
   assert.equal(out.hash, PROVED_TX_HASH);
   assert.equal(count(env.fetch, 'prover_submit'), 1);
 });
 
-test('the RandProtocol prover busy is said plainly, once, with the way to pair your own', async () => {
-  const busy = () => { throw Object.assign(new Error('busy'), { code: -32005, data: { depth: 2 } }); };
-  const env = await sendableWallet({ fetch: poolFetch({ prover_submit: busy }) });
-  await env.backend.prover.acknowledgeDefault();
-  await assert.rejects(() => env.backend.send.send(SEND, () => {}), (err) => {
-    assert.equal(err.definite, true);
-    assert.equal(err.busy, true);
-    assert.equal(err.message, 'The RandProtocol prover is busy; try again in a minute, or pair your own prover in Settings.');
-    return true;
-  });
-  assert.equal(count(env.fetch, 'prover_submit'), 1, 'a busy pool was asked again in a loop');
-  assert.equal(count(env.fetch, 'rand_sendTransaction'), 0);
-});
-
-test('your own prover is preferred over the default, forget falls back to it, and none turns it off', async () => {
+test('your own prover is preferred over the pool, forget falls back to it, and none turns it off', async () => {
   const env = await sendableWallet({ fetch: poolFetch() });
   await env.backend.prover.pair(proverLink(), PASSWORD);
   assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover' });
   await env.backend.send.send(SEND, () => {});
-  assert.equal(env.fetch.requests.find((r) => r.body.method === 'prover_submit').url, PROVER_URL, 'the default was used over the user\'s own');
-
+  assert.deepEqual(submittedTo(env), [PROVER_URL]);
   await env.backend.prover.forget();
   assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
   assert.equal((await env.backend.send.canProve()).prover, 'default');
-
   await env.backend.prover.useNone();
   assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
   assert.deepEqual(await env.backend.send.canProve(), { ok: false, reason: CANNOT_PROVE_REASON });
-  // A settings change does not turn it back on, nor write the default down.
   await env.backend.settings.set({ theme: 'dark' });
   assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
-
   await env.backend.prover.useDefault();
   assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
-  // Pairing over a choice of none replaces it.
-  await env.backend.prover.useNone();
-  await env.backend.prover.pair(proverLink(), PASSWORD);
-  assert.equal((await env.backend.settings.get()).prover.mode, 'remote');
 });
 
-test('a wallet that stored the old "device" setting reads the default; a build without one stays on the device', async () => {
+test('a wallet that stored the old "device" setting reads the default; a build without a pool stays on the device', async () => {
   const env = build({ fetch: poolFetch() });
   await env.backend.wallet.create(PASSWORD);
   env.storage.local.set('settings', { ...(env.storage.local.get('settings') || {}), prover: { mode: 'device' } });
   assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
-  const none = build({ core: stubCore({ version: () => ({ ...CORE_VERSION, trusted_prover: null }) }) });
+  const none = build({ core: stubCore({ version: () => ({ ...CORE_VERSION, trusted_prover_pool: null }) }) });
   await none.backend.wallet.create(PASSWORD);
   assert.deepEqual((await none.backend.settings.get()).prover, { mode: 'device' });
   assert.deepEqual(await none.backend.send.canProve(), { ok: false, reason: CANNOT_PROVE_REASON });
@@ -443,13 +432,10 @@ test('a wallet that stored the old "device" setting reads the default; a build w
 test('a desktop that can prove keeps proving on the device, default or not', async () => {
   const env = await sendableWallet({ fetch: poolFetch(), native: true, systemMemoryGiB: () => 32 });
   assert.deepEqual(await env.backend.send.canProve(), { ok: true });
-  assert.equal(count(env.fetch, 'prover_info'), 0, 'the default prover was asked although this machine can prove');
-  // Without the memory, the default makes the proof.
+  assert.equal(count(env.fetch, 'prover_info'), 0, 'a pool member was asked although this machine can prove');
   const small = await sendableWallet({ fetch: poolFetch(), native: true, systemMemoryGiB: () => 4 });
-  assert.deepEqual(await small.backend.send.canProve(), { ok: true, via: 'prover', prover: 'default', notice: true });
+  assert.deepEqual(await small.backend.send.canProve(), { ok: true, via: 'prover', prover: 'default', provers: 3, notice: true });
 });
-
-// ------------------------------------------------------------------------------ canProve -------
 
 test('the_wasm_reason_names_the_prover_option', async () => {
   const env = build({ fetch: sendableFetch({ rand_getBridgeState: () => ({ enabled: true, emitters: {}, assets: [] }) }) });

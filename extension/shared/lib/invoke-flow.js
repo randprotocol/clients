@@ -13,13 +13,19 @@
 //      anything left the device, unknown once it may have reached the node.
 //   4. `rand:invokeResult` — `{tx}` or `{code, message}` — exactly once.
 
-/** Firefox did not let the wallet send its viewing key to the RandProtocol prover. */
-export const CONSENT_DECLINED = 'Firefox did not allow this wallet to send your viewing key to the RandProtocol prover, so this browser has no prover to make the proof. Nothing was sent. Pair your own prover in the wallet\'s Settings.';
+/** Firefox did not let the wallet send its viewing key to the RandProtocol provers. */
+export const CONSENT_DECLINED = 'Firefox did not allow this wallet to send your viewing key to the RandProtocol provers, so this browser has no prover to make the proof. Nothing was sent. Pair your own prover in the wallet\'s Settings.';
 
-/** The RandProtocol prover's one-time notice, as the approval window shows it. */
-export const PROVER_NOTICE = 'This device cannot make the proof, so the prover RandProtocol runs for everyone makes it. '
-  + 'It receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. '
-  + 'It cannot spend. You are asked once; to keep your history to yourself, pair your own prover in the wallet\'s Settings.';
+/**
+ * The RandProtocol provers' one-time notice, as the approval window shows it — named as every
+ * surface names them (ui/screens/send/markup.js `poolPhrase`): `n` machines, each with its own key.
+ */
+export function proverNotice(n) {
+  const count = Number.isSafeInteger(n) && n > 0 ? `${n} machines` : 'machines';
+  return `This device cannot make the proof, so one of the RandProtocol provers (${count} run by the validators; each one that proves a send sees that wallet's viewing key) makes it. `
+    + 'The one that does receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. '
+    + 'It cannot spend. You are asked once; to keep your history to yourself, pair your own prover in the wallet\'s Settings.';
+}
 
 /** What the site sees for an error with no code of its own. */
 const FALLBACK_CODE = 'UNKNOWN';
@@ -84,7 +90,7 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {} }) {
       const quote = await program.quote(request);
       // The RandProtocol prover's one-time notice, when it is still to be read: the window shows it
       // in Approve's place, and `acknowledge` (from its own click) reads it.
-      set({ step: 'review', quote, via: can.via || null, prover: can.prover || null, notice: can.notice === true });
+      set({ step: 'review', quote, via: can.via || null, prover: can.prover || null, provers: can.provers || 0, notice: can.notice === true });
     } catch (err) {
       await refuse(err);
     }
