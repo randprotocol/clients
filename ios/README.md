@@ -52,6 +52,17 @@ verifies the proof that comes back before anything is submitted. A pairing link 
 saying what it can read. This build pays no prover fee: a prover quoting one is refused before
 the auth proof is made.
 
+Settings → Prover also offers, in one step, the prover RandProtocol runs for everyone — the pool
+at `https://prover.randprotocol.org`, fingerprint `RGTF-7HKJ-XZFV-GQ1J`, viewing-key jobs only,
+no fee — whose pairing link the core ships (`version.trusted_prover`). "Use the RandProtocol
+prover" sits inside the pairing form under the same history warning as a pasted link, and goes
+through the same checks: the link is read by the core and held to the fingerprint the build pins
+(a link naming another key, or marked own, is refused before the pool is asked anything), the pool
+is asked for its key, which must be the link's, and only then is the record saved — not own,
+named RandProtocol — in the Keychain beside the spend key, exactly as any pairing. The app never
+pairs it by itself, the link (it carries the pairing token) is never shown, and "Forget this
+prover" undoes it like any pairing.
+
 ## TestFlight
 
 The listing text, the App Privacy answers, the review notes and what gets a wallet refused are

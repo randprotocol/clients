@@ -163,6 +163,7 @@ final class DepositWalkTests: XCTestCase {
         var replies = script
         var last = script.last!
         StubProver.requests = []
+        StubProver.hosts = []
         StubProver.handler = { _, _ in
             if !replies.isEmpty { last = replies.removeFirst() }
             return last

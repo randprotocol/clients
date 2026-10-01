@@ -131,8 +131,10 @@ enum ProverPairingService {
         return (try? self.fingerprint(kemEk: info.kemEk)) == fingerprint
     }
 
-    /// Asks the prover for its key and returns the pairing and its token — stores nothing.
-    static func pair(_ link: String, session: URLSession? = nil) async throws -> (pairing: ProverPairing, token: String) {
+    /// Asks the prover for its key and returns the pairing and its token — stores nothing. The
+    /// pairing is named `name` (trimmed, at most 64 characters) or, without one, the prover's host
+    /// (and port).
+    static func pair(_ link: String, session: URLSession? = nil, name: String? = nil) async throws -> (pairing: ProverPairing, token: String) {
         let p = try parse(link)
         let url = try checkedURL(p.url)
         let info: ProverInfo
@@ -146,8 +148,62 @@ enum ProverPairingService {
         }
         let comps = URLComponents(string: url)
         let host = comps?.host ?? url
-        let name = comps?.port.map { "\(host):\($0)" } ?? host
-        return (ProverPairing(name: name, url: url, kemEk: p.kemEk, fingerprint: p.fingerprint, own: p.own), p.token)
+        let given = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let label = given.isEmpty ? (comps?.port.map { "\(host):\($0)" } ?? host) : String(given.prefix(64))
+        return (ProverPairing(name: label, url: url, kemEk: p.kemEk, fingerprint: p.fingerprint, own: p.own), p.token)
+    }
+
+    // MARK: the trusted prover (`prover.trusted` / `prover.pairTrusted` in the JS)
+
+    /// What a screen may show of the prover the build ships the address of: never the link (it
+    /// carries the pairing token).
+    struct Trusted: Equatable {
+        let name: String
+        let url: String
+        let fingerprint: String
+    }
+
+    /// The core's `version.trusted_prover` — the one source; `nil` when this build carries none.
+    static func trustedProver() -> TrustedProver? {
+        (try? RandCore.constants())?.trustedProver
+    }
+
+    /// The prover every client ships the address of (the RandProtocol validators' pool,
+    /// viewing-key jobs only, no fee) — `{name, url, fingerprint}` for Settings to offer in one
+    /// step beside the history warning, or `nil` when this build carries none. Asking pairs
+    /// nothing. `from` is the test seam; a screen passes nothing.
+    static func trusted(from source: TrustedProver?? = nil) -> Trusted? {
+        guard let t = source ?? trustedProver(), !t.link.isEmpty else { return nil }
+        let name = t.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Trusted(name: name.isEmpty ? "RandProtocol" : name, url: t.url, fingerprint: t.fingerprint)
+    }
+
+    /// Pair the trusted prover: `pair` on the built-in link — the same checks (the link read by
+    /// the core, the URL rule, the prover's key asked of the prover itself and held to the link's)
+    /// and the same record, named after the pool and never own — after holding the link, through
+    /// the core, to the fingerprint the build pins, so a link that somehow named another key is
+    /// refused before the prover is asked anything. Stores nothing: Settings saves what comes back
+    /// through `save`, exactly as for a pasted link. Never called by the app itself — only by the
+    /// user's tap, after the history warning; `forget` undoes it like any pairing. `trusted` is
+    /// the test seam; a screen passes nothing.
+    static func pairTrusted(session: URLSession? = nil, trusted source: TrustedProver?? = nil) async throws -> (pairing: ProverPairing, token: String) {
+        guard let t = source ?? trustedProver(), !t.link.isEmpty else {
+            throw ProverRefusal(message: "This build ships no prover to use.")
+        }
+        let parsed = try parse(t.link)
+        guard !t.fingerprint.isEmpty, parsed.fingerprint == t.fingerprint else {
+            throw ProverRefusal(message: "The built-in prover link does not name the key this wallet pins; not pairing it.")
+        }
+        guard !t.own, !parsed.own else {
+            throw ProverRefusal(message: "The built-in prover link is marked as your own, which a shared prover is not; not pairing it.")
+        }
+        let label = trusted(from: .some(t))?.name ?? "RandProtocol"
+        let (pairing, token) = try await pair(t.link, session: session, name: label)
+        // A shared prover is never the user's own: what the link said is checked above, and the
+        // record says so too, whatever a later link might.
+        var shared = pairing
+        shared.own = false
+        return (shared, token)
     }
 
     /// The Keychain record first — the token with the key and URL it belongs to — then the display

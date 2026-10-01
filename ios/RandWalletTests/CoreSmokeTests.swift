@@ -19,6 +19,13 @@ final class CoreSmokeTests: XCTestCase {
         XCTAssertEqual(c.splitAuthorisation, true)
         XCTAssertEqual(c.proverHistoryWarning, ProverPairingService.historyWarningFallback)
         XCTAssertEqual(ProverPairingService.warning, ProverPairingService.historyWarningFallback)
+        // The prover every client ships the address of: the RandProtocol pool, viewing-key jobs
+        // only, never own — the pins the Settings action holds the link to before asking it.
+        XCTAssertEqual(c.trustedProver?.fingerprint, "RGTF-7HKJ-XZFV-GQ1J")
+        XCTAssertEqual(c.trustedProver?.url, "https://prover.randprotocol.org")
+        XCTAssertEqual(c.trustedProver?.name, "RandProtocol")
+        XCTAssertEqual(c.trustedProver?.own, false)
+        XCTAssertTrue(c.trustedProver?.link.hasPrefix("randprover:") == true)
         XCTAssertEqual(c.timeWindow, NoteStore.timeWindow)
         XCTAssertFalse(RandCore.version.isEmpty)
     }

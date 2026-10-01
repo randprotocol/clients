@@ -28,6 +28,12 @@ struct CoreConstants: Decodable {
     /// What a prover learns from a viewing-key job — the sentence every shell shows before a
     /// pairing is saved (`wallet_core::PROVER_HISTORY_WARNING`).
     let proverHistoryWarning: String?
+    /// The prover every client ships the address of (`wallet_core::trusted_prover`: the
+    /// RandProtocol validators' pool, viewing-key jobs only, no fee), or `nil` when this build
+    /// carries none. Never paired by itself — only Settings' one-step action does, behind the
+    /// history warning. `link` carries the pairing token: `ProverPairingService.trusted()` hands a
+    /// screen the name, URL and fingerprint and never the link.
+    let trustedProver: TrustedProver?
 
     enum CodingKeys: String, CodingKey {
         case version
@@ -47,7 +53,21 @@ struct CoreConstants: Decodable {
         case hcAuth = "hc_auth"
         case splitAuthorisation = "split_authorisation"
         case proverHistoryWarning = "prover_history_warning"
+        case trustedProver = "trusted_prover"
     }
+}
+
+/// `version.trusted_prover`: the built-in pairing link and the fingerprint the build pins for it.
+/// The core refuses to report one whose link names another key; the shell checks again before
+/// the prover is asked anything (`ProverPairingService.pairTrusted`).
+struct TrustedProver: Decodable, Equatable {
+    let name: String
+    let url: String
+    let fingerprint: String
+    /// The `randprover:` link, token included. Read by the core only; never shown, never logged.
+    let link: String
+    /// Always `false` for a shared prover; a link somehow marked own is refused.
+    let own: Bool
 }
 
 /// `chain_guests`: what a chain's guests mean for a proof, decided by the core and nowhere else.

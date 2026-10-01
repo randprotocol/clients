@@ -117,6 +117,215 @@ final class ProverTests: XCTestCase {
         XCTAssertEqual(ProverPairingService.statusLine(moved), "Not answering: the prover at that address now has a different key; pair it again.")
     }
 
+    // MARK: the trusted prover — the built-in link (`prover.trusted` / `pairTrusted` in the JS)
+
+    static let trustedURL = "https://prover.randprotocol.org"
+    static let trustedFingerprint = "RGTF-7HKJ-XZFV-GQ1J"
+
+    /// The core's `version.trusted_prover` as this build ships it — the link included, which only
+    /// the test and the service ever read. A framework built from a core before `trusted_prover`
+    /// fails here, by name: rebuild `Frameworks/RandWalletCore.xcframework` from this core.
+    static func builtIn() throws -> TrustedProver {
+        try XCTUnwrap(try RandCore.constants().trustedProver,
+                      "this core ships no trusted prover — the XCFramework predates core `trusted_prover`")
+    }
+
+    /// A built-in prover the TEST ships, through the service's seam: the synthetic link above
+    /// (key 0x07…, fingerprint `Z254-BQX0-VPMT-8YJR`), never own. What `pairTrusted` does with a
+    /// built-in link is the same whichever core answered `version`.
+    static func syntheticBuiltIn(fingerprint: String = fingerprint, own: Bool = false, name: String = "RandProtocol") -> TrustedProver {
+        TrustedProver(name: name, url: "https://prover.example:8600", fingerprint: fingerprint, link: link(own: false), own: own)
+    }
+
+    /// A `prover_info` answering with a link's own key: what the live pool answers for its link.
+    static func infoFor(link: String) throws -> [String: Any] {
+        let parsed = try ProverPairingService.parse(link)
+        return ["kem_ek": parsed.kemEk, "kem_fingerprint": parsed.fingerprint, "witness_kinds": ["viewing_key"],
+                "fee": NSNull(), "queue": ["depth": 0, "max": 8, "proving": 0]]
+    }
+
+    /// The requests that reached `host` (by the host log alone) — never the whole stub log: another test class's RPC stub
+    /// (`node.example`, a deposit walk's retry, say) can still be landing in it while these run.
+    static func asked(_ host: String) -> [String] {
+        StubProver.hosts.filter { $0 == host }
+    }
+
+    /// No prover, built-in or synthetic, was asked anything.
+    static var noProverAsked: Bool {
+        asked("prover.example").isEmpty && asked("prover.randprotocol.org").isEmpty
+    }
+
+    /// `pairTrusted` then `save`, as the Settings button does: nothing is stored unless the
+    /// pairing came back.
+    @MainActor
+    private func pairTrustedAndSave(_ settings: Settings, trusted: TrustedProver?? = nil) async throws {
+        let (paired, token) = try await ProverPairingService.pairTrusted(session: StubProver.session(), trusted: trusted)
+        try ProverPairingService.save(paired, token: token, settings: settings)
+    }
+
+    /// Runs `body` with no pairing stored and restores whatever this simulator had afterwards.
+    @MainActor
+    private func withCleanPairing(_ body: (Settings) async throws -> Void) async throws {
+        let settings = Settings()
+        let hadDisplay = settings.prover
+        let hadSecret = Keychain.loadProverSecret()
+        ProverPairingService.forget(settings: settings)
+        defer {
+            ProverPairingService.forget(settings: settings)
+            if let s = hadSecret { try? Keychain.saveProverSecret(s) }
+            settings.prover = hadDisplay
+        }
+        try await body(settings)
+    }
+
+    /// Against the REAL core: the prover this build ships the address of is reported — the name,
+    /// URL and fingerprint, never the link — and its link names that key, that URL, not own.
+    func testTheTrustedProverIsReportedWithoutItsLink() throws {
+        let t = try XCTUnwrap(ProverPairingService.trusted(), "this core ships no trusted prover — the XCFramework predates core `trusted_prover`")
+        XCTAssertEqual(t, .init(name: "RandProtocol", url: Self.trustedURL, fingerprint: Self.trustedFingerprint))
+        let built = try Self.builtIn()
+        XCTAssertEqual(built.name, "RandProtocol")
+        XCTAssertEqual(built.url, Self.trustedURL)
+        XCTAssertEqual(built.fingerprint, Self.trustedFingerprint)
+        XCTAssertFalse(built.own)
+        let parsed = try ProverPairingService.parse(built.link)
+        XCTAssertEqual(parsed.fingerprint, Self.trustedFingerprint)
+        XCTAssertEqual(parsed.url, Self.trustedURL)
+        XCTAssertFalse(parsed.own)
+    }
+
+    /// What a screen gets never carries the link; a build that ships none offers nothing and
+    /// pairs nothing, asking nobody.
+    func testTrustedHandsNoLinkToScreensAndABuildWithoutOneOffersNothing() async throws {
+        let t = try XCTUnwrap(ProverPairingService.trusted(from: Self.syntheticBuiltIn()))
+        XCTAssertEqual(t, .init(name: "RandProtocol", url: "https://prover.example:8600", fingerprint: Self.fingerprint))
+        XCTAssertEqual(Mirror(reflecting: t).children.map(\.label), ["name", "url", "fingerprint"], "the link (with its token) is not handed to screens")
+        XCTAssertEqual(ProverPairingService.trusted(from: Self.syntheticBuiltIn(name: "  "))?.name, "RandProtocol")
+        // Asking pairs nothing and asks nobody.
+        XCTAssertTrue(Self.noProverAsked)
+        XCTAssertNil(ProverPairingService.trusted(from: .some(nil)))
+        let blank = TrustedProver(name: "RandProtocol", url: Self.trustedURL, fingerprint: Self.trustedFingerprint, link: "", own: false)
+        XCTAssertNil(ProverPairingService.trusted(from: blank))
+        for none in [TrustedProver??.some(nil), .some(blank)] {
+            do {
+                _ = try await ProverPairingService.pairTrusted(session: StubProver.session(), trusted: none)
+                XCTFail("paired with no built-in prover")
+            } catch {
+                XCTAssertEqual(error.localizedDescription, "This build ships no prover to use.")
+            }
+        }
+        XCTAssertTrue(Self.noProverAsked)
+    }
+
+    /// One step: the built-in link through the same `pair` — the prover asked for its key, which
+    /// must be the link's — stored NOT own and named RandProtocol; `forget` undoes it like any.
+    /// Against the REAL core's link and key, as the live pool would answer.
+    @MainActor
+    func testPairTrustedStoresANotOwnPairingNamedRandProtocolWhenTheProverAnswersWithTheLinksKey() async throws {
+        let built = try Self.builtIn()
+        let info = try Self.infoFor(link: built.link)
+        StubProver.handler = { method, _ in
+            XCTAssertEqual(method, "prover_info")
+            return .result(info)
+        }
+        let parsed = try ProverPairingService.parse(built.link)
+        try await withCleanPairing { settings in
+            try await pairTrustedAndSave(settings)
+            XCTAssertEqual(settings.prover, ProverPairing(name: "RandProtocol", url: Self.trustedURL, kemEk: parsed.kemEk,
+                                                          fingerprint: Self.trustedFingerprint, own: false))
+            let secret = try XCTUnwrap(Keychain.loadProverSecret())
+            XCTAssertEqual(secret, ProverSecret(token: parsed.token, kemEk: parsed.kemEk, url: Self.trustedURL,
+                                                fingerprint: Self.trustedFingerprint, own: false))
+            XCTAssertEqual(Self.asked("prover.randprotocol.org").count, 1, "the pool itself was asked, once")
+            XCTAssertFalse(StubProver.requests.contains { $0.contains(parsed.token) }, "the token is never on the wire in clear")
+            // Forget works as for any pairing.
+            ProverPairingService.forget(settings: settings)
+            XCTAssertNil(settings.prover)
+            XCTAssertNil(Keychain.loadProverSecret())
+        }
+    }
+
+    /// The same, through the seam: the record is named after the built-in prover (not its host,
+    /// as a pasted link's is) and never own — whatever the `pair` of the plain link would say.
+    @MainActor
+    func testPairTrustedNamesTheRecordRandProtocolAndNeverOwn() async throws {
+        let built = Self.syntheticBuiltIn()
+        let info = try Self.infoFor(link: built.link)
+        StubProver.handler = { _, _ in .result(info) }
+        // The plain pairing of that link is named after its host.
+        let plain = try await ProverPairingService.pair(built.link, session: StubProver.session())
+        XCTAssertEqual(plain.pairing.name, "prover.example:8600")
+        StubProver.requests = []
+        StubProver.hosts = []
+        try await withCleanPairing { settings in
+            try await pairTrustedAndSave(settings, trusted: built)
+            XCTAssertEqual(settings.prover, ProverPairing(name: "RandProtocol", url: "https://prover.example:8600", kemEk: Self.kemEk,
+                                                          fingerprint: Self.fingerprint, own: false))
+            XCTAssertEqual(Keychain.loadProverSecret(), ProverSecret(token: Self.token, kemEk: Self.kemEk, url: "https://prover.example:8600",
+                                                                     fingerprint: Self.fingerprint, own: false))
+            XCTAssertFalse(StubProver.requests.contains { $0.contains(Self.token) })
+        }
+    }
+
+    /// A prover at that address answering with another key — however it names itself — is
+    /// refused, and nothing is stored.
+    @MainActor
+    func testPairTrustedRefusesAProverAnsweringWithAnotherKeyAndStoresNothing() async throws {
+        StubProver.handler = { _, _ in
+            .result(["kem_ek": String(repeating: "08", count: 1184), "kem_fingerprint": Self.fingerprint, "witness_kinds": ["viewing_key"]])
+        }
+        try await withCleanPairing { settings in
+            do {
+                try await pairTrustedAndSave(settings, trusted: Self.syntheticBuiltIn())
+                XCTFail("paired a prover with another key")
+            } catch {
+                XCTAssertEqual(error.localizedDescription, "The prover at that address has a different key from the one the link names. Do not pair it.")
+            }
+            XCTAssertNil(settings.prover)
+            XCTAssertNil(Keychain.loadProverSecret())
+            XCTAssertEqual(Self.asked("prover.example").count, 1, "the prover the link names was asked, once")
+        }
+    }
+
+    /// A build whose pinned fingerprint disagrees with its link — or pins none, or whose link is
+    /// marked own — never asks the prover at all.
+    @MainActor
+    func testABuildWhosePinnedFingerprintDisagreesWithTheLinkIsRefusedBeforeAnyRequest() async throws {
+        let info = try Self.infoFor(link: Self.link(own: false))
+        StubProver.handler = { _, _ in .result(info) }
+        try await withCleanPairing { settings in
+            for (built, want) in [
+                (Self.syntheticBuiltIn(fingerprint: "ZZZZ-ZZZZ-ZZZZ-ZZZZ"), "The built-in prover link does not name the key this wallet pins; not pairing it."),
+                (Self.syntheticBuiltIn(fingerprint: ""), "The built-in prover link does not name the key this wallet pins; not pairing it."),
+                (Self.syntheticBuiltIn(own: true), "The built-in prover link is marked as your own, which a shared prover is not; not pairing it."),
+            ] {
+                do {
+                    try await pairTrustedAndSave(settings, trusted: built)
+                    XCTFail("paired a built-in link the build should refuse (\(built.fingerprint), own \(built.own))")
+                } catch {
+                    XCTAssertEqual(error.localizedDescription, want)
+                }
+                XCTAssertTrue(Self.noProverAsked, "the prover was asked")
+                XCTAssertNil(settings.prover)
+                XCTAssertNil(Keychain.loadProverSecret())
+            }
+            // And the link's own flag, not only the build's word, is held: a built-in link that
+            // itself says `own=1` is refused the same way, before any request.
+            let ownLink = TrustedProver(name: "RandProtocol", url: "https://prover.example:8600", fingerprint: Self.fingerprint, link: Self.link(own: true), own: false)
+            do {
+                try await pairTrustedAndSave(settings, trusted: ownLink)
+                XCTFail("paired a built-in link marked own")
+            } catch {
+                XCTAssertEqual(error.localizedDescription, "The built-in prover link is marked as your own, which a shared prover is not; not pairing it.")
+            }
+            XCTAssertTrue(Self.noProverAsked)
+            // The same key, the right pin, not own: paired — the one path that asks.
+            try await pairTrustedAndSave(settings, trusted: Self.syntheticBuiltIn())
+            XCTAssertEqual(settings.prover?.name, "RandProtocol")
+            XCTAssertEqual(Self.asked("prover.example").count, 1)
+        }
+    }
+
     // MARK: the client's errors
 
     func testRefusalsAreWordedAsTheOtherWallets() async throws {

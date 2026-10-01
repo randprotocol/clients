@@ -24,9 +24,15 @@ struct SettingsView: View {
     // once it is paired.
     @State private var proverLink = ""
     @State private var pairing = false
-    @State private var proverStatus: (ok: Bool, title: String, message: String)?
+    /// The one status line under the pairing form; `.warn` is a pairing that went through and
+    /// says once more what the prover can now read.
+    enum StatusTone { case positive, warn, negative }
+    @State private var proverStatus: (tone: StatusTone, title: String, message: String)?
     @State private var probeLine = "Asking the prover…"
     @State private var showProverScanner = false
+    /// The prover the build ships the address of (the core's `version.trusted_prover`), offered in
+    /// one step inside the pairing form once the core names one — never paired by itself.
+    @State private var trusted: ProverPairingService.Trusted?
 
     var body: some View {
         NavigationStack {
@@ -95,6 +101,7 @@ struct SettingsView: View {
             .onAppear {
                 rpcDraft = settings.rpcUrl
                 chainDraft = String(settings.chainId)
+                trusted = ProverPairingService.trusted()
             }
             .sheet(isPresented: $showProverScanner) {
                 QRScannerView(prompt: "Point the camera at your prover's pairing QR code") { code in
@@ -145,6 +152,16 @@ struct SettingsView: View {
                 Button("Paste") { if let s = UIPasteboard.general.string { proverLink = s.trimmingCharacters(in: .whitespacesAndNewlines) } }
                     .buttonStyle(.borderless)
             }
+            // The one-step pairing of the prover the build ships the address of (the JS's
+            // `use-trusted-prover`): part of the form, above the warning, so the warning is on
+            // screen before the button is, and the same status line afterwards.
+            if let t = trusted {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Or use the prover RandProtocol runs for everyone — \(t.url), fingerprint \(t.fingerprint). It sees as much as any prover you pair (the warning below) and charges nothing; your spend key stays here either way.")
+                        .font(.ui(13)).foregroundColor(Theme.textSoft)
+                    Button(pairing ? "Pairing…" : "Use the RandProtocol prover") { Task { await useTrustedProver() } }.disabled(pairing)
+                }
+            }
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Theme.negative)
                 VStack(alignment: .leading, spacing: 4) {
@@ -155,7 +172,7 @@ struct SettingsView: View {
             Button(pairing ? "Pairing…" : "Save") { Task { await saveProver() } }.disabled(pairing)
             if let s = proverStatus {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(s.title).font(.ui(14, .semibold)).foregroundColor(s.ok ? Theme.positive : Theme.negative)
+                    Text(s.title).font(.ui(14, .semibold)).foregroundColor(statusColor(s.tone))
                     Text(s.message).font(.ui(13)).foregroundColor(Theme.textSoft)
                 }
             }
@@ -168,14 +185,14 @@ struct SettingsView: View {
         let link = proverLink.trimmingCharacters(in: .whitespacesAndNewlines)
         proverStatus = nil
         guard !link.isEmpty else {
-            proverStatus = (false, "Not paired", "Paste the randprover: link your prover shows.")
+            proverStatus = (.negative, "Not paired", "Paste the randprover: link your prover shows.")
             return
         }
         pairing = true
         defer { pairing = false }
         let seen: ProverPairingService.Preview
         do { seen = try ProverPairingService.preview(link) } catch {
-            proverStatus = (false, "Not paired", error.localizedDescription)
+            proverStatus = (.negative, "Not paired", error.localizedDescription)
             return
         }
         do {
@@ -183,16 +200,44 @@ struct SettingsView: View {
             try ProverPairingService.save(paired, token: token, settings: settings)
             proverLink = "" // the token goes with it
             let note = seen.note.map { " \($0)" } ?? ""
-            proverStatus = (true, "Paired", "Proofs this device cannot make go to \(paired.name).\(note) Its fingerprint is \(paired.fingerprint) — check that your prover shows the same.")
+            proverStatus = (.positive, "Paired", "Proofs this device cannot make go to \(paired.name).\(note) Its fingerprint is \(paired.fingerprint) — check that your prover shows the same.")
             await probeProver()
         } catch {
-            proverStatus = (false, "Not paired", error.localizedDescription)
+            proverStatus = (.negative, "Not paired", error.localizedDescription)
+        }
+    }
+
+    /// The one-step pairing of the built-in prover: the link never passes through this screen;
+    /// the service holds it to the pinned fingerprint and asks the prover for its key like any
+    /// pairing, and the record is saved not own, named RandProtocol. The status says once more
+    /// what the prover can now read.
+    private func useTrustedProver() async {
+        guard let t = trusted, !pairing else { return }
+        proverStatus = nil
+        pairing = true
+        defer { pairing = false }
+        do {
+            let (paired, token) = try await ProverPairingService.pairTrusted()
+            try ProverPairingService.save(paired, token: token, settings: settings)
+            proverStatus = (.warn, "Paired — this prover can read your history",
+                            "Proofs this device cannot make go to \(paired.name). Its fingerprint is \(paired.fingerprint.isEmpty ? t.fingerprint : paired.fingerprint). \(ProverPairingService.warning)")
+            await probeProver()
+        } catch {
+            proverStatus = (.negative, "Not paired", error.localizedDescription)
         }
     }
 
     private func forgetProver() {
         ProverPairingService.forget(settings: settings)
-        proverStatus = (true, "Forgotten", "Proofs are made on this device again. The prover's pairing is gone from this wallet.")
+        proverStatus = (.positive, "Forgotten", "Proofs are made on this device again. The prover's pairing is gone from this wallet.")
+    }
+
+    private func statusColor(_ tone: StatusTone) -> Color {
+        switch tone {
+        case .positive: return Theme.positive
+        case .warn: return Theme.warning
+        case .negative: return Theme.negative
+        }
     }
 
     private func probeProver() async {
