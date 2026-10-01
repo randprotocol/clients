@@ -287,8 +287,8 @@ test('submitted: a transaction hash, with or without 0x', () => {
 });
 
 test('bridge state: `enabled` only when exactly true, and the chains are derived', () => {
-  assert.deepEqual(checkBridgeState({ enabled: true, extra: 1 }), { enabled: true, chains: [], assets: [], mintPaused: false });
-  assert.deepEqual(checkBridgeState({ enabled: 'yes' }), { enabled: false, chains: [], assets: [], mintPaused: false });
+  assert.deepEqual(checkBridgeState({ enabled: true, extra: 1 }), { enabled: true, chains: [], assets: [], mintPaused: false, fees: null });
+  assert.deepEqual(checkBridgeState({ enabled: 'yes' }), { enabled: false, chains: [], assets: [], mintPaused: false, fees: null });
   rejects(() => checkBridgeState(null), /not an object/);
 
   // There is NO `chains` field on the wire: the node sends an `emitters` map keyed by chain id,
@@ -388,10 +388,10 @@ test('a transaction record yields only a validated height', () => {
 
 test('limits: envelope_bytes, max_proof_bytes and the chain-18 bundle_gas_limit, each null when absent', async () => {
   const { checkLimits } = await import('../engine/validate.js');
-  assert.deepEqual(checkLimits({ max_block_bytes: 4194304 }), { envelopeBytes: null, maxProofBytes: null, bundleGasLimit: null, programState: null });
+  assert.deepEqual(checkLimits({ max_block_bytes: 4194304 }), { envelopeBytes: null, maxProofBytes: null, bundleGasLimit: null, programState: null, proofWindowBlocks: null });
   assert.deepEqual(
     checkLimits({ envelope_bytes: 1860, max_proof_bytes: 8388608, bundle_gas_limit: 20479, gas_metering: 'circuit', gas_price: '100' }),
-    { envelopeBytes: 1860, maxProofBytes: 8388608, bundleGasLimit: 20479, programState: null },
+    { envelopeBytes: 1860, maxProofBytes: 8388608, bundleGasLimit: 20479, programState: null, proofWindowBlocks: null },
   );
   assert.equal(checkLimits({ bundle_gas_limit: null }).bundleGasLimit, null, 'a chain without a gas section');
   rejects(() => checkLimits({ bundle_gas_limit: 0 }), /bundle_gas_limit is zero/);
@@ -431,4 +431,13 @@ test('program state replies: code, public input, cells and vault are held to the
   assert.equal(checkProgramVault({ enabled: false }), null);
   rejects(() => checkProgramVault([{ asset: 1, amount: '1' }, { asset: 1, amount: '1' }]), /ascending/);
   rejects(() => checkProgramVault([{ asset: 0, amount: '-1' }]), /amount/);
+});
+
+test('bridge state: v0.6.8 fees are read when the chain has them, and held to their shape', async () => {
+  const { checkBridgeState } = await import('../engine/validate.js');
+  const recipient = 'rand13V5' + 'a'.repeat(40);
+  assert.deepEqual(checkBridgeState({ enabled: true, fees: { mint_bps: 10, burn_bps: 10, recipient } }).fees, { mintBps: 10, burnBps: 10, recipient });
+  assert.equal(checkBridgeState({ enabled: true, fees: null }).fees, null);
+  rejects(() => checkBridgeState({ enabled: true, fees: { mint_bps: 10, burn_bps: 10, recipient: '<script>' } }), /fees.recipient/);
+  rejects(() => checkBridgeState({ enabled: true, fees: { mint_bps: -1, burn_bps: 10, recipient } }), /mint_bps/);
 });

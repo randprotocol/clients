@@ -148,6 +148,13 @@ public final class NoteStore {
         return changed;
     }
 
+    /** A note or a submission still waiting on the chain. */
+    public boolean hasPending() {
+        for (OwnedNote n : notes) if (n.pending != null) return true;
+        for (Submission s : submissions) if (Submission.PENDING.equals(s.status)) return true;
+        return false;
+    }
+
     /** Hold the notes a submission spends until the chain answers. */
     public void markPending(Set<Long> indices, long time) {
         for (OwnedNote n : notes) if (indices.contains(n.index)) n.pending = time;
@@ -159,13 +166,32 @@ public final class NoteStore {
      * admitted. {@code readThrough} is the last block height whose nullifiers have been read.
      */
     public void clearPending(long readThrough) {
+        clearPending(readThrough, TIME_WINDOW);
+    }
+
+    /** The most blocks this wallet waits on a node's {@code proof_window_blocks} (fullnode #118's clamp). */
+    public static final long MAX_PROOF_WINDOW = 4096;
+
+    /** {@code proof_window_blocks} as this wallet uses it: null is the ledger's 256, clamped to [256, 4096]. */
+    public static long proofWindow(Long claimed) {
+        long w = claimed == null ? TIME_WINDOW : claimed;
+        return Math.max(TIME_WINDOW, Math.min(MAX_PROOF_WINDOW, w));
+    }
+
+    /**
+     * {@link #clearPending(long)} under the chain's window ({@link #proofWindow}): on chain 20 a
+     * bundle stays admissible for 1024 blocks, and a note released after 256 could be spent again
+     * while its first submission can still land.
+     */
+    public void clearPending(long readThrough, long window) {
+        long w = proofWindow(window);
         for (OwnedNote n : notes) {
-            if (n.pending != null && (n.spent || readThrough > n.pending + TIME_WINDOW)) {
+            if (n.pending != null && (n.spent || readThrough > n.pending + w)) {
                 n.pending = null;
             }
         }
         for (Submission s : submissions) {
-            if (Submission.PENDING.equals(s.status) && readThrough > s.time + TIME_WINDOW) {
+            if (Submission.PENDING.equals(s.status) && readThrough > s.time + w) {
                 s.status = Submission.EXPIRED;
             }
         }

@@ -190,7 +190,14 @@ final class WalletService: ObservableObject {
             from = maxHeight
         }
         s.advanceScannedHeight(pagedTo: from, headBefore: headBefore)
-        s.clearPending(readThrough: s.scannedHeight &- 1)
+        // The chain's proof window, read only when something waits on it; unread, the longest this
+        // wallet accepts, so nothing is released early.
+        var window = NoteStore.timeWindow
+        if s.hasPending {
+            if let lim = try? await rpc.limits() { window = NoteStore.proofWindow(lim.proofWindowBlocks.map { UInt64($0) }) }
+            else { window = NoteStore.maxProofWindow }
+        }
+        s.clearPending(readThrough: s.scannedHeight &- 1, window: window)
 
         // Submissions we are still waiting on.
         for i in s.submissions.indices where s.submissions[i].status == .pending {

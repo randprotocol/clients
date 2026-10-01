@@ -386,6 +386,7 @@ function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [
       <div class="kv"><span class="k">On</span><span class="v">${chainName(toChain)}</span></div>
       <div class="kv"><span class="k">Burned</span><span class="v amount">${amountOf(units)}</span></div>
       ${relayerRow}
+      ${raw(BigInt(estimate.bridgeFee || '0') > 0n ? h`<div class="kv"><span class="k">Bridge fee</span><span class="v amount">${amountOf(BigInt(estimate.bridgeFee))}</span></div>` : '')}
       <div class="kv"><span class="k">Arrives</span><span class="v amount">${amountOf(BigInt(estimate.receive || '0'))}</span></div>
       <div class="kv"><span class="k">Network fee</span><span class="v amount">${feeLine}</span></div>
     </div>

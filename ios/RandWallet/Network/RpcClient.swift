@@ -97,6 +97,8 @@ final class RpcClient {
         let envelopeBytes: Int?
         let maxProofBytes: Int?
         let bundleGasLimit: Int?
+        /// Fullnode #118: blocks a bundle's time and anchor stay valid (1024 on chain 20); nil = 256.
+        var proofWindowBlocks: Int? = nil
         static let none = ChainLimits(envelopeBytes: nil, maxProofBytes: nil, bundleGasLimit: nil)
     }
 
@@ -114,7 +116,8 @@ final class RpcClient {
         guard reply is [String: Any] else { throw RpcError(code: 0, message: "rand_getLimits: not an object") }
         return ChainLimits(envelopeBytes: try envelopeBytes(fromLimits: reply),
                            maxProofBytes: try sizeField("max_proof_bytes", fromLimits: reply, max: 1 << 30),
-                           bundleGasLimit: try sizeField("bundle_gas_limit", fromLimits: reply, max: Int.max))
+                           bundleGasLimit: try sizeField("bundle_gas_limit", fromLimits: reply, max: Int.max),
+                           proofWindowBlocks: try sizeField("proof_window_blocks", fromLimits: reply, max: 1 << 30))
     }
 
     /// The chain's `envelope_bytes` alone (see `limits`).

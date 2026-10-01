@@ -5,6 +5,18 @@ import Foundation
 /// from leaf 0, which is what "Rescan" in Settings does.
 struct NoteStore: Codable, Equatable {
     static let timeWindow: UInt64 = 256
+    /// The most blocks this wallet waits on a node's `proof_window_blocks` (fullnode #118's clamp).
+    static let maxProofWindow: UInt64 = 4096
+    /// `proof_window_blocks` as this wallet uses it: nil is the ledger's 256, clamped to [256, 4096].
+    /// On chain 20 a bundle stays admissible for 1024 blocks; a note released after 256 could be
+    /// spent again while its first submission can still land.
+    static func proofWindow(_ claimed: UInt64?) -> UInt64 {
+        min(max(claimed ?? timeWindow, timeWindow), maxProofWindow)
+    }
+    /// A note or a submission still waiting on the chain.
+    var hasPending: Bool {
+        notes.contains { $0.pending != nil } || submissions.contains { $0.status == .pending }
+    }
 
     var scannedIndex: UInt64 = 0
     var scannedHeight: UInt64 = 0
@@ -60,14 +72,15 @@ struct NoteStore: Codable, Equatable {
 
     /// Clear `pending` on notes the chain has answered for: the spend landed, or the blocks read
     /// reach past the last height the bundle could be admitted at (`time + TIME_WINDOW`).
-    mutating func clearPending(readThrough: UInt64) {
+    mutating func clearPending(readThrough: UInt64, window: UInt64 = NoteStore.timeWindow) {
+        let w = Self.proofWindow(window)
         for i in notes.indices {
-            if let t = notes[i].pending, notes[i].spent || readThrough > UInt64(t) + Self.timeWindow {
+            if let t = notes[i].pending, notes[i].spent || readThrough > UInt64(t) + w {
                 notes[i].pending = nil
             }
         }
         for i in submissions.indices where submissions[i].status == .pending {
-            if readThrough > UInt64(submissions[i].time) + Self.timeWindow {
+            if readThrough > UInt64(submissions[i].time) + w {
                 submissions[i].status = .failed
             }
         }

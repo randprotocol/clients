@@ -53,7 +53,10 @@ function chainArgs(nodeBin) {
   const auth = help.includes('--auth-guest')
     ? ['--bundle-guest', 'v3', '--auth-guest', '--max-proof-bytes', '4194304', '--max-block-bytes', '20971520']
     : [];
-  return [...gas, ...auth];
+  // BIND-1: a chain after 19 binds its genesis hash, and this wallet builds every transaction for
+  // one that way — so the test chain must say so, or its node expects the chain-id binding.
+  const bind = help.includes('--binding-domain') ? ['--binding-domain', '1'] : [];
+  return [...gas, ...auth, ...bind];
 }
 /** Whether the node cuts a split-authorisation chain (see `chainArgs`). */
 function splitAuthorisation(nodeBin) {
@@ -63,7 +66,7 @@ const PROVER_BIN = process.env.RAND_PROVER_BIN || '';
 const CLI_BIN = process.env.RAND_CLI_BIN || '';
 const FIXTURES_BIN = process.env.RAND_FIXTURES_BIN || '';
 const PASSWORD = 'an-e2e-password-for-a-real-vault';
-const CHAIN_ID = 19; // the chain this build's core was made for (`version.default_chain_id`)
+const CHAIN_ID = 20; // the chain this build's core was made for (`version.default_chain_id`)
 const SOURCE_CHAIN = 2; // Ethereum's bridge chain id
 // Chain 2 USDT, the mainnet wire address: twelve zero bytes then the contract. The genesis
 // `e2e-fixtures` writes lists zUSD backed by exactly this coin.

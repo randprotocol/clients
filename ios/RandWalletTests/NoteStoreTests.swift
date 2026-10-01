@@ -33,6 +33,19 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertEqual(s.balance, 6)
     }
 
+    func testAChainsLongerProofWindowHoldsPendingNotesLonger() {
+        var s = NoteStore()
+        s.merge(received: [note(1, amount: 5)], sent: [])
+        s.holdPending(indices: [1], time: 100)
+        s.clearPending(readThrough: 100 + 1024, window: 1024)
+        XCTAssertEqual(s.notes[0].pending, 100, "still admissible on chain 20")
+        s.clearPending(readThrough: 100 + 1025, window: 1024)
+        XCTAssertNil(s.notes[0].pending)
+        XCTAssertEqual(NoteStore.proofWindow(nil), 256)
+        XCTAssertEqual(NoteStore.proofWindow(10), 256)
+        XCTAssertEqual(NoteStore.proofWindow(1_000_000), 4096)
+    }
+
     func testRebuiltDepositIsPlacedWhenItsLeafArrives() {
         var s = NoteStore()
         var deposit = note(UInt64.max, amount: 9, cm: "cmdep", height: 0)

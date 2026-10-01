@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Write SHA256SUMS for a GitHub release over every file attached to it, and attach that too.
 #
-#   scripts/release/checksums.sh v0.6.7                     re-sum what the release has
-#   scripts/release/checksums.sh v0.6.7 a.apk b.aab         attach these first, then sum everything
+#   scripts/release/checksums.sh v0.6.8                     re-sum what the release has
+#   scripts/release/checksums.sh v0.6.8 a.apk b.aab         attach these first, then sum everything
 #
 # The sums are taken over the files as GitHub serves them back (they are downloaded again, not
 # read from the local disk), so SHA256SUMS describes exactly what a user's download will be. The

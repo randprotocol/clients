@@ -322,9 +322,18 @@ public final class WalletService {
             nfFrom = maxHeight;
             pagedTo = nfFrom;
         }
+        // The chain's proof window (fullnode #118), read only when a note or a submission waits on
+        // it; unread, the longest this wallet accepts, so nothing is released early.
+        boolean waiting;
+        synchronized (store) { waiting = store.hasPending(); }
+        long window = NoteStore.TIME_WINDOW;
+        if (waiting) {
+            try { window = NoteStore.proofWindow(rpc.limits().proofWindowBlocks); }
+            catch (RpcException e) { window = NoteStore.MAX_PROOF_WINDOW; }
+        }
         synchronized (store) {
             store.scannedHeight = NoteStore.advanceScannedHeight(store.scannedHeight, pagedTo, headBefore);
-            store.clearPending(store.scannedHeight - 1);
+            store.clearPending(store.scannedHeight - 1, window);
             resolveSubmissions(rpc);
         }
         save();

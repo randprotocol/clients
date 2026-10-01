@@ -124,4 +124,18 @@ public class NoteStoreTest {
         assertEquals(0, s.notes.size());
         assertEquals(0, s.scannedIndex);
     }
+
+    @Test
+    public void aChainsLongerProofWindowHoldsPendingNotesLonger() throws Exception {
+        NoteStore s = new NoteStore();
+        s.merge(fixture("scan_page.json"));
+        s.markPending(new HashSet<>(Arrays.asList(10L)), 100);
+        s.clearPending(100 + 1024, 1024);
+        assertEquals("still admissible on chain 20", Long.valueOf(100), s.noteByIndex(10).pending);
+        s.clearPending(100 + 1025, 1024);
+        assertNull(s.noteByIndex(10).pending);
+        assertEquals(256, NoteStore.proofWindow(null));
+        assertEquals(256, NoteStore.proofWindow(10L));
+        assertEquals(4096, NoteStore.proofWindow(1_000_000L));
+    }
 }

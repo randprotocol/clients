@@ -55,6 +55,11 @@ export const BUNDLE_INPUTS = 2;
  *  `max_proof_bytes`: what an invoke's fee quotes the call proof's bytes at (see `quoteInvoke`). */
 const DEFAULT_PROOF_CAP = 2_097_152;
 
+/** The ledger's proof window without `proof_window_blocks` (256), and the most this wallet will
+ *  wait on a node's word (4096) — fullnode #118's clamp. */
+const PROOF_WINDOW_MIN = 256;
+const PROOF_WINDOW_MAX = 4096;
+
 /**
  * The chain's `envelope_bytes`, from `rand_getLimits` on `client` — the client the caller verified,
  * never a fresh one (spec 2026-09-26 §2.4). `prove_transfer` and `prove_burn` seal every output
@@ -81,7 +86,7 @@ export async function envelopeBytesOf(client, signal) {
  * as `envelopeBytesOf`.
  */
 export async function chainLimitsOf(client, signal) {
-  const none = { envelopeBytes: null, maxProofBytes: null, bundleGasLimit: null, programState: null };
+  const none = { envelopeBytes: null, maxProofBytes: null, bundleGasLimit: null, programState: null, proofWindowBlocks: null };
   if (!client || typeof client.getLimits !== 'function') return none;
   let reply;
   try {
@@ -341,7 +346,11 @@ export function coreApi(core) {
     parseAddress: (address) => call('parse_address', { address }),
     scanPage: (spend_key, rows) => call('scan_page', { spend_key, rows }),
     rebuiltDeposit: (spend_key, action) => call('rebuilt_deposit', { spend_key, action }),
-    pendingCleared: (note, read_through) => call('pending_cleared', { note, read_through }),
+    // Every note a committed action created for this wallet from its public fields — a bridge
+    // deposit (net of the chain's fee, v0.6.8), an invoke's payouts — and, when this wallet is the
+    // chain's bridge fee recipient, the fee notes of deposits and burns.
+    rebuiltNotes: (spend_key, action, fee_recipient) => call('rebuilt_notes', { spend_key, action, ...(fee_recipient ? { fee_recipient } : {}) }),
+    pendingCleared: (note, read_through, window) => call('pending_cleared', { note, read_through, ...(window ? { window } : {}) }),
     selectInputs: (notes, need, asset = 0) => call('select_inputs', { notes, need: String(need), asset }),
     /**
      * Chain 14's ONE planning call, for RAND and for a token alike. `asset: 0` (or omitted) picks
@@ -554,6 +563,23 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    * abort between commitment pages persisted the cursor while the deposits gathered for that
    * range were dropped on the floor, and a bridge deposit could be missed permanently.
    */
+  /**
+   * The notes one block action created for this wallet from its public fields: a bridge deposit,
+   * and — on a chain with `bridge.fees` where this wallet is the recipient — the fee notes of
+   * deposits and burns (they carry no envelope; nothing else finds them). Without a fee
+   * recipient this is the deposit alone, as it always was.
+   */
+  async function notesOf(spendKey, action, feeRecipient) {
+    if (action.kind === 'bridge_attest' && !feeRecipient) {
+      const note = await c.rebuiltDeposit(spendKey, action);
+      return note ? [note] : [];
+    }
+    if (action.kind === 'bridge_attest' || (feeRecipient && action.kind === 'bridge_burn')) {
+      return (await c.rebuiltNotes(spendKey, action, feeRecipient)) || [];
+    }
+    return [];
+  }
+
   async function rebuildableDeposits(client, spendKey, st, head, signal, onProgress) {
     const out = new Map();
     const start = st.scanned_attest_height;
@@ -565,8 +591,11 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     // could hide a bridge deposit for ever.
     let enabled = false;
     let known = false;
+    let feeRecipient = null;
     try {
-      enabled = checkBridgeState(await client.bridgeState({ signal })).enabled;
+      const bs = checkBridgeState(await client.bridgeState({ signal }));
+      enabled = bs.enabled;
+      feeRecipient = bs.fees ? bs.fees.recipient : null;
       known = true;
     } catch (err) {
       if (err && err.name === 'AbortError') throw err;
@@ -577,7 +606,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     // cursor does: `head` is the node's claim, and a claim near 2^53 must not become a cursor.
     if (!enabled) return { deposits: out, through: Math.min(head, start + MAX_ATTEST_HEIGHTS_PER_SCAN - 1) };
     const walked = typeof client.getBlocks === 'function'
-      ? await depositsByHeader(client, spendKey, start, head, signal, onProgress, out)
+      ? await depositsByHeader(client, spendKey, start, head, signal, onProgress, out, feeRecipient)
       : null;
     if (walked) return walked;
     // A node with no `rand_getBlocks`: one `rand_getBlockByHeight` per height, so this is capped —
@@ -590,9 +619,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       throwIfAborted(signal);
       // Every action is re-parsed into a plain, size-bounded object before it reaches the core.
       for (const action of checkBlockActions(await client.blockByHeight(h, { signal }))) {
-        if (action.kind !== 'bridge_attest') continue;
-        const note = await c.rebuiltDeposit(spendKey, action);
-        if (note) out.set(note.cm, note);
+        for (const note of await notesOf(spendKey, action, feeRecipient)) out.set(note.cm, note);
       }
       examined = h;
       if ((h - start) % 64 === 63) onProgress?.({ phase: 'deposits', scanned: h, total: head });
@@ -619,7 +646,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
    *
    * Returns `null`, having moved nothing, when the node does not know `rand_getBlocks`.
    */
-  async function depositsByHeader(client, spendKey, start, head, signal, onProgress, out) {
+  async function depositsByHeader(client, spendKey, start, head, signal, onProgress, out, feeRecipient = null) {
     let examined = start - 1;
     let budget = MAX_ATTEST_REQUESTS_PER_SCAN;
     // Only what the NODE said or failed to say is "unknown". The core refusing an action it was
@@ -656,9 +683,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
           const block = await ask(async () => checkBlockActions(await client.blockByHeight(header.height, { signal })));
           if (block.failed) return { deposits: out, through: examined, unknown: true };
           for (const action of block.value) {
-            if (action.kind !== 'bridge_attest') continue;
-            const note = await c.rebuiltDeposit(spendKey, action);
-            if (note) out.set(note.cm, note);
+            for (const note of await notesOf(spendKey, action, feeRecipient)) out.set(note.cm, note);
           }
         }
         examined = header.height;
@@ -1030,15 +1055,30 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     // Only as far as the pages actually covered. Never `headBefore + 1` on the node's say-so.
     st.scanned_height = Math.max(st.scanned_height, Math.min(cursor, headBefore + 1));
     const readThrough = st.scanned_height - 1;
+    // The chain's proof window (fullnode #118: 1024 on chain 20, 256 without the field), read only
+    // when something is waiting on it, clamped as the core clamps it. A note released before the
+    // window ends could be spent again while its first submission can still land.
+    const waiting = st.notes.some((n) => n.pending != null) || st.submissions.some((sub) => sub.status === 'pending');
+    let window = PROOF_WINDOW_MIN;
+    if (waiting) {
+      try {
+        const w = (await chainLimitsOf(client, signal)).proofWindowBlocks;
+        window = Math.min(Math.max(w ?? PROOF_WINDOW_MIN, PROOF_WINDOW_MIN), PROOF_WINDOW_MAX);
+      } catch (err) {
+        if (err && err.name === 'AbortError') throw err;
+        // Unread: the longest window this wallet accepts, so nothing is released early.
+        window = PROOF_WINDOW_MAX;
+      }
+    }
     for (const n of st.notes) {
-      if (n.pending != null && (await c.pendingCleared(n, readThrough))) n.pending = null;
+      if (n.pending != null && (await c.pendingCleared(n, readThrough, window))) n.pending = null;
     }
     // Submissions: resolved when their nullifiers are spent or their window has passed.
     for (const sub of st.submissions) {
       if (sub.status !== 'pending') continue;
       const spent = st.notes.filter((n) => sub.spent_indices?.includes(n.index));
       if (spent.length && spent.every((n) => n.spent)) sub.status = 'committed';
-      else if (readThrough > sub.time + 256) sub.status = 'expired';
+      else if (readThrough > sub.time + window) sub.status = 'expired';
     }
     if (annotate) await annotateBlocks(client, st, signal);
     st.head = headBefore;

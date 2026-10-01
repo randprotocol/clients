@@ -176,14 +176,21 @@ public class RpcClient {
         public final Integer envelopeBytes;
         public final Integer maxProofBytes;
         public final Long bundleGasLimit;
+        /** Fullnode #118: blocks a bundle's time and anchor stay valid (1024 on chain 20); null = 256. */
+        public final Long proofWindowBlocks;
 
         public ChainLimits(Integer envelopeBytes, Integer maxProofBytes, Long bundleGasLimit) {
+            this(envelopeBytes, maxProofBytes, bundleGasLimit, null);
+        }
+
+        public ChainLimits(Integer envelopeBytes, Integer maxProofBytes, Long bundleGasLimit, Long proofWindowBlocks) {
             this.envelopeBytes = envelopeBytes;
             this.maxProofBytes = maxProofBytes;
             this.bundleGasLimit = bundleGasLimit;
+            this.proofWindowBlocks = proofWindowBlocks;
         }
 
-        public static final ChainLimits NONE = new ChainLimits(null, null, null);
+        public static final ChainLimits NONE = new ChainLimits(null, null, null, null);
     }
 
     /**
@@ -207,7 +214,8 @@ public class RpcClient {
         Long envelope = sizeField(reply, "envelope_bytes", 1L << 20);
         Long proof = sizeField(reply, "max_proof_bytes", 1L << 30);
         Long gas = sizeField(reply, "bundle_gas_limit", Long.MAX_VALUE);
-        return new ChainLimits(envelope == null ? null : (int) (long) envelope, proof == null ? null : (int) (long) proof, gas);
+        Long window = sizeField(reply, "proof_window_blocks", 1L << 30);
+        return new ChainLimits(envelope == null ? null : (int) (long) envelope, proof == null ? null : (int) (long) proof, gas, window);
     }
 
     /**

@@ -2,8 +2,8 @@
 // Write the randprotocol.org site's src/data/release.ts for a release: every file attached to it,
 // with its size and SHA-256. The site's /clients pages link the files and print the sums from it.
 //
-//   scripts/release/checksums.sh v0.6.7                                   # fills dist/release/v0.6.7/
-//   node scripts/release/site-release.mjs v0.6.7 > ../randprotocol.org/src/data/release.ts
+//   scripts/release/checksums.sh v0.6.8                                   # fills dist/release/v0.6.8/
+//   node scripts/release/site-release.mjs v0.6.8 > ../randprotocol.org/src/data/release.ts
 //
 // It reads dist/release/<tag>/SHA256SUMS — what checksums.sh wrote after downloading the release
 // back from GitHub — and nothing else decides what is listed: a file that is not in SHA256SUMS is

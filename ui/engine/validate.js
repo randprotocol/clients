@@ -530,7 +530,11 @@ export function checkLimits(reply) {
       maxPayouts: intField(m, 'program_state.max_payouts', ps.max_payouts, { max: 1024 }),
     };
   }
-  return { envelopeBytes, maxProofBytes, bundleGasLimit, programState };
+  // Fullnode #118 (v0.6.8): how many blocks a bundle's `time` and anchor stay valid — 1024 on chain
+  // 20; `null` on a chain without the field, where the ledger's 256 holds. The caller clamps it.
+  const w = reply.proof_window_blocks;
+  const proofWindowBlocks = w === undefined || w === null ? null : intField(m, 'proof_window_blocks', w, { max: 1 << 30 });
+  return { envelopeBytes, maxProofBytes, bundleGasLimit, programState, proofWindowBlocks };
 }
 
 // --------------------------------------------------------------------- RPL-2 program state ---
@@ -647,5 +651,20 @@ export function checkBridgeState(reply) {
   // Absent on a bridge-less chain, and validated exactly as the registry call's own rows are —
   // one implementation, because they are one reply.
   const assets = state.assets === undefined || state.assets === null ? [] : checkAssets(state.assets);
-  return { enabled, chains, assets, mintPaused };
+  // v0.6.8 `bridge.fees`: `{mint_bps, burn_bps, recipient}` — every bridge deposit and burn keeps
+  // a share for the recipient, whose fee notes carry no envelope and are rebuilt, not decrypted.
+  // Shape only: the core parses the address, and a rebuilt note is placed only at a leaf whose
+  // commitment it hashes to.
+  let fees = null;
+  const f = state.fees;
+  if (f !== undefined && f !== null) {
+    if (typeof f !== 'object' || Array.isArray(f)) fail(m, 'fees is not an object', f);
+    if (typeof f.recipient !== 'string' || f.recipient.length > 8192 || !/^rand1[0-9A-Za-z]+$/.test(f.recipient)) fail(m, 'fees.recipient is not an address', f.recipient);
+    fees = {
+      mintBps: intField(m, 'fees.mint_bps', f.mint_bps, { max: 10000 }),
+      burnBps: intField(m, 'fees.burn_bps', f.burn_bps, { max: 10000 }),
+      recipient: f.recipient,
+    };
+  }
+  return { enabled, chains, assets, mintPaused, fees };
 }

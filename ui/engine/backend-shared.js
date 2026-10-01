@@ -165,7 +165,7 @@ const FALLBACK = Object.freeze({
     'https://rpc.randprotocol.org',
   ]),
   explorerUrl: 'https://randscan.org',
-  chainId: 19,
+  chainId: 20,
   decimals: 9,
   autoLockMin: 15,
   theme: 'system',
@@ -2199,9 +2199,22 @@ export function makeSharedBackend({
     const token = String(req.token || '');
     const gate = verified || (await requireVerifiedChain());
     const state = checkBridgeState(await gate.client.bridgeState());
+    // v0.6.8 `bridge.fees`: the chain keeps a share of the burn, and the source contract releases
+    // the rest — out of which the relayer is paid. The core's own rule (`bridge_fee_quote`).
+    let bridgeFee = 0n;
+    let release = amount;
+    if (state.fees && /^(0x)?[0-9a-fA-F]{64}$/.test(token)) {
+      const q = await c.call('bridge_fee_quote', {
+        bridge_state: { fees: { burn_bps: state.fees.burnBps }, assets: state.assets },
+        to_chain: toChain, token, amount: amount.toString(),
+      });
+      bridgeFee = toUnits(q.fee);
+      release = toUnits(q.release);
+    }
+    if (relayerFee > release) throw definite('The relayer fee is more than what the bridge would release after its fee.');
     const possible = await burnIsPossible(c, state, asset, toChain, token, amount, relayerFee);
     if (!possible.ok) throw definite(possible.reason);
-    return { ...gate, state, asset, amount, relayerFee, toChain, token };
+    return { ...gate, state, asset, amount, relayerFee, toChain, token, bridgeFee, release };
   }
 
   /**
@@ -2269,7 +2282,7 @@ export function makeSharedBackend({
      * never add up to more than the burn.
      */
     async estimate(req = {}) {
-      const { asset, amount, relayerFee } = await screenBurn(req);
+      const { asset, amount, relayerFee, bridgeFee, release } = await screenBurn(req);
       const fee = req.fee === undefined || req.fee === null ? await burnFee() : toUnits(req.fee);
       const st = await loadNotes();
       const plan = await c.planBurn({
@@ -2278,7 +2291,10 @@ export function makeSharedBackend({
       return {
         fee: String(plan.fee),
         relayerFee: relayerFee.toString(),
-        receive: (amount - relayerFee).toString(),
+        // v0.6.8: the chain's share of the burn (0 on a chain without `bridge.fees`), in units of
+        // the asset; what arrives is what the bridge releases less the relayer's fee.
+        bridgeFee: bridgeFee.toString(),
+        receive: (release - relayerFee).toString(),
         change: String(plan.change ?? '0'),
         feeChange: String(plan.fee_change ?? '0'),
         // From the plan, never hard-coded: it is the chain's number of proofs, not this file's.

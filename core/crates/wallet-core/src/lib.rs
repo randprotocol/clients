@@ -57,7 +57,11 @@ pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode's tag
-/// `v0.6.7` (`86941a1`, circuits `aeacf31`), the build chains 18 and 19 run — **constraint set 8**
+/// `v0.6.8` (`c9c9bd3`), the build chain 20 runs — RPL-2 (program state, vaults and the `Invoke`
+/// action, Action 33), BIND-1 (a transaction binds its chain's genesis hash on every chain after
+/// 19, [`binding_domain_of`]) and `bridge.fees` (a deposit is the gross less the chain's share,
+/// [`rebuilt_deposit`], [`bridge_fee_quote`]); the proof guests are v0.6.7's. Before it: fullnode's
+/// tag `v0.6.7` (`86941a1`, circuits `aeacf31`), the build chains 18 and 19 run — **constraint set 8**
 /// (one more public value on every proof, `pv::GAS`, the declared gas limit; the genesis `gas`
 /// section whose `bundle_gas_limit` every bundle proof must declare exactly,
 /// [`check_bundle_gas_limit`]) and **split authorisation** (fullnode v0.6.3, delegated proving
@@ -70,8 +74,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
 /// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
 /// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "86941a1";
-/// The chain the defaults below describe: chain 19, the next cut (not live on 2026-09-30; the
+pub const CHAIN_BUILD: &str = "c9c9bd3";
+/// The chain the defaults below describe: chain 20, cut 2026-10-01 on fullnode v0.6.8 (`c9c9bd3`)
+/// from chain 19's state, with `program_state`, `binding_domain: 1` and `bridge.fees` (10 bps each
+/// way) in its genesis. Before it, chain 19, the next cut (not live on 2026-09-30; the
 /// public node answered chain 18, genesis `a7cb020c…`, that day; chain 18 was the aim from
 /// 2026-09-29, 16 from 2026-09-28). Chain 19 is chain 18 re-cut on the same build (fullnode
 /// v0.6.7, constraint set 8, the memo envelope) with the redeployed bridge endpoints in its
@@ -87,7 +93,7 @@ pub const CHAIN_BUILD: &str = "86941a1";
 /// never built with either: without them both constants are the ones written here.
 pub const DEFAULT_CHAIN_ID: u64 = match option_env!("RAND_WALLET_CHAIN_ID") {
     Some(id) => parse_chain_id(id),
-    None => 19,
+    None => 20,
 };
 pub const DEFAULT_RPC_URL: &str = match option_env!("RAND_WALLET_RPC_URL") {
     Some(url) => url,
@@ -564,14 +570,44 @@ pub fn rebuilt_deposit(w: &Wallet, action: &Value) -> Option<OwnedNote> {
     if action["kind"].as_str()? != "bridge_attest" {
         return None;
     }
-    rebuilt_public_note(w, action, [0; 8], "asset_index", "commitment")
+    // v0.6.8 (`bridge.fees`): the depositor's note is `deposit_amount` — the gross the guardians
+    // signed less the chain's fee; `amount` is that gross. A node older than v0.6.8 renders no
+    // `deposit_amount`, and there the gross is the note's value.
+    let amount_field = if action["deposit_amount"].is_string() { "deposit_amount" } else { "amount" };
+    rebuilt_public_note(w, action, [0; 8], "asset_index", "commitment", amount_field)
+}
+
+/// The treasury's fee note of a `bridge_attest` or `bridge_burn` on a chain with `bridge.fees`
+/// (v0.6.8), when THIS wallet is the genesis fee recipient (`fee_recipient`, from
+/// `rand_getBridgeState.fees.recipient`). A fee note has no envelope — every word is public in the
+/// action's `fee_note` — so the treasury finds it only by rebuilding it here; it is checked
+/// against the commitment the node rendered, so a lying node only makes a note go unfound.
+pub fn rebuilt_fee_note(w: &Wallet, action: &Value, fee_recipient: Option<&str>) -> Option<OwnedNote> {
+    let recipient = ShieldedAddress::parse(fee_recipient?.trim()).ok()?;
+    if recipient.pk != w.vk.pk() {
+        return None;
+    }
+    let f = action.get("fee_note").filter(|f| f.is_object())?;
+    let note = Note {
+        pk: recipient.pk,
+        from: [0; 8],
+        amount: amount_field(&f["amount"])?,
+        asset: u32::try_from(f["asset"].as_u64()?).ok()?,
+        time: u32::try_from(f["time"].as_u64()?).ok()?,
+        r: word8_from_hex(f["r"].as_str()?)?,
+    };
+    let cm = note.commitment();
+    if word8_to_hex(&cm) != f["commitment"].as_str()? {
+        return None;
+    }
+    Some(owned_note(w, UNKNOWN_LEAF, 0, cm, note))
 }
 
 /// A chain-computed note to this wallet, rebuilt from the public fields the node renders — a
 /// bridge deposit's (`from` zero, `asset_index`, `commitment`) or an RPL-2 payout's (`from`
 /// [`PROGRAM_FROM`], `asset`, `cm`). `None` unless the recipient is this wallet and the
 /// commitment the node rendered is the one these fields hash to.
-fn rebuilt_public_note(w: &Wallet, v: &Value, from: Word8, asset_field: &str, cm_field: &str) -> Option<OwnedNote> {
+fn rebuilt_public_note(w: &Wallet, v: &Value, from: Word8, asset_field: &str, cm_field: &str, amount_name: &str) -> Option<OwnedNote> {
     let recipient = ShieldedAddress::parse(v["recipient"].as_str()?).ok()?;
     if recipient.pk != w.vk.pk() {
         return None;
@@ -579,7 +615,7 @@ fn rebuilt_public_note(w: &Wallet, v: &Value, from: Word8, asset_field: &str, cm
     let note = Note {
         pk: recipient.pk,
         from,
-        amount: amount_field(&v["amount"])?,
+        amount: amount_field(&v[amount_name])?,
         asset: u32::try_from(v[asset_field].as_u64()?).ok()?,
         time: u32::try_from(v["time"].as_u64()?).ok()?,
         r: word8_from_hex(v["r"].as_str()?)?,
@@ -604,16 +640,45 @@ fn rebuilt_public_note(w: &Wallet, v: &Value, from: Word8, asset_field: &str, cm
 /// seals its envelope to this wallet's own address, and the node serves it as a leaf like any
 /// other — so this is the belt to that pair of braces: a program paying this wallet from
 /// somebody else's invoke, whose envelope the payer sealed however they liked.
+/// What a burn of `amount` to `to_chain`/`token` leaves in the chain's treasury under v0.6.8's
+/// `bridge.fees` — `⌊amount · burn_bps / 10⁴⌋` rounded down to the backing's release unit, the
+/// ledger's own `bridge_fee` — and what the source contract releases (`amount − fee`). Read from a
+/// `rand_getBridgeState` reply: `fee` is 0 on a chain without the group (or a backing it does not
+/// list), so `release == amount`. Upstream's `burn_fee_quote`.
+pub fn bridge_fee_quote(state: &Value, to_chain: u16, token: &[u8; 32], amount: u64) -> (u64, u64) {
+    let bps = state["fees"]["burn_bps"].as_u64().and_then(|b| u16::try_from(b).ok());
+    let unit = state["assets"].as_array().and_then(|rows| {
+        rows.iter().find_map(|row| {
+            let chain = row["chain"].as_u64()?;
+            let t = hex32(row["token"].as_str()?, "token").ok()?;
+            let decimals = u8::try_from(row["decimals"].as_u64()?).ok()?;
+            (chain == to_chain as u64 && &t == token).then(|| randprotocol_core::ledger::tokens::release_unit(decimals))
+        })
+    });
+    let fee = match (bps, unit) {
+        (Some(bps), Some(unit)) => randprotocol_core::ledger::bridge_notes::bridge_fee(amount, bps, unit),
+        _ => 0,
+    };
+    (fee, amount - fee)
+}
+
 pub fn rebuilt_notes(w: &Wallet, action: &Value) -> Vec<OwnedNote> {
+    rebuilt_notes_with(w, action, None)
+}
+
+/// [`rebuilt_notes`], plus the treasury's fee notes ([`rebuilt_fee_note`]) when `fee_recipient`
+/// (the chain's `bridge.fees.recipient`) is this wallet: a deposit's and a burn's.
+pub fn rebuilt_notes_with(w: &Wallet, action: &Value, fee_recipient: Option<&str>) -> Vec<OwnedNote> {
     match action["kind"].as_str() {
-        Some("bridge_attest") => rebuilt_deposit(w, action).into_iter().collect(),
+        Some("bridge_attest") => rebuilt_deposit(w, action).into_iter().chain(rebuilt_fee_note(w, action, fee_recipient)).collect(),
+        Some("bridge_burn") => rebuilt_fee_note(w, action, fee_recipient).into_iter().collect(),
         Some("invoke") => {
             let t = &action["transition"];
             let list = |name: &str| t[name].as_array().cloned().unwrap_or_default();
             list("pays")
                 .iter()
                 .chain(list("mints").iter())
-                .filter_map(|p| rebuilt_public_note(w, p, PROGRAM_FROM, "asset", "cm"))
+                .filter_map(|p| rebuilt_public_note(w, p, PROGRAM_FROM, "asset", "cm", "amount"))
                 .collect()
         }
         _ => Vec::new(),
@@ -624,8 +689,22 @@ pub fn rebuilt_notes(w: &Wallet, action: &Value) -> Vec<OwnedNote> {
 /// once its nullifier appeared (`spent`) or the chain has read past the last height the bundle
 /// could still be admitted at.
 pub fn pending_cleared(note: &OwnedNote, read_through: u64) -> bool {
+    pending_cleared_within(note, read_through, TIME_WINDOW)
+}
+
+/// [`pending_cleared`] under the chain's own window: `rand_getLimits.proof_window_blocks` (fullnode
+/// #118 — 1024 on chain 20; absent, the ledger's 256). Clamped to [256, 4096], as the fullnode
+/// wallet clamps it: a node claiming less cannot release a note early (an early release only
+/// fails safe — the chain refuses the second spend — but shows a spend that will fail), and one
+/// claiming more can hold a note back by at most 4096 blocks.
+pub fn proof_window(claimed: Option<u64>) -> u64 {
+    claimed.unwrap_or(TIME_WINDOW).clamp(TIME_WINDOW, 4096)
+}
+
+pub fn pending_cleared_within(note: &OwnedNote, read_through: u64, window: u64) -> bool {
+    let window = proof_window(Some(window));
     match note.pending {
-        Some(time) => note.spent || read_through > time as u64 + TIME_WINDOW,
+        Some(time) => note.spent || read_through > time as u64 + window,
         None => false,
     }
 }
@@ -3646,6 +3725,10 @@ pub fn open_with_tx_key(cm_hex: &str, envelope: &EnvelopeHex, tx_key_hex: &str) 
 /// the request alone — every leaf index is in the request and they are 0 and 1 — which is what
 /// `examples/prove_fixture.rs` relies on to put the proved transaction in front of
 /// `Ledger::validate`.
+/// The chain the fixture requests are built for: 19, the last chain-id-bound chain (BIND-1), so a
+/// fixture needs no genesis hash and proves the same bundle whatever this build's default is.
+pub const FIXTURE_CHAIN_ID: u64 = 19;
+
 pub fn fixture_prove_request(profile: &str, asset: u32) -> Result<Value> {
     use randprotocol_core::notes::FullTree;
     profile_from_str(profile)?;
@@ -3664,7 +3747,7 @@ pub fn fixture_prove_request(profile: &str, asset: u32) -> Result<Value> {
         };
         return Ok(json!({
             "spend_key": sender.spend_key_hex(),
-            "chain_id": DEFAULT_CHAIN_ID,
+            "chain_id": FIXTURE_CHAIN_ID,
             "to": recipient.address.to_string(),
             "asset": 0,
             "amount": UNITS_PER_RAND.to_string(),
@@ -3684,7 +3767,7 @@ pub fn fixture_prove_request(profile: &str, asset: u32) -> Result<Value> {
     let path = |i: u64| -> Result<Vec<String>> { Ok(tree.path(i).ok_or("fixture tree")?.iter().map(word8_to_hex).collect()) };
     Ok(json!({
         "spend_key": sender.spend_key_hex(),
-        "chain_id": DEFAULT_CHAIN_ID,
+        "chain_id": FIXTURE_CHAIN_ID,
         "to": recipient.address.to_string(),
         "asset": asset,
         "amount": FIXTURE_TOKEN_SENT.to_string(),
@@ -3745,7 +3828,7 @@ pub fn fixture_burn_request(profile: &str) -> Result<Value> {
     to[12..].copy_from_slice(&[0x11u8; 20]);
     Ok(json!({
         "spend_key": sender.spend_key_hex(),
-        "chain_id": DEFAULT_CHAIN_ID,
+        "chain_id": FIXTURE_CHAIN_ID,
         "asset": FIXTURE_BURN_ASSET,
         "amount": FIXTURE_BURN_AMOUNT.to_string(),
         "relayer_fee": FIXTURE_BURN_RELAYER_FEE.to_string(),
@@ -4080,13 +4163,16 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
         "rebuilt_notes" => {
             let w = Wallet::from_hex(str_param(params, "spend_key")?)?;
             let action = params.get("action").cloned().unwrap_or(Value::Null);
-            Ok(ser(&rebuilt_notes(&w, &action)))
+            let fee_recipient = params.get("fee_recipient").and_then(Value::as_str);
+            Ok(ser(&rebuilt_notes_with(&w, &action, fee_recipient)))
         }
         "pending_cleared" => {
             let note: OwnedNote = serde_json::from_value(params.get("note").cloned().unwrap_or(Value::Null)).map_err(|e| format!("note: {e}"))?;
             // `read_through` is a block height, not an amount of value: a JSON number, as every
             // caller today already sends it.
-            Ok(Value::Bool(pending_cleared(&note, index_param(params, "read_through")?)))
+            // `window`: the chain's `proof_window_blocks` (optional; absent is the ledger's 256).
+            let window = proof_window(params.get("window").and_then(Value::as_u64));
+            Ok(Value::Bool(pending_cleared_within(&note, index_param(params, "read_through")?, window)))
         }
         "select_inputs" => {
             let notes: Vec<OwnedNote> =
@@ -4120,6 +4206,14 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
                 Some(_) => amount_param(params, "fee")?,
             };
             Ok(ser(&plan_burn(&notes, asset, amount, fee)?))
+        }
+        "bridge_fee_quote" => {
+            let state = params.get("bridge_state").cloned().unwrap_or(Value::Null);
+            let to_chain = u16::try_from(params["to_chain"].as_u64().ok_or("to_chain must be a number")?).map_err(|_| "to_chain is out of range".to_string())?;
+            let token = hex32(str_param(params, "token")?.trim_start_matches("0x"), "token")?;
+            let amount = amount_param(params, "amount")?;
+            let (fee, release) = bridge_fee_quote(&state, to_chain, &token, amount);
+            Ok(json!({ "fee": fee.to_string(), "release": release.to_string() }))
         }
         "burn_is_possible" => {
             let state = params.get("bridge_state").cloned().unwrap_or(Value::Null);
@@ -4287,6 +4381,12 @@ mod erased {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The chain these tests build transactions for: 19, chain-id bound (BIND-1's list), so a
+    /// request needs no genesis. The genesis-bound path (every chain after 19, the default 20)
+    /// has its own tests below.
+    const TEST_CHAIN_ID: u64 = 19;
+
 
     #[test]
     fn the_chain_id_bound_chains_are_the_vendored_clients_list() {
@@ -4726,7 +4826,7 @@ mod tests {
         let amount: u64 = req.amount.parse().unwrap();
         let (_w, b) = burn_unproven(&req).unwrap();
 
-        assert_eq!(b.tx.chain_id, DEFAULT_CHAIN_ID);
+        assert_eq!(b.tx.chain_id, TEST_CHAIN_ID);
         let bundle = b.tx.bundle.as_ref().expect("a burn carries a bundle");
         assert_eq!(bundle.nullifiers.len(), BUNDLE_SLOTS, "four nullifiers, not two bundles' worth");
         assert!(bundle.proof.is_empty(), "the proof is made after the transaction exists, over its binding");
@@ -5166,7 +5266,7 @@ mod tests {
         assert_eq!(ADDRESS_HRP, "rand1");
         // The wire names come from upstream, not from a second literal here.
         assert_eq!(ADDRESS_HRP, randprotocol_core::notes::ADDRESS_PREFIX);
-        assert_eq!(v["default_chain_id"], 19);
+        assert_eq!(v["default_chain_id"], 20);
         assert!(v.get("units_per_rand").is_some());
     }
 
@@ -5180,7 +5280,7 @@ mod tests {
     fn json_entry_point_reports_errors_as_json() {
         let v: Value = serde_json::from_str(&call("version", "{}")).unwrap();
         assert_eq!(v["ok"], true);
-        assert_eq!(v["value"]["default_chain_id"], 19);
+        assert_eq!(v["value"]["default_chain_id"], 20);
         assert_eq!(v["value"]["bundle_base_fee"], "1000000");
         let v: Value = serde_json::from_str(&call("wallet_info", r#"{"spend_key":"zz"}"#)).unwrap();
         assert_eq!(v["ok"], false);
@@ -5197,7 +5297,7 @@ mod tests {
     /// anchor and its height at `height`. `Ledger::validate` on it is what a chain-18 node runs.
     fn chain18_ledger(exec: &ZkExecutor, leaves: &[Word8], height: u64) -> randprotocol_core::Ledger {
         let mut ledger =
-            randprotocol_core::Ledger::new(DEFAULT_CHAIN_ID, ZkExecutor::hc_hidden_bundle_v3(), Default::default(), exec);
+            randprotocol_core::Ledger::new(TEST_CHAIN_ID, ZkExecutor::hc_hidden_bundle_v3(), Default::default(), exec);
         ledger.set_hc_auth(Some(ZkExecutor::hc_auth()));
         ledger.set_envelope_bytes(Some(randprotocol_core::notes::MEMO_ENVELOPE_BYTES));
         let gas: gas::GasConfig = serde_json::from_value(json!({
@@ -5234,7 +5334,7 @@ mod tests {
         let req = ProveRequest {
             genesis: None,
             spend_key: alice.spend_key_hex(),
-            chain_id: DEFAULT_CHAIN_ID,
+            chain_id: TEST_CHAIN_ID,
             to: bob.address.to_string(),
             asset: 0,
             amount: "1000000000".into(),
@@ -5697,6 +5797,41 @@ mod tests {
             assert_eq!(got.asset, 1);
         }
 
+        /// v0.6.8 `bridge.fees`: the depositor's note is `deposit_amount` (gross less the fee), and
+        /// the treasury — only the treasury — rebuilds the fee note of a deposit and of a burn.
+        #[test]
+        fn a_fee_chain_deposit_is_net_and_the_treasury_rebuilds_its_fee_notes() {
+            let user = wallet(41);
+            let treasury = wallet(42);
+            let net = Note::new(user.vk.pk(), [0; 8], 21_978_000, 1, 7);
+            let fee = Note::new(treasury.vk.pk(), [0; 8], 22_000, 1, 7);
+            let fee_json = json!({ "amount": "22000", "asset": 1, "time": 7, "r": word8_to_hex(&fee.r), "commitment": word8_to_hex(&fee.commitment()) });
+            let attest = json!({
+                "kind": "bridge_attest", "recipient": user.address.to_string(),
+                "amount": "22000000", "deposit_amount": "21978000", "asset_index": 1, "time": 7,
+                "r": word8_to_hex(&net.r), "commitment": word8_to_hex(&net.commitment()), "fee_note": fee_json,
+            });
+            let got = rebuilt_deposit(&user, &attest).expect("the net note hashes to the rendered commitment");
+            assert_eq!(got.amount, "21978000");
+            let mut gross = attest.clone();
+            gross.as_object_mut().unwrap().remove("deposit_amount");
+            assert!(rebuilt_deposit(&user, &gross).is_none(), "the gross does not hash to the net note: never placed");
+
+            let t = treasury.address.to_string();
+            let mine = rebuilt_notes_with(&treasury, &attest, Some(&t));
+            assert_eq!(mine.len(), 1, "the treasury gets the fee note, not the deposit");
+            assert_eq!(mine[0].amount, "22000");
+            assert!(rebuilt_notes_with(&user, &attest, Some(&t)).iter().all(|n| n.amount == "21978000"), "a user who is not the treasury gets only its deposit");
+            assert!(rebuilt_notes_with(&treasury, &attest, None).is_empty(), "no recipient named, no fee note");
+
+            let burn = json!({ "kind": "bridge_burn", "asset": 1, "amount": "22000000", "release_amount": "21978000", "fee_note": fee_json });
+            assert_eq!(rebuilt_notes_with(&treasury, &burn, Some(&t)).len(), 1);
+            assert!(rebuilt_notes_with(&user, &burn, Some(&t)).is_empty());
+            let mut lying = burn.clone();
+            lying["fee_note"]["amount"] = json!("99999");
+            assert!(rebuilt_notes_with(&treasury, &lying, Some(&t)).is_empty(), "a fee note that does not hash to its commitment is not believed");
+        }
+
         /// `plan_transfer` and `max_sendable` must agree for a token too, not only for RAND.
         #[test]
         fn plan_and_max_agree_for_a_token() {
@@ -5966,8 +6101,8 @@ mod tests {
         #[test]
         fn version_reports_chain_fourteen() {
             let v = constants();
-            assert_eq!(v["default_chain_id"], 19);
-            assert_eq!(v["chain_build"], "86941a1");
+            assert_eq!(v["default_chain_id"], 20);
+            assert_eq!(v["chain_build"], "c9c9bd3");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
@@ -7162,7 +7297,7 @@ mod tests {
                 activation_epoch: 0,
             };
             let mut l = randprotocol_core::Ledger::new(
-                DEFAULT_CHAIN_ID,
+                TEST_CHAIN_ID,
                 ZkExecutor::hc_hidden_bundle_v3(),
                 [(proposer.address(), entry)].into_iter().collect(),
                 exec,
@@ -7179,7 +7314,7 @@ mod tests {
             let deploy_exec = DeployExec(exec);
             let deploy = Action::Deploy { base_pc: program.base_pc, words: program.words.clone(), public: vec![] };
             let fee = gas::fee_floor(&deploy);
-            let tx = StubExecutor::bound(Transaction::shielded(DEFAULT_CHAIN_ID, stub_bundle(&l, 900, fee), deploy));
+            let tx = StubExecutor::bound(Transaction::shielded(TEST_CHAIN_ID, stub_bundle(&l, 900, fee), deploy));
             l.apply_tx(&tx, &proposer.address(), &deploy_exec).expect("the counter deploys");
             assert_eq!(l.program(&id).map(|r| r.words.len()), Some(program.words.len()));
             for seed in [910u32, 920] {
@@ -7192,7 +7327,7 @@ mod tests {
                     salt: [seed as u8; 32],
                     index: l.tokens().unwrap().next_index(),
                 };
-                let tx = StubExecutor::bound(Transaction::shielded(DEFAULT_CHAIN_ID, stub_bundle(&l, seed, gas::BUNDLE_BASE + REG_FEE), register));
+                let tx = StubExecutor::bound(Transaction::shielded(TEST_CHAIN_ID, stub_bundle(&l, seed, gas::BUNDLE_BASE + REG_FEE), register));
                 l.apply_tx(&tx, &proposer.address(), &deploy_exec).expect("the program's token registers");
             }
             assert_eq!(l.tokens().unwrap().next_index(), 3, "tokens 1 and 2 are the program's");
@@ -7241,7 +7376,7 @@ mod tests {
             let mut req = call.clone();
             for (k, v) in [
                 ("spend_key", json!(alice.spend_key_hex())),
-                ("chain_id", json!(DEFAULT_CHAIN_ID)),
+                ("chain_id", json!(TEST_CHAIN_ID)),
                 ("fee", json!(FEE.to_string())),
                 ("tier", json!(run.tier)),
                 ("gas_limit", json!(run.gas_limit)),
@@ -7376,7 +7511,7 @@ mod tests {
                 let mut v = request(41, inflow, json!([]), json!([]));
                 for (k, val) in [
                     ("spend_key", json!(alice.spend_key_hex())),
-                    ("chain_id", json!(DEFAULT_CHAIN_ID)),
+                    ("chain_id", json!(TEST_CHAIN_ID)),
                     ("fee", json!(FEE.to_string())),
                     ("anchor_height", json!(40)),
                     ("anchor_root", json!(word8_to_hex(&[0; 8]))),

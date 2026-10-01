@@ -1132,3 +1132,28 @@ test('a cancel during the header walk is a cancellation, not an unknown bridge',
   await assert.rejects(() => wallet.scan(SPEND_KEY, { signal: ctl.signal }), (err) => err.name === 'AbortError');
   assert.equal(store.writes.length, 0);
 });
+
+test('on a chain with bridge fees the recipient rebuilds its fee notes, a burn\'s included, and finds them at their leaves', async () => {
+  const fee = {
+    index: 18446744073709551615, note: '00'.repeat(112), cm: HEX64('fe'), nf: HEX64('ff'),
+    amount: '22000', asset: 1, time: 5, from: '00'.repeat(32), height: 0, spent: false, pending: null,
+  };
+  const asked = [];
+  const core = stubCore({
+    rebuilt_deposit: () => { throw new Error('a fee chain asks rebuilt_notes, with the recipient'); },
+    rebuilt_notes: ({ action, fee_recipient }) => { asked.push([action.kind, fee_recipient]); return action.kind === 'bridge_burn' ? [fee] : []; },
+  });
+  const client = stubClient({
+    bridgeState: () => ({ enabled: true, fees: { mint_bps: 10, burn_bps: 10, recipient: 'rand1treasury' } }),
+    blockByHeight: (h) => ({ height: h, timestamp_ms: 1788000000000, transactions: h === 5 ? [{ action: { kind: 'bridge_burn', amount: '22000000' } }, { action: { kind: 'transfer' } }] : [] }),
+    commitments: (from) => (from === 0 ? [{ index: 0, cm: HEX64('fe'), height: 6, envelope: envelope() }] : []),
+  });
+  const store = memoryStore();
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await wallet.scan(SPEND_KEY, {});
+  assert.deepEqual(asked, [['bridge_burn', 'rand1treasury']], 'only the burn was asked about, with the recipient');
+  const placed = store.current.notes.find((n) => n.cm === HEX64('fe'));
+  assert.ok(placed, 'the fee note was placed at its leaf');
+  assert.equal(placed.index, 0);
+  assert.equal(placed.amount, '22000');
+});
