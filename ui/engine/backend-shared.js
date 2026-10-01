@@ -84,12 +84,13 @@ import { makeRpc, isAllowedRpcMethod, rpcUrlList } from './rpc.js';
 import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, HEIGHT_SPAN, envelopeBytesOf } from './wallet.js';
 import { LEGACY_ENVELOPE_CHAIN_IDS } from '../lib/memo.js';
 import { listContacts, addContact, removeContact, nameOf as contactNameOf, addressOf as contactAddressOf, CONTACTS_KEY } from '../lib/contacts.js';
-import { checkFee, checkTokens, checkSubmitted, checkBridgeState, MAX_TOKEN_PAGE, NodeReplyError } from './validate.js';
+import { checkFee, checkTokens, checkSubmitted, checkBridgeState, checkLimits, MAX_TOKEN_PAGE, NodeReplyError } from './validate.js';
 import {
   PENDING_PROOF_KEY, checkProverUrl, makeProverClient, readInfo, remoteProve, pollRemoteProof,
   pendingProof, cancelPendingProof,
 } from './prover.js';
 import { runPhased } from './execute.js';
+import { normalizeInvokeRequest, invokeEffects, invokeError } from './invoke.js';
 
 /**
  * The one key under `storage.session` — the unlocked wallet session, and the only place the
@@ -1703,7 +1704,9 @@ export function makeSharedBackend({
       // spend key, on this device: seconds natively, about half a minute in a browser. Reported as
       // its own step of 'prove', so the wait is not silent and says what is happening where.
       if (guests.split_authorisation && typeof onPhase === 'function') onPhase('prove', { prover: route.name, authorising: true });
-      const prepared = kind === 'burn' ? await c.prepareBurn(params) : await c.prepareTransfer(params);
+      const prepared = kind === 'burn'
+        ? await c.prepareBurn(params)
+        : kind === 'invoke' ? await c.prepareInvoke(params) : await c.prepareTransfer(params);
       return remoteProve({
         client: proverClient, core, prepared, storage,
         meta: { kind, name: route.name, ...(meta || {}) },
@@ -1767,6 +1770,10 @@ export function makeSharedBackend({
           const opts = { onPhase: report, signal: options.signal, client, wait: true };
           if (rec.kind === 'burn') {
             const sub = await engine.completeBurn(spendKey, res, opts);
+            return { hash: sub.hash };
+          }
+          if (rec.kind === 'invoke') {
+            const sub = await engine.completeInvoke(spendKey, res, opts);
             return { hash: sub.hash };
           }
           const sub = await engine.completeSend(spendKey, res, { ...opts, to: rec.to, memo: rec.memo || '' });
@@ -2098,6 +2105,90 @@ export function makeSharedBackend({
     },
   };
 
+  // ----------------------------------------------------------------------- RPL-2 programs --
+  /**
+   * OPTIONAL in the Backend contract, like `bridge`: a site's `window.rand.invoke` (the browser
+   * extension's approval window, extension/shared/invoke.js) and nothing else. Every rejection
+   * carries a string `code` the site branches on (durian.market's `web/lib/rand/provider.ts`), and
+   * `definite: true` wherever nothing was sent.
+   *
+   * The request is the site's, so it is held to its shape here (`normalizeInvokeRequest`) and
+   * everything the window shows of it is this wallet's own reading (`invokeEffects`), never the
+   * site's summary beyond its title.
+   */
+  const program = {
+    /**
+     * `{ok, reason?, code?, via?}` — whether this device can invoke on this chain, in the order a
+     * send asks it: a proof route first (no node needed: the wasm shells have none without a paired
+     * prover), then the chain's `program_state` section.
+     */
+    async canInvoke() {
+      const prove = (await proveRoute()).answer;
+      if (!prove || !prove.ok) {
+        return { ok: false, code: 'PROVER_UNAVAILABLE', reason: (prove && prove.reason) || 'Proving is not available here.' };
+      }
+      const { client } = await requireVerifiedChain();
+      const limits = checkLimits(await client.getLimits());
+      if (!limits.programState) {
+        return { ok: false, code: 'PROGRAMS_UNSUPPORTED', reason: 'This chain does not run programs yet.' };
+      }
+      return prove.via ? { ok: true, via: prove.via } : { ok: true };
+    },
+
+    /**
+     * What the approval window shows: `{title, spend, receive, fee, cells, tier}` — the site's
+     * title, and this wallet's reading of what leaves and what comes back, with the fee the chain
+     * quotes for it. Everything that can refuse the invoke before a proof runs here
+     * (`engine.quoteInvoke`), so a window never offers Approve for a request that cannot be sent.
+     */
+    async quote(raw) {
+      const request = normalizeInvokeRequest(raw);
+      const { spend_key: spendKey } = await requireUnlockedCoded();
+      const { client } = await requireVerifiedChain();
+      const q = await engine.quoteInvoke(spendKey, request, { client });
+      const effects = invokeEffects(request, q.fee);
+      return { title: request.title, ...effects, cells: q.cells, tier: q.dry.tier };
+    },
+
+    /**
+     * `(raw, onPhase, options?)` → `{hash}` once the node has accepted the transaction (not after
+     * it commits: the site follows the transaction itself, and the wallet's next scan finds the
+     * payout notes). Phases as `send.send`'s.
+     */
+    async invoke(raw, onPhase, options = {}) {
+      const request = normalizeInvokeRequest(raw);
+      // Minutes of user-initiated work: the idle lock must not take the spend key half-way.
+      const release = holdUnlock();
+      try {
+        await refuseWhilePending();
+        const { answer: { ok, reason }, route } = await proveRoute();
+        if (!ok) throw invokeError('PROVER_UNAVAILABLE', reason);
+        const prove = await proveHookFor(route);
+        const { client, identity } = await requireVerifiedChain();
+        return await runPhased(onPhase, async (report) => {
+          const { spend_key: spendKey } = await requireUnlockedCoded();
+          const sub = await engine.invoke(spendKey, {
+            request, wait: false, onPhase: report, signal: options.signal, client, identity, prove,
+          });
+          return { hash: sub.hash };
+        });
+      } finally {
+        release();
+      }
+    },
+  };
+
+  /** `requireUnlocked`, with the page-facing code on its refusal. */
+  async function requireUnlockedCoded() {
+    try {
+      return await requireUnlocked();
+    } catch (err) {
+      if (err && !err.code) err.code = 'LOCKED';
+      if (err) err.definite = true;
+      throw err;
+    }
+  }
+
   const rpc = {
     /** The raw escape hatch — but only into this chain's own namespaces. */
     async call(method, params = []) {
@@ -2210,5 +2301,8 @@ export function makeSharedBackend({
   // (`ctx.backend.bridge?.canWithdraw`). Both real shells do supply one — the wasm shell's always
   // refuses, which is honest rather than absent, and proves the shape out.
   if (typeof executeWithdraw === 'function') backend.bridge = bridge;
+  // `program` (RPL-2 invoke) is OPTIONAL and not in BACKEND_SHAPE either; every shell that can prove
+  // a bundle — on the device or through a paired prover — has it.
+  backend.program = program;
   return backend;
 }

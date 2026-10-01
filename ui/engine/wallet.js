@@ -29,8 +29,10 @@ import {
   checkHead, checkTreeInfo, checkCommitments, checkNullifiers, checkAnchor, checkWitness,
   checkBlockHeader, checkBlockHeaders, checkBridgeState, checkSubmitted, checkGenesisHash, checkBlockActions,
   checkTransaction, checkLimits, intField, NodeReplyError,
+  checkFee, checkProgramCode, checkProgramPublic, checkProgramCell, checkProgramVault,
 } from './validate.js';
 import { isTransportFailure } from './rpc.js';
+import { invokeError, createdCells, vaultShortfall, isStaleRead } from './invoke.js';
 
 const PAGE = 500;
 export const COMMIT_TIMEOUT_MS = 180_000;
@@ -48,6 +50,10 @@ const MAX_BLOCK_TIMES_PER_SCAN = 128;
  * over it (the chain-14 core does).
  */
 export const BUNDLE_INPUTS = 2;
+
+/** The vendored `gas::MAX_PROOF_BYTES`, for a node that reports a gas section but no
+ *  `max_proof_bytes`: what an invoke's fee quotes the call proof's bytes at (see `quoteInvoke`). */
+const DEFAULT_PROOF_CAP = 2_097_152;
 
 /**
  * The chain's `envelope_bytes`, from `rand_getLimits` on `client` — the client the caller verified,
@@ -75,7 +81,7 @@ export async function envelopeBytesOf(client, signal) {
  * as `envelopeBytesOf`.
  */
 export async function chainLimitsOf(client, signal) {
-  const none = { envelopeBytes: null, maxProofBytes: null, bundleGasLimit: null };
+  const none = { envelopeBytes: null, maxProofBytes: null, bundleGasLimit: null, programState: null };
   if (!client || typeof client.getLimits !== 'function') return none;
   let reply;
   try {
@@ -370,6 +376,15 @@ export function coreApi(core) {
      * no I/O. Resolves `true` or rejects with the chain's own sentence.
      */
     burnIsPossible: (req) => call('burn_is_possible', req),
+    // RPL-2 `invoke`. `dry_run_invoke` runs the program on the transition in the emulator (no
+    // proof): the tier, the gas and whether the program accepts it at all, after checking that the
+    // node's code and public input hash to the program id. `plan_invoke` is `plan_burn`'s twin;
+    // `prove_invoke`/`prepare_invoke` make the call proof (and the auth proof) here, and the bundle
+    // proof here or at the paired prover.
+    dryRunInvoke: (req) => call('dry_run_invoke', req),
+    planInvoke: (req) => call('plan_invoke', req),
+    proveInvoke: (req) => call('prove_invoke', req),
+    prepareInvoke: (req) => call('prepare_invoke', req),
     openWithTxKey: (cm, envelope, tx_key) => call('open_with_tx_key', { cm, envelope, tx_key }),
     formatAmount: (units) => call('format_amount', { units: String(units) }),
     parseAmount: (text) => call('parse_amount', { text }),
@@ -1290,6 +1305,193 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     return submission;
   }
 
+  /**
+   * Everything an RPL-2 invoke can be refused for **without proving anything**, and its price:
+   * `request` is `normalizeInvokeRequest`'s (ui/engine/invoke.js). In this order, the cheapest
+   * question first:
+   *
+   *   1. the chain runs programs at all (`rand_getLimits.program_state`) — `PROGRAMS_UNSUPPORTED`;
+   *   2. the program exists, and its code and public input are what the core will prove against
+   *      (`dry_run_invoke` hashes them to the id; a node serving other code is refused there);
+   *   3. every cell the site read is still what the chain holds — `STALE_READ`, which the site
+   *      answers by re-quoting (the chain would refuse the same transaction `StaleRead`, after the
+   *      proofs were paid for);
+   *   4. the program accepts the transition (`dry_run_invoke`: the emulator, no proof) — its tier
+   *      and gas, which price the fee;
+   *   5. the fee: `rand_estimateFee {"kind":"invoke"}` at that tier and gas, the proof's bytes
+   *      quoted at the chain's cap as the CLI quotes them (`hardened_call_quote_bytes`: the fee is
+   *      in the bundle, which the call proof commits to, so it is fixed before the proof exists),
+   *      plus `cell_fee` per cell the writes create;
+   *   6. the vault covers what the transition pays out — `VAULT_SHORT`;
+   *   7. this wallet's notes cover the deposit and the fee (`plan_invoke`) — `INSUFFICIENT_FUNDS`.
+   *
+   * Returns `{transition, dry, fee, cells, limits, plan, notes}`. `client` is the caller's verified
+   * one: every read of a quote comes from the node the invoke will be submitted to.
+   */
+  async function quoteInvoke(spendKey, request, { signal, client: given, scanFirst = true } = {}, settingsOverride) {
+    const s = settingsOverride || (await currentSettings());
+    const client = given || (await rpcFor(s));
+    const limits = await chainLimitsOf(client, signal);
+    if (!limits.programState) {
+      throw invokeError('PROGRAMS_UNSUPPORTED', 'This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent.');
+    }
+    const program = request.program;
+    const code = checkProgramCode(await client.getProgramCode(program, { signal }));
+    if (!code) throw invokeError('NO_PROGRAM', `There is no program ${program.slice(0, 12)}… on this chain. Nothing was sent.`);
+    const publicHex = checkProgramPublic(await client.getProgramPublic(program, { signal })) ?? '';
+    const live = async (key) => {
+      const v = checkProgramCell(await client.getProgramCell(program, key, { signal }), key);
+      if (v === null) throw invokeError('PROGRAMS_UNSUPPORTED', 'This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent.');
+      return v;
+    };
+    for (const r of request.reads) {
+      // eslint-disable-next-line no-await-in-loop -- a handful of cells, one node, in order
+      if ((await live(r.key)) !== r.value) {
+        throw invokeError('STALE_READ', 'The pool changed since this page read it. Nothing was sent; the site can quote again.');
+      }
+    }
+    const cells = await createdCells(request, live);
+    const transition = {
+      program,
+      program_code: code,
+      public_hex: publicHex,
+      private_inputs: request.inputs,
+      reads: request.reads,
+      writes: request.writes,
+      inflow: request.inflow,
+      pays: request.pays,
+      mints: request.mints,
+    };
+    let dry;
+    try {
+      dry = await c.dryRunInvoke(transition);
+    } catch (err) {
+      throw invokeError('PROGRAM_REFUSED', `The program would not accept this request, so nothing was sent: ${(err && err.message) || err}`);
+    }
+    // Under a `gas` section (`bundle_gas_limit` set: chain 18 and later) the call is priced by the
+    // gas it declares and every byte of its proof; without one, by tier alone.
+    const gasSection = limits.bundleGasLimit !== null;
+    const spec = {
+      kind: 'invoke',
+      tier: dry.tier,
+      keccak_log_height: dry.keccak_log_height,
+      sha256_log_height: dry.sha256_log_height,
+      created_cells: cells,
+      ...(gasSection ? { gas: dry.gas_limit, bytes: limits.maxProofBytes ?? DEFAULT_PROOF_CAP } : {}),
+    };
+    const fee = checkFee(await client.estimateFee(spec, { signal }));
+    if (request.pays.length > 0) {
+      const vault = checkProgramVault(await client.getProgramVault(program, { signal }));
+      const short = vaultShortfall(request, vault || []);
+      if (short) {
+        throw invokeError('VAULT_SHORT', 'The pool does not hold enough to pay this out. Nothing was sent; the site can quote again.');
+      }
+    }
+    const st = scanFirst ? await scan(spendKey, { signal, client }, s) : await loadStore();
+    let plan;
+    try {
+      plan = await c.planInvoke({
+        notes: st.notes || [],
+        burn_r: request.inflow.rand,
+        burn_asset: request.inflow.kind === 'none' ? 0 : request.inflow.asset,
+        burn_a: request.inflow.kind === 'none' ? '0' : request.inflow.amount,
+        fee,
+      });
+    } catch (err) {
+      throw invokeError('INSUFFICIENT_FUNDS', `Rand Wallet does not hold enough to cover this and its network fee: ${(err && err.message) || err}`);
+    }
+    return { transition, dry, fee: String(plan.fee ?? fee), cells, limits, plan, notes: st.notes || [], st };
+  }
+
+  /**
+   * Quote, prove and submit an RPL-2 invoke. `onPhase` receives 'select' | 'witness' | 'prove' |
+   * 'submit' | 'wait'. Resolves with the submission record.
+   *
+   * The quote is taken again here, whatever the approval window showed, because time has passed:
+   * the cells may have moved and the notes may be spent. **The anchor is taken last**, after every
+   * other read and right before the proofs: the bundle's `time` is the anchor's height, and the
+   * chain refuses a bundle more than 256 blocks behind its tip when the transaction arrives — on a
+   * three-second chain, under thirteen minutes for the call proof (made here), the auth proof (made
+   * here) and the bundle proof (here, or at the paired prover through `prove`).
+   */
+  async function invoke(spendKey, { request, wait = true, onPhase, signal, client: given, identity, prove }, settingsOverride) {
+    const s = settingsOverride || (await currentSettings());
+    const client = given || (await rpcFor(s));
+    onPhase?.('select');
+    const q = await quoteInvoke(spendKey, request, { signal, client }, s);
+    const inputs = q.plan.inputs || [];
+    const feeInputs = q.plan.fee_inputs || [];
+    onPhase?.('witness');
+    const { hcBundle, hcAuth, profile } = await proofParamsOf(client, signal);
+    const { anchor, paths } = await anchorAndWitnesses(client, [...inputs, ...feeInputs], signal);
+    if (typeof prove !== 'function') onPhase?.('prove');
+    const provenChainId = provenChainIdOf(q.st, identity);
+    const req = {
+      spend_key: spendKey,
+      chain_id: provenChainId,
+      ...q.transition,
+      fee: q.fee,
+      tier: q.dry.tier,
+      gas_limit: q.limits.bundleGasLimit !== null ? q.dry.gas_limit : null,
+      anchor_height: anchor.height,
+      anchor_root: anchor.root,
+      inputs: inputs.map((note, i) => ({ note, path: paths[i] })),
+      fee_inputs: feeInputs.map((note, i) => ({ note, path: paths[inputs.length + i] })),
+      profile,
+      envelope_bytes: q.limits.envelopeBytes,
+      bundle_gas_limit: q.limits.bundleGasLimit,
+      ...(q.limits.maxProofBytes ? { max_proof_bytes: q.limits.maxProofBytes } : {}),
+      ...guestFields(hcBundle, hcAuth),
+    };
+    const res = typeof prove === 'function'
+      ? await prove({ kind: 'invoke', request: req, maxProofBytes: q.limits.maxProofBytes, hcBundle, hcAuth, meta: { program: request.program }, onPhase, signal })
+      : await c.proveInvoke(req);
+    return completeInvoke(spendKey, res, { wait, onPhase, signal, client }, s);
+  }
+
+  /** `completeSend` for an invoke: submit, record, wait, re-scan. A stale read refused by the
+   *  chain at submit is `STALE_READ`, like one caught by the quote. */
+  async function completeInvoke(spendKey, res, { wait = true, onPhase, signal, client: given }, settingsOverride) {
+    const s = settingsOverride || (await currentSettings());
+    const client = given || (await rpcFor(s));
+    throwIfAborted(signal);
+    onPhase?.('submit');
+    let hash;
+    try {
+      hash = checkSubmitted('rand_sendTransaction', await client.sendTransaction(res.tx_hex));
+    } catch (err) {
+      if (isStaleRead(err)) {
+        throw invokeError('STALE_READ', 'The pool changed while this was being proved. Nothing was sent; the site can quote again.');
+      }
+      throw err;
+    }
+    const fresh = await loadStore();
+    for (const n of fresh.notes) if ((res.spent_indices || []).includes(n.index)) n.pending = res.time;
+    const submission = {
+      hash, kind: 'invoke', program: res.program, asset: Number(res.asset) || 0,
+      burn_r: res.burn_r, burn_asset: res.burn_asset, burn_a: res.burn_a,
+      // What the transition pays this wallet: the notes the next scan finds by trial decryption.
+      payouts: (res.payouts || []).map((n) => ({ asset: Number(n.asset) || 0, amount: String(n.amount) })),
+      change: res.change, fee: res.fee, fee_change: res.fee_change, time: res.time, tier: res.tier,
+      proof_bytes: res.proof_bytes, spent_indices: res.spent_indices || [],
+      status: 'pending', created_ms: Date.now(),
+    };
+    fresh.submissions.unshift(submission);
+    await persist(fresh);
+    if (wait) {
+      onPhase?.('wait');
+      const committed = await waitForTransaction(client, hash, COMMIT_TIMEOUT_MS);
+      if (committed) {
+        const after = await loadStore();
+        const sub = after.submissions.find((x) => x.hash === hash);
+        if (sub) { sub.status = 'committed'; sub.height = committed.height; }
+        await persist(after);
+        await scan(spendKey, { client }, s);
+      }
+    }
+    return submission;
+  }
+
   /** Testnet faucet: RAND into a note only this wallet can open. */
   async function faucet(spendKey, address, settingsOverride) {
     const s = settingsOverride || (await currentSettings());
@@ -1308,7 +1510,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
   }
 
   return {
-    scan, rescan, send, burn, completeSend, completeBurn, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable,
+    scan, rescan, send, burn, completeSend, completeBurn, quoteInvoke, invoke, completeInvoke, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable,
     // Exposed so a backend can prove the chain WITHOUT scanning — the gate in front of send and
     // faucet is two RPC calls, not a page of leaves.
     chainIdentity, chainVerdict,

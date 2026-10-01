@@ -72,6 +72,10 @@ export const METHODS = {
   getProgram: { params: ['id'], explore: 'lookup' },
   getProgramPublic: { params: ['id'] },
   getProgramCode: { params: ['id'], explore: 'lookup' },
+  // RPL-2 program state (genesis-gated; `{"enabled": false}` on a chain without the section).
+  getProgramCell: { params: ['id', 'key'] },
+  getProgramCells: { params: ['id', 'page'] },
+  getProgramVault: { params: ['id'] },
 
   // -- transactions, blocks & receipts --------------------------------------------------------
   getTransaction: { params: ['hash'], explore: 'lookup' },

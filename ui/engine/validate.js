@@ -516,7 +516,85 @@ export function checkLimits(reply) {
   const bundleGasLimit = g === undefined || g === null
     ? null
     : intField(m, 'bundle_gas_limit', g, { max: Number.MAX_SAFE_INTEGER }) || fail(m, 'bundle_gas_limit is zero', g);
-  return { envelopeBytes, maxProofBytes, bundleGasLimit };
+  // RPL-2 (fullnode v0.6.8): `{cell_fee, max_reads, max_writes, max_payouts}` on a chain whose
+  // genesis carries a `program_state` section, `null` (or no key, an older node) on one without —
+  // where every invoke is refused, so the wallet says so before anything is built.
+  const ps = reply.program_state;
+  let programState = null;
+  if (ps !== undefined && ps !== null) {
+    if (typeof ps !== 'object' || Array.isArray(ps)) fail(m, 'program_state is not an object', ps);
+    programState = {
+      cellFee: unitsField(m, 'program_state.cell_fee', ps.cell_fee),
+      maxReads: intField(m, 'program_state.max_reads', ps.max_reads, { max: 1024 }),
+      maxWrites: intField(m, 'program_state.max_writes', ps.max_writes, { max: 1024 }),
+      maxPayouts: intField(m, 'program_state.max_payouts', ps.max_payouts, { max: 1024 }),
+    };
+  }
+  return { envelopeBytes, maxProofBytes, bundleGasLimit, programState };
+}
+
+// --------------------------------------------------------------------- RPL-2 program state ---
+// What an invoke reads from the node before it proves anything. None of it is trusted further than
+// its shape: the core hashes the code and public input against the program id (`dry_run_invoke`
+// refuses a node serving other code), and the cells are re-checked by the chain itself (a stale
+// read is refused there, `StaleRead`).
+
+/** A program's code is at most `max_program_words` (65 535 on the devnet) words. */
+const MAX_PROGRAM_WORDS = 1 << 20;
+const WORD8_RE = /^(0x)?[0-9a-fA-F]{64}$/;
+const word8 = (method, what, value) => {
+  if (typeof value !== 'string' || !WORD8_RE.test(value)) fail(method, `${what} is not 64 hex characters`, value);
+  return value.replace(/^0x/, '').toLowerCase();
+};
+
+/** `{"enabled": false}`: what every program-state method answers on a chain without the section. */
+function sectionOff(reply) {
+  return !!reply && typeof reply === 'object' && !Array.isArray(reply) && reply.enabled === false;
+}
+
+/** `rand_getProgramCode` → `{base_pc, words}`, or `null` for an id no program has. */
+export function checkProgramCode(reply) {
+  const m = 'rand_getProgramCode';
+  if (reply === null) return null;
+  const r = objectReply(m, reply);
+  const base_pc = intField(m, 'base_pc', r.base_pc, { max: 0xffffffff });
+  const words = arrayReply(m, r.words, MAX_PROGRAM_WORDS);
+  for (const w of words) intField(m, 'a code word', w, { max: 0xffffffff });
+  return { base_pc, words };
+}
+
+/** `rand_getProgramPublic` → the public words as hex (`""` without), or `null` for no program. */
+export function checkProgramPublic(reply) {
+  const m = 'rand_getProgramPublic';
+  if (reply === null) return null;
+  const hex = hexBlob(m, 'the public input', reply, { max: 8 * MAX_PROGRAM_WORDS });
+  if (hex.length % 8 !== 0) fail(m, 'the public input is not whole words', hex.length);
+  return hex.toLowerCase();
+}
+
+/** `rand_getProgramCell` → the cell's value (64 hex; zeros for absent), or `null` without the section. */
+export function checkProgramCell(reply, key) {
+  const m = 'rand_getProgramCell';
+  if (sectionOff(reply)) return null;
+  const r = objectReply(m, reply);
+  const got = word8(m, 'key', r.key);
+  if (key !== undefined && got !== String(key).replace(/^0x/, '').toLowerCase()) fail(m, 'the reply is for another key', got);
+  return word8(m, 'value', r.value);
+}
+
+/** `rand_getProgramVault` → `[{asset, amount}]` ascending, or `null` without the section. */
+export function checkProgramVault(reply) {
+  const m = 'rand_getProgramVault';
+  if (sectionOff(reply)) return null;
+  const rows = arrayReply(m, reply, 4096);
+  let last = -1;
+  return rows.map((row) => {
+    const r = objectReply(m, row);
+    const asset = intField(m, 'asset', r.asset, { max: 0xffffffff });
+    if (asset <= last) fail(m, 'the vault is not in ascending asset order', asset);
+    last = asset;
+    return { asset, amount: unitsField(m, 'amount', r.amount) };
+  });
 }
 
 /** `rand_sendTransaction` / `rand_mint` → the transaction hash. */

@@ -388,10 +388,10 @@ test('a transaction record yields only a validated height', () => {
 
 test('limits: envelope_bytes, max_proof_bytes and the chain-18 bundle_gas_limit, each null when absent', async () => {
   const { checkLimits } = await import('../engine/validate.js');
-  assert.deepEqual(checkLimits({ max_block_bytes: 4194304 }), { envelopeBytes: null, maxProofBytes: null, bundleGasLimit: null });
+  assert.deepEqual(checkLimits({ max_block_bytes: 4194304 }), { envelopeBytes: null, maxProofBytes: null, bundleGasLimit: null, programState: null });
   assert.deepEqual(
     checkLimits({ envelope_bytes: 1860, max_proof_bytes: 8388608, bundle_gas_limit: 20479, gas_metering: 'circuit', gas_price: '100' }),
-    { envelopeBytes: 1860, maxProofBytes: 8388608, bundleGasLimit: 20479 },
+    { envelopeBytes: 1860, maxProofBytes: 8388608, bundleGasLimit: 20479, programState: null },
   );
   assert.equal(checkLimits({ bundle_gas_limit: null }).bundleGasLimit, null, 'a chain without a gas section');
   rejects(() => checkLimits({ bundle_gas_limit: 0 }), /bundle_gas_limit is zero/);
@@ -399,4 +399,36 @@ test('limits: envelope_bytes, max_proof_bytes and the chain-18 bundle_gas_limit,
   rejects(() => checkLimits({ bundle_gas_limit: -1 }), /bundle_gas_limit/);
   rejects(() => checkLimits({ envelope_bytes: 0 }), /envelope_bytes is zero/);
   rejects(() => checkLimits(null), /not an object/);
+});
+
+test('limits: program_state is read when the chain has the section, null when it has not', async () => {
+  const { checkLimits } = await import('../engine/validate.js');
+  const ps = { cell_fee: '10000000', max_reads: 8, max_writes: 8, max_payouts: 4 };
+  assert.deepEqual(checkLimits({ program_state: ps }).programState, { cellFee: '10000000', maxReads: 8, maxWrites: 8, maxPayouts: 4 });
+  assert.equal(checkLimits({ program_state: null }).programState, null);
+  rejects(() => checkLimits({ program_state: { ...ps, cell_fee: 1.5 } }), /cell_fee/);
+  rejects(() => checkLimits({ program_state: { ...ps, max_writes: -1 } }), /max_writes/);
+  rejects(() => checkLimits({ program_state: [] }), /program_state is not an object/);
+});
+
+test('program state replies: code, public input, cells and vault are held to their shapes', async () => {
+  const { checkProgramCode, checkProgramPublic, checkProgramCell, checkProgramVault } = await import('../engine/validate.js');
+  assert.deepEqual(checkProgramCode({ base_pc: 0, words: [19, 4294967295] }), { base_pc: 0, words: [19, 4294967295] });
+  assert.equal(checkProgramCode(null), null, 'no program under that id');
+  rejects(() => checkProgramCode({ base_pc: 0, words: [4294967296] }), /code word/);
+  rejects(() => checkProgramCode({ base_pc: -4, words: [] }), /base_pc/);
+  assert.equal(checkProgramPublic(''), '');
+  assert.equal(checkProgramPublic('0100000002000000'), '0100000002000000');
+  assert.equal(checkProgramPublic(null), null);
+  rejects(() => checkProgramPublic('010000'), /whole words/);
+  const key = 'ab'.repeat(32);
+  assert.equal(checkProgramCell({ key, value: '00'.repeat(32) }, key), '00'.repeat(32));
+  assert.equal(checkProgramCell({ key: `0x${key.toUpperCase()}`, value: 'CD'.repeat(32) }, key), 'cd'.repeat(32));
+  assert.equal(checkProgramCell({ enabled: false }, key), null, 'a chain without the section');
+  rejects(() => checkProgramCell({ key: 'ef'.repeat(32), value: '00'.repeat(32) }, key), /another key/);
+  rejects(() => checkProgramCell({ key, value: 'zz' }, key), /value/);
+  assert.deepEqual(checkProgramVault([{ asset: 0, amount: '10' }, { asset: 1, amount: 5 }]), [{ asset: 0, amount: '10' }, { asset: 1, amount: '5' }]);
+  assert.equal(checkProgramVault({ enabled: false }), null);
+  rejects(() => checkProgramVault([{ asset: 1, amount: '1' }, { asset: 1, amount: '1' }]), /ascending/);
+  rejects(() => checkProgramVault([{ asset: 0, amount: '-1' }]), /amount/);
 });
