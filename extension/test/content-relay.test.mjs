@@ -111,3 +111,27 @@ test('a re-injected script takes over: the orphan falls silent and the page hear
   assert.deepEqual(replies(win, 'r2'), [{ target: 'rand-wallet:content', id: 'r2', ok: true, result: 'rand1live' }]);
   assert.deepEqual(plain(live.sent), [{ type: 'rand:getAddress' }]);
 });
+
+test('invoke is the one method whose request is forwarded, and an oversized one never reaches the background', async () => {
+  const win = fakeWindow();
+  const chrome = fakeChrome({ answer: (msg) => ({ pending: msg.type === 'rand:invoke' ? 'i1' : 'c1' }) });
+  inject(win, chrome);
+  const params = { program: 'ab'.repeat(32), inputs: [1, 2] };
+  win.postMessage({ target: 'rand-wallet:page', id: 'v1', method: 'invoke', params }, ORIGIN);
+  // A connect that tries to smuggle parameters through gets none of them forwarded.
+  win.postMessage({ target: 'rand-wallet:page', id: 'v2', method: 'connect', params: { evil: true } }, ORIGIN);
+  await tick();
+  assert.deepEqual(plain(chrome.sent), [{ type: 'rand:invoke', params }, { type: 'rand:connect' }]);
+  // The verdict, when it comes, goes to the request that waited for it.
+  for (const fn of chrome.decisions) fn({ type: 'rand:decision', id: 'i1', ok: true, result: { tx: 'cd'.repeat(32) } });
+  await tick();
+  assert.deepEqual(replies(win, 'v1'), [{ target: 'rand-wallet:content', id: 'v1', ok: true, result: { tx: 'cd'.repeat(32) } }]);
+
+  const big = { program: 'ab'.repeat(32), inputs: Array.from({ length: 70000 }, () => 4294967295) };
+  win.postMessage({ target: 'rand-wallet:page', id: 'v3', method: 'invoke', params: big }, ORIGIN);
+  win.postMessage({ target: 'rand-wallet:page', id: 'v4', method: 'invoke' }, ORIGIN);
+  await tick();
+  assert.equal(chrome.sent.length, 2, 'neither reached the background');
+  assert.equal(replies(win, 'v3')[0].error.code, 'BAD_REQUEST');
+  assert.equal(replies(win, 'v4')[0].error.code, 'BAD_REQUEST');
+});

@@ -2136,7 +2136,7 @@ export function makeSharedBackend({
     },
 
     /**
-     * What the approval window shows: `{title, spend, receive, fee, cells, tier}` — the site's
+     * What the approval window shows: `{title, program, spend, receive, fee, cells, tier}` — the site's
      * title, and this wallet's reading of what leaves and what comes back, with the fee the chain
      * quotes for it. Everything that can refuse the invoke before a proof runs here
      * (`engine.quoteInvoke`), so a window never offers Approve for a request that cannot be sent.
@@ -2147,7 +2147,7 @@ export function makeSharedBackend({
       const { client } = await requireVerifiedChain();
       const q = await engine.quoteInvoke(spendKey, request, { client });
       const effects = invokeEffects(request, q.fee);
-      return { title: request.title, ...effects, cells: q.cells, tier: q.dry.tier };
+      return { title: request.title, program: request.program, ...effects, cells: q.cells, tier: q.dry.tier };
     },
 
     /**

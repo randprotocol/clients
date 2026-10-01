@@ -62,7 +62,7 @@ ext.alarms.onAlarm.addListener(async (alarm) => {
 // extension/test/background.test.mjs holds the three in step. A tab the extension may not touch
 // (a localhost the user never granted) refuses the injection; that tab keeps its orphan and its
 // "reload the page" answer, which is the situation before this existed.
-const PROVIDER_SITES = ['https://randbridge.org/*', 'https://*.randbridge.org/*', 'http://localhost/*', 'http://127.0.0.1/*'];
+const PROVIDER_SITES = ['https://randbridge.org/*', 'https://*.randbridge.org/*', 'https://durian.market/*', 'https://www.durian.market/*', 'http://localhost/*', 'http://127.0.0.1/*'];
 
 async function reinjectProvider() {
   if (!ext.scripting || !ext.tabs || typeof ext.tabs.query !== 'function') return;
@@ -112,7 +112,18 @@ const providerHost = globalThis.makeRandProviderHost({
     const query = new URLSearchParams({ id, origin, tab: Number.isInteger(tabId) ? String(tabId) : '' });
     await ext.windows.create({ url: ext.runtime.getURL(`connect.html?${query}`), type: 'popup', width: 380, height: 600 });
   },
+  // The approval window for a site's `invoke` (invoke.html): it reads the request from the host by
+  // id, and stays open for the whole proof — minutes — so it is a window of its own, not the
+  // toolbar popup, which the browser destroys the moment it loses focus. Its id is kept so that
+  // closing it answers the site (`windowClosed`).
+  openInvoke: async ({ id, origin }) => {
+    const query = new URLSearchParams({ id, origin });
+    const win = await ext.windows.create({ url: ext.runtime.getURL(`invoke.html?${query}`), type: 'popup', width: 400, height: 660 });
+    return win && Number.isInteger(win.id) ? win.id : null;
+  },
 });
+
+ext.windows?.onRemoved?.addListener((windowId) => { void providerHost.windowClosed(windowId); });
 
 ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('rand:')) return false;

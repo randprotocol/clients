@@ -1,9 +1,11 @@
 // The relay between the page's `window.rand` (inpage.js, in the page's world) and the extension
-// (background.js). Isolated world, classic script, no imports. It forwards exactly four method
-// names and nothing the page put in the message: the background decides everything from who is
-// asking (`sender`), never from what they said. A connect that needs the user's consent comes back
-// as `{pending: id}`; the verdict arrives later as a `rand:decision` message and is handed to the
-// page then.
+// (background.js). Isolated world, classic script, no imports. It forwards exactly five method
+// names, and nothing the page put in the message except `invoke`'s request: the background decides
+// everything else from who is asking (`sender`), never from what they said, and the invoke request
+// is data the user is shown and approves in the wallet's own window, capped here at
+// `MAX_INVOKE_CHARS` of JSON. A connect or an invoke that needs the user comes back as
+// `{pending: id}`; the verdict arrives later as a `rand:decision` message and is handed to the page
+// then.
 //
 // ---- two relays on one page ----
 //
@@ -23,7 +25,10 @@
   const FROM_PAGE = 'rand-wallet:page';
   const TO_PAGE = 'rand-wallet:content';
   const TAKEOVER = 'rand-wallet:content-takeover';
-  const METHODS = new Set(['connect', 'getAddress', 'getRecipientHash', 'disconnect']);
+  const METHODS = new Set(['connect', 'getAddress', 'getRecipientHash', 'disconnect', 'invoke']);
+  /** An invoke request is a few kilobytes (eight cells, a few dozen input words); 256 KiB of JSON
+   *  is far past any real one and well short of a page using the relay to push megabytes. */
+  const MAX_INVOKE_CHARS = 256 * 1024;
   const waiting = new Map(); // consent id → the page's request id
   /** When this relay was born: it yields to a later one only. Worlds of one document share a
    *  time origin, so the clock reads the same across them. */
@@ -44,8 +49,18 @@
     if (!fromThisPage(e)) return;
     const d = e.data;
     if (d.target !== FROM_PAGE || typeof d.id !== 'string' || !METHODS.has(d.method)) return;
+    const msg = { type: `rand:${d.method}` };
+    if (d.method === 'invoke') {
+      let size = Infinity;
+      try { size = JSON.stringify(d.params).length; } catch { /* not JSON: refused below */ }
+      if (!d.params || typeof d.params !== 'object' || !(size <= MAX_INVOKE_CHARS)) {
+        reply(d.id, { ok: false, error: { code: 'BAD_REQUEST', message: 'Rand Wallet could not read that request.' } });
+        return;
+      }
+      msg.params = d.params;
+    }
     let res, why = '';
-    try { res = await ext.runtime.sendMessage({ type: `rand:${d.method}` }); } catch (e) { res = null; why = String((e && e.message) || e); }
+    try { res = await ext.runtime.sendMessage(msg); } catch (e) { res = null; why = String((e && e.message) || e); }
     if (!res) { reply(d.id, /invalidated/i.test(why) ? unavailable : noBackground); return; }
     if (res.pending) { waiting.set(res.pending, d.id); return; }
     reply(d.id, res);

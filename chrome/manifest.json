@@ -20,6 +20,8 @@
       "matches": [
         "https://randbridge.org/*",
         "https://*.randbridge.org/*",
+        "https://durian.market/*",
+        "https://www.durian.market/*",
         "http://localhost/*",
         "http://127.0.0.1/*"
       ],
@@ -33,6 +35,8 @@
       "matches": [
         "https://randbridge.org/*",
         "https://*.randbridge.org/*",
+        "https://durian.market/*",
+        "https://www.durian.market/*",
         "http://localhost/*",
         "http://127.0.0.1/*"
       ],
@@ -44,7 +48,7 @@
   ],
   "options_ui": { "page": "app.html#settings", "open_in_tab": true },
   "permissions": ["storage", "alarms", "sidePanel", "scripting"],
-  "host_permissions": ["https://rpc.randprotocol.org/*", "https://rpc1.randprotocol.org/*", "https://rpc2.randprotocol.org/*", "https://rpc3.randprotocol.org/*", "https://randbridge.org/*", "https://*.randbridge.org/*"],
+  "host_permissions": ["https://rpc.randprotocol.org/*", "https://rpc1.randprotocol.org/*", "https://rpc2.randprotocol.org/*", "https://rpc3.randprotocol.org/*", "https://randbridge.org/*", "https://*.randbridge.org/*", "https://durian.market/*", "https://www.durian.market/*"],
   "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
