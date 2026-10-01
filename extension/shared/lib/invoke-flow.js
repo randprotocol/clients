@@ -84,7 +84,7 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {} }) {
       const quote = await program.quote(request);
       // The RandProtocol prover's one-time notice, when it is still to be read: the window shows it
       // in Approve's place, and `acknowledge` (from its own click) reads it.
-      set({ step: 'review', quote, via: can.via || null, notice: can.notice === true });
+      set({ step: 'review', quote, via: can.via || null, prover: can.prover || null, notice: can.notice === true });
     } catch (err) {
       await refuse(err);
     }

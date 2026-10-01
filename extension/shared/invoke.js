@@ -86,9 +86,11 @@ function render(state) {
     const prog = el('div', 'kv');
     prog.append(el('span', 'k', 'Program'), el('span', 'v mono', shortHex(q.program, 10)));
     card.append(prog);
-    const note = el('p', 'caption', state.via === 'prover'
-      ? 'Your paired prover makes the large proof; this browser makes the small ones. It takes a few minutes.'
-      : 'Proving takes a few minutes. Keep this window open until it says sent.');
+    const note = el('p', 'caption', state.via !== 'prover'
+      ? 'Proving takes a few minutes. Keep this window open until it says sent.'
+      : state.prover === 'default'
+        ? 'The RandProtocol prover makes the large proof; this browser makes the small ones. It takes a few minutes.'
+        : 'Your paired prover makes the large proof; this browser makes the small ones. It takes a few minutes.');
     const actions = el('div', 'onboard-actions');
     if (state.notice) {
       // The RandProtocol prover's one-time notice in Approve's place: read it, or leave for your
