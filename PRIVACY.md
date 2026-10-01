@@ -44,12 +44,14 @@ your device until you delete them.
 - **To the testnet faucet, if you ask it.** A faucet request asks the node to mint test RAND
   into a note that only your key can open.
 - **To a prover, when your device cannot make the proof itself.** A browser wallet, or a phone
-  without the memory for a proof, has the payment's proof made by a prover. From version 0.6.8
-  the wallet uses **the RandProtocol prover** by default — https://prover.randprotocol.org
-  (fingerprint RGTF-7HKJ-XZFV-GQ1J), a pool of machines run by the RandProtocol validators,
-  sharing one prover key and charging no fee — and tells you so before your first send. Each
-  proving job carries your wallet's **viewing key** and a one-time salt, encrypted to that one
-  prover. With them the prover's operators can read your wallet's whole history — every
+  without the memory for a proof, has the payment's proof made by a prover. By default (from
+  version 0.6.8) that is **the RandProtocol provers**: a few machines run by the RandProtocol
+  validators (four today, under https://prover.randprotocol.org), charging no fee. From 0.6.9
+  each machine has its own key, which the wallet pins (Settings → Prover lists them by
+  fingerprint); 0.6.8 used one key shared by all of them. The wallet tells you before your first
+  send through them. Each proving job goes to one machine, carrying your wallet's **viewing key**
+  and a one-time salt, encrypted to that machine's key. With them its operator can read your
+  wallet's whole history — every
   payment received and sent, past and future — and they cannot spend: your **spend key never
   leaves your device**, which makes the small authorisation proof itself. For more privacy,
   choose your own prover in Settings → Prover (the desktop app on your own computer, or a server
