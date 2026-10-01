@@ -443,13 +443,19 @@ function createBackend(initial = {}, overrides = {}) {
       state.settings.prover = { mode: 'remote', name: r.host, url: r.url, kemEk: `ek-${r.key}`, fingerprint: r.fingerprint, own: r.own };
       return { ...state.settings.prover };
     },
-    probe: () => (state.settings.prover && state.settings.prover.mode === 'remote'
+    probe: () => (state.settings.prover && (state.settings.prover.mode === 'remote' || state.settings.prover.mode === 'default')
       ? state.proverProbe
       : { ok: false, reason: 'No prover is paired.' }),
-    forget: () => { state.settings.prover = { mode: 'device' }; },
+    // Like the engine: forgetting a paired prover goes back to the default, the RandProtocol prover.
+    forget: () => { state.settings.prover = { mode: 'default', ...TRUSTED_PROVER }; },
     // The prover the build ships the address of, and its one-step pairing (the same `pair`).
     trusted: () => ({ ...TRUSTED_PROVER, warning: PROVER_NOT_OWN }),
     pairTrusted: (password) => { const r = proverDefs.pair(TRUSTED_LINK, password); state.settings.prover.name = TRUSTED_PROVER.name; return { ...state.settings.prover }; },
+    // Wallet 0.6.8: the default (nothing paired) and none, one call each; the one-time notice.
+    useDefault: () => { state.settings.prover = { mode: 'default', ...TRUSTED_PROVER }; },
+    useNone: () => { state.settings.prover = { mode: 'device' }; },
+    defaultNotice: () => ({ ...TRUSTED_PROVER, warning: PROVER_NOT_OWN, read: state.proverNoticeRead === true }),
+    acknowledgeDefault: () => { state.proverNoticeRead = true; },
   };
 
   const rpcDefs = {

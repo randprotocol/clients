@@ -1007,6 +1007,30 @@ registerScreen('send', {
       if (link) ctx.backend.platform.openExternal(link.url);
     });
 
+    // The one-time notice about the RandProtocol prover: read, remembered for this wallet by the
+    // engine, and the review shown again with the button that sends.
+    let acknowledging = false;
+    const offAcknowledgeProver = on(root, '[data-action="acknowledge-prover"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (acknowledging || !canProve.notice || !ctx.backend.prover || typeof ctx.backend.prover.acknowledgeDefault !== 'function') return;
+      acknowledging = true;
+      try {
+        await ctx.backend.prover.acknowledgeDefault();
+      } catch (err) {
+        acknowledging = false;
+        if (!live()) return;
+        const box = stepEl.querySelector('[data-role="prover-notice"]');
+        if (box) box.insertAdjacentHTML('afterend', h`<p class="caption error">${(err && err.message) || 'Could not record that.'}</p>`);
+        return;
+      }
+      acknowledging = false;
+      if (!live()) return;
+      const { notice, ...rest } = canProve;
+      void notice;
+      canProve = rest;
+      if (step === 'review') goStep('review');
+    });
+
     const offProve = on(root, '[data-action="prove"]', 'click', (evt) => {
       evt.preventDefault();
       // Everything that decides whether a transfer may start is re-checked here, from this flow's
@@ -1058,7 +1082,7 @@ registerScreen('send', {
       if (attached) attached.listeners.delete(onStoreChange);
       backBtn.removeEventListener('click', onBack);
       offAsset(); offPaste(); offInput(); offAmountInput(); offMax(); offExpand();
-      offEdit(); offRetry(); offResumeProof(); offCancelProof(); offSubmit(); offProve(); offCancel();
+      offEdit(); offRetry(); offResumeProof(); offCancelProof(); offSubmit(); offProve(); offAcknowledgeProver(); offCancel();
       offGate(); offCheckActivity(); offExplorerUnknown();
     };
   },

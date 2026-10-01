@@ -78,6 +78,10 @@ const methodsOf = (fetch) => fetch.requests.map((r) => r.body.method);
 const count = (fetch, method) => methodsOf(fetch).filter((m) => m === method).length;
 const coreCalled = (env, method) => env.core.calls.filter(([m]) => m === method);
 const SEND = { asset: 0, to: ADDRESS, amount: '1000000000' };
+/** `settings.prover` with nothing chosen (wallet 0.6.8): the RandProtocol prover the build ships. */
+const DEFAULT_SETTING = Object.freeze({
+  mode: 'default', name: 'RandProtocol', url: 'https://prover.randprotocol.org', fingerprint: TRUSTED_PROVER.fingerprint,
+});
 
 async function until(check, what) {
   for (let i = 0; i < 500; i += 1) {
@@ -134,7 +138,7 @@ test('pairing refuses a wrong password, a prover with another key, and plain htt
   await assert.rejects(() => env.backend.prover.pair(proverLink(), PASSWORD), /different key/);
   await assert.rejects(() => env.backend.prover.pair(proverLink({ url: 'http://192.168.1.9:8546' }), PASSWORD), /https/);
   assert.equal(env.storage.local.get('proverToken'), undefined);
-  assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
+  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
 });
 
 test('preview reads a link without saving, asking, or needing the password', async () => {
@@ -156,7 +160,7 @@ test('preview reads a link without saving, asking, or needing the password', asy
   await assert.rejects(() => env.backend.prover.preview(proverLink({ url: 'http://192.168.1.9:8546' })), /https/);
 
   // Nothing was stored and no prover was asked.
-  assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
+  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
   assert.equal(env.storage.local.get('proverToken'), undefined);
   assert.equal(count(env.fetch, 'prover_info'), 0);
 });
@@ -214,11 +218,15 @@ test('forget_removes_settings_vault_and_session_copies', async () => {
   await env.backend.wallet.create(PASSWORD);
   await env.backend.prover.pair(proverLink(), PASSWORD);
   await env.backend.prover.forget();
-  assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
+  // Forgetting a paired prover falls back to the default (wallet 0.6.8), not to nothing.
+  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
   assert.equal(env.storage.local.has('proverToken'), false);
   assert.equal('prover' in env.storage.sessionMap.get('unlocked'), false);
   assert.equal(env.storage.sessionMap.get('unlocked').spend_key, SPEND_KEY, 'forgetting the prover kept the wallet unlocked');
-  assert.deepEqual(await env.backend.send.canProve(), { ok: false, reason: CANNOT_PROVE_REASON });
+  // The stub's prover answers with key KEY, not the pinned TRUST: the default is not there.
+  const answer = await env.backend.send.canProve();
+  assert.equal(answer.ok, false);
+  assert.equal(answer.unreachable, true);
   assert.equal((await env.backend.prover.probe()).ok, false);
 });
 
@@ -234,9 +242,8 @@ test('the trusted prover is reported, never paired by itself, and paired in one 
     warning: CORE_VERSION.prover_history_warning,
   });
   assert.equal('link' in t, false, 'the link (with its token) is not handed to screens');
-  assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
+  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
   assert.equal(count(env.fetch, 'prover_info'), 0);
-  assert.deepEqual(await env.backend.send.canProve(), { ok: false, reason: CANNOT_PROVE_REASON });
 
   // One step: the built-in link through `pair` — the password first, the prover's key checked
   // against the link's, the vault record written NOT own, the display copy named RandProtocol.
@@ -250,9 +257,9 @@ test('the trusted prover is reported, never paired by itself, and paired in one 
   assert.equal(JSON.parse(await decryptSecret(PASSWORD, env.storage.local.get('proverToken'))).own, false);
   assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover' });
   assert.ok(env.fetch.requests.some((r) => r.body.method === 'prover_info' && String(r.url).startsWith('https://prover.randprotocol.org')));
-  // Forget works as for any pairing.
+  // Forget works as for any pairing — back to the default.
   await env.backend.prover.forget();
-  assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
+  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
 
   // A prover at that address answering with another key is refused — nothing stored.
   const other = build({ fetch: sendableFetch({ prover_info: () => proverInfo('OTHER') }) });
@@ -273,10 +280,144 @@ test('the trusted prover is reported, never paired by itself, and paired in one 
   await assert.rejects(() => none.backend.prover.pairTrusted(PASSWORD), /ships no prover/);
 });
 
+// ------------------------------------------------------- the default prover (wallet 0.6.8) ---
+
+/**
+ * One stub fetch where the RandProtocol prover's URL answers with the key the build pins (TRUST)
+ * and every other prover URL with `KEY` — so a paired prover and the default can be told apart.
+ */
+function poolFetch(table = {}, { poolInfo = () => proverInfo('TRUST') } = {}) {
+  const inner = sendableFetch(table);
+  const fn = async (url, init) => {
+    const body = JSON.parse(init.body);
+    if (String(url).startsWith(TRUSTED_PROVER.url) && body.method === 'prover_info') {
+      inner.requests.push({ url, body, raw: init.body });
+      const result = await poolInfo();
+      return { ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, result }) };
+    }
+    return inner(url, init);
+  };
+  fn.requests = inner.requests;
+  return fn;
+}
+
+test('a fresh wallet proves through the RandProtocol prover, after its one-time notice, remembered per wallet', async () => {
+  const env = await sendableWallet({ fetch: poolFetch() });
+  // Nothing chosen, nothing paired, nothing stored: the default.
+  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
+  assert.equal((env.storage.local.get('settings') || {}).prover, undefined, 'the default was written down as a choice');
+  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover', prover: 'default', notice: true });
+
+  // The notice comes first: a send before it is read is refused before anything is sealed.
+  await assert.rejects(() => env.backend.send.send(SEND, () => {}), (err) => {
+    assert.equal(err.definite, true);
+    assert.equal(err.needsNotice, true);
+    assert.match(err.message, /viewing key/);
+    return true;
+  });
+  assert.equal(coreCalled(env, 'prepare_transfer').length, 0);
+  assert.equal(count(env.fetch, 'prover_submit'), 0);
+  const notice = await env.backend.prover.defaultNotice();
+  assert.deepEqual(notice, {
+    name: 'RandProtocol', url: TRUSTED_PROVER.url, fingerprint: TRUSTED_PROVER.fingerprint,
+    warning: CORE_VERSION.prover_history_warning, read: false,
+  });
+  assert.match(notice.warning, /whole history/);
+  assert.match(notice.warning, /cannot spend/);
+
+  // Read: remembered, and the send goes to the pool — sealed to the key the build pins, not own.
+  await env.backend.prover.acknowledgeDefault();
+  assert.equal((await env.backend.prover.defaultNotice()).read, true);
+  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover', prover: 'default' });
+  const phases = [];
+  const out = await env.backend.send.send(SEND, (p, d) => phases.push(d === undefined ? [p] : [p, d]));
+  assert.equal(out.hash, PROVED_TX_HASH);
+  const [[, prepared]] = coreCalled(env, 'prepare_transfer');
+  assert.deepEqual(prepared.prover, { kem_ek: proverEk('TRUST'), token: 'c3'.repeat(32), own: false, fee: null, hc_bundle: HC_V3 });
+  const submit = env.fetch.requests.find((r) => r.body.method === 'prover_submit');
+  assert.equal(submit.url, TRUSTED_PROVER.url);
+  assert.ok(phases.some(([p, d]) => p === 'proving' && d && d.prover === 'RandProtocol'));
+  assert.equal(env.storage.local.get('proverToken'), undefined, 'the default needs no vault record');
+  assertKeyNeverLeaked(env);
+
+  // Another wallet on this device (after a wipe, or a record naming another key) reads it again.
+  env.storage.local.set('proverNotice', { pk: 'ff'.repeat(32) });
+  assert.equal((await env.backend.send.canProve()).notice, true);
+});
+
+test('the RandProtocol prover not answering is said plainly, with the way to pair your own', async () => {
+  const env = await sendableWallet({
+    fetch: poolFetch({}, { poolInfo: () => { throw Object.assign(new Error('gateway down'), { code: -32000 }); } }),
+  });
+  await env.backend.prover.acknowledgeDefault();
+  const answer = await env.backend.send.canProve();
+  assert.equal(answer.ok, false);
+  assert.equal(answer.unreachable, true);
+  assert.match(answer.reason, /The RandProtocol prover cannot be reached right now/);
+  assert.match(answer.reason, /pair your own prover in Settings/);
+  await assert.rejects(() => env.backend.send.send(SEND, () => {}), /cannot be reached right now/);
+  assert.equal(coreCalled(env, 'prepare_transfer').length, 0);
+  // A prover at that address with another key than the pin is not the RandProtocol prover.
+  const other = await sendableWallet({ fetch: poolFetch({}, { poolInfo: () => proverInfo('OTHER') }) });
+  const said = await other.backend.send.canProve();
+  assert.equal(said.ok, false);
+  assert.match(said.reason, /another key than the one this wallet pins/);
+});
+
+test('your own prover is preferred over the default, forget falls back to it, and none turns it off', async () => {
+  const env = await sendableWallet({ fetch: poolFetch() });
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover' });
+  await env.backend.send.send(SEND, () => {});
+  assert.equal(env.fetch.requests.find((r) => r.body.method === 'prover_submit').url, PROVER_URL, 'the default was used over the user\'s own');
+
+  await env.backend.prover.forget();
+  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
+  assert.equal((await env.backend.send.canProve()).prover, 'default');
+
+  await env.backend.prover.useNone();
+  assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
+  assert.deepEqual(await env.backend.send.canProve(), { ok: false, reason: CANNOT_PROVE_REASON });
+  // A settings change does not turn it back on, nor write the default down.
+  await env.backend.settings.set({ theme: 'dark' });
+  assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
+
+  await env.backend.prover.useDefault();
+  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
+  // Pairing over a choice of none replaces it.
+  await env.backend.prover.useNone();
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  assert.equal((await env.backend.settings.get()).prover.mode, 'remote');
+});
+
+test('a wallet that stored the old "device" setting reads the default; a build without one stays on the device', async () => {
+  const env = build({ fetch: poolFetch() });
+  await env.backend.wallet.create(PASSWORD);
+  env.storage.local.set('settings', { ...(env.storage.local.get('settings') || {}), prover: { mode: 'device' } });
+  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
+  const none = build({ core: stubCore({ version: () => ({ ...CORE_VERSION, trusted_prover: null }) }) });
+  await none.backend.wallet.create(PASSWORD);
+  assert.deepEqual((await none.backend.settings.get()).prover, { mode: 'device' });
+  assert.deepEqual(await none.backend.send.canProve(), { ok: false, reason: CANNOT_PROVE_REASON });
+  assert.equal(await none.backend.prover.defaultNotice(), null);
+});
+
+test('a desktop that can prove keeps proving on the device, default or not', async () => {
+  const env = await sendableWallet({ fetch: poolFetch(), native: true, systemMemoryGiB: () => 32 });
+  assert.deepEqual(await env.backend.send.canProve(), { ok: true });
+  assert.equal(count(env.fetch, 'prover_info'), 0, 'the default prover was asked although this machine can prove');
+  // Without the memory, the default makes the proof.
+  const small = await sendableWallet({ fetch: poolFetch(), native: true, systemMemoryGiB: () => 4 });
+  assert.deepEqual(await small.backend.send.canProve(), { ok: true, via: 'prover', prover: 'default', notice: true });
+});
+
 // ------------------------------------------------------------------------------ canProve -------
 
 test('the_wasm_reason_names_the_prover_option', async () => {
   const env = build({ fetch: sendableFetch({ rand_getBridgeState: () => ({ enabled: true, emitters: {}, assets: [] }) }) });
+  await env.backend.wallet.create(PASSWORD);
+  // With no prover at all — the user turned the default off — the device's own sentence.
+  await env.backend.prover.useNone();
   const answer = await env.backend.send.canProve();
   assert.deepEqual(answer, { ok: false, reason: CANNOT_PROVE_REASON });
   assert.match(answer.reason, /Pair a prover in Settings/);

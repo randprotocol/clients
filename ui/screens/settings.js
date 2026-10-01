@@ -112,11 +112,29 @@ function networkMarkup(settings) {
 // pairing is saved, as part of the form, above the password — not a dismissible notice.
 export const PROVER_WARNING = 'This prover will be able to read this wallet\'s whole history — every payment '
   + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.';
+/** What the RandProtocol prover (the default) sees, in one line, wherever it is offered or in use. */
+export const PROVER_DEFAULT_NOTE = 'It receives this wallet\'s viewing key, so it can read your whole history, past and future. It cannot spend.';
 /** Under a pairing that is not the user's own: what that prover can do, in one line. */
 export const PROVER_NOT_OWN_NOTE = 'Not marked as your own: it can read this wallet\'s whole history. It cannot spend.';
 
-/** Who makes this wallet's proofs: this device, or the paired prover. Every field is text. */
-function proverStateMarkup(prover) {
+/**
+ * Who makes this wallet's proofs: this device, the RandProtocol prover (the default, wallet 0.6.8),
+ * or a prover the user paired. `trusted` is the engine's `prover.trusted()` (or null) and `choose`
+ * whether the backend can switch between the default and none (`useDefault`/`useNone`). Every
+ * field is text.
+ */
+function proverStateMarkup(prover, { trusted = null, choose = false } = {}) {
+  if (prover && prover.mode === 'default') {
+    const off = choose
+      ? raw('<button class="btn block" type="button" data-role="use-no-prover">Use no prover</button>')
+      : '';
+    return h`
+      <div class="kv"><span class="k">Proofs are made by</span><span class="v">This device, or where it cannot · ${prover.name || 'RandProtocol'} prover</span></div>
+      <div class="kv"><span class="k">Fingerprint</span><span class="v mono">${prover.fingerprint || ''}</span></div>
+      <p class="caption" data-role="prover-default-note">The prover RandProtocol runs for everyone (${prover.url || ''}), used until you choose another. It charges nothing. ${PROVER_DEFAULT_NOTE}</p>
+      <p class="caption" data-role="prover-probe">Asking the prover…</p>
+      ${off}`;
+  }
   if (prover && prover.mode === 'remote') {
     // "My own" only for a pairing whose link said so: a prover somebody else runs makes the
     // proofs too (the job carries the viewing key), and the line under it says what it sees.
@@ -125,16 +143,30 @@ function proverStateMarkup(prover) {
       ? h`My own prover · ${prover.name || prover.url || ''}`
       : h`Paired prover · ${prover.name || prover.url || ''}`;
     const note = own ? '' : raw(h`<p class="caption" data-role="prover-not-own">${PROVER_NOT_OWN_NOTE}</p>`);
+    const back = choose && trusted
+      ? raw(h`<p class="caption">Forgetting it goes back to the ${trusted.name || 'RandProtocol'} prover.</p>`)
+      : '';
     return h`
       <div class="kv"><span class="k">Proofs are made by</span><span class="v">${raw(who)}</span></div>
       <div class="kv"><span class="k">Fingerprint</span><span class="v mono">${prover.fingerprint || ''}</span></div>
       ${note}
       <p class="caption" data-role="prover-probe">Asking the prover…</p>
+      ${back}
       <button class="btn block" type="button" data-role="forget-prover">Forget this prover</button>`;
   }
+  // No prover: chosen (`useNone`), or a build that ships none. The way back to the default is
+  // one button, with what that prover sees right beside it.
+  const useIt = choose && trusted
+    ? raw(h`
+      <div class="stack tight" data-role="trusted-prover">
+        <p class="caption">Or use the prover RandProtocol runs for everyone — <span class="mono" data-role="trusted-prover-url">${trusted.url}</span>, fingerprint <span class="mono" data-role="trusted-prover-fingerprint">${trusted.fingerprint}</span>. It charges nothing. ${PROVER_DEFAULT_NOTE}</p>
+        <button class="btn" type="button" data-role="use-trusted-prover">Use the RandProtocol prover</button>
+      </div>`)
+    : '';
   return h`
     <div class="kv"><span class="k">Proofs are made by</span><span class="v">This device</span></div>
-    <p class="caption">Where this device cannot make a proof, pair a prover. Your spend key stays here either way; a prover you run yourself — the desktop app, or rand-prover on your own machine — also keeps your history to yourself.</p>`;
+    <p class="caption">Where this device cannot make a proof, pair a prover. Your spend key stays here either way; a prover you run yourself — the desktop app, or rand-prover on your own machine — also keeps your history to yourself.</p>
+    ${useIt}`;
 }
 
 // Offered only where the backend has the (optional) `prover` group. The link is never put in
@@ -145,6 +177,7 @@ function proverMarkup(settings, platform, host = '') {
     : '';
   return sectionMarkup('Prover', h`
     <div data-role="prover-state" class="stack tight">${raw(proverStateMarkup(settings.prover))}</div>
+    <h3 class="label">Pair your own prover</h3>
     <form data-role="prover-form" class="stack" novalidate>
       <div class="field">
         <label class="label" for="settings-prover-link">Pairing link</label>
@@ -152,10 +185,6 @@ function proverMarkup(settings, platform, host = '') {
         <span class="hint" id="settings-prover-link-hint">The randprover: link your prover shows. It carries a secret — paste it here and nowhere else.</span>
       </div>
       ${scan}
-      <div class="stack tight" data-role="trusted-prover" hidden>
-        <p class="caption">Or use the prover RandProtocol runs for everyone — <span class="mono" data-role="trusted-prover-url"></span>, fingerprint <span class="mono" data-role="trusted-prover-fingerprint"></span>. It sees as much as any prover you pair (the warning below) and charges nothing; your spend key stays here either way.</p>
-        <button class="btn" type="button" data-role="use-trusted-prover">Use the RandProtocol prover</button>
-      </div>
       <div class="banner warn" data-role="prover-warning">
         <span class="ic">${raw(icons.warning())}</span>
         <span><span class="banner-title">A prover sees your history</span>${PROVER_WARNING}</span>
@@ -547,12 +576,27 @@ registerScreen('settings', {
       }
     }
 
+    // The default and none are one tap each where the backend can switch (`useDefault`/`useNone`).
+    const canChoose = !!proverGroup && typeof proverGroup.useDefault === 'function' && typeof proverGroup.useNone === 'function';
+    let trusted = null;
     function paintProverState() {
       if (!proverStateEl) return;
-      proverStateEl.innerHTML = proverStateMarkup(settings.prover);
+      proverStateEl.innerHTML = proverStateMarkup(settings.prover, { trusted, choose: canChoose });
       probeProver();
     }
     if (proverGroup) probeProver();
+    // The prover the build ships the address of: asked once, then the state is painted with it.
+    (async () => {
+      if (!proverGroup || typeof proverGroup.trusted !== 'function') return;
+      try { trusted = await proverGroup.trusted(); } catch { trusted = null; }
+      if (!live() || !trusted) return;
+      paintProverState();
+    })();
+
+    /** `settings.prover` as the engine now reads it (the default after a forget, say). */
+    async function rereadProver(fallback) {
+      try { const fresh = await ctx.backend.settings.get(); return fresh && fresh.prover ? fresh.prover : fallback; } catch { return fallback; }
+    }
 
     const offSaveProver = on(body, '[data-role="prover-form"]', 'submit', async (evt) => {
       evt.preventDefault();
@@ -626,61 +670,42 @@ registerScreen('settings', {
       }
     });
 
-    // The one-step pairing of the prover the build ships the address of: shown only once the
-    // engine says there is one; the same password field, the same warning above it (the banner
-    // is part of the form, so it is on screen before this button is), the same host permission.
-    let trusted = null;
-    (async () => {
-      if (!proverGroup || typeof proverGroup.trusted !== 'function') return;
-      try { trusted = await proverGroup.trusted(); } catch { trusted = null; }
-      if (!live() || !trusted) return;
-      const box = body.querySelector('[data-role="trusted-prover"]');
-      if (!box) return;
-      box.querySelector('[data-role="trusted-prover-url"]').textContent = trusted.url;
-      box.querySelector('[data-role="trusted-prover-fingerprint"]').textContent = trusted.fingerprint;
-      box.removeAttribute('hidden');
-    })();
-
+    // Back to the default — the RandProtocol prover — in one tap: nothing is paired and nothing is
+    // asked of anybody; the one-time notice still comes before the first send through it.
     const offUseTrusted = on(body, '[data-role="use-trusted-prover"]', 'click', async (evt) => {
       evt.preventDefault();
-      if (!proverGroup || typeof proverGroup.pairTrusted !== 'function' || !trusted || pairing) return;
-      let password = proverPasswordInput.value;
+      if (!canChoose || !trusted || pairing) return;
       proverStatusEl.innerHTML = '';
-      if (!password) { showStatus('negative', 'Not paired', 'Enter this wallet\'s password — the pairing is sealed under it.', proverStatusEl); return; }
-      pairing = true;
-      const btn = evt.target.closest('button');
-      if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
-      const done = () => {
-        pairing = false;
-        password = '';
-        proverPasswordInput.value = '';
-        if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
-      };
-      if (typeof platform.ensureHostPermission === 'function') {
-        let granted = false;
-        try { granted = await platform.ensureHostPermission(trusted.url); } catch { granted = false; }
-        if (!live()) { done(); return; }
-        if (!granted) {
-          done();
-          showStatus('negative', 'Not paired', 'Permission to reach that prover was not granted, so nothing was saved.', proverStatusEl);
-          return;
-        }
-      }
-      let paired;
       try {
-        paired = await proverGroup.pairTrusted(password);
+        await proverGroup.useDefault();
       } catch (err) {
-        done();
         if (!live()) return;
-        showStatus('negative', 'Not paired', (err && err.message) || 'The prover could not be paired.', proverStatusEl);
+        showStatus('negative', 'Not changed', (err && err.message) || 'The prover could not be changed.', proverStatusEl);
         return;
       }
-      done();
       if (!live()) return;
-      settings = { ...settings, prover: paired };
+      settings = { ...settings, prover: await rereadProver({ mode: 'default', name: trusted.name, url: trusted.url, fingerprint: trusted.fingerprint }) };
+      if (!live()) return;
       paintProverState();
-      showStatus('warn', 'Paired — this prover can read your history',
-        `Proofs this device cannot make go to ${paired.name || trusted.name}. Its fingerprint is ${paired.fingerprint || trusted.fingerprint}. ${trusted.warning || PROVER_WARNING}`, proverStatusEl);
+      showStatus('warn', `Using the ${trusted.name || 'RandProtocol'} prover`,
+        `Proofs this device cannot make go to it. ${trusted.warning || PROVER_WARNING}`, proverStatusEl);
+    });
+
+    const offUseNone = on(body, '[data-role="use-no-prover"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (!canChoose || pairing) return;
+      proverStatusEl.innerHTML = '';
+      try {
+        await proverGroup.useNone();
+      } catch (err) {
+        if (!live()) return;
+        showStatus('negative', 'Not changed', (err && err.message) || 'The prover could not be changed.', proverStatusEl);
+        return;
+      }
+      if (!live()) return;
+      settings = { ...settings, prover: { mode: 'device' } };
+      paintProverState();
+      showStatus('positive', 'No prover', 'Proofs are made on this device only. Where it cannot make one, sending waits until you pair a prover or use the RandProtocol prover again.', proverStatusEl);
     });
 
     const offScanProver = on(body, '[data-role="scan-prover"]', 'click', async (evt) => {
@@ -707,9 +732,12 @@ registerScreen('settings', {
         return;
       }
       if (!live()) return;
-      settings = { ...settings, prover: { mode: 'device' } };
+      settings = { ...settings, prover: await rereadProver({ mode: 'device' }) };
+      if (!live()) return;
       paintProverState();
-      showStatus('positive', 'Forgotten', 'Proofs are made on this device again. The prover\'s pairing is gone from this wallet.', proverStatusEl);
+      showStatus('positive', 'Forgotten', settings.prover.mode === 'default'
+        ? `The prover's pairing is gone from this wallet. Proofs this device cannot make go to the ${settings.prover.name || 'RandProtocol'} prover again.`
+        : 'Proofs are made on this device again. The prover\'s pairing is gone from this wallet.', proverStatusEl);
     });
 
     // ---- the prover host ----
@@ -1170,7 +1198,7 @@ registerScreen('settings', {
       if (proverLinkInput) proverLinkInput.value = '';
       if (proverPasswordInput) proverPasswordInput.value = '';
       offSaveNetwork(); offTest(); offRescan(); offTheme(); offAutoLock(); offPasskey();
-      offSaveProver(); offScanProver(); offForgetProver();
+      offSaveProver(); offScanProver(); offForgetProver(); offUseNone(); offUseTrusted();
       if (hostLinkText) hostLinkText.textContent = ''; // the pairing token leaves with the screen
       hostLink = '';
       offHostToggle(); offCopyHostLink(); offRotateHostLink();

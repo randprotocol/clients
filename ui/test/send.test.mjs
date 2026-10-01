@@ -104,6 +104,61 @@ test('a shell that cannot prove shows the reason and no prove button', async (t)
   assert.match(root.textContent, /desktop app/i);
 });
 
+test('the first send through the RandProtocol prover shows its notice first; read, it is the prove button', async (t) => {
+  let notice = true;
+  const sends = [];
+  const b = unlockedBackend({
+    send: {
+      canProve: async () => ({ ok: true, via: 'prover', prover: 'default', ...(notice ? { notice: true } : {}) }),
+      send: async (req) => { sends.push(req); return { hash: 'ab'.repeat(32), txKey: 'cd'.repeat(32) }; },
+    },
+    prover: { acknowledgeDefault: () => { notice = false; } },
+  });
+  const { root, app } = await review(t, b);
+  // The notice, not the button: what the prover sees, that it cannot spend, and the way out.
+  assertGone(root.querySelector('[data-action="prove"]'), 'the prove button before the notice was read');
+  const box = root.querySelector('[data-role="prover-notice"]');
+  assert.ok(box, 'the one-time notice');
+  assert.match(box.textContent, /viewing key/);
+  assert.match(box.textContent, /whole history/);
+  assert.match(box.textContent, /past and future/);
+  assert.match(box.textContent, /cannot spend/);
+  const own = root.querySelector('[data-role="use-own-prover"]');
+  assert.equal(own.getAttribute('data-go'), 'settings');
+  assert.match(own.textContent, /Use my own prover/);
+
+  root.querySelector('[data-action="acknowledge-prover"]').click();
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'prover.acknowledgeDefault').length, 1);
+  assertGone(root.querySelector('[data-role="prover-notice"]'), 'the notice after it was read');
+  root.querySelector('[data-action="prove"]').click();
+  await app.idle();
+  assert.equal(sends.length, 1);
+  assert.match(location.hash, /^#sent\//);
+});
+
+test('"Use my own prover" on the notice goes to Settings and sends nothing', async (t) => {
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true, via: 'prover', prover: 'default', notice: true }) } });
+  const { root, app } = await review(t, b);
+  root.querySelector('[data-role="use-own-prover"]').click();
+  await app.idle();
+  assert.match(location.hash, /^#settings/);
+  assert.equal(b.calls.filter((c) => c[0] === 'send.send' || c[0] === 'prover.acknowledgeDefault').length, 0);
+});
+
+test('the RandProtocol prover not answering is said plainly, with Settings one tap away', async (t) => {
+  const reason = 'The RandProtocol prover cannot be reached right now (it did not answer: fetch failed). Try again later, or pair your own prover in Settings.';
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: false, unreachable: true, reason }) } });
+  const { root } = await review(t, b);
+  assertGone(root.querySelector('[data-action="prove"]'), 'the prove button while the prover is away');
+  const box = root.querySelector('[data-role="prover-unreachable"]');
+  assert.ok(box);
+  assert.match(box.textContent, /cannot be reached/);
+  assert.ok(box.textContent.includes(reason));
+  assert.doesNotMatch(root.textContent, /import into the desktop app/);
+  assert.equal(root.querySelector('[data-role="use-own-prover"]').getAttribute('data-go'), 'settings');
+});
+
 test('a shell that can prove walks the phases and lands on sent', async (t) => {
   const phases = [];
   const b = unlockedBackend({

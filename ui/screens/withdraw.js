@@ -32,6 +32,7 @@ import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink, TX_HASH_RE } from '../lib/explorer.js';
 import { UNLISTED_TEXT, isUnlisted, backingsOf, feeDecimals, feeSymbol } from '../lib/assets.js';
 import { plainUnits, proveCost, provingLabel, phaseLabel, recordPhase, provingBanner } from './send/state.js';
+import { proverNoticeMarkup, proverUnreachableMarkup } from './send/markup.js';
 
 // ============================================================================ the vocabulary ===
 
@@ -365,7 +366,7 @@ function amountStepMarkup(asset, draft) {
     </form>`;
 }
 
-function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [] }) {
+function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [], notice = false }) {
   const amountOf = (u) => `${formatUnits(u, 9, asset.decimals)} ${asset.symbol}`;
   const relayer = BigInt(estimate.relayerFee || '0');
   const relayerRow = relayer > 0n
@@ -396,8 +397,12 @@ function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [
         <span class="hint" id="withdraw-confirm-hint">So the address above is one you have actually read.</span>
       </div>
     </form>
-    <button class="btn btn-primary block" type="button" data-action="prove" disabled>${raw(icons.bridge())}Withdraw</button>
-    <p class="caption">${proveCost(estimate.proofs)}</p>
+    ${raw(notice
+    // The one-time notice before the first proof by the RandProtocol prover (the default where
+    // this device cannot prove), in the Withdraw button's place until it is read.
+    ? proverNoticeMarkup()
+    : h`<button class="btn btn-primary block" type="button" data-action="prove" disabled>${raw(icons.bridge())}Withdraw</button>
+    <p class="caption">${proveCost(estimate.proofs)}</p>`)}
     <button class="btn btn-ghost block" type="button" data-role="edit">Edit</button>`;
 }
 
@@ -521,9 +526,12 @@ registerScreen('withdraw', {
     if (!live()) return;
 
     if (!can.ok) {
-      endOfTheRoad(cannotMarkup('This device cannot withdraw', can.reason || 'Withdrawals are not available here.'));
+      endOfTheRoad(can.unreachable
+        ? proverUnreachableMarkup(can.reason)
+        : cannotMarkup('This device cannot withdraw', can.reason || 'Withdrawals are not available here.'));
       return;
     }
+
 
     const asset = assets.find((a) => a.index === index) || null;
     if (!asset || index < 1) {
@@ -627,6 +635,7 @@ registerScreen('withdraw', {
       else if (next === 'review') {
         stepEl.innerHTML = reviewStepMarkup({
           asset, display: draft.display, toChain: draft.toChain, units: reviewUnits, estimate: draft.estimate, assets,
+          notice: !!can.notice,
         });
       } else if (next === 'proving') paintProving();
       else if (next === 'failed') {
@@ -851,6 +860,20 @@ registerScreen('withdraw', {
       goStep('review');
     });
 
+    // The notice read: remembered for this wallet by the engine, and the review shown again with
+    // the Withdraw button. "Use my own prover" is a plain link to Settings.
+    let acknowledging = false;
+    const offAcknowledgeProver = on(root, '[data-action="acknowledge-prover"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (acknowledging || !can.notice || !ctx.backend.prover || typeof ctx.backend.prover.acknowledgeDefault !== 'function') return;
+      acknowledging = true;
+      try { await ctx.backend.prover.acknowledgeDefault(); } catch { acknowledging = false; return; }
+      acknowledging = false;
+      if (!live()) return;
+      can = { ...can, notice: false };
+      if (step === 'review') goStep('review');
+    });
+
     const offProve = on(root, '[data-action="prove"]', 'click', (evt) => {
       evt.preventDefault();
       // Re-checked from this flow's own state at the moment of the click, never from the DOM: a
@@ -898,7 +921,7 @@ registerScreen('withdraw', {
       if (attached) attached.listeners.delete(onStoreChange);
       backBtn.removeEventListener('click', onBack);
       offChain(); offAddress(); offMax(); offAmountInput(); offRelayerInput(); offAmount();
-      offConfirm(); offEdit(); offRetry(); offResumeProof(); offCancelProof(); offProve(); offCancel();
+      offConfirm(); offEdit(); offRetry(); offResumeProof(); offCancelProof(); offProve(); offAcknowledgeProver(); offCancel();
     };
   },
 });

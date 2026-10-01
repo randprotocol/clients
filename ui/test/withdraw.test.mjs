@@ -173,6 +173,32 @@ test('no Withdraw action, and the reason instead, when canWithdraw says no', asy
   assert.match(text(root), /6\.2 GB/, 'the reason is shown in its place');
 });
 
+test('a first withdrawal through the RandProtocol prover shows its notice in place of the Withdraw button', async (t) => {
+  let notice = true;
+  const b = unlockedBackend({
+    bridge: { canWithdraw: () => ({ ok: true, via: 'prover', prover: 'default', ...(notice ? { notice: true } : {}) }) },
+    prover: { acknowledgeDefault: () => { notice = false; } },
+  });
+  const { app, root } = await review(t, b);
+  assert.match(root.querySelector('[data-role="prover-notice"]').textContent, /viewing key.*cannot spend/s);
+  assertGone(root.querySelector('[data-action="prove"]'), 'the Withdraw button before the notice was read');
+  assert.equal(root.querySelector('[data-role="use-own-prover"]').getAttribute('data-go'), 'settings');
+  root.querySelector('[data-action="acknowledge-prover"]').click();
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'prover.acknowledgeDefault').length, 1);
+  assertGone(root.querySelector('[data-role="prover-notice"]'), 'the notice after it was read');
+  assert.ok(root.querySelector('[data-action="prove"]'), 'the Withdraw button once it is read');
+});
+
+test('a withdrawal whose RandProtocol prover is away says so, with Settings one tap away', async (t) => {
+  const reason = 'The RandProtocol prover cannot be reached right now (it did not answer). Try again later, or pair your own prover in Settings.';
+  const b = unlockedBackend({ bridge: { canWithdraw: () => ({ ok: false, unreachable: true, reason }) } });
+  const { app, root } = await mountApp(t, b, { hash: '#withdraw/1' });
+  await app.idle();
+  assert.ok(root.querySelector('[data-role="prover-unreachable"]').textContent.includes(reason));
+  assert.equal(root.querySelector('[data-role="use-own-prover"]').getAttribute('data-go'), 'settings');
+});
+
 test('a shell with no bridge group at all offers no Withdraw and asks it nothing', async (t) => {
   const b = unlockedBackend();
   delete b.bridge;

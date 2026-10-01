@@ -186,7 +186,10 @@ test('send refuses before touching the node when the machine is too small', asyn
   const small = build({
     core: env.core, storage: env.storage, fetch: env.fetch, systemMemoryGiB: () => 4,
   }).backend;
-  const before = env.fetch.requests.length;
+  // Only the node's requests: the default prover may be asked whether it is there (it is not —
+  // the stub's prover answers with another key than the one the build pins).
+  const nodeRequests = () => env.fetch.requests.filter((r) => !String(r.body.method).startsWith('prover_')).length;
+  const before = nodeRequests();
   const phases = [];
   await assert.rejects(
     () => small.send.send({ asset: 0, to: ADDRESS, amount: '1000000000' }, (p) => phases.push(p)),
@@ -194,7 +197,7 @@ test('send refuses before touching the node when the machine is too small', asyn
   );
   assert.deepEqual(phases, [], 'a refusal that costs nothing still reported a phase');
   assert.equal(env.core.calls.some(([m]) => m === 'prove_transfer'), false);
-  assert.equal(env.fetch.requests.length, before, 'it asked the node about a transfer it could not make');
+  assert.equal(nodeRequests(), before, 'it asked the node about a transfer it could not make');
 });
 
 // ------------------------------------------------------------------ send actually sends --------

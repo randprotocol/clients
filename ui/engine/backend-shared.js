@@ -136,6 +136,10 @@ const K = Object.freeze({
   // startedAt, kind, to?, memo?}` — `pending` is the core's, and carries no spend key. It is what
   // a popup closed mid-proof resumes from; it is cleared on lock like the spend key.
   pendingProof: PENDING_PROOF_KEY,
+  // The one-time notice before the first send through the RandProtocol prover (the default, wallet
+  // 0.6.8): `{pk}` of the wallet that read it. A wipe clears it with everything else, and a record
+  // naming another wallet's key counts for nothing.
+  proverNotice: 'proverNotice',
 });
 
 const MIN_PASSWORD_LEN = 10;
@@ -428,8 +432,8 @@ export function makeSharedBackend({
       explorerUrl: k.explorer_url || FALLBACK.explorerUrl,
       theme: FALLBACK.theme,
       autoLockMin: FALLBACK.autoLockMin,
-      // Proving on this device until the user pairs a prover (the `prover` group below writes the
-      // remote form; `settings.set` cannot).
+      // Read back by `proverSettingFor` (the RandProtocol prover by default where the build ships
+      // one); the `prover` group writes it, `settings.set` cannot.
       prover: { mode: 'device' },
     };
   }
@@ -450,16 +454,40 @@ export function makeSharedBackend({
   }
 
   /**
-   * `settings.prover` as read back: exactly the pairing's six fields when it is a remote pairing,
-   * `{mode: 'device'}` otherwise — nothing else stored under it (a token, above all) is ever read.
+   * The prover every client ships the address of (`version.trusted_prover`), as the core reports
+   * it — `{name, url, fingerprint, link}` — or `null` when this build carries none. The link holds
+   * the pool's pairing token, which every copy of the wallet ships: it is not this wallet's secret,
+   * but it is still never handed to a screen.
    */
-  function proverSettingOf(p) {
-    if (!p || typeof p !== 'object' || p.mode !== 'remote') return { mode: 'device' };
-    const str = (v) => (typeof v === 'string' ? v : '');
+  async function builtInProver() {
+    const t = (await constants()).trusted_prover;
+    if (!t || typeof t !== 'object' || typeof t.link !== 'string' || !t.link) return null;
     return {
-      mode: 'remote', name: str(p.name), url: str(p.url), kemEk: str(p.kemEk),
-      fingerprint: str(p.fingerprint), own: p.own === true,
+      name: String(t.name || 'RandProtocol'), url: String(t.url || ''), fingerprint: String(t.fingerprint || ''), link: t.link,
     };
+  }
+
+  /**
+   * `settings.prover` as read back, from what is stored (written by the `prover` group alone):
+   *   * `{mode: 'remote', name, url, kemEk, fingerprint, own}` — a prover the user paired, which is
+   *     preferred over the default;
+   *   * `{mode: 'default', name, url, fingerprint}` — nothing chosen, and this build ships the
+   *     RandProtocol prover: it makes the proofs this device cannot (wallet 0.6.8's default);
+   *   * `{mode: 'device'}` — the user chose no prover (`prover.useNone`), or the build ships none.
+   * A stored `{mode: 'device'}` is what every earlier build wrote back on any `settings.set`, never
+   * a choice, so it reads as the default. Nothing else stored under it (a token, above all) is read.
+   */
+  async function proverSettingFor(p) {
+    if (p && typeof p === 'object' && p.mode === 'remote') {
+      const str = (v) => (typeof v === 'string' ? v : '');
+      return {
+        mode: 'remote', name: str(p.name), url: str(p.url), kemEk: str(p.kemEk),
+        fingerprint: str(p.fingerprint), own: p.own === true,
+      };
+    }
+    if (p && typeof p === 'object' && p.mode === 'none') return { mode: 'device' };
+    const t = await builtInProver();
+    return t ? { mode: 'default', name: t.name, url: t.url, fingerprint: t.fingerprint } : { mode: 'device' };
   }
 
   async function getSettings() {
@@ -475,7 +503,7 @@ export function makeSharedBackend({
     // `chainId` likewise: no screen sets it, it is the chain this build's core was made for, and
     // `setSettings` used to write it back with everything else — so every wallet that ever changed
     // its theme had chain 14 pinned in storage, and moving the core to chain 16 moved nobody.
-    const merged = { ...base, ...stored, rpcUrls: base.rpcUrls, chainId: base.chainId, prover: proverSettingOf(stored.prover) };
+    const merged = { ...base, ...stored, rpcUrls: base.rpcUrls, chainId: base.chainId, prover: await proverSettingFor(stored.prover) };
     // Migration (task 5.0). `setSettings` writes the WHOLE settings object back, defaults
     // included, so anyone who ever changed their theme while `rpc.randprotocol.org` was the
     // single default has it sitting in storage as `rpcUrl`. Read as an override it would pin
@@ -494,8 +522,11 @@ export function makeSharedBackend({
     const previous = await getSettings();
     const next = { ...previous, ...(patch || {}) };
     // `prover` is written by the `prover` group only — pairing checks the prover's key and puts
-    // its token in the vault; a screen writing `settings.prover` directly would do neither.
-    next.prover = previous.prover;
+    // its token in the vault; a screen writing `settings.prover` directly would do neither. What
+    // is stored goes back exactly as it was (never the read-back form: a `default` written back
+    // would pin a choice the user never made).
+    const storedProver = ((await storage.get(K.settings)) || {}).prover;
+    if (storedProver) next.prover = storedProver; else delete next.prover;
     // **`rpcUrls` is read-only, and that is enforced here rather than asked for in a comment.**
     // This function writes the whole merged object, so without this line the FIRST `settings.set`
     // a wallet ever makes — a theme change, an auto-lock change, anything at all — would freeze
@@ -1547,6 +1578,36 @@ export function makeSharedBackend({
     return { ok: true, queue: info.queue, witnessKinds: info.witnessKinds, fee: info.fee, hcBundles: info.hcBundles };
   }
 
+  /**
+   * The built-in prover as a pairing — `{token, kemEk, url, fingerprint, own: false, name}` — read
+   * through the core from the link the build ships and held to the fingerprint the build pins, to
+   * the URL rule and to `own=0`, so a link that somehow named another key is refused before the
+   * prover is asked anything. Rejects (definite) when the build ships none or the link fails a pin.
+   */
+  async function builtInPairing() {
+    const fail = (message) => { const err = new Error(message); err.definite = true; return err; };
+    const t = await builtInProver();
+    if (!t) throw fail('This build ships no prover to use.');
+    const parsed = await c.parseProverLink(t.link);
+    if (!t.fingerprint || String(parsed.fingerprint) !== t.fingerprint) {
+      throw fail('The built-in prover link does not name the key this wallet pins; not pairing it.');
+    }
+    if (parsed.own === true) throw fail('The built-in prover link is marked as your own, which a shared prover is not; not pairing it.');
+    const checked = checkProverUrl(parsed.url);
+    if (checked.error) throw fail(checked.error);
+    return {
+      token: String(parsed.token), kemEk: String(parsed.kem_ek).toLowerCase(), url: checked.url,
+      fingerprint: String(parsed.fingerprint), own: false, name: t.name,
+    };
+  }
+
+  /** Whether THIS wallet has read the one-time notice about the RandProtocol prover. */
+  async function defaultNoticeRead() {
+    const rec = await storage.get(K.proverNotice);
+    const w = await storage.get(K.wallet);
+    return !!(rec && w && typeof rec.pk === 'string' && rec.pk && rec.pk === w.pk);
+  }
+
   const prover = {
     /**
      * What a link names, read through the core and held to the URL rule, WITHOUT saving it or
@@ -1606,7 +1667,15 @@ export function makeSharedBackend({
      */
     async probe() {
       const session = await unlockedSession();
-      const p = (session && pairingOf(session.prover)) || (await getSettings()).prover;
+      const paired = session && pairingOf(session.prover);
+      if (paired) return probeAt(paired);
+      const p = (await getSettings()).prover;
+      if (p && p.mode === 'default') {
+        // The RandProtocol prover, by the key the build pins — not the display copy.
+        let b;
+        try { b = await builtInPairing(); } catch (err) { return { ok: false, reason: (err && err.message) || String(err) }; }
+        return probeAt({ mode: 'remote', url: b.url, kemEk: b.kemEk, fingerprint: b.fingerprint });
+      }
       return probeAt(p);
     },
 
@@ -1633,17 +1702,52 @@ export function makeSharedBackend({
      * showing the history warning, and `forget()` undoes it like any pairing.
      */
     async pairTrusted(password) {
-      const t = (await constants()).trusted_prover;
-      if (!t || typeof t !== 'object' || typeof t.link !== 'string' || !t.link) throw new Error('This build ships no prover to use.');
-      const parsed = await c.parseProverLink(t.link);
-      if (!t.fingerprint || String(parsed.fingerprint) !== String(t.fingerprint)) {
-        throw new Error('The built-in prover link does not name the key this wallet pins; not pairing it.');
-      }
-      if (parsed.own === true) throw new Error('The built-in prover link is marked as your own, which a shared prover is not; not pairing it.');
-      return prover.pair(t.link, password, { name: String(t.name || 'RandProtocol') });
+      const t = await builtInProver();
+      await builtInPairing();
+      return prover.pair(t.link, password, { name: t.name });
     },
 
-    /** Forget the pairing: `settings.prover`, the vault's pairing record and the session's copy. */
+    /**
+     * The one-time notice before the first send through the RandProtocol prover:
+     * `{name, url, fingerprint, warning, read}` — `read` is whether this wallet has acknowledged
+     * it — or `null` when the build ships no such prover. The send and withdraw screens show it
+     * when `canProve()` answers `notice: true`, with a way to pair the user's own prover instead.
+     */
+    async defaultNotice() {
+      const t = await builtInProver();
+      if (!t) return null;
+      return { name: t.name, url: t.url, fingerprint: t.fingerprint, warning: await historyWarning(), read: await defaultNoticeRead() };
+    },
+
+    /** The user read the notice: remembered for this wallet (its `pk`), until a wipe. */
+    async acknowledgeDefault() {
+      const w = await storage.get(K.wallet);
+      if (!w || typeof w.pk !== 'string' || !w.pk) throw new Error('no wallet on this device');
+      await storage.set(K.proverNotice, { pk: w.pk });
+    },
+
+    /**
+     * Back to the RandProtocol prover, the default: forgets a paired prover (as `forget`) and a
+     * choice of none. Nothing is asked of anybody; the next send this device cannot prove goes to
+     * it (after the one-time notice).
+     */
+    async useDefault() {
+      await prover.forget();
+    },
+
+    /**
+     * No prover at all: forgets a paired one and turns the default off, so proofs are made on this
+     * device or not at all (a browser then cannot send; Settings turns one back on).
+     */
+    async useNone() {
+      await prover.forget();
+      await writeProverSetting({ mode: 'none' });
+    },
+
+    /**
+     * Forget the pairing: `settings.prover`, the vault's pairing record and the session's copy.
+     * The wallet falls back to the default — the RandProtocol prover, where the build ships one.
+     */
     async forget() {
       await writeProverSetting(null);
       await storage.remove(K.proverToken);
@@ -1668,6 +1772,7 @@ export function makeSharedBackend({
     const device = await canProve();
     if (device && device.ok) return { answer: device };
     const { prover: p } = await getSettings();
+    if (p && p.mode === 'default') return defaultRoute(device);
     if (!p || p.mode !== 'remote') return { answer: device };
     const probe = await prover.probe();
     const kinds = probe.ok ? probe.witnessKinds : [];
@@ -1681,6 +1786,55 @@ export function makeSharedBackend({
   }
 
   /**
+   * The default route (wallet 0.6.8): the RandProtocol prover makes the proofs this device cannot,
+   * with nothing paired. `{ok: true, via: 'prover', prover: 'default', notice?: true}` when it
+   * answers with the key the build pins, charges nothing and takes viewing-key jobs — `notice` until
+   * this wallet has read the one-time notice — and otherwise a plain `{ok: false, unreachable: true,
+   * reason}` that names it and points to Settings.
+   */
+  async function defaultRoute(device) {
+    let pairing;
+    try { pairing = await builtInPairing(); } catch (err) {
+      return { answer: { ok: false, reason: `${(device && device.reason) || 'This device cannot prove.'} ${(err && err.message) || err}` } };
+    }
+    let why = null;
+    let info;
+    try {
+      info = readInfo(await proverClientFor(pairing.url).info());
+    } catch (err) {
+      why = `it did not answer: ${(err && err.message) || err}`;
+    }
+    if (!why && !(await sameProverKey(info, pairing.kemEk, pairing.fingerprint))) {
+      why = 'it answered with another key than the one this wallet pins';
+    }
+    if (!why) why = (await feeRefusal(info.fee)) || (info.witnessKinds.includes('viewing_key') ? null : 'it does not take this wallet\'s jobs');
+    if (why) {
+      // Plainly: what this device cannot do, that the default prover is not there now, and the
+      // way out that does not wait for it — a prover of the user's own.
+      const lead = device && device.reason ? `${device.reason} ` : '';
+      return {
+        answer: {
+          ok: false, unreachable: true,
+          reason: `${lead}The ${pairing.name} prover cannot be reached right now (${why}). Try again later, or pair your own prover in Settings.`,
+        },
+      };
+    }
+    const notice = !(await defaultNoticeRead());
+    return {
+      answer: { ok: true, via: 'prover', prover: 'default', ...(notice ? { notice: true } : {}) },
+      route: { mode: 'default', name: pairing.name, url: pairing.url, fingerprint: pairing.fingerprint },
+    };
+  }
+
+  /** The refusal of a send through the default prover before its one-time notice was read. */
+  function noticeFirst() {
+    const err = new Error('Before the first send through the RandProtocol prover, read what it can see: it gets this wallet\'s viewing key. Continue on the send screen, or pair your own prover in Settings.');
+    err.definite = true;
+    err.needsNotice = true;
+    return err;
+  }
+
+  /**
    * The engine's `prove` hook for one send or withdrawal through `route`, or `undefined` for the
    * device. The seal target — the prover's key and URL — and the token come from the SESSION's
    * copy of the vault record, never from `route` (= `settings.prover`, plaintext, display only):
@@ -1690,7 +1844,9 @@ export function makeSharedBackend({
     if (!route) return undefined;
     let session;
     try { session = await requireUnlocked(); } catch (err) { err.definite = true; throw err; }
-    const pairing = pairingOf(session.prover);
+    // The default route's pairing is the build's own link, read again here through the core and
+    // held to the pin; a paired prover's comes from the session's copy of the vault record.
+    const pairing = route.mode === 'default' ? await builtInPairing() : pairingOf(session.prover);
     if (!pairing) {
       const err = new Error('Your prover\'s pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.');
       err.definite = true;
@@ -1913,12 +2069,13 @@ export function makeSharedBackend({
       const release = holdUnlock();
       try {
         await refuseWhilePending();
-        const { answer: { ok, reason, via }, route } = await proveRoute();
+        const { answer: { ok, reason, via, notice }, route } = await proveRoute();
         if (!ok) {
           const err = new Error(reason);
           err.definite = true;
           throw err;
         }
+        if (notice) throw noticeFirst();
         const prove = await proveHookFor(route);
         const { client, url, identity } = await requireVerifiedChain();
         return await executeSend({
@@ -2071,7 +2228,9 @@ export function makeSharedBackend({
       if (!state.enabled) return { ok: false, reason: BRIDGE_DISABLED_TEXT };
       // `via` exactly as `canProve` reports it: a burn through a paired prover is proved there,
       // and the withdraw screen says so the way the send screen does.
-      return prove.via ? { ok: true, via: prove.via } : { ok: true };
+      return prove.via
+        ? { ok: true, via: prove.via, ...(prove.prover ? { prover: prove.prover } : {}), ...(prove.notice ? { notice: true } : {}) }
+        : { ok: true };
     },
 
     /**
@@ -2117,8 +2276,9 @@ export function makeSharedBackend({
       const release = holdUnlock();
       try {
         await refuseWhilePending();
-        const { answer: { ok, reason, via }, route } = await proveRoute();
+        const { answer: { ok, reason, via, notice }, route } = await proveRoute();
         if (!ok) throw definite(reason);
+        if (notice) throw noticeFirst();
         const prove = await proveHookFor(route);
         // ONE verified client for the whole operation: taken here, handed to `screenBurn` so its
         // `rand_getBridgeState` is that node's answer, and threaded into `executeWithdraw`.
