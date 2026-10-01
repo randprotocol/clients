@@ -908,13 +908,32 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       return Math.min(next, from + rows.length);
     };
 
+    /**
+     * One page of leaves from `from`, held to the request and to the tree's leaf count. **The tree
+     * grows while a scan pages it**: a block can land between `rand_getTreeInfo` and a page, and
+     * on a busy chain one does (chain 19, 2026-10-01: a page at leaf 24 against a count of 24).
+     * A page that reaches past the count read so far is checked against the count read AGAIN,
+     * from the same node — still never a leaf the node itself says it has not grown.
+     */
+    const pageFrom = async (from) => {
+      const raw = await client.commitments(from, PAGE, { signal });
+      const last = Array.isArray(raw) && raw.length > 0 ? raw[raw.length - 1] : null;
+      if (Number.isSafeInteger(leafCount) && last && Number.isSafeInteger(last.index) && last.index >= leafCount) {
+        try {
+          leafCount = Math.max(leafCount, checkTreeInfo(await client.treeInfo({ signal })).next_index);
+          total = leafCount;
+        } catch (err) {
+          if (err && err.name === 'AbortError') throw err;
+          /* the count stays as it was, and the page is held to it */
+        }
+      }
+      return checkCommitments(raw, { from, limit: PAGE, leafCount });
+    };
+
     for (;;) {
       throwIfAborted(signal);
       const cursorBefore = st.scanned_index;
-      const rows = checkCommitments(
-        await client.commitments(cursorBefore, PAGE, { signal }),
-        { from: cursorBefore, limit: PAGE, leafCount },
-      );
+      const rows = await pageFrom(cursorBefore);
       if (rows.length === 0) break;
       const next = await placePage(rows);
       st.scanned_index = Math.max(st.scanned_index, next);
@@ -927,10 +946,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     while (deposits.size > 0) {
       throwIfAborted(signal);
       const cursorBefore = from;
-      const rows = checkCommitments(
-        await client.commitments(cursorBefore, PAGE, { signal }),
-        { from: cursorBefore, limit: PAGE, leafCount },
-      );
+      const rows = await pageFrom(cursorBefore);
       if (rows.length === 0) throw new Error(`${deposits.size} rebuilt deposit(s) match no leaf of the tree`);
       await placePage(rows);
       from = Math.max(from, rows[rows.length - 1].index + 1);

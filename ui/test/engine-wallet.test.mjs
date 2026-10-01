@@ -560,6 +560,25 @@ test('a commitment page may not claim leaves the tree says do not exist', async 
   assert.equal(store.current.scanned_index, 0);
 });
 
+test('a tree that grows while the scan pages it is read again, not mistaken for a lying node', async () => {
+  // Live chain 19, 2026-10-01: the count was read (24 leaves), a block landed, and the next page
+  // started at leaf 24 — refused as "past the 24 leaves the tree reports", and every scan of a
+  // busy chain could fail the same way. The tree only grows: a page past the count is checked
+  // against the count read again, from the same node.
+  const store = memoryStore();
+  let infos = 0;
+  const client = stubClient({
+    treeInfo: () => { infos += 1; return { next_index: infos === 1 ? 1 : 2, root: HEX64('00'), nullifiers: 0 }; },
+    commitments: (from) => (from === 0
+      ? [{ index: 0, cm: HEX64('0b'), height: 4, envelope: envelope() }, { index: 1, cm: HEX64('0c'), height: 5, envelope: envelope() }]
+      : []),
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.current.scanned_index, 2);
+  assert.equal(infos, 2, 'the count was read again once the page went past it');
+});
+
 test('a bridge state that could not be read does not advance the attest cursor', async () => {
   const store = memoryStore();
   const client = stubClient({
