@@ -23,18 +23,24 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use randprotocol_core::gas;
+use randprotocol_core::ledger::program_state::{
+    self, Cell, Inflow, Payout, Transition, CONTEXT_HEADER_WORDS, MAX_PAYOUTS, MAX_READS,
+    MAX_WRITES, PROGRAM_FROM,
+};
 use randprotocol_core::ledger::TIME_WINDOW;
 use randprotocol_core::notes::{
     word8_from_hex, word8_to_hex, Bundle, Envelope, EnvelopeFormat, ShieldedAddress, Word8, DEPTH, KEM_EK_BYTES,
     MEMO_TEXT_MAX_BYTES,
 };
 use randprotocol_core::payment_uri::PaymentUri;
+use randprotocol_core::program::{program_id_with_public, ProgramId};
 use randprotocol_core::types::TX_BINDING_WORDS;
 use randprotocol_core::{format_amount, parse_amount, Action, Transaction, FAUCET_MAX_UNITS};
 use randprotocol_zkvm::address::{address_of, envelope_from_core, seal_note_as};
 use randprotocol_core::confidential::ConfidentialExecutor;
 use randprotocol_prover::wire::{fresh_reply_key, open_reply, seal_job, ProveJob, WitnessKind, WIRE_VERSION};
-use randprotocol_zkvm::executor::{prove_auth, prove_bundle_for, ZkExecutor};
+use randprotocol_zkvm::executor::{self, prove_auth, prove_bundle_for, ZkExecutor};
+use randprotocol_zkvm::isa::Program;
 use randprotocol_zkvm::hidden::{self, HiddenDigestInput, HiddenDigestInputV3, HiddenOutput, A_SLOTS, SLOTS};
 use randprotocol_zkvm::machine::{Backend, FriProfile};
 use randprotocol_zkvm::notes::{Note, SpendKey, ViewingKey};
@@ -145,6 +151,11 @@ pub const NO_SPENDABLE_RAND_PENDING: &str = "a transfer pays its fee in RAND, an
 /// refusal, verbatim (`randprotocol_client::wallet::submit_burn`, the first thing it checks), so
 /// this wallet and the `rand` CLI say the same sentence.
 pub const RAND_NOT_BRIDGED: &str = "asset 0 is RAND, which is not a bridged asset and cannot be burned";
+
+/// An RPL-2 invoke deposits RAND into a program's vault through the bundle's `burn_r`, never as a
+/// `burn_a` of asset 0 (the ledger's `NonCanonicalRandBurn`). Upstream's `submit_bound_invoke`
+/// refusal, in its words.
+pub const RAND_NOT_BURN_A: &str = "RAND goes into the vault through burn_r, never burn_a";
 
 // ------------------------------------------------------------------ errors
 
@@ -369,7 +380,7 @@ pub struct CommitmentRow {
     pub envelope: EnvelopeHex,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnvelopeHex {
     pub kem_ct: String,
     pub to_receiver: String,
@@ -466,25 +477,60 @@ pub fn rebuilt_deposit(w: &Wallet, action: &Value) -> Option<OwnedNote> {
     if action["kind"].as_str()? != "bridge_attest" {
         return None;
     }
-    let recipient = ShieldedAddress::parse(action["recipient"].as_str()?).ok()?;
+    rebuilt_public_note(w, action, [0; 8], "asset_index", "commitment")
+}
+
+/// A chain-computed note to this wallet, rebuilt from the public fields the node renders — a
+/// bridge deposit's (`from` zero, `asset_index`, `commitment`) or an RPL-2 payout's (`from`
+/// [`PROGRAM_FROM`], `asset`, `cm`). `None` unless the recipient is this wallet and the
+/// commitment the node rendered is the one these fields hash to.
+fn rebuilt_public_note(w: &Wallet, v: &Value, from: Word8, asset_field: &str, cm_field: &str) -> Option<OwnedNote> {
+    let recipient = ShieldedAddress::parse(v["recipient"].as_str()?).ok()?;
     if recipient.pk != w.vk.pk() {
         return None;
     }
     let note = Note {
         pk: recipient.pk,
-        from: [0; 8],
-        amount: amount_field(&action["amount"])?,
-        asset: u32::try_from(action["asset_index"].as_u64()?).ok()?,
-        time: u32::try_from(action["time"].as_u64()?).ok()?,
-        r: word8_from_hex(action["r"].as_str()?)?,
+        from,
+        amount: amount_field(&v["amount"])?,
+        asset: u32::try_from(v[asset_field].as_u64()?).ok()?,
+        time: u32::try_from(v["time"].as_u64()?).ok()?,
+        r: word8_from_hex(v["r"].as_str()?)?,
     };
     let cm = note.commitment();
-    if word8_to_hex(&cm) != action["commitment"].as_str()? {
+    if word8_to_hex(&cm) != v[cm_field].as_str()? {
         return None;
     }
     // The leaf index is not in the action; the client fills it in when the leaf with this
     // commitment turns up in a commitments page.
     Some(owned_note(w, u64::MAX, 0, cm, note))
+}
+
+/// Every chain-computed note a committed action created for this wallet, rebuilt from the public
+/// fields `rand_getTransaction` renders: a `bridge_attest`'s one deposit ([`rebuilt_deposit`]),
+/// or the notes an RPL-2 `invoke` paid out — `transition.pays` then `transition.mints`, each
+/// `{asset, amount, recipient, time, r, cm}` with `time` the bundle's and the commitment
+/// `program_state::payout_commitment` (`from` = [`PROGRAM_FROM`]). Empty for any other action,
+/// and for one that pays somebody else.
+///
+/// A payout note the wallet asked for itself is also found the ordinary way — `prove_invoke`
+/// seals its envelope to this wallet's own address, and the node serves it as a leaf like any
+/// other — so this is the belt to that pair of braces: a program paying this wallet from
+/// somebody else's invoke, whose envelope the payer sealed however they liked.
+pub fn rebuilt_notes(w: &Wallet, action: &Value) -> Vec<OwnedNote> {
+    match action["kind"].as_str() {
+        Some("bridge_attest") => rebuilt_deposit(w, action).into_iter().collect(),
+        Some("invoke") => {
+            let t = &action["transition"];
+            let list = |name: &str| t[name].as_array().cloned().unwrap_or_default();
+            list("pays")
+                .iter()
+                .chain(list("mints").iter())
+                .filter_map(|p| rebuilt_public_note(w, p, PROGRAM_FROM, "asset", "cm"))
+                .collect()
+        }
+        _ => Vec::new(),
+    }
 }
 
 /// The `pending` bookkeeping a client applies after a scan: a note held by a submission clears
@@ -706,20 +752,30 @@ pub fn plan_transfer(notes: &[OwnedNote], asset: u32, amount: u64, fee: u64) -> 
             format_amount(gas::BUNDLE_BASE)
         ));
     }
-    group_plan(notes, asset, amount, fee, 0, 1)
+    group_plan(notes, asset, amount, fee, 0, 0, 1)
 }
 
-/// The body [`plan_transfer`] and [`plan_burn`] share: select both groups, then derive both
-/// changes with the same arithmetic `BundlePlan` uses when it builds the real bundle.
-fn group_plan(notes: &[OwnedNote], asset: u32, amount: u64, fee: u64, burn_a: u64, proofs: u8) -> Result<TransferPlan> {
-    let (a_notes, r_notes) = select_groups(notes, asset, amount, fee, burn_a, 0)?;
+/// The body [`plan_transfer`], [`plan_burn`] and [`plan_invoke`] share: select both groups, then
+/// derive both changes with the same arithmetic `BundlePlan` uses when it builds the real bundle.
+/// `burn_r` is RAND burned from slots 2–3 beside the fee — zero for a transfer and a bridge burn,
+/// an invoke's RAND deposit (`docs/program-state.md`: `burn_r` is what goes into the vault).
+fn group_plan(
+    notes: &[OwnedNote],
+    asset: u32,
+    amount: u64,
+    fee: u64,
+    burn_a: u64,
+    burn_r: u64,
+    proofs: u8,
+) -> Result<TransferPlan> {
+    let (a_notes, r_notes) = select_groups(notes, asset, amount, fee, burn_a, burn_r)?;
     let a_sum = checked_sum(a_notes.iter().map(|n| n.units()))?;
     let r_sum = checked_sum(r_notes.iter().map(|n| n.units()))?;
     let change_a = change_a_of(asset, a_sum, amount, burn_a)?;
-    let change_r = change_r_of(asset, r_sum, amount, fee, 0)?;
+    let change_r = change_r_of(asset, r_sum, amount, fee, burn_r)?;
     // What `inputs` had to cover, which is the asset group's need for a token and the RAND
     // group's for RAND — the one number a client compares its balance against.
-    let need = if asset == 0 { bundle_need(amount, fee, 0)? } else { bundle_need(amount, 0, burn_a)? };
+    let need = if asset == 0 { bundle_need(amount, fee, burn_r)? } else { bundle_need(amount, 0, burn_a)? };
     // For RAND the one group is the RAND group, so its notes are `inputs` and `fee_inputs` is
     // empty: the fee comes out of the very notes `inputs` names, as it always did.
     let (inputs, fee_inputs) = if asset == 0 { (r_notes, Vec::new()) } else { (a_notes, r_notes) };
@@ -817,7 +873,40 @@ pub fn plan_burn(notes: &[OwnedNote], asset: u32, amount: u64, fee: u64) -> Resu
         ));
     }
     // A burn pays nobody inside the pool: `amount = 0`, `burn_a = amount`.
-    group_plan(notes, asset, 0, fee, amount, 1)
+    group_plan(notes, asset, 0, fee, amount, 0, 1)
+}
+
+// ------------------------------------------------------------------ planning an RPL-2 invoke
+
+/// Plan the one bundle an RPL-2 `Invoke` rides (`docs/program-state.md`): it pays `fee` in RAND
+/// and burns what the program takes in — `burn_r` RAND into the vault, and/or `burn_a` of the
+/// token `burn_asset` (deposited or destroyed, which the transition's `inflow` says and this
+/// planner need not know). Upstream's `Plan::select` for
+/// `Spend { asset: burn_asset or 0, to: None, fee, burn_a, burn_r }`, the shape
+/// `submit_bound_invoke` builds.
+///
+/// The same [`TransferPlan`] as a burn's: with a token burn, `inputs` are notes of `burn_asset`
+/// (slots 0–1, covering `burn_a`) and `fee_inputs` RAND notes (slots 2–3, covering
+/// `fee + burn_r`); without one (`burn_a == 0`) the bundle's asset is RAND, `inputs` are the RAND
+/// notes covering `fee + burn_r` and `fee_inputs` is empty — exactly [`plan_transfer`]'s RAND
+/// shape, so a client hands the two lists to `prove_invoke` as it hands them to `prove_transfer`.
+/// A wallet with no spendable RAND is refused with [`NO_SPENDABLE_RAND`].
+///
+/// The refusals before selection are the ledger's cheap ones (`check_burn_shape` and the
+/// `Invoke` arm): RAND goes in through `burn_r`, never as `burn_a` of asset 0, and an invoke
+/// that burns nothing and pays nothing is still a call, so nothing here refuses an all-zero burn.
+pub fn plan_invoke(notes: &[OwnedNote], burn_r: u64, burn_asset: u32, burn_a: u64, fee: u64) -> Result<TransferPlan> {
+    if burn_a != 0 && burn_asset == 0 {
+        return bad(RAND_NOT_BURN_A);
+    }
+    if fee < gas::BUNDLE_BASE {
+        return bad(format!(
+            "fee must be at least {} RAND (the bundle floor)",
+            format_amount(gas::BUNDLE_BASE)
+        ));
+    }
+    let asset = if burn_a != 0 { burn_asset } else { 0 };
+    group_plan(notes, asset, 0, fee, burn_a, burn_r, 1)
 }
 
 // ------------------------------------------------------------ building one hidden-asset bundle
@@ -908,7 +997,8 @@ struct BundlePlan {
     fee: u64,
     /// Burned from the asset's slots (`asset` must then be a token).
     burn_a: u64,
-    /// RAND burned from slots 2–3. Always 0 here: this crate builds no `Bond`.
+    /// RAND burned from slots 2–3: an RPL-2 invoke's deposit into the program's vault
+    /// ([`build_invoke_unproven`]); 0 for a transfer and a bridge burn. This crate builds no `Bond`.
     burn_r: u64,
     /// The memo sealed with the payment slot, `""` for none — never with change or a dummy.
     memo: String,
@@ -1618,6 +1708,7 @@ fn transfer_scalars(b: &TransferBuild) -> PendingScalars {
         to_chain: None,
         token: None,
         to: None,
+        invoke: None,
     }
 }
 
@@ -1919,6 +2010,7 @@ fn burn_scalars(b: &BurnBuild, to_chain: u16) -> PendingScalars {
         to_chain: Some(to_chain),
         token: Some(hex::encode(b.token)),
         to: Some(hex::encode(b.to)),
+        invoke: None,
     }
 }
 
@@ -1952,6 +2044,804 @@ fn burn_result(s: &PendingScalars, tx: &Transaction, tier: u8, proof_bytes: usiz
         payment_commitment: s.payment_commitment.clone(),
         spent_indices: s.spent_indices.clone(),
         proofs: s.proofs,
+    })
+}
+
+// ------------------------------------------------------------------ RPL-2: invoking a program
+//
+// An `Invoke` (fullnode `docs/program-state.md`; spec 2026-09-30) is a call whose proof vouches
+// for one declared state transition of a program — the cells it read with the values it read,
+// the cells it writes, what the bundle burns into the program's vault, and the notes the vault
+// pays out or the program mints. The wallet's order is the fullnode client's
+// (`randprotocol_client::wallet::submit_bound_invoke`), and every step of it is here because
+// each later step is bound to the earlier ones:
+//
+//   1. the bundle's notes are chosen and its `time` fixed (the anchor height, as for a transfer);
+//   2. the payout notes are sealed AGAINST THAT TIME — the chain stamps a payout note with the
+//      bundle's `time` (`program_state::payout_commitment`), so a note sealed before the time
+//      was known would not be the note the chain appends;
+//   3. the transaction is assembled with both proofs empty and its `call_binding` taken — it
+//      covers the transition, the payout notes, their envelopes and the fee bundle;
+//   4. the call proof is made over `public ‖ call_binding ‖ context` (`executor::prove_invoke`),
+//      where `context` is the transition's words with the bundle's three burn fields, and put
+//      into the action (the call binding blanks it, so it does not move);
+//   5. the auth proof and the bundle proof are made over the whole (`prove_transaction`), here
+//      or — the bundle's — on a paired prover (`prepare_invoke` + `finish_proof`).
+//
+// What the dapp sends (durian.market's `lib/rand/types.ts`, `InvokeRequest`) is the program,
+// its private inputs, the cells and the amounts; the wallet adds itself as every payout's
+// recipient, the program's code and public input it fetched from the node, the notes and the
+// fee. Nothing here does I/O.
+
+/// The pending kind of an invoke waiting for its bundle proof ([`Pending::kind`]).
+pub const INVOKE_KIND: &str = "invoke";
+
+/// A cell as this crate's JSON carries it — the node's own rendering (`rand_getProgramCell`):
+/// key and value, 64 hex characters each (a `Word8`, little-endian word by word).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CellHex {
+    pub key: String,
+    pub value: String,
+}
+
+fn word8_param(s: &str, what: &str) -> Result<Word8> {
+    let h = s.trim();
+    word8_from_hex(h.strip_prefix("0x").unwrap_or(h)).ok_or_else(|| format!("{what} is not 64 hex characters"))
+}
+
+fn cell_from_hex(c: &CellHex, what: &str) -> Result<Cell> {
+    Ok(Cell { key: word8_param(&c.key, &format!("{what} key"))?, value: word8_param(&c.value, &format!("{what} value"))? })
+}
+
+fn cell_to_hex(c: &Cell) -> CellHex {
+    CellHex { key: word8_to_hex(&c.key), value: word8_to_hex(&c.value) }
+}
+
+fn zero_string() -> String {
+    "0".into()
+}
+
+fn inflow_none() -> String {
+    "none".into()
+}
+
+/// What the bundle burns into the program (`docs/program-state.md`, "what comes in"), as the
+/// dapp declares it: `rand` is the bundle's `burn_r` (RAND into the vault), `asset`/`amount` its
+/// `burn_asset`/`burn_a`, and `kind` says what that token is to the program — `"deposit"` (into
+/// the vault) or `"burn"` (destroyed; the program's own token) — or `"none"` when `amount` is 0.
+/// Amounts are decimal strings of base units, as everywhere in this crate.
+#[derive(Clone, Debug, Deserialize)]
+pub struct InflowRequest {
+    #[serde(default = "zero_string")]
+    pub rand: String,
+    #[serde(default)]
+    pub asset: u32,
+    #[serde(default = "zero_string")]
+    pub amount: String,
+    #[serde(default = "inflow_none")]
+    pub kind: String,
+}
+
+/// One note the transition asks the chain to create for this wallet: the asset and the amount.
+/// The recipient is always this wallet (the dapp contract), the blinding and envelope are drawn
+/// when the bundle's time is known.
+#[derive(Clone, Debug, Deserialize)]
+pub struct PayoutAsk {
+    pub asset: u32,
+    pub amount: String,
+}
+
+/// A program's code as `rand_getProgramCode` serves it.
+#[derive(Clone, Debug, Deserialize)]
+pub struct ProgramCode {
+    pub base_pc: u32,
+    pub words: Vec<u32>,
+}
+
+/// The program, its inputs and the transition — what [`dry_run_invoke`] takes, and what
+/// `prove_invoke`/`prepare_invoke` take beside the notes and the fee.
+#[derive(Clone, Debug, Deserialize)]
+pub struct TransitionRequest {
+    /// The program id, 64 hex.
+    pub program: String,
+    /// `rand_getProgramCode`'s `{base_pc, words}`; checked to hash to `program` with
+    /// `public_hex`, so a node serving other code is refused before anything is proved.
+    pub program_code: ProgramCode,
+    /// `rand_getProgramPublic`'s hex string — the deploy-time public words, 8 hex digits a word,
+    /// little-endian — `""` (the default) for a program without a public input.
+    #[serde(default)]
+    pub public_hex: String,
+    /// The guest's private input words (durian's `inputs`; word 0 is the method).
+    #[serde(default)]
+    pub private_inputs: Vec<u32>,
+    #[serde(default)]
+    pub reads: Vec<CellHex>,
+    #[serde(default)]
+    pub writes: Vec<CellHex>,
+    pub inflow: InflowRequest,
+    #[serde(default)]
+    pub pays: Vec<PayoutAsk>,
+    #[serde(default)]
+    pub mints: Vec<PayoutAsk>,
+}
+
+/// [`TransitionRequest`] parsed and held to the ledger's cheap shape rules, in the ledger's
+/// order, before a note is chosen or a proof paid for.
+struct InvokeCall {
+    id: ProgramId,
+    program: Program,
+    public: Vec<u32>,
+    private_inputs: Vec<u32>,
+    reads: Vec<Cell>,
+    writes: Vec<Cell>,
+    inflow: Inflow,
+    burn_r: u64,
+    burn_asset: u32,
+    burn_a: u64,
+    pays: Vec<(u32, u64)>,
+    mints: Vec<(u32, u64)>,
+}
+
+/// `rand_getProgramPublic`'s string into words: 4 little-endian bytes a word.
+fn words_from_le_hex(s: &str) -> Result<Vec<u32>> {
+    let s = s.trim();
+    let bytes = hex::decode(s.strip_prefix("0x").unwrap_or(s)).map_err(|_| "public_hex is not hex")?;
+    if !bytes.len().is_multiple_of(4) {
+        return bad(format!("public_hex is {} bytes, not whole words", bytes.len()));
+    }
+    Ok(bytes.chunks_exact(4).map(|c| u32::from_le_bytes(c.try_into().expect("4 bytes"))).collect())
+}
+
+fn parse_call(t: &TransitionRequest) -> Result<InvokeCall> {
+    let id = ProgramId::from_hex(t.program.trim()).map_err(|_| "program is not a 64-hex program id".to_string())?;
+    if !t.program_code.base_pc.is_multiple_of(4) {
+        return bad("program_code.base_pc is not word-aligned");
+    }
+    let public = words_from_le_hex(&t.public_hex)?;
+    // The id commits to the code and the public input (`program_id_with_public`): a node serving
+    // any other code or constants would have this wallet prove — and pay for — a call the chain
+    // refuses, or one that does something else. Upstream's `load_call_program` check.
+    let served = program_id_with_public(t.program_code.base_pc, &t.program_code.words, &public);
+    if served != id {
+        return bad(format!(
+            "the node served code ({} words) and a public input ({} words) that do not hash to program {}; not proving against them",
+            t.program_code.words.len(),
+            public.len(),
+            id.to_hex()
+        ));
+    }
+    let program = Program { base_pc: t.program_code.base_pc, words: t.program_code.words.clone() };
+    let cells = |list: &[CellHex], what: &str| -> Result<Vec<Cell>> {
+        list.iter().map(|c| cell_from_hex(c, what)).collect()
+    };
+    let reads = cells(&t.reads, "reads")?;
+    let writes = cells(&t.writes, "writes")?;
+    // The ledger's shape rules (`program_state::validate`, steps 1 and 3), so a transition it
+    // would refuse in a microsecond costs no proof.
+    if reads.len() > MAX_READS || writes.len() > MAX_WRITES {
+        return bad(format!("a transition reads at most {MAX_READS} cells and writes at most {MAX_WRITES}"));
+    }
+    let ascending = |cells: &[Cell]| cells.windows(2).all(|w| w[0].key < w[1].key);
+    if !ascending(&reads) || !ascending(&writes) {
+        return bad("cell keys must be strictly ascending");
+    }
+    let payouts = |list: &[PayoutAsk], what: &str| -> Result<Vec<(u32, u64)>> {
+        list.iter()
+            .map(|p| {
+                let amount = parse_units(&p.amount, &format!("{what} amount"))?;
+                if amount == 0 {
+                    return bad("a payout of zero creates nothing; the chain refuses it");
+                }
+                if amount >= randprotocol_core::notes::MAX_NOTE_VALUE {
+                    return bad(format!("a payout of {amount} is not a note value"));
+                }
+                Ok((p.asset, amount))
+            })
+            .collect()
+    };
+    let pays = payouts(&t.pays, "pays")?;
+    let mints = payouts(&t.mints, "mints")?;
+    if pays.len() + mints.len() > MAX_PAYOUTS {
+        return bad(format!("a transition creates at most {MAX_PAYOUTS} notes (pays and mints together)"));
+    }
+    let burn_r = parse_units(&t.inflow.rand, "inflow.rand")?;
+    let burn_a = parse_units(&t.inflow.amount, "inflow.amount")?;
+    let inflow = match t.inflow.kind.as_str() {
+        "none" => Inflow::None,
+        "deposit" => Inflow::Deposit,
+        "burn" => Inflow::Burn,
+        other => return bad(format!("inflow.kind must be none, deposit or burn, not {other:?}")),
+    };
+    if (burn_a == 0) != matches!(inflow, Inflow::None) {
+        return bad("the inflow is `none` exactly when the bundle burns no token (inflow.amount == 0)");
+    }
+    if burn_a != 0 && t.inflow.asset == 0 {
+        return bad(RAND_NOT_BURN_A);
+    }
+    let burn_asset = if burn_a != 0 { t.inflow.asset } else { 0 };
+    let context_words = CONTEXT_HEADER_WORDS + 16 * (reads.len() + writes.len()) + 3 * (pays.len() + mints.len());
+    if !program_state::segment_fits(public.len(), context_words) {
+        return bad(format!(
+            "the transition's context is {context_words} words, which does not fit beside this program's {}-word public \
+             input and the 8 binding words in one public table (the segment rule): fewer cells or payouts",
+            public.len()
+        ));
+    }
+    Ok(InvokeCall {
+        id,
+        program,
+        public,
+        private_inputs: t.private_inputs.clone(),
+        reads,
+        writes,
+        inflow,
+        burn_r,
+        burn_asset,
+        burn_a,
+        pays,
+        mints,
+    })
+}
+
+impl InvokeCall {
+    /// The context words of this transition with the payouts not yet sealed: `Transition::context`
+    /// reads only each payout's asset and amount, never its recipient, blinding or envelope, so a
+    /// probe with those blank is the very words the proof will commit to.
+    fn probe_context(&self, me: &ShieldedAddress) -> Vec<u32> {
+        let blank = |(asset, amount): &(u32, u64)| Payout {
+            asset: *asset,
+            amount: *amount,
+            recipient: me.clone(),
+            r: [0; 8],
+            envelope: Envelope { kem_ct: vec![], to_receiver: vec![], to_sender: vec![], body: vec![] },
+        };
+        let probe = Transition {
+            reads: self.reads.clone(),
+            writes: self.writes.clone(),
+            inflow: self.inflow,
+            pays: self.pays.iter().map(blank).collect(),
+            mints: self.mints.iter().map(blank).collect(),
+        };
+        probe.context(self.burn_r, self.burn_asset, self.burn_a)
+    }
+}
+
+/// What [`dry_run_invoke`] answers: the tier the call will prove at, the exact gas it spends,
+/// the limit it declares by default and the header's ceiling, the hash-table heights, and how
+/// many context words the transition is. A client prices the fee from these
+/// (`rand_estimateFee {"kind":"invoke", "tier", "gas", "bytes", "created_cells"}`) before the
+/// proof exists — the fee is in the bundle, which is in the call binding the proof commits to,
+/// so it has to be fixed first.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct InvokeDryRun {
+    pub tier: u8,
+    pub gas: u64,
+    /// The `GAS_LIMIT` to declare under a `gas` section: the exact gas rounded up to the next
+    /// quarter-tier bucket (upstream's `gas_bucket`), capped at `gas_max`. Under no section a
+    /// client proves at the header's ceiling (`gas_limit: null` to `prove_invoke`).
+    pub gas_limit: u64,
+    pub gas_max: u64,
+    pub keccak_log_height: u8,
+    pub sha256_log_height: u8,
+    pub context_words: usize,
+}
+
+/// Spec 2026-09-28 §5, §9: the `GAS_LIMIT` a call declares by default — the dry run's exact gas
+/// rounded up to the next multiple of `2^(tier−2)`, capped at the header's ceiling. Upstream's
+/// `gas_bucket`, verbatim.
+pub fn gas_bucket(exact: u64, tier: u8, ceiling: u64) -> u64 {
+    let step = 1u64 << tier.saturating_sub(2).min(62);
+    exact.div_ceil(step).saturating_mul(step).min(ceiling)
+}
+
+/// Run the program on the transition in the emulator, no proving: the tier, the gas and the
+/// heights the proof will have (`executor::dry_run_call` over the REAL context words — the guest
+/// branches on them — with eight zero words standing in for the binding, which the guest never
+/// reads). A transition the program does not accept has no run, so no proof, and is refused here
+/// with the emulator's reason. The recipient of every payout is this wallet, whose address is
+/// not in the context, so no key is needed.
+pub fn dry_run_invoke(t: &TransitionRequest) -> Result<InvokeDryRun> {
+    let call = parse_call(t)?;
+    let me = ShieldedAddress { pk: [0; 8], kem_ek: vec![] };
+    let context = call.probe_context(&me);
+    let segment = program_state::invoke_segment(&call.public, &[0; TX_BINDING_WORDS], &context);
+    let run = executor::dry_run_call(&call.program, &call.private_inputs, &segment)
+        .map_err(|e| format!("the program does not accept this transition: {e}"))?;
+    let gas_max = gas::gas_max(run.tier, run.keccak_log_height, run.sha256_log_height);
+    Ok(InvokeDryRun {
+        tier: run.tier,
+        gas: run.gas,
+        gas_limit: gas_bucket(run.gas, run.tier, gas_max),
+        gas_max,
+        keccak_log_height: run.keccak_log_height,
+        sha256_log_height: run.sha256_log_height,
+        context_words: context.len(),
+    })
+}
+
+/// A payout as the results render it: the note's public fields, the commitment the chain will
+/// append (`program_state::payout_commitment`, at the bundle's time) and the envelope this
+/// wallet sealed to itself. `recipient` is always this wallet's address.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PayoutHex {
+    pub asset: u32,
+    pub amount: String,
+    pub recipient: String,
+    pub r: String,
+    pub cm: String,
+    pub envelope: EnvelopeHex,
+}
+
+/// The transition as sent, with its payout notes — what a client shows and keeps with the
+/// submission. Round-trips through [`transition_from_hex`].
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TransitionHex {
+    pub reads: Vec<CellHex>,
+    pub writes: Vec<CellHex>,
+    /// `"none"`, `"deposit"` or `"burn"`.
+    pub inflow: String,
+    pub pays: Vec<PayoutHex>,
+    pub mints: Vec<PayoutHex>,
+}
+
+fn envelope_hex(e: &Envelope) -> EnvelopeHex {
+    EnvelopeHex {
+        kem_ct: hex::encode(&e.kem_ct),
+        to_receiver: hex::encode(&e.to_receiver),
+        to_sender: hex::encode(&e.to_sender),
+        body: hex::encode(&e.body),
+    }
+}
+
+/// The note a payout is: what the chain computes from the payout's public fields and the
+/// bundle's `time` (`payout_commitment`, the same function through this build's executor).
+fn payout_note(p: &Payout, time: u32) -> Note {
+    Note { pk: p.recipient.pk, from: PROGRAM_FROM, amount: p.amount, asset: p.asset, time, r: p.r }
+}
+
+fn transition_hex(t: &Transition, time: u32) -> TransitionHex {
+    let payouts = |list: &[Payout]| {
+        list.iter()
+            .map(|p| PayoutHex {
+                asset: p.asset,
+                amount: p.amount.to_string(),
+                recipient: p.recipient.to_string(),
+                r: word8_to_hex(&p.r),
+                cm: word8_to_hex(&payout_note(p, time).commitment()),
+                envelope: envelope_hex(&p.envelope),
+            })
+            .collect()
+    };
+    TransitionHex {
+        reads: t.reads.iter().map(cell_to_hex).collect(),
+        writes: t.writes.iter().map(cell_to_hex).collect(),
+        inflow: match t.inflow {
+            Inflow::None => "none",
+            Inflow::Deposit => "deposit",
+            Inflow::Burn => "burn",
+        }
+        .into(),
+        pays: payouts(&t.pays),
+        mints: payouts(&t.mints),
+    }
+}
+
+/// [`transition_hex`] read back: the transition as the chain's type, for a test to compare with
+/// the one inside the transaction, and for anything that keeps the JSON rather than `tx_hex`.
+pub fn transition_from_hex(t: &TransitionHex) -> Result<Transition> {
+    let cells = |list: &[CellHex], what: &str| -> Result<Vec<Cell>> { list.iter().map(|c| cell_from_hex(c, what)).collect() };
+    let payouts = |list: &[PayoutHex], what: &str| -> Result<Vec<Payout>> {
+        list.iter()
+            .map(|p| {
+                Ok(Payout {
+                    asset: p.asset,
+                    amount: parse_units(&p.amount, &format!("{what} amount"))?,
+                    recipient: ShieldedAddress::parse(p.recipient.trim()).map_err(|e| format!("{what} recipient: {e}"))?,
+                    r: word8_param(&p.r, &format!("{what} r"))?,
+                    envelope: p.envelope.decode()?,
+                })
+            })
+            .collect()
+    };
+    Ok(Transition {
+        reads: cells(&t.reads, "reads")?,
+        writes: cells(&t.writes, "writes")?,
+        inflow: match t.inflow.as_str() {
+            "none" => Inflow::None,
+            "deposit" => Inflow::Deposit,
+            "burn" => Inflow::Burn,
+            other => return bad(format!("inflow must be none, deposit or burn, not {other:?}")),
+        },
+        pays: payouts(&t.pays, "pays")?,
+        mints: payouts(&t.mints, "mints")?,
+    })
+}
+
+/// What [`prove_invoke`] takes: the transition and the program ([`TransitionRequest`], flattened),
+/// the notes the bundle spends, the fee, and the chain's parameters exactly as [`BurnRequest`]
+/// carries them.
+#[derive(Deserialize)]
+pub struct InvokeRequest {
+    pub spend_key: String,
+    pub chain_id: u64,
+    #[serde(flatten)]
+    pub call: TransitionRequest,
+    /// RAND units, decimal string: a call's fee for the tier plus `cell_fee` per cell created
+    /// (`rand_estimateFee {"kind":"invoke"}`), fixed before the proof exists.
+    pub fee: String,
+    /// The tier to prove the call at — the dry run's, so the proof cannot come out at a tier the
+    /// fee was not priced for. `null` lets the prover pick.
+    #[serde(default)]
+    pub tier: Option<u8>,
+    /// The `GAS_LIMIT` the call proof declares ([`InvokeDryRun::gas_limit`] under a `gas`
+    /// section); `null` declares the header's ceiling.
+    #[serde(default)]
+    pub gas_limit: Option<u64>,
+    /// The head anchor: `rand_getAnchor` with no height. Its height is the bundle's `time`, which
+    /// every payout note is stamped with.
+    pub anchor_height: u64,
+    pub anchor_root: String,
+    /// [`plan_invoke`]'s `inputs`: notes of the burned token (slots 0–1) when the bundle burns
+    /// one, else the RAND notes (slots 2–3) — [`ProveRequest`]'s rule, by the bundle's asset.
+    pub inputs: Vec<ProveInput>,
+    /// [`plan_invoke`]'s `fee_inputs`: the RAND notes when the bundle burns a token; empty
+    /// otherwise.
+    #[serde(default)]
+    pub fee_inputs: Vec<ProveInput>,
+    #[serde(default = "default_profile")]
+    pub profile: String,
+    #[serde(default)]
+    pub envelope_bytes: Option<u32>,
+    #[serde(default)]
+    pub hc_bundle: Option<String>,
+    #[serde(default)]
+    pub hc_auth: Option<String>,
+    #[serde(default)]
+    pub bundle_gas_limit: Option<u64>,
+    /// The chain's proof cap (`rand_getLimits.max_proof_bytes`); a call proof over it would be
+    /// refused, so it is checked before the bundle is proved. Absent means the vendored
+    /// `gas::MAX_PROOF_BYTES`.
+    #[serde(default)]
+    pub max_proof_bytes: Option<u32>,
+}
+
+/// What [`prove_invoke`] returns. The bundle's arrays are slot-ordered as [`BurnResult`]'s, and
+/// an invoke pays nobody inside the pool through its bundle (its payouts are chain-computed
+/// notes, in `transition`), so the three `payment_*` fields are present and `null`.
+#[derive(Serialize)]
+pub struct InvokeResult {
+    pub tx_hex: String,
+    pub hash: String,
+    pub time: u32,
+    pub program: String,
+    /// The bundle's asset: `burn_asset` when it burns a token, else 0.
+    pub asset: u32,
+    pub burn_r: String,
+    pub burn_asset: u32,
+    pub burn_a: String,
+    /// Change in units of `asset` (the RAND change when `asset` is 0, as a transfer's).
+    pub change: String,
+    pub fee: String,
+    /// RAND change from the fee slots when `asset` is a token; `"0"` when `asset` is RAND.
+    pub fee_change: String,
+    /// The bundle proof's tier and size.
+    pub tier: u8,
+    pub proof_bytes: usize,
+    pub auth_proof_bytes: usize,
+    /// The call proof's tier, size and the program's eight output words.
+    pub call_tier: u8,
+    pub call_proof_bytes: usize,
+    pub outputs: [u32; 8],
+    pub tx_bytes: usize,
+    pub nullifiers: [String; BUNDLE_SLOTS],
+    pub commitments: [String; BUNDLE_SLOTS],
+    pub tx_keys: [String; BUNDLE_SLOTS],
+    pub payment_slot: Option<usize>,
+    pub payment_tx_key: Option<String>,
+    pub payment_commitment: Option<String>,
+    pub spent_indices: Vec<u64>,
+    pub proofs: u8,
+    /// The transition as sent, its payout notes sealed.
+    pub transition: TransitionHex,
+    /// The payout notes as this wallet will own them (leaf index unknown until they are scanned,
+    /// as [`rebuilt_deposit`]'s), pays then mints — for a client's pending record.
+    pub payouts: Vec<OwnedNote>,
+}
+
+/// Everything an invoke's results say that its proofs do not decide — [`PendingScalars`]'s
+/// invoke half, `null` on a transfer and a burn.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct InvokeScalars {
+    pub program: String,
+    pub burn_r: String,
+    pub burn_asset: u32,
+    pub burn_a: String,
+    pub call_tier: u8,
+    pub call_proof_bytes: usize,
+    pub outputs: [u32; 8],
+    pub transition: TransitionHex,
+    pub payouts: Vec<OwnedNote>,
+}
+
+/// An invoke's one bundle, built and sealed, its transition sealed against the bundle's time, and
+/// the transaction assembled — the call proof made by [`bind_invoke`], the other two by
+/// [`prove_transaction`].
+struct InvokeBuild {
+    plan: BundlePlan,
+    prepared: Prepared,
+    /// The transaction: `Action::Invoke` with its proof empty until [`bind_invoke`], its bundle's
+    /// proofs empty until proved.
+    tx: Transaction,
+    call: InvokeCall,
+    /// The transition inside `tx`, kept for the results.
+    transition: Transition,
+    fee: u64,
+    time: u32,
+    spent_indices: Vec<u64>,
+    profile: FriProfile,
+    tier: Option<u8>,
+    gas_limit: Option<u64>,
+    cap: usize,
+    call_tier: u8,
+    call_proof_bytes: usize,
+    outputs: [u32; 8],
+}
+
+/// The payout notes, sealed against the bundle's `time` — upstream's `seal_transition`: one
+/// fresh blinding and one fresh transaction key each, the envelope sealed to this wallet's own
+/// address (the dapp contract: every payout is the wallet's).
+fn seal_payouts(w: &Wallet, asks: &[(u32, u64)], time: u32, format: EnvelopeFormat) -> Result<Vec<Payout>> {
+    asks.iter()
+        .map(|(asset, amount)| {
+            let note = Note::new(w.vk.pk(), PROGRAM_FROM, *amount, *asset, time);
+            let envelope = seal_note_as(format, &w.vk, &w.address, &note, &TxKey::random(), "")
+                .map_err(|e| format!("sealing the payout envelope: {e}"))?;
+            Ok(Payout { asset: *asset, amount: *amount, recipient: w.address.clone(), r: note.r, envelope })
+        })
+        .collect()
+}
+
+/// Everything [`prove_invoke`] does before any proof: parse and check the call, select the
+/// slots, build the bundle (which fixes `time`), seal the payouts against that time, assemble the
+/// transaction with every proof empty. Mirrors `submit_bound_invoke`'s `Spend` —
+/// `{ asset: burn_asset or 0, to: None, fee, burn_a, burn_r }` — and its refusals.
+fn build_invoke_unproven(req: &InvokeRequest, guests: &ChainGuests) -> Result<(Wallet, InvokeBuild)> {
+    let w = Wallet::from_hex(&req.spend_key)?;
+    let call = parse_call(&req.call)?;
+    let fee = parse_units(&req.fee, "fee")?;
+    if fee < gas::BUNDLE_BASE {
+        return bad(format!("fee {} is below the bundle floor {}", fee, gas::BUNDLE_BASE));
+    }
+    if let Some(t) = req.tier {
+        if !randprotocol_zkvm::machine::TIERS.contains(&(t as usize)) {
+            return bad(format!("tier {t} is not one of {:?}", randprotocol_zkvm::machine::TIERS));
+        }
+    }
+    if req.inputs.is_empty() {
+        return bad("a bundle spends one or two notes");
+    }
+    let root = word8_from_hex(&req.anchor_root).ok_or("anchor_root is not 64 hex characters")?;
+    let time = u32::try_from(req.anchor_height).map_err(|_| "anchor height does not fit a bundle's time field")?;
+    let profile = profile_from_str(&req.profile)?;
+    // No memo: the bundle pays nobody; its change and dummies follow the chain's format, and so
+    // do the payout envelopes.
+    let format = envelope_format_for(req.chain_id, req.envelope_bytes, "")?;
+    check_bundle_gas_limit(req.bundle_gas_limit)?;
+    let asset = if call.burn_a != 0 { call.burn_asset } else { 0 };
+    let need_r = bundle_need(0, fee, call.burn_r)?;
+    let (a_slots, a_spent, r_slots, r_spent) = if asset == 0 {
+        if !req.fee_inputs.is_empty() {
+            return bad("an invoke that burns no token pays out of the RAND notes in `inputs`; `fee_inputs` names the RAND notes of one that burns a token");
+        }
+        let (r, spent, held) = group_slots(&w, &req.inputs, 0)?;
+        if held < need_r {
+            return bad(format!("inputs hold {}, but fee + RAND deposit is {}", amount_of(0, held), amount_of(0, need_r)));
+        }
+        (Vec::new(), Vec::new(), r, spent)
+    } else {
+        if req.fee_inputs.is_empty() {
+            return bad(format!("an invoke that burns asset {asset} pays its fee in RAND: name one or two RAND notes in `fee_inputs`"));
+        }
+        let (a, a_spent, a_held) = group_slots(&w, &req.inputs, asset)?;
+        let (r, r_spent, r_held) = group_slots(&w, &req.fee_inputs, 0)?;
+        if a_held < call.burn_a {
+            return bad(format!("the notes of asset {asset} hold {a_held} units, but the deposit is {}", call.burn_a));
+        }
+        if r_held < need_r {
+            return bad(format!("the RAND notes hold {}, but fee + RAND deposit is {}", amount_of(0, r_held), amount_of(0, need_r)));
+        }
+        (a, a_spent, r, r_spent)
+    };
+    let plan = BundlePlan {
+        asset,
+        a_slots,
+        r_slots,
+        to: None,
+        fee,
+        burn_a: call.burn_a,
+        burn_r: call.burn_r,
+        memo: String::new(),
+    };
+    // The bundle first: it fixes `time`, which every payout note below is stamped with.
+    let prepared = build_bundle(&w, &plan, format, root, time, guests)?;
+    let transition = Transition {
+        reads: call.reads.clone(),
+        writes: call.writes.clone(),
+        inflow: call.inflow,
+        pays: seal_payouts(&w, &call.pays, time, format)?,
+        mints: seal_payouts(&w, &call.mints, time, format)?,
+    };
+    // The chain refuses a payout commitment that repeats one of the bundle's four or another
+    // payout's; with fresh blindings it cannot happen, so it is a bug worth stopping on here.
+    let mut seen: Vec<Word8> = prepared.bundle.commitments.to_vec();
+    for p in transition.payouts() {
+        let cm = payout_note(p, time).commitment();
+        if seen.contains(&cm) {
+            return bad("a payout repeats a commitment (wallet bug)");
+        }
+        seen.push(cm);
+    }
+    let action = Action::Invoke { program: call.id, proof: Vec::new(), input_envelope: None, transition: transition.clone() };
+    let tx = Transaction::shielded(req.chain_id, prepared.bundle.clone(), action);
+    let spent_indices = a_spent.into_iter().chain(r_spent).collect();
+    Ok((
+        w,
+        InvokeBuild {
+            plan,
+            prepared,
+            tx,
+            call,
+            transition,
+            fee,
+            time,
+            spent_indices,
+            profile,
+            tier: req.tier,
+            gas_limit: req.gas_limit,
+            cap: req.max_proof_bytes.map_or(gas::MAX_PROOF_BYTES, |c| c as usize),
+            call_tier: 0,
+            call_proof_bytes: 0,
+            outputs: [0; 8],
+        },
+    ))
+}
+
+/// Prove the call over the transaction's own `call_binding` and the transition's context, and
+/// put the proof into the action — upstream's `bind_call` for an `Invoke`. The call binding
+/// blanks the call proof and the bundle proof, so filling the call proof in cannot move it, and
+/// the bundle's binding, taken next, then covers the finished call.
+///
+/// This is the call's own proving cost — durian.market's program proves at tier 12 — and it runs
+/// wherever this crate does: natively in seconds, in wasm32 in minutes. A proof over the chain's
+/// cap is refused here, before a bundle proof is paid for.
+fn bind_invoke(b: &mut InvokeBuild) -> Result<()> {
+    let binding = b.tx.call_binding();
+    let bundle = b.tx.bundle.as_ref().ok_or("a shielded transaction has a bundle")?;
+    let context = b.transition.context(bundle.burn_r, bundle.burn_asset, bundle.burn_a);
+    let salt = executor::fresh_call_salt();
+    let (proof, outputs, tier) = executor::prove_invoke(
+        b.profile,
+        &b.call.program,
+        &b.call.private_inputs,
+        &b.call.public,
+        &binding,
+        &context,
+        salt,
+        b.tier,
+        b.gas_limit,
+    )
+    .map_err(|e| format!("proving the call failed: {e}"))?;
+    if proof.len() > b.cap {
+        return bad(format!(
+            "the call proof is {} bytes, over this chain's {}-byte cap (max_proof_bytes); it would be refused, so nothing was built",
+            proof.len(),
+            b.cap
+        ));
+    }
+    b.call_tier = tier;
+    b.call_proof_bytes = proof.len();
+    b.outputs = outputs;
+    match &mut b.tx.action {
+        Action::Invoke { proof: p, .. } => *p = proof,
+        _ => return bad("a call binding for an action that is not an invoke (wallet bug)"),
+    }
+    debug_assert_eq!(b.tx.call_binding(), binding, "filling the call proof in never moves the call binding");
+    Ok(())
+}
+
+/// Build, prove and encode an RPL-2 `Invoke`: the call proof, then the auth proof and the bundle
+/// proof, all here. The slow call, three times over (see `prove_transaction`). Nothing is
+/// submitted.
+pub fn prove_invoke(req: &InvokeRequest) -> Result<InvokeResult> {
+    let guests = chain_guests(req.hc_bundle.as_deref(), req.hc_auth.as_deref())?;
+    let (w, mut b) = build_invoke_unproven(req, &guests)?;
+    bind_invoke(&mut b)?;
+    let (tier, proof_bytes) = prove_transaction(&mut b.tx, &b.prepared, &w.sk, b.profile)?;
+    invoke_result(&invoke_scalars(&w, &b), &b.tx, tier, proof_bytes)
+}
+
+/// [`transfer_scalars`] for an invoke: the same slot arrays, `null` payment fields (a burn's
+/// reasoning: the bundle pays nobody), and the invoke's own half.
+fn invoke_scalars(w: &Wallet, b: &InvokeBuild) -> PendingScalars {
+    let (nullifiers, commitments, tx_keys) = slot_hex(&b.prepared);
+    let (payment_slot, payment_tx_key, payment_commitment) = payment_of(&b.plan, &b.prepared);
+    let (change, fee_change) =
+        if b.plan.asset == 0 { (b.prepared.change_r, 0) } else { (b.prepared.change_a, b.prepared.change_r) };
+    let payouts = b
+        .transition
+        .payouts()
+        .map(|p| {
+            let note = payout_note(p, b.time);
+            owned_note(w, u64::MAX, 0, note.commitment(), note)
+        })
+        .collect();
+    PendingScalars {
+        time: b.time,
+        asset: b.plan.asset,
+        amount: "0".into(),
+        change: change.to_string(),
+        fee_change: fee_change.to_string(),
+        fee: b.fee.to_string(),
+        nullifiers,
+        commitments,
+        tx_keys,
+        payment_slot,
+        payment_tx_key,
+        payment_commitment,
+        spent_indices: b.spent_indices.clone(),
+        proofs: 1,
+        relayer_fee: None,
+        to_chain: None,
+        token: None,
+        to: None,
+        invoke: Some(InvokeScalars {
+            program: b.call.id.to_hex(),
+            burn_r: b.call.burn_r.to_string(),
+            burn_asset: b.call.burn_asset,
+            burn_a: b.call.burn_a.to_string(),
+            call_tier: b.call_tier,
+            call_proof_bytes: b.call_proof_bytes,
+            outputs: b.outputs,
+            transition: transition_hex(&b.transition, b.time),
+            payouts,
+        }),
+    }
+}
+
+/// An [`InvokeResult`] from an invoke's scalars and its proved transaction. Fails only on scalars
+/// without the invoke half — a `Pending` that says `"invoke"` but was not built as one.
+fn invoke_result(s: &PendingScalars, tx: &Transaction, tier: u8, proof_bytes: usize) -> Result<InvokeResult> {
+    let i = s.invoke.as_ref().ok_or("the pending invoke has no transition")?;
+    let encoded = tx.encode();
+    Ok(InvokeResult {
+        hash: tx.hash().to_hex(),
+        tx_bytes: encoded.len(),
+        tx_hex: hex::encode(encoded),
+        time: s.time,
+        program: i.program.clone(),
+        asset: s.asset,
+        burn_r: i.burn_r.clone(),
+        burn_asset: i.burn_asset,
+        burn_a: i.burn_a.clone(),
+        change: s.change.clone(),
+        fee: s.fee.clone(),
+        fee_change: s.fee_change.clone(),
+        tier,
+        proof_bytes,
+        auth_proof_bytes: auth_proof_bytes_of(tx),
+        call_tier: i.call_tier,
+        call_proof_bytes: i.call_proof_bytes,
+        outputs: i.outputs,
+        nullifiers: s.nullifiers.clone(),
+        commitments: s.commitments.clone(),
+        tx_keys: s.tx_keys.clone(),
+        payment_slot: s.payment_slot,
+        payment_tx_key: s.payment_tx_key.clone(),
+        payment_commitment: s.payment_commitment.clone(),
+        spent_indices: s.spent_indices.clone(),
+        proofs: s.proofs,
+        transition: i.transition.clone(),
+        payouts: i.payouts.clone(),
     })
 }
 
@@ -2022,6 +2912,15 @@ pub struct PrepareBurnRequest {
     pub max_proof_bytes: Option<u32>,
 }
 
+/// [`PrepareTransferRequest`] for an RPL-2 invoke. `max_proof_bytes` is [`InvokeRequest`]'s own
+/// (the call proof is held to it here, the bundle proof in `finish_proof`).
+#[derive(Deserialize)]
+pub struct PrepareInvokeRequest {
+    #[serde(flatten)]
+    pub req: InvokeRequest,
+    pub prover: ProverTarget,
+}
+
 /// A transaction waiting for its proof. **No spend key, no witness**: everything here is either
 /// public once the transaction is submitted, or a one-time reply key that opens only this job's
 /// reply. It is everything [`finish_proof`] needs to produce the result `prove_transfer` or
@@ -2032,7 +2931,7 @@ pub struct PrepareBurnRequest {
 /// about 2.8 MB of hex at the production profile (a 1.36 MB proof) where it was some 15 kB.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Pending {
-    /// `"transfer"` or `"burn"`.
+    /// `"transfer"`, `"burn"` or `"invoke"` ([`INVOKE_KIND`]).
     pub kind: String,
     /// `bincode(Transaction)` as hex, its bundle's proof empty (and, on a split-authorisation
     /// chain, its auth proof already in place).
@@ -2076,6 +2975,10 @@ pub struct PendingScalars {
     pub to_chain: Option<u16>,
     pub token: Option<String>,
     pub to: Option<String>,
+    /// An invoke's half ([`InvokeScalars`]), `null` on a transfer and a burn. `#[serde(default)]`
+    /// so a `pending` a client stored before invokes existed still loads.
+    #[serde(default)]
+    pub invoke: Option<InvokeScalars>,
 }
 
 /// What `prepare_*` returns: the sealed job for `prover_submit`, and the pending transaction the
@@ -2356,6 +3259,21 @@ pub fn prepare_burn(r: &PrepareBurnRequest) -> Result<PrepareResult> {
     seal_pending("burn", &target, &b.tx, words, &b.prepared.expected, b.profile, r.max_proof_bytes, scalars)
 }
 
+/// [`prepare_transfer`] for an RPL-2 invoke: [`prove_invoke`]'s build, its **call proof made
+/// here** (over the transaction's call binding — it has to exist before the bundle's binding is
+/// final, and its witness is the program's private inputs, which a bundle prover has no job for),
+/// its auth proof made here, and its bundle witness sealed to the prover. `pending.tx_hex` carries
+/// the call proof and the auth proof; `finish_proof` adds the bundle's.
+pub fn prepare_invoke(r: &PrepareInvokeRequest) -> Result<PrepareResult> {
+    let target = check_target(&r.prover, r.req.hc_bundle.as_ref(), r.req.hc_auth.as_deref())?;
+    let (w, mut b) = build_invoke_unproven(&r.req, &target.guests)?;
+    bind_invoke(&mut b)?;
+    authorise(&mut b.tx, &b.prepared, &w.sk, b.profile)?;
+    let words = std::mem::take(&mut b.prepared.words);
+    let scalars = invoke_scalars(&w, &b);
+    seal_pending(INVOKE_KIND, &target, &b.tx, words, &b.prepared.expected, b.profile, r.req.max_proof_bytes, scalars)
+}
+
 /// The pending transaction's auth fields against its guest, before any reply is opened: a v3
 /// transaction carries an auth proof that publishes its own `auth_commit` (a decode — the proof
 /// was made and checked on this device by `prepare_*`), and any other carries neither. A pending
@@ -2390,8 +3308,8 @@ fn check_pending_auth(exec: &ZkExecutor, hc: &Word8, bundle: &Bundle) -> Result<
 /// and this transaction's binding. Only then is it used.
 pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
     let p = &r.pending;
-    if p.kind != "transfer" && p.kind != "burn" {
-        return bad(format!("unknown pending kind {:?}; expected \"transfer\" or \"burn\"", p.kind));
+    if p.kind != "transfer" && p.kind != "burn" && p.kind != INVOKE_KIND {
+        return bad(format!("unknown pending kind {:?}; expected \"transfer\", \"burn\" or \"invoke\"", p.kind));
     }
     let reply_key = hex32(&p.reply_key, "pending.reply_key")?;
     let expected = word8_from_hex(&p.expected).ok_or("pending.expected is not 64 hex characters")?;
@@ -2406,6 +3324,18 @@ pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
             return bad("the pending transaction already carries a proof");
         }
         check_pending_auth(&exec, &hc, bundle)?;
+    }
+    // An invoke's call proof was made by `prepare_invoke` before the job was sealed and sits
+    // inside the call binding the bundle proof commits to; a pending that lost it is refused by
+    // every validator after the prover's work.
+    match (&p.kind[..], &tx.action) {
+        (INVOKE_KIND, Action::Invoke { proof, .. }) if proof.is_empty() => {
+            return bad("the pending invoke carries no call proof")
+        }
+        (INVOKE_KIND, Action::Invoke { .. }) => {}
+        (INVOKE_KIND, _) => return bad("the pending transaction is not an invoke"),
+        (_, Action::Invoke { .. }) => return bad("the pending transaction is an invoke, but its kind says otherwise"),
+        _ => {}
     }
     let sealed = hex::decode(r.reply_hex.trim()).map_err(|_| "the prover's reply is not hex".to_string())?;
 
@@ -2456,10 +3386,10 @@ pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
     tx.bundle.as_mut().ok_or("the pending transaction has no bundle")?.proof = reply.proof;
     debug_assert_eq!(tx.binding(), binding, "filling the proof in never moves the binding");
     let ser = |v: &dyn erased::Ser| v.to_value();
-    Ok(if p.kind == "transfer" {
-        ser(&transfer_result(&p.scalars, &tx, reply.tier, proof_bytes))
-    } else {
-        ser(&burn_result(&p.scalars, &tx, reply.tier, proof_bytes)?)
+    Ok(match &p.kind[..] {
+        "transfer" => ser(&transfer_result(&p.scalars, &tx, reply.tier, proof_bytes)),
+        INVOKE_KIND => ser(&invoke_result(&p.scalars, &tx, reply.tier, proof_bytes)?),
+        _ => ser(&burn_result(&p.scalars, &tx, reply.tier, proof_bytes)?),
     })
 }
 
@@ -2773,6 +3703,14 @@ pub fn constants() -> Value {
         // before it saves such a pairing.
         "prover_history_warning": PROVER_HISTORY_WARNING,
         "prover_peak_memory_bytes": PROVER_PEAK_MEMORY_BYTES,
+        // RPL-2 (`docs/program-state.md`): this build can plan, prove and delegate an `Invoke`
+        // (`plan_invoke`, `dry_run_invoke`, `prove_invoke`, `prepare_invoke`), with the
+        // transition's limits and the `from` word of a payout note, for a client's own checks.
+        "rpl2_invoke": true,
+        "invoke_max_reads": MAX_READS,
+        "invoke_max_writes": MAX_WRITES,
+        "invoke_max_payouts": MAX_PAYOUTS,
+        "program_from": word8_to_hex(&PROGRAM_FROM),
     })
 }
 
@@ -2884,6 +3822,8 @@ fn asset_param(p: &Value) -> Result<u32> {
 /// - `scan_page` `{spend_key, rows: [getCommitments rows]}` → `{received, sent, next_index, rows}`;
 ///   every received note and sent row carries `memo` (a string, or `null` for none)
 /// - `rebuilt_deposit` `{spend_key, action}` → owned note or null
+/// - `rebuilt_notes` `{spend_key, action}` → owned notes (an array): a `bridge_attest`'s deposit,
+///   or every note an RPL-2 `invoke` paid out to this wallet, from the action's public fields
 /// - `pending_cleared` `{note, read_through}` → bool; `read_through` is a block height (a JSON
 ///   number, or a digit string for a non-JS caller — never an amount)
 /// - `select_inputs` `{notes, asset?, need}` → `{chosen, need, change}`
@@ -2899,6 +3839,26 @@ fn asset_param(p: &Value) -> Result<u32> {
 ///   `inputs` are notes of `asset` (which the bundle burns) and `fee_inputs` are RAND notes.
 ///   `fee` defaults to `gas::BRIDGE_BURN_FEE`, which `version` reports as `bridge_burn_fee`;
 ///   `asset == 0` fails with [`RAND_NOT_BRIDGED`]
+/// - `plan_invoke` `{notes, burn_r?, burn_asset?, burn_a?, fee}` → the same shape as `plan_burn`:
+///   the one bundle an RPL-2 invoke rides, burning `burn_r` RAND and/or `burn_a` of `burn_asset`
+///   into the program beside the fee. With a token burn `inputs` are its notes and `fee_inputs`
+///   the RAND notes; without one `inputs` are the RAND notes and `fee_inputs` is empty (the RAND
+///   transfer shape). Amounts are decimal strings; `burn_a` of asset 0 fails with [`RAND_NOT_BURN_A`]
+/// - `dry_run_invoke` `{program, program_code: {base_pc, words}, public_hex?, private_inputs?,
+///   reads?, writes?, inflow: {rand?, asset?, amount?, kind?}, pays?, mints?}` → `{tier, gas,
+///   gas_limit, gas_max, keccak_log_height, sha256_log_height, context_words}` (fast — the
+///   emulator, no proof): what a client prices the fee from (`rand_estimateFee
+///   {"kind":"invoke", tier, gas: gas_limit, bytes, created_cells}`) and pins the proof to. The
+///   program's code is checked to hash to `program`; a transition the program refuses, or the
+///   ledger's cheap shape rules refuse, is an error naming why
+/// - `prove_invoke` `{…InvokeRequest}` → InvokeResult (slow — the call proof, the auth proof and
+///   the bundle proof, all here): the dry run's fields plus `fee`, `tier?` (the dry run's),
+///   `gas_limit?` (its `gas_limit` under a `gas` section, else `null`), the anchor, `inputs` and
+///   `fee_inputs` from `plan_invoke`, `profile`, `envelope_bytes`, `hc_bundle`, `hc_auth`,
+///   `bundle_gas_limit` and `max_proof_bytes` as `prove_burn`'s. The result carries the
+///   transition as sent (`transition`, with each payout's `cm` and envelope), the payout notes as
+///   this wallet will own them (`payouts`), the program's `outputs`, and the bundle's slot arrays
+///   with `payment_*` null
 /// - `burn_is_possible` `{bridge_state, asset, to_chain, token, amount, relayer_fee}` → `true`, or
 ///   an error naming what the chain would refuse. `bridge_state` is a whole `rand_getBridgeState`
 ///   reply the client fetched. **Call this before `prove_burn`** — it is the only thing standing
@@ -2930,6 +3890,10 @@ fn asset_param(p: &Value) -> Result<u32> {
 ///   `gas::MAX_PROOF_BYTES`). `pending` carries **no spend key and no witness** — a client may
 ///   store it while the prover works; it names `witness_kind`, what the prover was sent
 /// - `prepare_burn` `{…BurnRequest, prover, max_proof_bytes?}` → the same, for a burn
+/// - `prepare_invoke` `{…InvokeRequest, prover}` → the same, for an RPL-2 invoke, with the call
+///   proof and the auth proof **made here** (the call proof's witness is the program's private
+///   inputs, which no bundle prover has a job for) and only the bundle proof sealed to the
+///   prover; `pending.kind` is `"invoke"` and `pending.scalars.invoke` carries the transition
 /// - `chain_guests` `{hc_bundle?, hc_auth?}` → `{hc_bundle, hc_auth, split_authorisation,
 ///   witness_kind}` (instant): the check `prove_*`/`prepare_*` make of a chain's two guests, on
 ///   its own — so a client can refuse a chain this build cannot prove for, and learn which
@@ -2985,6 +3949,11 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
             let w = Wallet::from_hex(str_param(params, "spend_key")?)?;
             let action = params.get("action").cloned().unwrap_or(Value::Null);
             Ok(rebuilt_deposit(&w, &action).map(|n| serde_json::to_value(n).unwrap()).unwrap_or(Value::Null))
+        }
+        "rebuilt_notes" => {
+            let w = Wallet::from_hex(str_param(params, "spend_key")?)?;
+            let action = params.get("action").cloned().unwrap_or(Value::Null);
+            Ok(ser(&rebuilt_notes(&w, &action)))
         }
         "pending_cleared" => {
             let note: OwnedNote = serde_json::from_value(params.get("note").cloned().unwrap_or(Value::Null)).map_err(|e| format!("note: {e}"))?;
@@ -3061,6 +4030,41 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
         "prepare_burn" => {
             let req: PrepareBurnRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
             Ok(ser(&prepare_burn(&req)?))
+        }
+        "plan_invoke" => {
+            let notes: Vec<OwnedNote> =
+                serde_json::from_value(params.get("notes").cloned().unwrap_or(Value::Array(vec![]))).map_err(|e| format!("notes: {e}"))?;
+            // Each burn is optional and absent means none: an invoke may deposit nothing.
+            let optional = |name: &str| -> Result<u64> {
+                match params.get(name) {
+                    None | Some(Value::Null) => Ok(0),
+                    Some(_) => amount_param(params, name),
+                }
+            };
+            let burn_r = optional("burn_r")?;
+            let burn_a = optional("burn_a")?;
+            let burn_asset = match params.get("burn_asset") {
+                None | Some(Value::Null) => 0,
+                Some(Value::Number(n)) => n
+                    .as_u64()
+                    .and_then(|v| u32::try_from(v).ok())
+                    .ok_or_else(|| "burn_asset must be a non-negative integer".to_string())?,
+                Some(_) => return bad("burn_asset must be a non-negative integer"),
+            };
+            let fee = amount_param(params, "fee")?;
+            Ok(ser(&plan_invoke(&notes, burn_r, burn_asset, burn_a, fee)?))
+        }
+        "dry_run_invoke" => {
+            let req: TransitionRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
+            Ok(ser(&dry_run_invoke(&req)?))
+        }
+        "prove_invoke" => {
+            let req: InvokeRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
+            Ok(ser(&prove_invoke(&req)?))
+        }
+        "prepare_invoke" => {
+            let req: PrepareInvokeRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
+            Ok(ser(&prepare_invoke(&req)?))
         }
         "finish_proof" => {
             let req: FinishRequest = serde_json::from_value(params.clone()).map_err(|e| format!("request: {e}"))?;
@@ -5772,6 +6776,472 @@ mod tests {
             other.tx_hex = hex::encode(tx.encode());
             let e = finish(&other, &good).err().unwrap();
             assert!(e.contains("does not verify"), "{e}");
+        }
+    }
+
+    /// RPL-2: planning, proving and delegating an `Invoke`, and what the chain does with it.
+    mod rpl2 {
+        use super::*;
+        use randprotocol_core::confidential::{ConfidentialError, StubExecutor};
+        use randprotocol_core::ledger::program_state::payout_commitment;
+        use randprotocol_core::ledger::tokens::{MintAuthority, TokenRegistry};
+        use randprotocol_core::ProgramRecord;
+        use randprotocol_core::notes::FullTree;
+        use randprotocol_core::program::CallOutcome;
+        use randprotocol_core::types::{CoveredBundle, DeclaredShape};
+        use randprotocol_prover::key::ProverKey;
+        use randprotocol_prover::wire::{open_job, seal_reply, ProveReply};
+        use randprotocol_zkvm::guests;
+
+        const REG_FEE: u64 = 1_000_000_000;
+        const CELL_FEE: u64 = 10_000_000;
+        /// Generous: a call at tier 10 or 12 and a cell, whatever the gas section prices.
+        const FEE: u64 = 2_000_000_000;
+
+        fn key(n: u32) -> Word8 {
+            [n, 0, 0, 0, 0, 0, 0, 0]
+        }
+
+        fn cell_hex(k: u32, v: u32) -> CellHex {
+            CellHex { key: word8_to_hex(&key(k)), value: word8_to_hex(&[v, 0, 0, 0, 0, 0, 0, 0]) }
+        }
+
+        fn counter() -> (Program, ProgramId) {
+            let p = guests::rpl2_counter();
+            (p.clone(), program_id_with_public(p.base_pc, &p.words, &[]))
+        }
+
+        /// The counter's transition — `from` → `from + 1` in cell 1 — with whatever burns and
+        /// payouts the test adds: the counter checks the counts of reads and writes and the
+        /// value, nothing else (`guests::rpl2_counter`'s doc), so it stands in for a program
+        /// that takes deposits and pays out.
+        fn request(from: u32, inflow: Value, pays: Value, mints: Value) -> Value {
+            let (p, id) = counter();
+            json!({
+                "program": id.to_hex(),
+                "program_code": { "base_pc": p.base_pc, "words": p.words },
+                "public_hex": "",
+                "private_inputs": [],
+                "reads": [cell_hex(1, from)],
+                "writes": [cell_hex(1, from + 1)],
+                "inflow": inflow,
+                "pays": pays,
+                "mints": mints,
+            })
+        }
+
+        #[test]
+        fn plan_invoke_burns_a_token_and_rand_in_one_bundle() {
+            let notes = vec![owned(0, 1, 500), owned(1, 0, 3_000_000_000), owned(2, 1, 20)];
+            // A token deposit AND a RAND deposit beside the fee: the token from slots 0–1, the
+            // fee and the RAND burn from slots 2–3.
+            let plan = plan_invoke(&notes, 1_000_000_000, 1, 200, gas::BUNDLE_BASE).unwrap();
+            assert_eq!(plan.inputs.iter().map(|n| n.index).collect::<Vec<_>>(), vec![0]);
+            assert_eq!(plan.fee_inputs.iter().map(|n| n.index).collect::<Vec<_>>(), vec![1]);
+            assert_eq!(plan.need, "200");
+            assert_eq!(plan.change, "300");
+            assert_eq!(plan.fee_change, (3_000_000_000u64 - 1_000_000_000 - gas::BUNDLE_BASE).to_string());
+            assert_eq!(plan.proofs, 1);
+            // RAND alone: `plan_transfer`'s RAND shape, the deposit beside the fee.
+            let plan = plan_invoke(&notes, 1_000_000_000, 0, 0, gas::BUNDLE_BASE).unwrap();
+            assert_eq!(plan.inputs.iter().map(|n| n.index).collect::<Vec<_>>(), vec![1]);
+            assert!(plan.fee_inputs.is_empty());
+            assert_eq!(plan.need, (1_000_000_000 + gas::BUNDLE_BASE).to_string());
+            assert_eq!(plan.change, (3_000_000_000u64 - 1_000_000_000 - gas::BUNDLE_BASE).to_string());
+            assert_eq!(plan.fee_change, "0");
+            // Nothing burned: a call that only reads and writes still pays its fee.
+            let plan = plan_invoke(&notes, 0, 0, 0, gas::BUNDLE_BASE).unwrap();
+            assert_eq!(plan.need, gas::BUNDLE_BASE.to_string());
+            // The refusals: RAND as `burn_a`, a fee under the floor, no RAND for the fee.
+            assert_eq!(plan_invoke(&notes, 0, 0, 5, gas::BUNDLE_BASE).unwrap_err(), RAND_NOT_BURN_A);
+            assert!(plan_invoke(&notes, 0, 1, 5, gas::BUNDLE_BASE - 1).unwrap_err().contains("bundle floor"));
+            assert_eq!(plan_invoke(&[owned(0, 1, 500)], 0, 1, 5, gas::BUNDLE_BASE).unwrap_err(), NO_SPENDABLE_RAND);
+            // Through `dispatch`, amounts as strings, the burns optional.
+            let v = dispatch(
+                "plan_invoke",
+                &json!({ "notes": notes, "burn_r": "1000000000", "burn_asset": 1, "burn_a": "200", "fee": gas::BUNDLE_BASE.to_string() }),
+            )
+            .unwrap();
+            assert_eq!(v["change"], "300");
+            let v = dispatch("plan_invoke", &json!({ "notes": notes, "fee": gas::BUNDLE_BASE.to_string() })).unwrap();
+            assert_eq!(v["need"], gas::BUNDLE_BASE.to_string());
+            assert!(dispatch("plan_invoke", &json!({ "notes": notes, "burn_a": 5, "fee": "1000000" })).is_err(), "a number is not an amount");
+        }
+
+        #[test]
+        fn dry_run_says_the_tier_and_refuses_a_transition_the_program_does_not_accept() {
+            let ok: TransitionRequest = serde_json::from_value(request(41, json!({}), json!([]), json!([]))).unwrap();
+            let run = dry_run_invoke(&ok).unwrap();
+            assert_eq!(run.context_words, CONTEXT_HEADER_WORDS + 32);
+            assert!(randprotocol_zkvm::machine::TIERS.contains(&(run.tier as usize)));
+            assert!(run.gas > 0 && run.gas <= run.gas_limit && run.gas_limit <= run.gas_max);
+            // 41 → 43 is not a step: no run, so no proof, said before anything is built.
+            let mut bad = request(41, json!({}), json!([]), json!([]));
+            bad["writes"] = json!([cell_hex(1, 43)]);
+            let e = dispatch("dry_run_invoke", &bad).unwrap_err();
+            assert!(e.contains("does not accept"), "{e}");
+            // The cheap shape rules, in the ledger's words, before the emulator runs.
+            let mut two = request(41, json!({}), json!([]), json!([]));
+            two["reads"] = json!([cell_hex(2, 0), cell_hex(1, 41)]);
+            assert!(dispatch("dry_run_invoke", &two).unwrap_err().contains("strictly ascending"));
+            let mut rand = request(41, json!({ "rand": "0", "asset": 0, "amount": "5", "kind": "deposit" }), json!([]), json!([]));
+            assert_eq!(dispatch("dry_run_invoke", &rand).unwrap_err(), RAND_NOT_BURN_A);
+            rand["inflow"] = json!({ "asset": 1, "amount": "5", "kind": "none" });
+            assert!(dispatch("dry_run_invoke", &rand).unwrap_err().contains("inflow"));
+            let mut zero = request(41, json!({}), json!([{ "asset": 0, "amount": "0" }]), json!([]));
+            assert!(dispatch("dry_run_invoke", &zero).unwrap_err().contains("payout of zero"));
+            zero["pays"] = json!((0..5).map(|_| json!({ "asset": 0, "amount": "1" })).collect::<Vec<_>>());
+            assert!(dispatch("dry_run_invoke", &zero).unwrap_err().contains("at most 4"));
+            // A node serving other code for the id is caught before anything is proved.
+            let mut forged = request(41, json!({}), json!([]), json!([]));
+            forged["program_code"]["words"][0] = json!(0x13);
+            assert!(dispatch("dry_run_invoke", &forged).unwrap_err().contains("do not hash to program"));
+        }
+
+        /// The executor a deploy under a stub bundle proof goes through: the zkVM's own code
+        /// commitment (`check_program` — the record the invoke's proof is checked against) and
+        /// its hashes, the stub's bundle verification. A test's way of deploying a program into
+        /// a ledger without proving a bundle for it.
+        struct DeployExec<'a>(&'a ZkExecutor);
+
+        impl ConfidentialExecutor for DeployExec<'_> {
+            fn check_program(&self, base_pc: u32, words: &[u32]) -> std::result::Result<Vec<u8>, ConfidentialError> {
+                self.0.check_program(base_pc, words)
+            }
+            fn verify_call(&self, program: &ProgramRecord, proof: &[u8]) -> std::result::Result<CallOutcome, ConfidentialError> {
+                self.0.verify_call(program, proof)
+            }
+            fn public_digest(&self, words: &[u32]) -> Word8 {
+                self.0.public_digest(words)
+            }
+            fn node_hash(&self, left: &Word8, right: &Word8) -> Word8 {
+                self.0.node_hash(left, right)
+            }
+            fn note_commitment(&self, pk: &Word8, from: &Word8, amount: u64, asset: u32, time: u32, r: &Word8) -> Word8 {
+                self.0.note_commitment(pk, from, amount, asset, time, r)
+            }
+            fn bundle_digest(&self, input: &randprotocol_core::notes::BundleDigestInput) -> Word8 {
+                StubExecutor.bundle_digest(input)
+            }
+            fn bundle_digest_v3(&self, input: &randprotocol_core::notes::BundleDigestInput) -> Word8 {
+                StubExecutor.bundle_digest_v3(input)
+            }
+            fn bundle_proof_digest(&self, hc: &Word8, proof: &[u8]) -> std::result::Result<Word8, ConfidentialError> {
+                StubExecutor.bundle_proof_digest(hc, proof)
+            }
+            fn auth_proof_digest(&self, proof: &[u8]) -> std::result::Result<Word8, ConfidentialError> {
+                StubExecutor.auth_proof_digest(proof)
+            }
+            fn verify_auth(&self, hc: &Word8, proof: &[u8], binding: &[u32; TX_BINDING_WORDS]) -> std::result::Result<Word8, ConfidentialError> {
+                StubExecutor.verify_auth(hc, proof, binding)
+            }
+            fn verify_bundle(&self, hc: &Word8, proof: &[u8], binding: &[u32; TX_BINDING_WORDS]) -> std::result::Result<(), ConfidentialError> {
+                StubExecutor.verify_bundle(hc, proof, binding)
+            }
+            fn aggregate_program_digest(&self, shape: &DeclaredShape) -> std::result::Result<[u64; 4], ConfidentialError> {
+                StubExecutor.aggregate_program_digest(shape)
+            }
+            fn verify_aggregate(&self, shape: &DeclaredShape, covered: &[CoveredBundle], proof: &[u8], binding: &[u32; 8]) -> std::result::Result<Vec<[u32; 8]>, ConfidentialError> {
+                StubExecutor.verify_aggregate(shape, covered, proof, binding)
+            }
+        }
+
+        /// A stub-proved bundle for the set-up transactions, `program_state.rs`'s own `bundle`:
+        /// the ledger's newest anchor, dummy nullifiers and commitments, tiny envelopes.
+        fn stub_bundle(l: &randprotocol_core::Ledger, seed: u32, fee: u64) -> Bundle {
+            let env = || Envelope { kem_ct: vec![1; 8], to_receiver: vec![], to_sender: vec![], body: vec![2; 8] };
+            let mut b = Bundle {
+                anchor: l.anchors().back().expect("an anchor").1,
+                nullifiers: [[seed; 8], [seed + 1; 8], [seed + 2; 8], [seed + 3; 8]],
+                commitments: [[seed + 4; 8], [seed + 5; 8], [seed + 6; 8], [seed + 7; 8]],
+                fee,
+                burn_a: 0,
+                burn_r: 0,
+                burn_asset: 0,
+                time: l.height() as u32,
+                envelopes: [env(), env(), env(), env()],
+                proof: vec![],
+                auth_commit: [0; 8],
+                auth_proof: Vec::new(),
+            };
+            let d = StubExecutor.bundle_digest(&b.digest_input());
+            b.proof = StubExecutor::make_bundle_proof(&ZkExecutor::hc_hidden_bundle_v3(), &d, &[0; 8]);
+            b
+        }
+
+        /// A chain-18-shaped ledger with a `program_state` section, the counter deployed and two
+        /// of its own tokens registered (1: what the wallet deposits, 2: what the program mints)
+        /// — `program_state.rs`'s `ledger_with`, on this crate's `chain18_ledger`. The wallet's
+        /// leaves go in first and the anchor is recorded over them, so the tree the wallet
+        /// witnessed against is one the ledger still accepts after the set-up transactions
+        /// appended theirs.
+        fn rpl2_ledger(exec: &ZkExecutor, leaves: &[Word8], height: u64) -> (randprotocol_core::Ledger, ProgramId) {
+            let (program, id) = counter();
+            let proposer = randprotocol_core::crypto::Keypair::from_seed([1; 32]).unwrap();
+            let entry = randprotocol_core::ledger::ValidatorEntry {
+                public_key: proposer.public_key().clone(),
+                stake: 10,
+                pending: Vec::new(),
+                rewards: 0,
+                payout: ShieldedAddress { pk: [1; 8], kem_ek: vec![2; 32] },
+                nonce: 0,
+                activation_epoch: 0,
+            };
+            let mut l = randprotocol_core::Ledger::new(
+                DEFAULT_CHAIN_ID,
+                ZkExecutor::hc_hidden_bundle_v3(),
+                [(proposer.address(), entry)].into_iter().collect(),
+                exec,
+            );
+            l.set_tokens(Some(TokenRegistry::new(REG_FEE)));
+            l.set_program_state(Some(program_state::ProgramState::from_config(&program_state::ProgramStateConfig { cell_fee: CELL_FEE })));
+            l.set_genesis_supply(1_000_000_000_000, 10);
+            for cm in leaves {
+                l.deposit(*cm, exec).unwrap();
+            }
+            l.record_anchor(1);
+            l.set_height(height);
+            l.set_timestamp_ms(1_000_000);
+            let deploy_exec = DeployExec(exec);
+            let deploy = Action::Deploy { base_pc: program.base_pc, words: program.words.clone(), public: vec![] };
+            let fee = gas::fee_floor(&deploy);
+            let tx = StubExecutor::bound(Transaction::shielded(DEFAULT_CHAIN_ID, stub_bundle(&l, 900, fee), deploy));
+            l.apply_tx(&tx, &proposer.address(), &deploy_exec).expect("the counter deploys");
+            assert_eq!(l.program(&id).map(|r| r.words.len()), Some(program.words.len()));
+            for seed in [910u32, 920] {
+                let register = Action::RegisterToken {
+                    name: "Durian".into(),
+                    symbol: "DUR".into(),
+                    decimals: 6,
+                    authority: MintAuthority::Program(id),
+                    initial: None,
+                    salt: [seed as u8; 32],
+                    index: l.tokens().unwrap().next_index(),
+                };
+                let tx = StubExecutor::bound(Transaction::shielded(DEFAULT_CHAIN_ID, stub_bundle(&l, seed, gas::BUNDLE_BASE + REG_FEE), register));
+                l.apply_tx(&tx, &proposer.address(), &deploy_exec).expect("the program's token registers");
+            }
+            assert_eq!(l.tokens().unwrap().next_index(), 3, "tokens 1 and 2 are the program's");
+            // Now the chain-18 shape the wallet proves for: split authorisation, the gas pins,
+            // the memo envelope.
+            l.set_hc_auth(Some(ZkExecutor::hc_auth()));
+            l.set_envelope_bytes(Some(randprotocol_core::notes::MEMO_ENVELOPE_BYTES));
+            let gas: gas::GasConfig = serde_json::from_value(json!({
+                "gas_price": "100", "byte_price": "800", "bundle_gas_limit": gas::bundle_gas_limit_pin(), "metering": "circuit",
+            }))
+            .unwrap();
+            l.set_gas(Some(gas));
+            (l, id)
+        }
+
+        /// The whole invoke, delegated, against a real tree and a ledger with the section — the
+        /// one path a browser wallet takes: `prepare_invoke` makes the call proof and the auth
+        /// proof here and seals the bundle's viewing-key witness; a prover proves the bundle;
+        /// `finish_proof` checks the reply and assembles the result; the chain admits and
+        /// applies the transaction — the vault credited, the cell written, the payout notes
+        /// appended at the bundle's time — and the wallet finds its payout notes both ways.
+        #[test]
+        fn an_invoke_burns_a_token_and_rand_and_the_chain_pays_out_at_the_bundles_time() {
+            let alice = wallet(31);
+            let exec = ZkExecutor::new(FriProfile::Test);
+            let token = Note::new(alice.vk.pk(), [0; 8], 500, 1, 1);
+            let rand = Note::new(alice.vk.pk(), [0; 8], 3_000_000_000, 0, 1);
+            let leaves = vec![token.commitment(), rand.commitment()];
+            let tree = FullTree::new(leaves.clone(), &exec);
+            let root = tree.root();
+            let path = |i: u64| -> Vec<String> { tree.path(i).unwrap().iter().map(word8_to_hex).collect() };
+            let notes = vec![owned_note(&alice, 0, 1, token.commitment(), token), owned_note(&alice, 1, 1, rand.commitment(), rand)];
+            let (ledger, id) = rpl2_ledger(&exec, &leaves, 40);
+
+            // What the dapp sends: a deposit of 200 of token 1 and 1 RAND, 10 RAND paid back out
+            // of the vault, 40 of token 2 minted — the counter ignores all of it and steps the absent cell (zero) to 1.
+            let plan = plan_invoke(&notes, 1_000_000_000, 1, 200, FEE).unwrap();
+            let call = request(
+                0,
+                json!({ "rand": "1000000000", "asset": 1, "amount": "200", "kind": "deposit" }),
+                json!([{ "asset": 0, "amount": "10" }]),
+                json!([{ "asset": 2, "amount": "40" }]),
+            );
+            let run: InvokeDryRun = serde_json::from_value(dispatch("dry_run_invoke", &call).unwrap()).unwrap();
+            let prover = ProverKey::from_seed([7u8; 64]);
+            let mut req = call.clone();
+            for (k, v) in [
+                ("spend_key", json!(alice.spend_key_hex())),
+                ("chain_id", json!(DEFAULT_CHAIN_ID)),
+                ("fee", json!(FEE.to_string())),
+                ("tier", json!(run.tier)),
+                ("gas_limit", json!(run.gas_limit)),
+                ("anchor_height", json!(40)),
+                ("anchor_root", json!(word8_to_hex(&root))),
+                ("inputs", json!(plan.inputs.iter().map(|n| json!({ "note": n, "path": path(n.index) })).collect::<Vec<_>>())),
+                ("fee_inputs", json!(plan.fee_inputs.iter().map(|n| json!({ "note": n, "path": path(n.index) })).collect::<Vec<_>>())),
+                ("profile", json!("test")),
+                ("envelope_bytes", json!(1860)),
+                ("hc_bundle", json!(word8_to_hex(&ZkExecutor::hc_hidden_bundle_v3()))),
+                ("hc_auth", json!(word8_to_hex(&ZkExecutor::hc_auth()))),
+                ("bundle_gas_limit", json!(gas::bundle_gas_limit_pin())),
+                ("prover", json!({ "kem_ek": hex::encode(prover.kem_ek()), "token": hex::encode([9u8; 32]) })),
+            ] {
+                req[k] = v;
+            }
+            let out: PrepareResult = {
+                let r: PrepareInvokeRequest = serde_json::from_value(req.clone()).unwrap();
+                prepare_invoke(&r).unwrap()
+            };
+            assert_eq!(out.pending.kind, INVOKE_KIND);
+            assert_eq!(out.pending.witness_kind, "viewing_key");
+            let pending_tx = Transaction::decode(&hex::decode(&out.pending.tx_hex).unwrap()).unwrap();
+            let Action::Invoke { proof: call_proof, transition, program, .. } = &pending_tx.action else { panic!("an invoke") };
+            assert_eq!(*program, id);
+            assert!(!call_proof.is_empty(), "the call proof is made before the job is sealed");
+            assert!(!pending_tx.bundle.as_ref().unwrap().auth_proof.is_empty(), "and so is the auth proof");
+            let bundle = pending_tx.bundle.as_ref().unwrap();
+            assert_eq!((bundle.burn_r, bundle.burn_asset, bundle.burn_a, bundle.time, bundle.fee), (1_000_000_000, 1, 200, 40, FEE));
+            let i = out.pending.scalars.invoke.as_ref().expect("the invoke half");
+            assert_eq!((i.call_tier, i.outputs[0]), (run.tier, 1));
+            assert_eq!(out.pending.scalars.payment_slot, None);
+
+            // The payout notes: sealed against the bundle's time, their commitments the very
+            // words the chain computes (`payout_commitment` through the chain's executor), each
+            // named in the transition as sent, and every one this wallet's.
+            let mut payouts = Vec::new();
+            for (p, hex) in transition.payouts().zip(i.transition.pays.iter().chain(&i.transition.mints)) {
+                let cm = payout_commitment(p, bundle.time, &exec);
+                assert_eq!(word8_to_hex(&cm), hex.cm);
+                assert_eq!(p.recipient, alice.address);
+                assert_eq!(p.envelope, hex.envelope.decode().unwrap());
+                payouts.push((cm, p.envelope.clone()));
+            }
+            assert_eq!(payouts.len(), 2);
+            assert_eq!(i.payouts.iter().map(|n| n.cm.as_str()).collect::<Vec<_>>(), [word8_to_hex(&payouts[0].0), word8_to_hex(&payouts[1].0)]);
+            assert_eq!(i.payouts.iter().map(|n| (n.asset, n.amount.as_str(), n.time)).collect::<Vec<_>>(), [(0, "10", 40), (2, "40", 40)]);
+            assert_eq!(i.payouts[0].from, word8_to_hex(&PROGRAM_FROM));
+            // The transition JSON round-trips to the transition inside the transaction.
+            assert_eq!(&transition_from_hex(&i.transition).unwrap(), transition);
+            assert_eq!(serde_json::from_value::<TransitionHex>(serde_json::to_value(&i.transition).unwrap()).unwrap(), i.transition);
+
+            // The prover: the opened job, a bundle proof, a sealed reply.
+            let job = open_job(prover.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
+            assert_eq!(job.binding, pending_tx.binding());
+            let (proof, digest, tier) = prove_bundle_for(&job.hc_bundle, FriProfile::Test, &job.inputs, &job.binding, Backend::Cpu).unwrap();
+            assert_eq!(word8_to_hex(&digest), out.expected);
+            let rk: [u8; 32] = hex::decode(&out.pending.reply_key).unwrap().try_into().unwrap();
+            let reply = ProveReply { proof, digest, tier };
+            let got = dispatch("finish_proof", &json!({ "pending": out.pending, "reply_hex": hex::encode(seal_reply(&rk, &reply)) })).unwrap();
+            assert_eq!(got["program"], id.to_hex());
+            assert_eq!((got["burn_r"].as_str(), got["burn_asset"].as_u64(), got["burn_a"].as_str()), (Some("1000000000"), Some(1), Some("200")));
+            assert_eq!((got["change"].as_str(), got["fee_change"].as_str()), (Some("300"), Some((3_000_000_000u64 - 1_000_000_000 - FEE).to_string().as_str())));
+            assert_eq!(got["spent_indices"], json!([0, 1]));
+            assert_eq!(got["outputs"][0], 1);
+            assert!(got["payment_slot"].is_null());
+            // A pending whose call proof went missing is refused before the reply is opened.
+            let mut stripped = pending_tx.clone();
+            if let Action::Invoke { proof, .. } = &mut stripped.action { proof.clear() }
+            let mut lost = out.pending.clone();
+            lost.tx_hex = hex::encode(stripped.encode());
+            let e = dispatch("finish_proof", &json!({ "pending": lost, "reply_hex": hex::encode(seal_reply(&rk, &reply)) })).unwrap_err();
+            assert!(e.contains("no call proof"), "{e}");
+
+            // The chain: admitted whole, then applied — the counter stepped, the vault holds
+            // what came in less what went out, the program's token minted, and the two payout
+            // notes appended after the bundle's four.
+            let tx = Transaction::decode(&hex::decode(got["tx_hex"].as_str().unwrap()).unwrap()).unwrap();
+            assert_eq!(tx.hash().to_hex(), got["hash"]);
+            let mut ledger = ledger;
+            ledger.validate(&tx, &exec).expect("a chain with the program_state section admits the invoke");
+            let before = ledger.next_index();
+            let mut expected_tree = ledger.tree().clone();
+            let proposer = randprotocol_core::crypto::Keypair::from_seed([1; 32]).unwrap();
+            let receipt = ledger.apply_tx(&tx, &proposer.address(), &exec).expect("and applies it").expect("a call's receipt");
+            assert_eq!(receipt.outputs[0], 1);
+            let state = ledger.program_state().unwrap();
+            assert_eq!(state.cell(&id, &key(1)), [1, 0, 0, 0, 0, 0, 0, 0]);
+            assert_eq!(state.vault(&id, 0), 1_000_000_000 - 10, "RAND in, the payout out");
+            assert_eq!(state.vault(&id, 1), 200, "the token deposited");
+            assert_eq!(ledger.tokens().unwrap().get(2).unwrap().total_supply, 40, "the mint");
+            assert_eq!(ledger.next_index(), before + 4 + 2);
+            let mut expected_leaves: Vec<Word8> = tx.bundle.as_ref().unwrap().commitments.to_vec();
+            expected_leaves.extend(payouts.iter().map(|(cm, _)| *cm));
+            for cm in &expected_leaves {
+                expected_tree.append(*cm, &exec);
+            }
+            assert_eq!(ledger.tree().root(), expected_tree.root(), "the bundle's four, then pays, then mints");
+            // The same transaction again: refused — its nullifiers are spent (checked before the read).
+            let e = format!("{:?}", ledger.validate(&tx, &exec).unwrap_err());
+            assert!(e.contains("Spent") || e.contains("StaleRead"), "{e}");
+
+            // The wallet finds its payouts as the node serves them — leaves with the envelopes
+            // this wallet sealed — and from the transaction's public fields alone.
+            let rows: Vec<CommitmentRow> = payouts
+                .iter()
+                .enumerate()
+                .map(|(k, (cm, e))| CommitmentRow { index: before + 4 + k as u64, cm: word8_to_hex(cm), height: 41, envelope: envelope_hex(e) })
+                .collect();
+            let scan = scan_page(&alice, &rows).unwrap();
+            assert_eq!(scan.received.iter().map(|n| (n.asset, n.amount.as_str(), n.from.as_str())).collect::<Vec<_>>(),
+                [(0, "10", word8_to_hex(&PROGRAM_FROM).as_str()), (2, "40", word8_to_hex(&PROGRAM_FROM).as_str())]);
+            let rendered = json!({
+                "kind": "invoke", "program": id.to_hex(),
+                "transition": {
+                    "pays": i.transition.pays.iter().map(|p| json!({ "asset": p.asset, "amount": p.amount, "recipient": p.recipient, "time": 40, "r": p.r, "cm": p.cm })).collect::<Vec<_>>(),
+                    "mints": i.transition.mints.iter().map(|p| json!({ "asset": p.asset, "amount": p.amount, "recipient": p.recipient, "time": 40, "r": p.r, "cm": p.cm })).collect::<Vec<_>>(),
+                },
+            });
+            let rebuilt = dispatch("rebuilt_notes", &json!({ "spend_key": alice.spend_key_hex(), "action": rendered })).unwrap();
+            assert_eq!(rebuilt.as_array().unwrap().len(), 2);
+            assert_eq!(rebuilt[0]["cm"], scan.received[0].cm);
+            assert_eq!(rebuilt[1]["cm"], scan.received[1].cm);
+            let stranger = dispatch("rebuilt_notes", &json!({ "spend_key": wallet(32).spend_key_hex(), "action": rendered })).unwrap();
+            assert_eq!(stranger, json!([]));
+        }
+
+        #[test]
+        fn prove_invoke_refuses_what_could_never_be_admitted_before_building_anything() {
+            let alice = wallet(33);
+            let base = |inflow: Value, inputs: Value, fee_inputs: Value| {
+                let mut v = request(41, inflow, json!([]), json!([]));
+                for (k, val) in [
+                    ("spend_key", json!(alice.spend_key_hex())),
+                    ("chain_id", json!(DEFAULT_CHAIN_ID)),
+                    ("fee", json!(FEE.to_string())),
+                    ("anchor_height", json!(40)),
+                    ("anchor_root", json!(word8_to_hex(&[0; 8]))),
+                    ("inputs", inputs),
+                    ("fee_inputs", fee_inputs),
+                    ("profile", json!("test")),
+                ] {
+                    v[k] = val;
+                }
+                v
+            };
+            let err = |v: Value| dispatch("prove_invoke", &v).unwrap_err();
+            assert!(err(base(json!({}), json!([]), json!([]))).contains("one or two notes"));
+            let mut low = base(json!({}), json!([]), json!([]));
+            low["fee"] = json!("1");
+            assert!(err(low).contains("bundle floor"));
+            let mut tier = base(json!({}), json!([]), json!([]));
+            tier["tier"] = json!(11);
+            assert!(err(tier).contains("tier 11"));
+            // A RAND-only invoke names its RAND notes in `inputs`, as a RAND transfer does.
+            let rand = Note::new(alice.vk.pk(), [0; 8], 3_000_000_000, 0, 1);
+            let note = owned_note(&alice, 1, 1, rand.commitment(), rand);
+            let one = json!([{ "note": note, "path": vec![word8_to_hex(&[0; 8]); DEPTH] }]);
+            assert!(err(base(json!({}), one.clone(), one.clone())).contains("burns no token"));
+            // A token deposit needs RAND notes for the fee, and enough of the token.
+            let token = json!({ "rand": "0", "asset": 1, "amount": "200", "kind": "deposit" });
+            assert!(err(base(token.clone(), one.clone(), json!([]))).contains("fee_inputs"));
+            let e = err(base(token, one.clone(), one));
+            assert!(e.contains("holds asset 0"), "{e}");
+        }
+
+        #[test]
+        fn version_reports_the_invoke_and_its_limits() {
+            let v = constants();
+            assert_eq!(v["rpl2_invoke"], true);
+            assert_eq!(v["invoke_max_reads"], 8);
+            assert_eq!(v["invoke_max_writes"], 8);
+            assert_eq!(v["invoke_max_payouts"], 4);
+            assert_eq!(v["program_from"], word8_to_hex(&PROGRAM_FROM));
         }
     }
 }
