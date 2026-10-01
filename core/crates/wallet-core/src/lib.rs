@@ -130,6 +130,47 @@ fn binding_domain_of(chain_id: u64, genesis: Option<&str>) -> Result<BindingDoma
 }
 
 pub const EXPLORER_URL: &str = "https://randscan.org";
+
+/// The prover every client ships the address of (delegated proving, Phase 2): a pool of
+/// validator-hosted `rand-prover`s behind one name, every member holding the same prover key, taking
+/// viewing-key jobs only and charging nothing. A wallet pairs it only when its user asks to
+/// ("Use the RandProtocol prover" in every shell's prover settings), after the history warning,
+/// through the same checks as any pasted link — the prover must answer with
+/// [`TRUSTED_PROVER_FINGERPRINT`]. Never on by default, never paired by itself. The link is a
+/// constant in every client, so its token identifies the wallet software, not the user. Written
+/// from `~/rand-prover-trusted/public/trusted-prover.json` (2026-10-01); [`trusted_prover`] pins the
+/// fingerprint against the link's key, so a link edited without its fingerprint fails the build's
+/// tests, not a user's pairing.
+pub const TRUSTED_PROVER_NAME: &str = "RandProtocol";
+pub const TRUSTED_PROVER_URL: &str = "https://prover.randprotocol.org";
+pub const TRUSTED_PROVER_FINGERPRINT: &str = "RGTF-7HKJ-XZFV-GQ1J";
+pub const TRUSTED_PROVER_LINK: &str = "randprover:ckTGmZwrvLRt66RNkNXPBnayNX4rEBFq3bWTEmqoX1NJ8RGWj3qAgCNorxZd9rgAf9EjUqGkEPRcHFaVaH7CAqAV5JakEZyMrXsN7J3RZZo3BzeHaNdC4NQTxNKY4fRV9TCqfwmd6DBh3J5qiJjpF9JecPFXJ1eC3xyKjhWCbaHDQSPFm9Njoxu1DskPWXboGu2zhTmXxo8QarC1wpZRQSPkqxy8shCdqKXzKX7aJeNvgRstjwe7486mKcywTTQDpBX6GyYAXTjL5JQmfUfk7C5pbdeq82bekoCfs7qLnwjc781Vx3YsLQ6B4ySxRoH3gaqoDPLG7GyEw94tW92y6LvEBB3u8T5gFty38JFzBZrJjFADP9FbeXoULNzwey3LDCevvEWtbdQvUt9V47EAn9fZXcUqpSJZumeFw5uQ8tP239BDPHPcPMNCvqHRWaCywCzgXn8CHZ8AyneQb266MYiMiJVSc9W6zJRkTPny64W7nPYngefgcrSp217xiMhQLwGqRpwGjtXTvUvSnuVBwM1nVYNf85HiNRHPY8UMw9phPvbAU6QwfzeX5Y1PQASSBDm8XSGC7ZCuEHd9M5tzdwjAamWwF1Zb5tg6AvgeCvkNEUxTsEe8413uCFU33GADd9Vq1KqnGqfyUNtpXYYzbjSrtunDCzhdZHSBuUngb8vvh9oEajwZV7AAkmyk5CUar8riaTNSNZ7bazz4ZEzskWWguKZM5NHKpjVWETkR94T1W9iaMANFe7tN6fjoiCcz4F3fbrX9W7D8uhG84ERXXkQtMGtt2Ej3qkAqr5oJ9zrFMDiZDp5Hpp3TSahdJPyWxrLdLK1BK74c9yC7U6z9A5egGaTiSqT6WEx2aRNAN2unSR8jv6ZahbNqVhGeMwgAsQUCMq192okdBCNf4pvMp9WKJsp2fqEPNpHVTzg8b3sCtD2JzC6Fq26abMy1J16agqZ4PgdMfQZhRYBtQm8kGp1ap5ntWtkjARZ1h8B98aRbT9MH1kzge7BBJHTWqb8yqYtwRae98DFTgQ9XHGHbWHwZq5pjsFwZMmK4Gz2KC3Axon7FWwSiYhk15H4Qnr8MrSQd3i13oR8ocERo2kvyENhVfHAz9oZqJXyc3LtiRKZkGg8HZ5rPqmV3vH2rRUuefLZj4XiPQxsr2oicEn4zeKCPuuEmCtfiWB9UGXbWaTJZBGsgFxwbE51D7X2LFgqHEBLduk9ZRUmfzWxdS93adPtCL8vDCpeomeEFYxqN9EMbiVAYcekGPp1FUHvXAUQy7GeW7XUpLqgDH5SUWBYxyBvzHG6NrhtZNVbaKnYV8YBpWZiSb1VF1Z4gkwdMknutve9rHX2fxsBf1VD48famH8o2eVtK8XGpD4v4zKZSZNiFKqXiG3p4tx8UypDvSuGyNvm4Z5HjjiPbTxBFk1RqM7T1ZhTzHtgCxnaxt5xxJ3zTVfmPP97AB76PZBdQxF2MUcW5TcFpdfP6D9J4meAxfwDwrR6m7VSGcpPWAFyuwztyLSTumwoZ7FfRGPRQB7tm4uJGFYL6RB9RPtFBnVZxqt1uoq3jqtPH3mQspJbJGaBJSr3YaJq3jb4bn9RK2FGLYwktaZrq9VoKUUdaw?url=https%3A%2F%2Fprover.randprotocol.org&token=c355e0f89dc53015b5075511edbabfeab1870da43c25438e0564c38955c55151";
+
+/// The trusted prover as `version` reports it — the link parsed and held to its pinned
+/// fingerprint and URL, so a client reads a pairing it can trust the shape of, or an error.
+pub fn trusted_prover() -> Result<Value> {
+    let l = randprotocol_prover::pairing::PairingLink::parse(TRUSTED_PROVER_LINK)
+        .map_err(|e| format!("the built-in trusted prover link does not parse: {e}"))?;
+    let fingerprint = l.fingerprint().to_string();
+    if fingerprint != TRUSTED_PROVER_FINGERPRINT {
+        return bad(format!(
+            "the built-in trusted prover link names key {fingerprint}, but the pinned fingerprint is {TRUSTED_PROVER_FINGERPRINT}"
+        ));
+    }
+    if l.url != TRUSTED_PROVER_URL {
+        return bad(format!("the built-in trusted prover link names {}, but the pinned URL is {TRUSTED_PROVER_URL}", l.url));
+    }
+    if l.own {
+        return bad("the built-in trusted prover link is marked own=1; a shared pool is nobody's own");
+    }
+    Ok(json!({
+        "name": TRUSTED_PROVER_NAME,
+        "url": TRUSTED_PROVER_URL,
+        "fingerprint": fingerprint,
+        "link": TRUSTED_PROVER_LINK,
+        "own": false,
+    }))
+}
 /// Peak resident memory of one bundle proof, measured on this crate's own fixture
 /// (`examples/prove_fixture.rs`, Apple M-series): the prover materialises every table's
 /// low-degree extension at once. Clients compare it with the device's memory before proving,
@@ -3783,6 +3824,9 @@ pub fn constants() -> Value {
         // What a prover that is not the owner's own learns — the sentence every shell shows
         // before it saves such a pairing.
         "prover_history_warning": PROVER_HISTORY_WARNING,
+        // The prover every client can enable in one step (never by itself): its name, URL, pinned
+        // fingerprint and pairing link, or `null` if the built-in link ever failed its own pins.
+        "trusted_prover": trusted_prover().ok(),
         "prover_peak_memory_bytes": PROVER_PEAK_MEMORY_BYTES,
         // RPL-2 (`docs/program-state.md`): this build can plan, prove and delegate an `Invoke`
         // (`plan_invoke`, `dry_run_invoke`, `prove_invoke`, `prepare_invoke`), with the
@@ -3891,7 +3935,9 @@ fn asset_param(p: &Value) -> Result<u32> {
 /// wrapper around this, so the three of them cannot drift.
 ///
 /// Methods:
-/// - `version` `{}` → constants
+/// - `version` `{}` → constants, among them `trusted_prover` `{name, url, fingerprint, link, own:
+///   false}` — the prover every client can enable in one step (never by itself): pair its `link`
+///   exactly as a pasted one, and the prover must answer with that `fingerprint`
 /// - `keygen` `{}` → wallet info for a fresh key
 /// - `wallet_info` `{spend_key}` → `{spend_key, viewing_key, pk, address, key_file}`
 /// - `import_key` `{input}` (64 hex or a key file) → wallet info
@@ -6670,6 +6716,32 @@ mod tests {
             let exec = ZkExecutor::new(FriProfile::Test);
             exec.verify_bundle(&v2, &bundle.proof, &tx.binding(&BindingDomain::ChainId)).unwrap();
             assert!(exec.verify_bundle(&ZkExecutor::hc_hidden_bundle(), &bundle.proof, &tx.binding(&BindingDomain::ChainId)).is_err());
+        }
+
+        /// The built-in trusted prover: the link parses, names the pinned URL and key, is not
+        /// anybody's own, and reaches a client through `version`. A placeholder, a link edited
+        /// without its fingerprint, or an `own=1` link fails here, loudly.
+        #[test]
+        fn the_trusted_prover_is_pinned_and_reported() {
+            assert!(!TRUSTED_PROVER_FINGERPRINT.contains('X') || TRUSTED_PROVER_FINGERPRINT.len() == 19, "a placeholder fingerprint");
+            assert_ne!(TRUSTED_PROVER_FINGERPRINT, "XXXX-XXXX-XXXX-XXXX", "a placeholder fingerprint");
+            assert!(TRUSTED_PROVER_LINK.starts_with("randprover:") && TRUSTED_PROVER_LINK.len() > 1000, "a placeholder link");
+            let t = trusted_prover().unwrap();
+            assert_eq!(t["name"], "RandProtocol");
+            assert_eq!(t["url"], "https://prover.randprotocol.org");
+            assert_eq!(t["fingerprint"], "RGTF-7HKJ-XZFV-GQ1J");
+            assert_eq!(t["own"], false);
+            assert_eq!(t["link"], TRUSTED_PROVER_LINK);
+            // The same link through the method a shell pairs with, byte for byte.
+            let parsed = dispatch("parse_prover_link", &json!({ "link": TRUSTED_PROVER_LINK })).unwrap();
+            assert_eq!(parsed["fingerprint"], t["fingerprint"]);
+            assert_eq!(parsed["url"], t["url"]);
+            assert_eq!(parsed["own"], false);
+            assert_eq!(dispatch("prover_fingerprint", &json!({ "kem_ek": parsed["kem_ek"] })).unwrap(), t["fingerprint"]);
+            assert_eq!(constants()["trusted_prover"], t);
+            // Through `call`, as every binding reaches it.
+            let v: Value = serde_json::from_str(&call("version", "{}")).unwrap();
+            assert_eq!(v["value"]["trusted_prover"]["fingerprint"], "RGTF-7HKJ-XZFV-GQ1J");
         }
 
         #[test]
