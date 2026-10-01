@@ -8,6 +8,7 @@
 // Layout note: a step's blocks are children of `[data-role="step"]`, which is a `.stack.loose`,
 // so nothing in the flow ever sits flush against the thing above it. The screen has exactly one
 // title — the step's own heading; the top bar carries the back button and no second title.
+import { expectedMs, progressAt, remainingText } from '../../lib/progress.js';
 import { h, raw } from '../../lib/dom.js';
 import { icons } from '../../lib/icons.js';
 import { formatUnits, shortAddress, elapsed } from '../../lib/format.js';
@@ -298,6 +299,30 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
     <button class="btn btn-ghost block" type="button" data-role="edit">Edit</button>`;
 }
 
+/**
+ * The proving ring: an estimate, not a measurement — the elapsed time against how long this kind
+ * of send usually takes on this device (ui/lib/progress.js). It fills towards 90% at the usual
+ * time, creeps after that, and says how long is left; 100% is only the "sent" screen.
+ */
+export function progressRing(store, label = '') {
+  const spent = Date.now() - store.startedMs;
+  const expected = expectedMs(store.kind || 'transfer');
+  const pct = progressAt(spent, expected);
+  const shown = Math.round(pct * 100);
+  return h`
+      <div class="ring" data-role="ring" role="progressbar" aria-label="${label}" aria-valuetext="${remainingText(spent, expected)}" style="--pct: ${pct.toFixed(3)}">
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+          <circle class="ring-bar" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="ring-label">
+          <span class="ring-pct" data-role="pct">${shown}%</span>
+          <span class="ring-cap" data-role="left">${remainingText(spent, expected)}</span>
+          <span class="ring-cap mono" data-role="elapsed">${elapsed(spent)}</span>
+        </div>
+      </div>`;
+}
+
 export function provingStepMarkup(store) {
   const label = phaseLabel(store.phase, store.detail);
   const banner = provingBanner(store);
@@ -307,13 +332,7 @@ export function provingStepMarkup(store) {
   return h`
     <h2 class="title" data-role="step-title" tabindex="-1">Sending</h2>
     <div class="stage">
-      <div class="ring spin" data-role="ring" role="progressbar" aria-label="${label}">
-        <svg viewBox="0 0 120 120" aria-hidden="true">
-          <circle class="ring-track" cx="60" cy="60" r="52"></circle>
-          <circle class="ring-bar" cx="60" cy="60" r="52"></circle>
-        </svg>
-        <div class="ring-label"><span class="amount mono" data-role="elapsed">${elapsed(Date.now() - store.startedMs)}</span></div>
-      </div>
+      ${raw(progressRing(store, label))}
       <span class="subtitle" data-role="phase">${label}</span>
     </div>
     <div class="banner">

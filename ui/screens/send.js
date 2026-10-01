@@ -25,6 +25,7 @@
 //   * **The transaction key never leaves a closure.** See ./send/state.js and ./send/sent.js.
 //
 // This file is the wiring; ./send/state.js is the behaviour, ./send/markup.js the markup.
+import { expectedMs, progressAt, remainingText } from '../lib/progress.js';
 import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
@@ -524,9 +525,19 @@ registerScreen('send', {
       stopScreenTicker();
       // This render's own clock, cleared on cleanup, on completion and the moment this render
       // stops being the one on screen. The pinned chip has its own (see startSend).
+      const ring = stepEl.querySelector('[data-role="ring"]');
+      const pctEl = stepEl.querySelector('[data-role="pct"]');
+      const leftEl = stepEl.querySelector('[data-role="left"]');
+      const expected = expectedMs(store.kind || 'transfer');
       screenTicker = setInterval(() => {
         if (!live() || store.done) { stopScreenTicker(); return; }
-        elapsedEl.textContent = elapsed(Date.now() - store.startedMs);
+        const spent = Date.now() - store.startedMs;
+        const pct = progressAt(spent, expected);
+        if (elapsedEl) elapsedEl.textContent = elapsed(spent);
+        // An estimate, so assistive tech hears the time left, not a percentage it would trust.
+        if (ring) { ring.style.setProperty('--pct', pct.toFixed(3)); ring.setAttribute('aria-valuetext', remainingText(spent, expected)); }
+        if (pctEl) pctEl.textContent = `${Math.round(pct * 100)}%`;
+        if (leftEl) leftEl.textContent = remainingText(spent, expected);
       }, 1000);
     }
 

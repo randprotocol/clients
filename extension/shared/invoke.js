@@ -6,7 +6,8 @@ import { ext } from './lib/browser.js';
 import { extensionBackend } from './backend-extension.js';
 import { makeInvokeFlow, PROVER_NOTICE } from './lib/invoke-flow.js';
 import { markSvg } from './ui/lib/entropy.js';
-import { formatUnits, shortHex } from './ui/lib/format.js';
+import { formatUnits, shortHex, elapsed } from './ui/lib/format.js';
+import { expectedMs, progressAt, remainingText, recordDuration } from './ui/lib/progress.js';
 
 const id = new URLSearchParams(location.search).get('id') || '';
 const backend = extensionBackend();
@@ -40,6 +41,38 @@ const PHASE_TEXT = {
   submitting: 'Sending…',
   confirming: 'Sent. Waiting for the chain…',
 };
+
+// The proving ring: an estimate against this device's usual invoke (ui/lib/progress.js), filled
+// towards 90% at the usual time; only "Sent" is done. Our own SVG, no user data in it.
+const RING_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="52"></circle><circle class="ring-bar" cx="60" cy="60" r="52"></circle></svg>';
+let runStartedMs = 0;
+let runTicker = null;
+let recorded = false;
+function progressRing() {
+  const ring = el('div', 'ring');
+  ring.setAttribute('role', 'progressbar');
+  ring.append(new DOMParser().parseFromString(RING_SVG, 'image/svg+xml').documentElement);
+  const label = el('div', 'ring-label');
+  const pct = el('span', 'ring-pct');
+  const left = el('span', 'ring-cap');
+  const time = el('span', 'ring-cap mono');
+  label.append(pct, left, time);
+  ring.append(label);
+  const paint = () => {
+    const spent = Date.now() - runStartedMs;
+    const expected = expectedMs('invoke');
+    const p = progressAt(spent, expected);
+    ring.style.setProperty('--pct', p.toFixed(3));
+    ring.setAttribute('aria-valuetext', remainingText(spent, expected));
+    pct.textContent = `${Math.round(p * 100)}%`;
+    left.textContent = remainingText(spent, expected);
+    time.textContent = elapsed(spent);
+  };
+  paint();
+  if (runTicker) clearInterval(runTicker);
+  runTicker = setInterval(paint, 1000);
+  return ring;
+}
 
 const root = el('div', 'app');
 document.body.append(root);
@@ -121,6 +154,7 @@ function render(state) {
     box.append(card, note, actions);
     queueMicrotask(() => yes.focus());
   } else if (state.step === 'running') {
+    if (!runStartedMs) runStartedMs = Date.now();
     title.textContent = 'Sending…';
     let text = PHASE_TEXT[state.phase] || 'Working…';
     const d = state.detail;
@@ -130,8 +164,10 @@ function render(state) {
       else if (d.prover) text = `${d.prover} is proving. This takes a few minutes; keep this window open.`;
     }
     sub.textContent = text;
-    box.append(el('div', 'progress'));
+    box.append(progressRing());
   } else if (state.step === 'done') {
+    if (runTicker) { clearInterval(runTicker); runTicker = null; }
+    if (runStartedMs && !recorded) { recorded = true; recordDuration('invoke', Date.now() - runStartedMs); }
     title.textContent = 'Sent';
     sub.textContent = `${host} has the transaction ${shortHex(state.tx, 10)}. Your wallet picks up what it pays you on its next sync.`;
     const actions = el('div', 'onboard-actions');
@@ -142,6 +178,7 @@ function render(state) {
     box.append(actions);
     if (!closeTimer) closeTimer = setTimeout(() => window.close(), 4000);
   } else {
+    if (runTicker) { clearInterval(runTicker); runTicker = null; }
     const e = state.error || {};
     title.textContent = e.code === 'USER_REJECTED' ? 'Not approved' : 'Not sent';
     sub.textContent = e.message || 'Rand Wallet could not complete the request.';

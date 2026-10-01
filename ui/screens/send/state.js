@@ -3,6 +3,7 @@
 //
 // Split out of screens/send.js (which was past 800 lines) so the screen itself is the wiring and
 // this is the behaviour; importable under plain Node, since none of it touches `document`.
+import { recordDuration } from '../../lib/progress.js';
 import { formatUnits, parseUnits, elapsed } from '../../lib/format.js';
 import { TX_HASH_RE } from '../../lib/explorer.js';
 import { displayMemo } from '../../lib/memo.js';
@@ -336,6 +337,8 @@ function launchSend(ctx, { req, asset, run, phase = 'selecting', detail = null, 
     req,
     symbol: asset.symbol,
     decimals: asset.decimals,
+    // What the progress estimate is timed against (ui/lib/progress.js).
+    kind: Number(req && req.asset) > 0 ? 'transfer-token' : 'transfer',
   };
   if (detail) recordPhase(store, phase, detail);
   ctx.state.send = store;
@@ -388,6 +391,8 @@ function launchSend(ctx, { req, asset, run, phase = 'selecting', detail = null, 
       (result) => {
         const hash = safeHash(result && result.hash);
         store.hash = hash;
+        // A whole run on this device teaches the estimate; a resumed one started elsewhere.
+        if (hash && !store.resumed) recordDuration(store.kind, Date.now() - store.startedMs);
         // The transaction key is moved out of the promise chain *here*, at the instant it arrives,
         // into the session-keyed handoff. `ctx.state.send.promise` therefore fulfils to the hash
         // alone: nothing reachable from `ctx.state` — not a field, not a resolved value — ever

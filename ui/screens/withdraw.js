@@ -24,6 +24,7 @@
 // Steps: backing → address → amount → review → proving → `#withdrawn/<hash>`. Like the send flow,
 // the proof lives on `ctx.state` (session-scoped) with a pinned chip, so leaving the screen does
 // not cancel two minutes of work.
+import { expectedMs, progressAt, remainingText, recordDuration } from '../lib/progress.js';
 import { h, raw, on } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
@@ -219,6 +220,7 @@ function launchWithdrawal(ctx, { req, asset, display, run, phase = 'selecting', 
     .then(
       (result) => {
         store.hash = safeHash(result && result.hash);
+        if (store.hash && !store.resumed) recordDuration('withdraw', Date.now() - store.startedMs);
         finish();
         if (ctx.session.id === session.id) {
           if (store.hash) {
@@ -431,6 +433,14 @@ function ringState(phase) {
   return 'pending';
 }
 
+/** "40% · about 1:50 left": the elapsed time against this device's usual withdrawal
+ *  (ui/lib/progress.js) — an estimate; only the receipt is 100%. */
+function estimateLine(store) {
+  const spent = Date.now() - store.startedMs;
+  const expected = expectedMs('withdraw');
+  return `${Math.round(progressAt(spent, expected) * 100)}% · ${remainingText(spent, expected)}`;
+}
+
 function provingStepMarkup(store) {
   const label = phaseLabel(store.phase, store.detail, PHASE_LABELS);
   const banner = provingBanner(store, 'One proof runs on this device — about two minutes. You can look at other screens; closing the wallet stops it.');
@@ -444,6 +454,7 @@ function provingStepMarkup(store) {
         ${raw(ringMarkup('ring-bundle', 'Bundle', ringState(store.phase)))}
       </div>
       <span class="amount mono" data-role="elapsed">${elapsed(Date.now() - store.startedMs)}</span>
+      <span class="caption" data-role="estimate">${estimateLine(store)}</span>
       <span class="subtitle" data-role="phase">${label}</span>
     </div>
     <div class="banner">
@@ -654,9 +665,11 @@ registerScreen('withdraw', {
       stepEl.innerHTML = provingStepMarkup(store);
       const elapsedEl = stepEl.querySelector('[data-role="elapsed"]');
       stopScreenTicker();
+      const estimateEl = stepEl.querySelector('[data-role="estimate"]');
       screenTicker = setInterval(() => {
         if (!live() || store.done) { stopScreenTicker(); return; }
         elapsedEl.textContent = elapsed(Date.now() - store.startedMs);
+        if (estimateEl) estimateEl.textContent = estimateLine(store);
       }, 1000);
     }
 
