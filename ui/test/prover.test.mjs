@@ -14,7 +14,8 @@ import { makeWasmBackend, CANNOT_PROVE_REASON } from '../engine/backend-wasm.js'
 import { makeNativeBackend } from '../engine/backend-native.js';
 import { decryptSecret } from '../engine/crypto.js';
 import {
-  pollRemoteProof, PENDING_PROOF_KEY, CLAIMED_PROOF_KEY, MAX_QUEUE_WAIT_MS, MAX_PROVING_MS,
+  pollRemoteProof, startRemoteProof, ProverError, PENDING_PROOF_KEY, CLAIMED_PROOF_KEY, MAX_QUEUE_WAIT_MS, MAX_PROVING_MS,
+  SUBMIT_TRIES, SUBMIT_BACKOFF_MS,
 } from '../engine/prover.js';
 import {
   stubCore, stubFetch, mapStorage, stubPlatform, assertKeyNeverLeaked,
@@ -821,4 +822,78 @@ test('each_state_has_its_own_bound_and_running_out_keeps_the_record', async () =
   );
   assert.equal(b.now(), MAX_QUEUE_WAIT_MS);
   assert.ok(sb.sessionMap.has(PENDING_PROOF_KEY));
+});
+
+// ------------------------------------------------------- submit: a transport failure is retried --
+
+/** A client whose `submit` plays `script` (an Error is thrown, anything else is the job id). */
+function scriptedSubmit(script) {
+  const calls = [];
+  return {
+    calls,
+    client: {
+      url: 'https://prover.randprotocol.org',
+      async submit(sealed) {
+        calls.push(sealed);
+        const next = script.shift();
+        if (next instanceof Error) throw next;
+        return next;
+      },
+    },
+  };
+}
+const PREPARED = { sealed_hex: 'aa'.repeat(8), pending: { kind: 'transfer' } };
+const connectFailure = () => new ProverError('cannot reach the prover at https://prover.randprotocol.org: fetch failed', { failure: 'connect' });
+
+test('a submit that never reached the prover is offered again, a bounded number of times, with backoff', async () => {
+  assert.equal(SUBMIT_TRIES, 3);
+  const waits = [];
+  const sleep = async (ms) => { waits.push(ms); };
+  const { client, calls } = scriptedSubmit([connectFailure(), new ProverError('HTTP 502', { failure: 'http' }), 'job-7']);
+  const storage = mapStorage();
+  const rec = await startRemoteProof({ client, prepared: PREPARED, storage, sleep });
+  assert.equal(rec.job, 'job-7');
+  assert.deepEqual(calls, [PREPARED.sealed_hex, PREPARED.sealed_hex, PREPARED.sealed_hex], 'the same sealed job, three times');
+  assert.deepEqual(waits, [...SUBMIT_BACKOFF_MS]);
+  assert.equal(storage.sessionMap.get(PENDING_PROOF_KEY).job, 'job-7');
+
+  // Three failures: given up, definite, nothing remembered.
+  const down = scriptedSubmit([connectFailure(), connectFailure(), connectFailure(), 'never']);
+  const empty = mapStorage();
+  await assert.rejects(() => startRemoteProof({ client: down.client, prepared: PREPARED, storage: empty, sleep }), (err) => {
+    assert.equal(err.definite, true);
+    assert.match(err.message, /Could not hand the proof to the prover/);
+    return true;
+  });
+  assert.equal(down.calls.length, SUBMIT_TRIES);
+  assert.equal(empty.sessionMap.has(PENDING_PROOF_KEY), false);
+});
+
+test('a JSON-RPC refusal, a timeout or a reply without a job id is never resubmitted', async () => {
+  const sleep = async () => {};
+  for (const failure of [
+    new ProverError('busy', { code: -32005, data: { depth: 5 } }),
+    new ProverError('cannot reach the prover: timed out', { failure: 'timeout' }),
+    new ProverError('the prover accepted the job but named no job id', { failure: 'body' }),
+  ]) {
+    const { client, calls } = scriptedSubmit([failure, 'job-2']);
+    await assert.rejects(() => startRemoteProof({ client, prepared: PREPARED, storage: mapStorage(), sleep }));
+    assert.equal(calls.length, 1, `resubmitted after: ${failure.message}`);
+  }
+});
+
+test('a send through the prover survives one failed connection to it', async () => {
+  let fail = 1;
+  const inner = sendableFetch();
+  const fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.method === 'prover_submit' && fail > 0) { fail -= 1; throw new TypeError('fetch failed'); }
+    return inner(url, init);
+  };
+  fetch.requests = inner.requests;
+  const env = await sendableWallet({ fetch });
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  const out = await env.backend.send.send(SEND, () => {});
+  assert.equal(out.hash, PROVED_TX_HASH);
+  assert.equal(count(env.fetch, 'prover_submit'), 1, 'the retried submit reached the prover once');
 });

@@ -290,6 +290,16 @@ async function removeRecord(storage, job) {
   }
 }
 
+/** How many times a job is offered when the prover could not be reached at all (`startRemoteProof`). */
+export const SUBMIT_TRIES = 3;
+/** The waits between those tries. */
+export const SUBMIT_BACKOFF_MS = Object.freeze([1000, 3000]);
+
+/** A submit that failed before the prover answered anything: no connection, or an HTTP error page. */
+function submitRetryable(err) {
+  return err instanceof ProverError && (err.failure === 'connect' || err.failure === 'http');
+}
+
 /**
  * Submit a prepared job and remember it. `prepared` is the core's `prepare_*` reply
  * (`{sealed_hex, pending, expected}`); `meta` is what the submission needs afterwards and is not in
@@ -299,19 +309,34 @@ async function removeRecord(storage, job) {
  * unlocked spend key lives — and it holds no spend key (the core's `pending` is asserted to carry
  * none). It is what lets a popup closed mid-proof pick the same job up again (`pollRemoteProof`).
  */
-export async function startRemoteProof({ client, prepared, storage, meta = {}, signal, now = Date.now }) {
+export async function startRemoteProof({
+  client, prepared, storage, meta = {}, signal, now = Date.now,
+  sleep = defaultSleep, submitTries = SUBMIT_TRIES, submitBackoff = SUBMIT_BACKOFF_MS,
+}) {
   if (!prepared || typeof prepared.sealed_hex !== 'string' || !prepared.pending) {
     throw definite('The wallet could not seal this transfer for the prover.');
   }
   let job;
-  try {
-    job = await client.submit(prepared.sealed_hex, { signal });
-  } catch (err) {
-    if (err && err.name === 'AbortError') throw err;
-    // Nothing reached the node, whatever the prover said or did not say.
-    const refusal = proverRefusal(err);
-    if (refusal !== err) throw refusal;
-    throw definite(`Could not hand the proof to the prover: ${err && err.message}`);
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      job = await client.submit(prepared.sealed_hex, { signal });
+      break;
+    } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
+      // A transport failure before any JSON-RPC reply — the connection failed, or an HTTP error
+      // page came back instead of an answer — means the prover accepted nothing, so the same
+      // sealed job is offered again, a bounded number of times. A JSON-RPC error is the prover's
+      // answer and is final; a reply that named no job id, or a timeout (the prover may have
+      // taken it), is never resubmitted; and once a job id came back there is no loop left.
+      if (submitRetryable(err) && attempt < submitTries) {
+        await sleep(submitBackoff[Math.min(attempt - 1, submitBackoff.length - 1)] ?? 0, signal);
+        continue;
+      }
+      // Nothing reached the node, whatever the prover said or did not say.
+      const refusal = proverRefusal(err);
+      if (refusal !== err) throw refusal;
+      throw definite(`Could not hand the proof to the prover: ${err && err.message}`);
+    }
   }
   const record = { job, pending: prepared.pending, url: client.url, startedAt: now(), ...meta };
   await storage.session.set(PENDING_PROOF_KEY, record);
@@ -418,7 +443,7 @@ export async function remoteProve({ client, core, prepared, storage, meta = {}, 
   // Reported before the submit, so even a job the prover answers `done` at once shows the phase.
   const announced = { prover: meta.name };
   if (typeof onPhase === 'function') onPhase('prove', announced);
-  const record = await startRemoteProof({ client, prepared, storage, meta, signal, now });
+  const record = await startRemoteProof({ client, prepared, storage, meta, signal, now, ...(sleep ? { sleep } : {}) });
   return pollRemoteProof({ client, core, record, storage, onPhase, signal, locks, announced, poll, maxWait, maxQueueWait, now, sleep });
 }
 
