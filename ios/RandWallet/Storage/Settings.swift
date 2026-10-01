@@ -34,6 +34,18 @@ final class Settings: ObservableObject {
         }
     }
 
+    /// The user chose NO prover (wallet 0.6.8): the RandProtocol prover, otherwise the default
+    /// where this device cannot prove, is not used either. Pairing a prover, or "Use the
+    /// RandProtocol prover", clears it.
+    @Published var noProver: Bool { didSet { defaults.set(noProver, forKey: "noProver") } }
+    /// The address of the wallet that read the one-time notice about the RandProtocol prover, or
+    /// `nil`. A record naming another wallet counts for nothing; removing the wallet clears it.
+    @Published var proverNoticeFor: String? {
+        didSet {
+            if let a = proverNoticeFor { defaults.set(a, forKey: "proverNoticeFor") } else { defaults.removeObject(forKey: "proverNoticeFor") }
+        }
+    }
+
     init() {
         let core = try? RandCore.constants()
         rpcUrl = defaults.string(forKey: "rpcUrl") ?? core?.defaultRpcUrl ?? "https://rpc.randprotocol.org"
@@ -42,6 +54,8 @@ final class Settings: ObservableObject {
         theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hasBackedUpKey = defaults.bool(forKey: "hasBackedUpKey")
         prover = defaults.data(forKey: "prover").flatMap { try? JSONDecoder().decode(ProverPairing.self, from: $0) }
+        noProver = defaults.bool(forKey: "noProver")
+        proverNoticeFor = defaults.string(forKey: "proverNoticeFor")
     }
 
     var rpcURL: URL? { URL(string: rpcUrl.trimmingCharacters(in: .whitespaces)) }

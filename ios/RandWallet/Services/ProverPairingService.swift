@@ -213,6 +213,7 @@ enum ProverPairingService {
         try Keychain.saveProverSecret(ProverSecret(token: token, kemEk: pairing.kemEk.lowercased(), url: pairing.url,
                                                    fingerprint: pairing.fingerprint, own: pairing.own))
         settings.prover = pairing
+        settings.noProver = false // a prover of the user's own replaces a choice of none
     }
 
     @MainActor
@@ -240,6 +241,58 @@ enum ProverPairingService {
     struct Route {
         let pairing: ProverPairing
         let token: String
+        /// The RandProtocol prover as the default (nothing paired): the one-time notice applies.
+        var isDefault = false
+    }
+
+    /// The default prover's queue is full: said plainly, never retried in a loop.
+    static func defaultBusy(_ name: String) -> String {
+        "The \(name) prover is busy; try again in a minute, or pair your own prover in Settings."
+    }
+
+    /// The one-time notice before the first proof by the RandProtocol prover (the default where
+    /// this device cannot prove): what it learns, that it cannot spend, and the way to use a prover
+    /// of your own instead.
+    static let defaultNoticeTitle = "The RandProtocol prover can read your history"
+    static let defaultNotice = "This device cannot make the proof, so the prover RandProtocol runs for everyone makes it. "
+        + "It receives this wallet's viewing key, so it can read your whole history — every payment received and sent, past and future. "
+        + "It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead."
+
+    /// Whether proofs this device cannot make go to the RandProtocol prover: nothing paired, no
+    /// prover not chosen, and a build that ships one.
+    static func usesDefault(paired: Bool, noProver: Bool, shipsOne: Bool) -> Bool { !paired && !noProver && shipsOne }
+
+    /// Whether `address`'s wallet has read the notice: the record names THIS wallet.
+    static func noticeRead(address: String, readFor: String?) -> Bool { !address.isEmpty && readFor == address }
+
+    /// Whether a send from this wallet must show the notice first.
+    static func needsNotice(deviceCanProve: Bool, usesDefault: Bool, read: Bool) -> Bool { !deviceCanProve && usesDefault && !read }
+
+    /// A remote proof's failure as the user reads it for `route`: the RandProtocol prover busy is
+    /// `defaultBusy`; anything else (a paired prover's busy included) is unchanged.
+    static func failure(_ error: Error, route: Route) -> Error {
+        if route.isDefault, let r = error as? ProverRefusal, r.busy { return ProverRefusal(message: defaultBusy(route.pairing.name), busy: true) }
+        return error
+    }
+
+    /// The RandProtocol prover as the DEFAULT route uses it (wallet 0.6.8: nothing paired, nothing
+    /// stored): the built-in link read through the core and held to the pinned fingerprint, the URL
+    /// rule and `own=0` — no network; the route asks the prover for its key before any job. Named
+    /// after the pool, NOT own; the token is the one every copy ships. `trusted` is the test seam.
+    static func builtIn(trusted source: TrustedProver?? = nil) throws -> (pairing: ProverPairing, token: String) {
+        guard let t = source ?? trustedProver(), !t.link.isEmpty else {
+            throw ProverRefusal(message: "This build ships no prover to use.")
+        }
+        let parsed = try parse(t.link)
+        guard !t.fingerprint.isEmpty, parsed.fingerprint == t.fingerprint else {
+            throw ProverRefusal(message: "The built-in prover link does not name the key this wallet pins; not pairing it.")
+        }
+        guard !t.own, !parsed.own else {
+            throw ProverRefusal(message: "The built-in prover link is marked as your own, which a shared prover is not; not pairing it.")
+        }
+        let url = try checkedURL(parsed.url)
+        let name = trusted(from: .some(t))?.name ?? "RandProtocol"
+        return (ProverPairing(name: name, url: url, kemEk: parsed.kemEk.lowercased(), fingerprint: parsed.fingerprint, own: false), parsed.token)
     }
 
     /// `prover_info.fee` as a sentence when it is a fee, `nil` when the prover charges nothing
@@ -266,9 +319,16 @@ enum ProverPairingService {
     /// this, refuses the send here, before anything is built: nothing is sent. The probe and the
     /// route use the Keychain record's URL, key and `own` (`secret`), never `pairing`'s, which is
     /// the plaintext display copy in Settings.
+    ///
+    /// With nothing paired (wallet 0.6.8), `defaultProver` — `nil` when the user chose no prover or
+    /// the build ships none — is the RandProtocol prover: asked for its key (the pinned one), its fee
+    /// (none) and viewing-key jobs; when it is not there the refusal says so plainly and points to
+    /// Settings. A paired prover is preferred over it.
     static func route(deviceCanProve: Bool, pairing display: ProverPairing?,
-                      probe: (ProverPairing) async -> Probe, secret: () -> ProverSecret?) async throws -> Route? {
+                      probe: (ProverPairing) async -> Probe, secret: () -> ProverSecret?,
+                      defaultProver: (() throws -> (pairing: ProverPairing, token: String))? = nil) async throws -> Route? {
         if deviceCanProve { return nil }
+        if display == nil, let defaultProver { return try await defaultRoute(probe: probe, defaultProver: defaultProver) }
         guard let d = display else { return nil }
         guard let s = secret(), !s.token.isEmpty else {
             throw ProverRefusal(message: "Your prover's pairing could not be opened. Pair the prover again in Settings.")
@@ -290,6 +350,28 @@ enum ProverPairingService {
         }
         if let why { throw ProverRefusal(message: "\(reason) Your paired prover is not available: \(why).") }
         return Route(pairing: p, token: s.token)
+    }
+
+    private static func defaultRoute(probe: (ProverPairing) async -> Probe,
+                                     defaultProver: () throws -> (pairing: ProverPairing, token: String)) async throws -> Route {
+        let lead = "This device does not have the memory for this proof."
+        let b: (pairing: ProverPairing, token: String)
+        do { b = try defaultProver() } catch {
+            throw ProverRefusal(message: "\(lead) \(error.localizedDescription)")
+        }
+        let why: String?
+        switch await probe(b.pairing) {
+        case .unavailable(let w):
+            why = w.contains("different key") ? "it answered with another key than the one this wallet pins" : w
+        case .ok(let info):
+            if let fee = feeRefusal(info.fee) { why = fee }
+            else if info.witnessKinds.contains("viewing_key") { why = nil }
+            else { why = "it does not take this wallet's jobs" }
+        }
+        if let why {
+            throw ProverRefusal(message: "\(lead) The \(b.pairing.name) prover cannot be reached right now (\(why)). Try again later, or pair your own prover in Settings.")
+        }
+        return Route(pairing: b.pairing, token: b.token, isDefault: true)
     }
 
     /// What one send's job is allowed to be, decided at the one point a job is built

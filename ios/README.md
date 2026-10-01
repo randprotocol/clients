@@ -52,16 +52,22 @@ verifies the proof that comes back before anything is submitted. A pairing link 
 saying what it can read. This build pays no prover fee: a prover quoting one is refused before
 the auth proof is made.
 
-Settings → Prover also offers, in one step, the prover RandProtocol runs for everyone — the pool
-at `https://prover.randprotocol.org`, fingerprint `RGTF-7HKJ-XZFV-GQ1J`, viewing-key jobs only,
-no fee — whose pairing link the core ships (`version.trusted_prover`). "Use the RandProtocol
-prover" sits inside the pairing form under the same history warning as a pasted link, and goes
-through the same checks: the link is read by the core and held to the fingerprint the build pins
-(a link naming another key, or marked own, is refused before the pool is asked anything), the pool
-is asked for its key, which must be the link's, and only then is the record saved — not own,
-named RandProtocol — in the Keychain beside the spend key, exactly as any pairing. The app never
-pairs it by itself, the link (it carries the pairing token) is never shown, and "Forget this
-prover" undoes it like any pairing.
+**The RandProtocol prover is the default** (wallet 0.6.8; `../docs/prover.md` §8): the pool at
+`https://prover.randprotocol.org`, fingerprint `RGTF-7HKJ-XZFV-GQ1J`, viewing-key jobs only, no fee,
+whose pairing link the core ships (`version.trusted_prover`). With nothing paired, a phone that
+cannot fit the proof sends through it at once: `ProverPairingService.route(…, defaultProver:)`
+builds the route from the built-in link (`builtIn` — the pinned fingerprint, the URL rule, `own=0`,
+no network), asks the pool for its key (it must be the pinned one), its fee (none) and viewing-key
+jobs, and seals the job to it — nothing is paired or stored in the Keychain. The first such send
+shows a one-time notice (it receives the viewing key: the whole history, past and future; it
+cannot spend) with "I understand — continue" and "Use my own prover" (Home then opens Settings);
+the read is remembered per wallet (`Settings.proverNoticeFor`, cleared with the wallet) and
+`WalletService.send` refuses until it is. A pool that does not answer, answers with another key,
+or is busy (never retried in a loop) is said plainly, pointing to Settings. Settings → Prover names
+it with its URL, fingerprint and what it sees, and offers "Use no prover" (`Settings.noProver`);
+with none, "Use the RandProtocol prover" turns it back on in one tap. A paired prover is preferred,
+and "Forget this prover" falls back to it. A `prover_submit` that never reached the prover is
+offered again, three tries, 1 s then 3 s apart; a JSON-RPC answer is final.
 
 ## TestFlight
 

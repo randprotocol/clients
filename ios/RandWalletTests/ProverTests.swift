@@ -326,6 +326,144 @@ final class ProverTests: XCTestCase {
         }
     }
 
+    // MARK: the default prover (wallet 0.6.8) — nothing paired, the RandProtocol prover
+
+    /// The synthetic built-in prover through `builtIn`'s seam: key 0x07…, not own.
+    static func builtInDefault(fingerprint: String = fingerprint) -> () throws -> (pairing: ProverPairing, token: String) {
+        { try ProverPairingService.builtIn(trusted: .some(Self.syntheticBuiltIn(fingerprint: fingerprint))) }
+    }
+
+    func testWithNothingPairedTheRandProtocolProverIsTheRouteNotOwnByItsPinnedKey() async throws {
+        var probedAt: [String] = []
+        let probe: (ProverPairing) async -> ProverPairingService.Probe = { p in
+            probedAt.append(p.url); return .ok(try! Self.info(["viewing_key"]))
+        }
+        let r = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: probe, secret: { nil },
+                                                     defaultProver: Self.builtInDefault())
+        let route = try XCTUnwrap(r, "a fresh wallet that cannot prove had no route")
+        XCTAssertTrue(route.isDefault)
+        XCTAssertEqual(route.pairing, ProverPairing(name: "RandProtocol", url: "https://prover.example:8600", kemEk: Self.kemEk,
+                                                    fingerprint: Self.fingerprint, own: false))
+        XCTAssertEqual(route.token, Self.token)
+        XCTAssertEqual(probedAt, ["https://prover.example:8600"])
+        // A device that can prove asks nobody; no prover chosen is no route; a paired one wins.
+        probedAt = []
+        let device = try await ProverPairingService.route(deviceCanProve: true, pairing: nil, probe: probe, secret: { nil }, defaultProver: Self.builtInDefault())
+        XCTAssertNil(device)
+        let none = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: probe, secret: { nil }, defaultProver: nil)
+        XCTAssertNil(none)
+        XCTAssertEqual(probedAt, [])
+        let paired = try await ProverPairingService.route(deviceCanProve: false, pairing: Self.route.pairing, probe: probe,
+                                                          secret: { Self.secret }, defaultProver: Self.builtInDefault())
+        XCTAssertEqual(paired?.isDefault, false)
+        XCTAssertEqual(paired?.pairing.url, Self.secret.url)
+    }
+
+    func testTheRandProtocolProverNotThereIsSaidPlainlyWithTheWayToPairYourOwn() async throws {
+        for (answer, why) in [
+            (ProverPairingService.Probe.unavailable("the prover at https://prover.example:8600 did not answer (offline)"),
+             "the prover at https://prover.example:8600 did not answer (offline)"),
+            (.unavailable("the prover at that address now has a different key; pair it again"), "it answered with another key than the one this wallet pins"),
+        ] {
+            do {
+                _ = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: { _ in answer }, secret: { nil },
+                                                         defaultProver: Self.builtInDefault())
+                XCTFail("routed to a prover that is not there")
+            } catch {
+                XCTAssertEqual(error.localizedDescription,
+                               "This device does not have the memory for this proof. The RandProtocol prover cannot be reached right now (\(why)). Try again later, or pair your own prover in Settings.")
+            }
+        }
+        // A build whose link names another key than its pin never asks anybody.
+        var asked = 0
+        do {
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: { _ in asked += 1; return .ok(try! Self.info(["viewing_key"])) },
+                                                     secret: { nil }, defaultProver: Self.builtInDefault(fingerprint: "ZZZZ-ZZZZ-ZZZZ-ZZZZ"))
+            XCTFail("routed to a link that fails its pin")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. The built-in prover link does not name the key this wallet pins; not pairing it.")
+        }
+        XCTAssertEqual(asked, 0)
+    }
+
+    func testTheRandProtocolProverBusyIsSaidPlainlyAndAPairedOnesIsItsOwn() {
+        let busy = ProverRefusal(message: "The prover is full (2 waiting). Try again in a few minutes.", busy: true)
+        let def = ProverPairingService.Route(pairing: ProverPairing(name: "RandProtocol", url: "https://prover.example:8600", kemEk: Self.kemEk,
+                                                                    fingerprint: Self.fingerprint, own: false), token: Self.token, isDefault: true)
+        let mapped = ProverPairingService.failure(busy, route: def)
+        XCTAssertEqual(mapped.localizedDescription, "The RandProtocol prover is busy; try again in a minute, or pair your own prover in Settings.")
+        XCTAssertEqual((mapped as? ProverRefusal)?.busy, true)
+        XCTAssertEqual(ProverPairingService.failure(busy, route: Self.route).localizedDescription, busy.message)
+        // The client's busy refusal is marked busy.
+        let fromClient = ProverClient.refusal(ProverError(message: "busy", code: -32005, data: ["depth": 2]))
+        XCTAssertEqual((fromClient as? ProverRefusal)?.busy, true)
+    }
+
+    func testTheOneTimeNoticeIsForThisWalletAndOnlyWhereTheDefaultMakesTheProof() {
+        XCTAssertTrue(ProverPairingService.usesDefault(paired: false, noProver: false, shipsOne: true))
+        XCTAssertFalse(ProverPairingService.usesDefault(paired: true, noProver: false, shipsOne: true))
+        XCTAssertFalse(ProverPairingService.usesDefault(paired: false, noProver: true, shipsOne: true))
+        XCTAssertFalse(ProverPairingService.usesDefault(paired: false, noProver: false, shipsOne: false))
+        XCTAssertTrue(ProverPairingService.noticeRead(address: "rand1me", readFor: "rand1me"))
+        XCTAssertFalse(ProverPairingService.noticeRead(address: "rand1me", readFor: "rand1other"), "another wallet's read counts")
+        XCTAssertFalse(ProverPairingService.noticeRead(address: "", readFor: ""))
+        XCTAssertTrue(ProverPairingService.needsNotice(deviceCanProve: false, usesDefault: true, read: false))
+        XCTAssertFalse(ProverPairingService.needsNotice(deviceCanProve: true, usesDefault: true, read: false))
+        XCTAssertFalse(ProverPairingService.needsNotice(deviceCanProve: false, usesDefault: true, read: true))
+        XCTAssertTrue(ProverPairingService.defaultNotice.contains("viewing key"))
+        XCTAssertTrue(ProverPairingService.defaultNotice.contains("past and future"))
+        XCTAssertTrue(ProverPairingService.defaultNotice.contains("It cannot spend"))
+    }
+
+    func testASubmitThatNeverReachedTheProverIsOfferedAgainBoundedWithBackoff() async throws {
+        var submits = 0
+        StubProver.handler = { method, _ in
+            if method == "prover_submit" {
+                submits += 1
+                if submits == 1 { return .transport }
+                if submits == 2 { return .http(502, Data("<html>bad gateway</html>".utf8)) }
+                return .result(["job": "job-9"])
+            }
+            return .result(["state": "done", "reply": "beef"])
+        }
+        let client = try ProverClient(url: "https://prover.example", session: StubProver.session())
+        var waits: [TimeInterval] = []
+        var prover = RemoteProver(client: client, poll: 0)
+        prover.sleep = { waits.append($0) }
+        let out = try await prover.prove(sealedHex: "ab", pending: [:], finish: { _, reply in reply }, onPhase: { _ in })
+        XCTAssertEqual(out, "beef")
+        XCTAssertEqual(submits, 3)
+        XCTAssertEqual(waits, [1, 3])
+        // Three failures: given up.
+        submits = 0
+        StubProver.handler = { method, _ in if method == "prover_submit" { submits += 1 }; return .transport }
+        do {
+            _ = try await prover.prove(sealedHex: "ab", pending: [:], finish: { _, reply in reply }, onPhase: { _ in })
+            XCTFail("sent through a prover that never answered")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.hasPrefix("Could not hand the proof to your prover"), error.localizedDescription)
+        }
+        XCTAssertEqual(submits, RemoteProver.submitTries)
+    }
+
+    func testAJsonRpcRefusalOrAReplyWithoutAJobIdIsNeverResubmitted() async throws {
+        for first in [StubProver.Reply.error(-32005, "busy", ["depth": 2]), .result(["nojob": true])] {
+            var submits = 0
+            StubProver.handler = { method, _ in
+                if method == "prover_submit" { submits += 1; return submits == 1 ? first : .result(["job": "j"]) }
+                return .result(["state": "done", "reply": "beef"])
+            }
+            let client = try ProverClient(url: "https://prover.example", session: StubProver.session())
+            var prover = RemoteProver(client: client, poll: 0)
+            prover.sleep = { _ in }
+            do {
+                _ = try await prover.prove(sealedHex: "ab", pending: [:], finish: { _, reply in reply }, onPhase: { _ in })
+                XCTFail("went on after a final answer")
+            } catch {}
+            XCTAssertEqual(submits, 1, "resubmitted after \(first)")
+        }
+    }
+
     // MARK: the client's errors
 
     func testRefusalsAreWordedAsTheOtherWallets() async throws {

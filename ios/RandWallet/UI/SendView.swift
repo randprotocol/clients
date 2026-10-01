@@ -23,6 +23,8 @@ struct SendView: View {
     /// 1860-byte envelope. Any other size, or unknown (not yet read, or the node did not answer),
     /// hides the field.
     @State private var memoSupported = false
+    /// The one-time notice before the first send through the RandProtocol prover.
+    @State private var showProverNotice = false
 
     private let fee: UInt64 = 1_000_000
 
@@ -245,15 +247,34 @@ struct SendView: View {
                 // carries the viewing key and a salt; the spend authorisation is proved here.
                 Text("This device does not have the memory for this proof, so your prover, \(p.name), will make it. It receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent.")
                     .font(.ui(13)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
+            } else if !ProverRequirements.deviceHasEnoughMemory, wallet.usesDefaultProver, let t = ProverPairingService.trusted() {
+                // The default (wallet 0.6.8): nothing paired, so the RandProtocol prover makes it.
+                Text("This device does not have the memory for this proof, so the \(t.name) prover will make it. It receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent.")
+                    .font(.ui(13)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
             } else if !ProverRequirements.deviceHasEnoughMemory {
                 Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.")
                     .font(.ui(13)).foregroundColor(Theme.warning).multilineTextAlignment(.center)
             }
             Spacer()
-            PrimaryButton(title: "Confirm and prove") { Task { await run() } }
+            PrimaryButton(title: "Confirm and prove") {
+                if wallet.needsDefaultNotice { showProverNotice = true } else { Task { await run() } }
+            }
             SecondaryButton(title: "Back") { step = .form }
         }
         .padding(20)
+        .alert(ProverPairingService.defaultNoticeTitle, isPresented: $showProverNotice) {
+            Button("I understand — continue") {
+                wallet.acknowledgeDefaultProver()
+                Task { await run() }
+            }
+            Button("Use my own prover") {
+                router.settingsRequested = true
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(ProverPairingService.defaultNotice)
+        }
     }
 
     private var working: some View {

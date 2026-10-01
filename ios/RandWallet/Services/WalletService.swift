@@ -102,8 +102,11 @@ final class WalletService: ObservableObject {
         lock()
         Keychain.deleteSpendKey()
         contacts.forget()
-        // A prover's pairing token was issued to this phone's wallet; it goes with the wallet.
+        // A prover's pairing token was issued to this phone's wallet; it goes with the wallet, and
+        // so do the choice of no prover and the notice read.
         ProverPairingService.forget(settings: settings)
+        settings.noProver = false
+        settings.proverNoticeFor = nil
         NoteStore.delete()
         store = NoteStore()
         settings.hasBackedUpKey = false
@@ -228,6 +231,11 @@ final class WalletService: ObservableObject {
         // (delegated proving; on a split-authorisation chain any paired prover, own or not — the
         // job carries the viewing key and a salt, never the spend key).
         let route = try await proveRoute()
+        // The RandProtocol prover only once this wallet has read what it sees (Send shows the
+        // notice before it starts; this is the rule, not the screen).
+        if let route, route.isDefault, !defaultNoticeRead {
+            throw ProverRefusal(message: "Before the first send through the RandProtocol prover, read what it can see: it gets this wallet's viewing key. Send again and read the notice, or pair your own prover in Settings.")
+        }
 
         phase = .syncing
         try await scan()
@@ -331,7 +339,48 @@ final class WalletService: ObservableObject {
         try await ProverPairingService.route(deviceCanProve: ProverRequirements.deviceHasEnoughMemory,
                                              pairing: settings.prover,
                                              probe: { await ProverPairingService.probe($0) },
-                                             secret: { Keychain.loadProverSecret() })
+                                             secret: { Keychain.loadProverSecret() },
+                                             defaultProver: defaultProver)
+    }
+
+    // MARK: the default prover (wallet 0.6.8)
+
+    /// The RandProtocol prover as the default would use it, or `nil`: the user chose none, or this
+    /// build ships none. Never paired, never stored.
+    var defaultProver: (() throws -> (pairing: ProverPairing, token: String))? {
+        if settings.noProver || ProverPairingService.trusted() == nil { return nil }
+        return { try ProverPairingService.builtIn() }
+    }
+
+    /// Whether proofs this device cannot make go to the RandProtocol prover (nothing paired, and
+    /// no prover not chosen).
+    var usesDefaultProver: Bool {
+        ProverPairingService.usesDefault(paired: settings.prover != nil, noProver: settings.noProver, shipsOne: ProverPairingService.trusted() != nil)
+    }
+
+    /// Whether THIS wallet has read the one-time notice about the RandProtocol prover.
+    var defaultNoticeRead: Bool { ProverPairingService.noticeRead(address: address, readFor: settings.proverNoticeFor) }
+
+    /// Whether Send must show the notice before this send.
+    var needsDefaultNotice: Bool {
+        ProverPairingService.needsNotice(deviceCanProve: ProverRequirements.deviceHasEnoughMemory, usesDefault: usesDefaultProver, read: defaultNoticeRead)
+    }
+
+    /// The notice was read: remembered for this wallet until it is removed.
+    func acknowledgeDefaultProver() {
+        if !address.isEmpty { settings.proverNoticeFor = address }
+    }
+
+    /// Back to the default: forgets a paired prover and a choice of none. Nothing is asked.
+    func useDefaultProver() {
+        ProverPairingService.forget(settings: settings)
+        settings.noProver = false
+    }
+
+    /// No prover at all: forgets a paired one and turns the default off.
+    func useNoProver() {
+        ProverPairingService.forget(settings: settings)
+        settings.noProver = true
     }
 
     /// The same transfer `prove_transfer` would build, its witness sealed by the core to the
@@ -366,7 +415,15 @@ final class WalletService: ObservableObject {
         if check.guests.splitAuthorisation { phase = .authorising(prover: name, started: started) }
         let prepared = try await Task.detached(priority: .userInitiated) { try RandCore.prepareTransfer(job) }.value
         phase = .provingRemotely(prover: name, position: nil, started: started)
-        return try await RemoteProver(client: client).prove(
+        do {
+            return try await remoteProve(client: client, prepared: prepared, name: name, started: started)
+        } catch {
+            throw ProverPairingService.failure(error, route: route)
+        }
+    }
+
+    private func remoteProve(client: ProverClient, prepared: (sealedHex: String, pending: Any), name: String, started: Date) async throws -> ProveResult {
+        try await RemoteProver(client: client).prove(
             sealedHex: prepared.sealedHex, pending: prepared.pending,
             finish: { pending, reply in try RandCore.finishProof(pending: pending, replyHex: reply) },
             onPhase: { [weak self] p in

@@ -43,6 +43,8 @@ struct RandWalletApp: App {
 /// A `randpay:` link the system handed the app, held until the Send screen takes it.
 final class LinkRouter: ObservableObject {
     @Published private(set) var pending: String?
+    /// Send's "Use my own prover": Home opens Settings once Send has gone.
+    @Published var settingsRequested = false
 
     func open(_ url: URL) {
         guard url.scheme?.lowercased() == "randpay" else { return }

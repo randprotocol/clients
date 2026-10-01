@@ -139,28 +139,39 @@ struct SettingsView: View {
                 }
                 row("Fingerprint", p.fingerprint)
                 Text(probeLine).font(.ui(13)).foregroundColor(Theme.textSoft)
+                if trusted != nil {
+                    Text("Forgetting it goes back to the RandProtocol prover.").font(.ui(13)).foregroundColor(Theme.textSoft)
+                }
                 Button("Forget this prover", role: .destructive) { forgetProver() }
+            } else if wallet.usesDefaultProver, let t = trusted {
+                // The default (wallet 0.6.8): the RandProtocol prover makes the proofs this device
+                // cannot — named, with what it sees, asked whether it answers, off in one tap.
+                row("Proofs are made by", "\(t.name) prover · where this device cannot prove")
+                row("Fingerprint", t.fingerprint)
+                Text("The prover RandProtocol runs for everyone (\(t.url)), used until you choose another. It charges nothing. \(Self.defaultNote)")
+                    .font(.ui(13)).foregroundColor(Theme.textSoft)
+                Text(probeLine).font(.ui(13)).foregroundColor(Theme.textSoft)
+                Button("Use no prover") { useNoProver() }
             } else {
                 row("Proofs are made by", "This device")
                 Text("Where this device cannot make a proof, pair a prover — rand-prover on a machine of yours, or one somebody else runs, reachable from this phone over https. It receives your viewing key and a salt, never your spend key: it can read this wallet's whole history and cannot spend.")
                     .font(.ui(13)).foregroundColor(Theme.textSoft)
+                // No prover chosen: the way back to the default is one tap, with what it sees.
+                if let t = trusted {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Or use the prover RandProtocol runs for everyone — \(t.url), fingerprint \(t.fingerprint). It charges nothing. \(Self.defaultNote)")
+                            .font(.ui(13)).foregroundColor(Theme.textSoft)
+                        Button("Use the RandProtocol prover") { useTrustedProver() }
+                    }
+                }
             }
+            Text("Pair your own prover").font(.ui(14, .semibold)).foregroundColor(Theme.text)
             HStack(spacing: 8) {
                 TextField("randprover:…", text: $proverLink).font(.mono).autocorrectionDisabled().textInputAutocapitalization(.never)
                 Button { showProverScanner = true } label: { Image(systemName: "qrcode.viewfinder") }
                     .accessibilityLabel("Scan QR code").buttonStyle(.borderless)
                 Button("Paste") { if let s = UIPasteboard.general.string { proverLink = s.trimmingCharacters(in: .whitespacesAndNewlines) } }
                     .buttonStyle(.borderless)
-            }
-            // The one-step pairing of the prover the build ships the address of (the JS's
-            // `use-trusted-prover`): part of the form, above the warning, so the warning is on
-            // screen before the button is, and the same status line afterwards.
-            if let t = trusted {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Or use the prover RandProtocol runs for everyone — \(t.url), fingerprint \(t.fingerprint). It sees as much as any prover you pair (the warning below) and charges nothing; your spend key stays here either way.")
-                        .font(.ui(13)).foregroundColor(Theme.textSoft)
-                    Button(pairing ? "Pairing…" : "Use the RandProtocol prover") { Task { await useTrustedProver() } }.disabled(pairing)
-                }
             }
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundColor(Theme.negative)
@@ -207,29 +218,31 @@ struct SettingsView: View {
         }
     }
 
-    /// The one-step pairing of the built-in prover: the link never passes through this screen;
-    /// the service holds it to the pinned fingerprint and asks the prover for its key like any
-    /// pairing, and the record is saved not own, named RandProtocol. The status says once more
-    /// what the prover can now read.
-    private func useTrustedProver() async {
+    /// What the RandProtocol prover sees, in one line, wherever it is offered or in use.
+    static let defaultNote = "It receives this wallet's viewing key, so it can read your whole history, past and future. It cannot spend."
+
+    /// "Use the RandProtocol prover": back to the default — nothing paired, nothing asked; the
+    /// one-time notice still comes before the first send through it.
+    private func useTrustedProver() {
         guard let t = trusted, !pairing else { return }
-        proverStatus = nil
-        pairing = true
-        defer { pairing = false }
-        do {
-            let (paired, token) = try await ProverPairingService.pairTrusted()
-            try ProverPairingService.save(paired, token: token, settings: settings)
-            proverStatus = (.warn, "Paired — this prover can read your history",
-                            "Proofs this device cannot make go to \(paired.name). Its fingerprint is \(paired.fingerprint.isEmpty ? t.fingerprint : paired.fingerprint). \(ProverPairingService.warning)")
-            await probeProver()
-        } catch {
-            proverStatus = (.negative, "Not paired", error.localizedDescription)
-        }
+        wallet.useDefaultProver()
+        proverStatus = (.warn, "Using the \(t.name) prover", "Proofs this device cannot make go to it. \(ProverPairingService.warning)")
+        Task { await probeProver() }
+    }
+
+    private func useNoProver() {
+        wallet.useNoProver()
+        proverStatus = (.positive, "No prover", "Proofs are made on this device only; where it cannot make one, sending waits until you pair a prover or use the RandProtocol prover again.")
     }
 
     private func forgetProver() {
         ProverPairingService.forget(settings: settings)
-        proverStatus = (.positive, "Forgotten", "Proofs are made on this device again. The prover's pairing is gone from this wallet.")
+        if wallet.usesDefaultProver, let t = trusted {
+            proverStatus = (.positive, "Forgotten", "The prover's pairing is gone from this wallet. Proofs this device cannot make go to the \(t.name) prover again.")
+            Task { await probeProver() }
+        } else {
+            proverStatus = (.positive, "Forgotten", "Proofs are made on this device again. The prover's pairing is gone from this wallet.")
+        }
     }
 
     private func statusColor(_ tone: StatusTone) -> Color {
@@ -241,10 +254,15 @@ struct SettingsView: View {
     }
 
     private func probeProver() async {
-        guard let p = settings.prover else { return }
         probeLine = "Asking the prover…"
-        let answer = await ProverPairingService.probe(p)
-        if settings.prover == p { probeLine = ProverPairingService.statusLine(answer) }
+        if let p = settings.prover {
+            let answer = await ProverPairingService.probe(p)
+            if settings.prover == p { probeLine = ProverPairingService.statusLine(answer) }
+        } else if wallet.usesDefaultProver, let b = try? ProverPairingService.builtIn() {
+            // The default, by the key the build pins.
+            let answer = await ProverPairingService.probe(b.pairing)
+            if settings.prover == nil { probeLine = ProverPairingService.statusLine(answer) }
+        }
     }
 
     private func row(_ k: String, _ v: String) -> some View {

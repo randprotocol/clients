@@ -48,7 +48,11 @@ struct ProverError: LocalizedError {
 /// A definite failure of a send: nothing reached the node. The message is shown verbatim.
 struct ProverRefusal: LocalizedError, Equatable {
     let message: String
+    /// The prover answered busy (-32005): its queue is full. Said plainly, never retried in a loop.
+    var busy = false
     var errorDescription: String? { message }
+    /// Two refusals are the same when they say the same thing.
+    static func == (a: ProverRefusal, b: ProverRefusal) -> Bool { a.message == b.message }
 }
 
 /// A JSON value held verbatim (Foundation's `JSONSerialization` objects; `NSNull` for `null`),
@@ -188,7 +192,7 @@ final class ProverClient {
         case busy:
             let depth = (e.data?["depth"] as? NSNumber)?.intValue
             let n = depth.map { $0 >= 0 ? String($0) : "?" } ?? "?"
-            return ProverRefusal(message: "The prover is full (\(n) waiting). Try again in a few minutes.")
+            return ProverRefusal(message: "The prover is full (\(n) waiting). Try again in a few minutes.", busy: true)
         case unpaired:
             return ProverRefusal(message: "This prover does not know this pairing. Pair it again in Settings.")
         case witnessKind:
@@ -264,22 +268,40 @@ struct RemoteProver {
     var poll: TimeInterval = 1
     var maxWait: TimeInterval = 20 * 60
     var now: () -> Date = Date.init
+    /// How many times a job is offered when the prover could not be reached at all, and the waits
+    /// between those tries; `sleep` is the test seam.
+    static let submitTries = 3
+    var submitBackoff: [TimeInterval] = [1, 3]
+    var sleep: (TimeInterval) async throws -> Void = { try await Task.sleep(nanoseconds: UInt64(max($0, 0) * 1e9)) }
 
     /// `finish(pending, replyHex)` is the core's `finish_proof`; `onPhase` is told each change.
     func prove<Result: Sendable>(sealedHex: String, pending: Any,
                        finish: @escaping (Any, String) throws -> Result,
                        onPhase: @escaping (RemoteProofPhase) async -> Void) async throws -> Result {
         await onPhase(.proving)
-        let job: String
-        do {
-            job = try await client.submit(sealedHex)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            let r = ProverClient.refusal(error)
-            if r is ProverRefusal { throw r }
-            throw ProverRefusal(message: "Could not hand the proof to your prover: \(error.localizedDescription)")
+        var submitted: String?
+        var attempt = 1
+        while submitted == nil {
+            do {
+                submitted = try await client.submit(sealedHex)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // No JSON-RPC reply at all — the connection failed, or an HTTP error page came back
+                // — means the prover accepted nothing: the same sealed job is offered again, a
+                // bounded number of times. A JSON-RPC error (busy included) is final; a timeout
+                // (the prover may have taken it) and a reply naming no job id are never resubmitted.
+                if let e = error as? ProverError, e.failure == .connect || e.failure == .http, attempt < Self.submitTries {
+                    try await sleep(submitBackoff[min(attempt - 1, submitBackoff.count - 1)])
+                    attempt += 1
+                    continue
+                }
+                let r = ProverClient.refusal(error)
+                if r is ProverRefusal { throw r }
+                throw ProverRefusal(message: "Could not hand the proof to your prover: \(error.localizedDescription)")
+            }
         }
+        let job = submitted!
         let started = now()
         var last: RemoteProofPhase = .proving
         func say(_ p: RemoteProofPhase) async {

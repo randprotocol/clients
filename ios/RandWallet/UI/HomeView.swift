@@ -84,6 +84,11 @@ struct HomeView: View {
 
     /// Any presentation finished dismissing: a link still pending opens Send now.
     private func presentationEnded() {
+        if router.settingsRequested && !showSend && !sheetUp {
+            router.settingsRequested = false
+            showSettings = true
+            return
+        }
         if handoff.presentationEnded(linkPending: router.pending != nil, sheetUp: sheetUp, sendUp: showSend) == .presentSend {
             showSend = true
         }
