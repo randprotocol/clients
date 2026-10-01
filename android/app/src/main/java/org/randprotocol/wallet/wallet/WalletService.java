@@ -53,6 +53,21 @@ public final class WalletService {
         return mi.totalMem / 3 * 2 >= PROVER_PEAK_MEMORY_BYTES;
     }
 
+    /**
+     * Peak memory of the proofs a swap always makes on the phone itself — the program call proof
+     * and the authorisation proof — even when a prover makes the bundle: about 1.4 GB, measured
+     * on the emulator 2026-10-01 (a 2 GB phone was stopped by Android half-way through).
+     */
+    public static final long CALL_PROOF_PEAK_MEMORY_BYTES = 1_500_000_000L;
+
+    /** Whether this phone has the memory for a swap's own proofs (the same two-thirds rule). */
+    public static boolean deviceCanMakeCallProof(Context c) {
+        android.app.ActivityManager am = (android.app.ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
+        android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+        am.getMemoryInfo(mi);
+        return mi.totalMem / 3 * 2 >= CALL_PROOF_PEAK_MEMORY_BYTES;
+    }
+
     /** How long a send waits for its bundle to be committed. */
     public static final long COMMIT_TIMEOUT_MS = 180_000;
     private static final long POLL_MS = 1_000;
@@ -752,6 +767,11 @@ public final class WalletService {
      * section. Returns the route (null: this device proves). Blocking.
      */
     public RemoteSend.Route canInvoke() throws Invoke.Refusal, RpcException {
+        // Said before anything is quoted: otherwise Android stops the app half-way through the
+        // proofs and the screen simply disappears (nothing is sent either way).
+        if (!deviceCanMakeCallProof(app)) {
+            throw new Invoke.Refusal(Invoke.PROVER_UNAVAILABLE, "This phone does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead.");
+        }
         RemoteSend.Route route;
         try {
             route = proveRoute();

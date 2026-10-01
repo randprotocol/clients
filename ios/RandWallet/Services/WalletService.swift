@@ -561,6 +561,10 @@ final class WalletService: ObservableObject {
     /// Whether this wallet can invoke on this chain (`program.canInvoke` in the JS), in the order a
     /// send asks it: a proof route first, then the chain's `program_state` section.
     func canInvoke() async throws -> InvokeVia {
+        // Said before anything is quoted, rather than the system stopping the app mid-proof.
+        guard ProverRequirements.deviceCanMakeCallProof else {
+            throw InvokeRefusal(code: .proverUnavailable, message: "This device does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead.")
+        }
         let route = try await invokeRoute()
         guard try await client().limits().programState != nil else {
             throw InvokeRefusal(code: .programsUnsupported, message: "This chain does not run programs yet.")

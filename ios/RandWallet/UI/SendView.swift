@@ -368,6 +368,11 @@ enum ProverRequirements {
     /// iOS lets a foreground app use roughly half to two thirds of physical memory.
     static var deviceHasEnoughMemory: Bool { deviceMemoryBytes / 3 * 2 >= peakMemoryBytes }
     static var peakMemoryGB: String { String(format: "%.1f", Double(peakMemoryBytes) / 1e9) }
+    /// The proofs a swap always makes on the device itself — the program call proof and the
+    /// authorisation proof — even when a prover makes the bundle: about 1.4 GB, measured on the
+    /// Android emulator 2026-10-01. The same two-thirds rule.
+    static let callProofPeakMemoryBytes: UInt64 = 1_500_000_000
+    static var deviceCanMakeCallProof: Bool { deviceMemoryBytes / 3 * 2 >= callProofPeakMemoryBytes }
     static var deviceMemoryGB: String { String(format: "%.0f", Double(deviceMemoryBytes) / 1e9) }
 }
 

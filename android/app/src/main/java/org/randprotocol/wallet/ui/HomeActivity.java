@@ -75,6 +75,24 @@ public class HomeActivity extends BaseActivity {
         b.addressShort.setText(Amounts.shortAddress(wallet().address()));
         refreshList();
         wallet().scanAsync(null);
+        loadTokenNames();
+    }
+
+    /** The registry's token names, read once per launch, so a swap's DUR shows as DUR. */
+    private static java.util.Map<Integer, SwapForm.Asset> tokenNames;
+
+    private void loadTokenNames() {
+        if (tokenNames != null) { adapter.setAssets(tokenNames); return; }
+        new Thread(() -> {
+            java.util.Map<Integer, SwapForm.Asset> names;
+            try {
+                names = SwapForm.assets(wallet().rpc().tokens(), new java.util.HashMap<>(), Memo::display);
+            } catch (Exception e) {
+                return; // rows keep the asset's index until the next visit
+            }
+            tokenNames = names;
+            runOnUiThread(() -> { if (!isFinishing() && !isDestroyed()) adapter.setAssets(names); });
+        }, "token-names").start();
     }
 
     private void refreshList() {
