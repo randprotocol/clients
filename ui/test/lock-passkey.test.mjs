@@ -81,3 +81,23 @@ test('without a passkey set up the screen is the password screen it always was',
   assert.equal(root.querySelector('[data-role="passkey-slot"]').hidden, true);
   assert.equal(root.querySelector('form button[type=submit]').textContent, 'Unlock');
 });
+
+test('after a password unlock, a device that can do it is offered Touch ID once, with the password just typed', async (t) => {
+  const enabled = [];
+  const pk = { ...passkey({ enabled: false }), enable: async (pw) => { enabled.push(pw); } };
+  const b = await locked(pk);
+  try { globalThis.localStorage?.removeItem('rand-wallet.passkeyOfferDeclined'); } catch {}
+  const { app, root } = await mountApp(t, b);
+  await app.go('#lock');
+  await settle(app);
+  root.querySelector('input[name=password]').value = PW;
+  root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await settle(app);
+  const turnOn = document.querySelector('[data-role="turn-on"]');
+  assert.ok(turnOn, 'the offer is shown');
+  assert.match(turnOn.textContent, /Turn on Touch ID/);
+  turnOn.click();
+  await settle(app);
+  assert.deepEqual(enabled, [PW], 'set up with the password that just unlocked');
+  assert.equal(location.hash, '#home');
+});

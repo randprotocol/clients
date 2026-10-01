@@ -74,9 +74,14 @@ registerScreen('lock', {
       try {
         // Through the shell, not backend.wallet.unlock directly: unlocking is a new wallet
         // session, and the shell is what ends the old one (see ctx.unlockWallet in ../app.js).
-        await ctx.unlockWallet(input.value);
+        const password = input.value;
+        await ctx.unlockWallet(password);
         markValid(wrap, input, 'lock-password-hint');
         input.value = '';
+        // Touch ID as the default (the owner's ask): right after a password unlock, on a device that
+        // can do it, offer it once — the password just typed is the one it seals. "Not now" is
+        // remembered on this device, and Settings → Security still turns it on later.
+        if (await shouldOfferPasskey()) { offerPasskey(password); return; }
         ctx.go('#home');
       } catch (err) {
         input.value = '';
@@ -93,6 +98,45 @@ registerScreen('lock', {
       }
     }
     form.addEventListener('submit', onSubmit);
+
+    const OFFER_KEY = 'rand-wallet.passkeyOfferDeclined';
+    async function shouldOfferPasskey() {
+      const pk = ctx.backend.wallet && ctx.backend.wallet.passkey;
+      if (!pk) return false;
+      try {
+        if (globalThis.localStorage && globalThis.localStorage.getItem(OFFER_KEY)) return false;
+      } catch { /* no storage: offer */ }
+      try { return (await pk.available()) && !(await pk.enabled()); } catch { return false; }
+    }
+    function offerPasskey(password) {
+      const pk = ctx.backend.wallet.passkey;
+      const label = pk.label();
+      const dialog = ctx.sheet(h`
+        <h3 class="sheet-title">Unlock with ${label} next time?</h3>
+        <p class="sheet-sub">Open Rand Wallet with ${label} instead of typing your password. Your password still works, and stays the way to restore access.</p>
+        <p class="caption" data-role="offer-error"></p>
+        <div class="sheet-foot">
+          <button class="btn" type="button" data-role="not-now">Not now</button>
+          <button class="btn btn-primary" type="button" data-role="turn-on">Turn on ${label}</button>
+        </div>`);
+      let done = false;
+      const finish = () => { if (done) return; done = true; password = ''; ctx.closeSheet(); ctx.go('#home'); };
+      on(dialog, '[data-role="not-now"]', 'click', () => {
+        try { globalThis.localStorage && globalThis.localStorage.setItem(OFFER_KEY, '1'); } catch { /* asked again next time */ }
+        finish();
+      });
+      on(dialog, '[data-role="turn-on"]', 'click', async (evt, btn) => {
+        btn.disabled = true;
+        try {
+          await pk.enable(password);
+          ctx.toast(`${label} is on`, { kind: 'positive' });
+          finish();
+        } catch (err) {
+          btn.disabled = false;
+          dialog.querySelector('[data-role="offer-error"]').textContent = `${label} could not be set up: ${(err && err.message) || err}. You can try again from Settings → Security.`;
+        }
+      });
+    }
 
     // ---- unlock with a passkey (Touch ID) ----
     // Where the wallet has one set up it is the default: offered first, and asked for at once, so
