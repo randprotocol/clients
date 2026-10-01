@@ -14,6 +14,7 @@
 //     written to exactly one text node while it is revealed — never an attribute, `ctx.state`, the
 //     URL or storage.
 import { h, raw, on } from '../lib/dom.js';
+import { t, LOCALES, AUTO_LOCALE, isLocale } from '../i18n.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { markInvalid, markValid } from '../lib/forms.js';
@@ -21,17 +22,18 @@ import { wireSecretReveal } from '../lib/reveal.js';
 import { urlRule } from '../lib/url-rule.js';
 import { encodeBytes, drawQr } from '../lib/qr.js';
 
+// Labels are functions, read at each render: the language can change while the screen is up.
 const THEMES = [
-  { value: 'system', label: 'System' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'light', label: 'Light' },
+  { value: 'system', label: () => t('System') },
+  { value: 'dark', label: () => t('Dark') },
+  { value: 'light', label: () => t('Light') },
 ];
 const AUTO_LOCK = [
-  { value: 1, label: '1 minute' },
-  { value: 5, label: '5 minutes' },
-  { value: 15, label: '15 minutes' },
-  { value: 60, label: '1 hour' },
-  { value: 0, label: 'Never' },
+  { value: 1, label: () => t('1 minute') },
+  { value: 5, label: () => t('5 minutes') },
+  { value: 15, label: () => t('15 minutes') },
+  { value: 60, label: () => t('1 hour') },
+  { value: 0, label: () => t('Never') },
 ];
 const WIPE_WORD = 'WIPE';
 // What each key slot shows when no key is open: the button that asks for the password again.
@@ -252,18 +254,29 @@ function contactsMarkup() {
 
 function appearanceMarkup(settings) {
   const current = settings.theme || 'system';
-  const segments = THEMES.map((t) => h`
-    <button class="seg" type="button" role="radio" data-value="${t.value}" aria-checked="${t.value === current ? 'true' : 'false'}">${t.label}</button>`).join('');
-  return sectionMarkup('Appearance', h`
+  const segments = THEMES.map((theme) => h`
+    <button class="seg" type="button" role="radio" data-value="${theme.value}" aria-checked="${theme.value === current ? 'true' : 'false'}">${theme.label()}</button>`).join('');
+  // The language: "follow the device" first, then every language under its own name, so a reader
+  // who cannot read the one in force can still find theirs. The stored value is 'auto' or a code.
+  const chosen = isLocale(settings.locale) ? settings.locale : AUTO_LOCALE;
+  const languages = [
+    h`<option value="${AUTO_LOCALE}"${raw(chosen === AUTO_LOCALE ? ' selected' : '')}>${t('Device language')}</option>`,
+    ...LOCALES.map((l) => h`<option value="${l.code}" lang="${l.tag}"${raw(chosen === l.code ? ' selected' : '')}>${l.name}</option>`),
+  ].join('');
+  return sectionMarkup(t('Appearance'), h`
     <div class="field">
-      <span class="label" id="settings-theme-label">Theme</span>
+      <span class="label" id="settings-theme-label">${t('Theme')}</span>
       <div class="segmented" role="radiogroup" aria-labelledby="settings-theme-label" data-role="theme">${raw(segments)}</div>
+    </div>
+    <div class="field">
+      <label class="label" for="settings-locale">${t('Language')}</label>
+      <select id="settings-locale" name="locale">${raw(languages)}</select>
     </div>`);
 }
 
 function securityMarkup(settings) {
   const options = AUTO_LOCK.map((o) => h`
-    <option value="${o.value}"${raw(String(o.value) === String(settings.autoLockMin) ? ' selected' : '')}>${o.label}</option>`).join('');
+    <option value="${o.value}"${raw(String(o.value) === String(settings.autoLockMin) ? ' selected' : '')}>${o.label()}</option>`).join('');
   return h`
     <h2 class="section-title">Security</h2>
     <div class="card stack">
@@ -893,6 +906,17 @@ registerScreen('settings', {
       }
       if (!live()) return;
       settings = { ...settings, theme: value };
+    });
+
+    // The language. `ctx.setLocale` persists it, loads the dictionary and re-renders this very
+    // screen in the new language, so nothing here touches the DOM afterwards.
+    const offLocale = on(body, 'select[name=locale]', 'change', async (evt, select) => {
+      const value = select.value;
+      try {
+        await ctx.setLocale(value);
+      } catch {
+        if (live()) ctx.toast(t('The language could not be saved.'), { kind: 'negative' });
+      }
     });
 
     const offAutoLock = on(body, 'select[name=autoLockMin]', 'change', async (evt, select) => {

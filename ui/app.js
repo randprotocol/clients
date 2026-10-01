@@ -3,6 +3,7 @@
 // `registerScreen` and only ever talk to the `ctx` object `mount()` hands them — never to
 // `document`/`window`/the concrete backend shell directly (besides through `ctx.backend`).
 import { h, raw, on } from './lib/dom.js';
+import { t, setLocale, resolveLocale, localeInfo } from './i18n.js';
 import { assertBackend, BACKEND_SHAPE } from './backend.js';
 import { icons } from './lib/icons.js';
 import { shortAddress } from './lib/format.js';
@@ -32,18 +33,22 @@ const screens = new Map();
  *                             so a screen can keep the user's own list and still have a default.
  *                             Required for `pane: 'detail'` to get a second pane at all.
  *   detailEmpty: '…'          this screen is a list whose detail column stays reserved, with this
- *                             sentence in it, while nothing is selected.
+ *                             sentence in it, while nothing is selected. A function returning the
+ *                             sentence is read at each render, so `() => t('…')` follows the
+ *                             language.
  */
 export function registerScreen(name, def) {
   if (!def || typeof def.render !== 'function') throw new Error(`registerScreen(${name}): render is required`);
   screens.set(name, def);
 }
 
+// Labels are functions: the language can change while the app is mounted, so a label is read at
+// each render, never at import.
 const TABS = [
-  { name: 'home', label: 'Home', icon: 'home' },
-  { name: 'activity', label: 'Activity', icon: 'activity' },
-  { name: 'explore', label: 'Explore', icon: 'compass' },
-  { name: 'settings', label: 'Settings', icon: 'settings' },
+  { name: 'home', label: () => t('Home'), icon: 'home' },
+  { name: 'activity', label: () => t('Activity'), icon: 'activity' },
+  { name: 'explore', label: () => t('Explore'), icon: 'compass' },
+  { name: 'settings', label: () => t('Settings'), icon: 'settings' },
 ];
 const WIDE_AT = 900; // keep in sync with tokens.css --wide-at
 
@@ -70,8 +75,8 @@ const SYNC_PASSTHROUGH = { wallet: ['onLocked', 'noteActivity'], sync: ['onChang
  * shell reports) is shown as given, escaped by `h` at the call site.
  */
 function networkLabel(chainId) {
-  if (chainId === undefined || chainId === null || chainId === '') return 'Not connected';
-  return /^\d+$/.test(String(chainId)) ? `Chain ${chainId}` : String(chainId);
+  if (chainId === undefined || chainId === null || chainId === '') return t('Not connected');
+  return /^\d+$/.test(String(chainId)) ? t('Chain {id}', { id: chainId }) : String(chainId);
 }
 
 function route(name, arg) {
@@ -396,9 +401,27 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
   toastArea.setAttribute('role', 'status');
   container.append(mainEl, toastArea);
 
-  // ---- theme ----
+  // ---- theme and language ----
   const settings = await backendApi.settings.get();
   document.documentElement.dataset.theme = settings.theme || 'system';
+  // The language is chosen before the first render, from the setting or else the device; a
+  // dictionary that fails to load is reported to the console and the wallet comes up in English.
+  async function applyLocale(setting) {
+    const device = (typeof navigator !== 'undefined' && navigator.languages) || [];
+    const code = resolveLocale(setting, device);
+    let inForce = code;
+    try {
+      await setLocale(code);
+    } catch (err) {
+      console.error(`rand-wallet: the ${code} dictionary could not be loaded`, err);
+      inForce = await setLocale('en');
+    }
+    const info = localeInfo(inForce);
+    document.documentElement.lang = info.tag;
+    document.documentElement.dir = info.dir;
+    return inForce;
+  }
+  await applyLocale(settings.locale);
 
   // ---- compact / wide ----
   // The 3-column wide grid (sidebar | app | detail) only makes sense once there is a sidebar to
@@ -565,6 +588,16 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     unlockWallet: (password) => backendApi.wallet.unlock(password),
     createWallet: (password) => backendApi.wallet.create(password),
     importWallet: (secret, password) => backendApi.wallet.import(secret, password),
+    /**
+     * Changes the language: persists the setting (`'auto'` or a code), loads the dictionary, sets
+     * `<html lang dir>` and re-renders the screen on display. Resolves to the code in force.
+     */
+    async setLocale(value) {
+      await backendApi.settings.set({ locale: value });
+      const code = await applyLocale(value);
+      await scheduleRender();
+      return code;
+    },
   };
 
   // Every `sync.scan` is counted, started and finished, on session-scoped state. Nothing in the
@@ -626,7 +659,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
     const active = tab.name === activeName;
     const cls = variant === 'tab' ? (active ? 'tab on' : 'tab') : (active ? 'nav-item on' : 'nav-item');
     const current = active ? raw(' aria-current="page"') : '';
-    return h`<a class="${cls}" href="#${tab.name}" data-go="${tab.name}"${current}>${raw(icons[tab.icon]())}${tab.label}</a>`;
+    return h`<a class="${cls}" href="#${tab.name}" data-go="${tab.name}"${current}>${raw(icons[tab.icon]())}${tab.label()}</a>`;
   }
 
   function renderTabbar(activeName) {
@@ -797,8 +830,11 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       route: r, screen, twoPane, from: originParentHash, lookup: (name) => screens.get(name),
     });
     const contentKey = `${unlocked ? '1' : '0'}:${plan.content.name}:${plan.content.arg ?? ''}`;
-    const emptyText = !plan.detail && twoPane && typeof plan.contentScreen.detailEmpty === 'string'
-      ? plan.contentScreen.detailEmpty
+    // `detailEmpty` may be a function (read at each render, so it follows the language) or, as
+    // before, a string.
+    const detailEmpty = typeof plan.contentScreen.detailEmpty === 'function' ? plan.contentScreen.detailEmpty() : plan.contentScreen.detailEmpty;
+    const emptyText = !plan.detail && twoPane && typeof detailEmpty === 'string'
+      ? detailEmpty
       : null;
     // The placeholder is part of what is on screen, so it is part of the key — otherwise a list
     // that starts reserving its column would never get one painted. The NUL prefix is simply a

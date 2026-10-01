@@ -1,5 +1,11 @@
 // Amount and text formatting. Units are decimal strings (1 RAND = 10^9 units) and are handled
 // as BigInt: a balance can exceed 2^53.
+//
+// Amounts are written the same way in every language — ASCII digits, `.` for the decimal point,
+// `,` grouping — so what the wallet shows can be pasted back into any amount field or a command
+// line unchanged; only the words around them follow the language (ui/i18n.js).
+import { t } from '../i18n.js';
+
 export const UNITS = 1_000_000_000n;
 
 export function toBig(s) { try { return BigInt(String(s ?? '0')); } catch { return 0n; } }
@@ -36,10 +42,10 @@ export function shortHex(h, n = 8) { return h ? `${h.slice(0, n)}…${h.slice(-4
 export function timeAgo(ms) {
   if (!ms) return '';
   const s = Math.max(0, (Date.now() - ms) / 1000);
-  if (s < 60) return 'just now';
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
-  return `${Math.floor(s / 86400)} d ago`;
+  if (s < 60) return t('just now');
+  if (s < 3600) return t('{n} min ago', { n: Math.floor(s / 60) });
+  if (s < 86400) return t('{n} h ago', { n: Math.floor(s / 3600) });
+  return t('{n} d ago', { n: Math.floor(s / 86400) });
 }
 
 export function elapsed(ms) {

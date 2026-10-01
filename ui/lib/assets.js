@@ -1,5 +1,6 @@
 // Pure data helpers for the home, asset, activity, send and withdraw screens. Importable under
 // plain Node (no `document`/`window` access at module scope, same rule as every other ui/lib file).
+import { t, formatDay as formatLocalDay } from '../i18n.js';
 
 /** The RAND (index 0) balance, as a decimal units string. RPL assets (index >= 1) have no price
  *  feed and are never summed into this — it is the RAND figure alone, never a portfolio total. */
@@ -83,7 +84,6 @@ export function canWithdrawAsset(asset) {
 }
 
 const DAY_MS = 86400000;
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // A day bucket is keyed by the start of the *viewer's* calendar day. Shifting the timestamp by the
 // zone offset and then reading it with the UTC getters gives the local calendar fields without
@@ -94,10 +94,9 @@ function startOfLocalDay(ms, tzOffsetMinutes) {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
-function formatDay(shiftedDayStartMs) {
-  const d = new Date(shiftedDayStartMs);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-}
+// The day as the language writes it ("2 Oct 2026", "2026年10月2日"), read from the shifted
+// timestamp's UTC fields, which are the viewer's local fields by construction (above).
+const formatDay = (shiftedDayStartMs) => formatLocalDay(new Date(shiftedDayStartMs));
 
 /**
  * Buckets `activity` into day groups, newest first: `[{label, items}]`, where `label` is
@@ -122,7 +121,7 @@ export function groupByDay(activity, now = Date.now(), tzOffsetMinutes = new Dat
     .sort((a, b) => b - a)
     .map((dayStart) => {
       const diffDays = Math.round((today - dayStart) / DAY_MS);
-      const label = diffDays === 0 ? 'Today' : diffDays === 1 ? 'Yesterday' : formatDay(dayStart);
+      const label = diffDays === 0 ? t('Today') : diffDays === 1 ? t('Yesterday') : formatDay(dayStart);
       return { label, items: buckets.get(dayStart) };
     });
 }
