@@ -1899,11 +1899,22 @@ export function makeSharedBackend({
       const prepared = kind === 'burn'
         ? await c.prepareBurn(params)
         : kind === 'invoke' ? await c.prepareInvoke(params) : await c.prepareTransfer(params);
-      return remoteProve({
-        client: proverClient, core, prepared, storage,
-        meta: { kind, name: route.name, ...(meta || {}) },
-        onPhase, signal, locks: locksApi, ...proverTiming,
-      });
+      try {
+        return await remoteProve({
+          client: proverClient, core, prepared, storage,
+          meta: { kind, name: route.name, ...(meta || {}) },
+          onPhase, signal, locks: locksApi, ...proverTiming,
+        });
+      } catch (err) {
+        // The shared pool full is the one refusal a default user will meet often: said plainly,
+        // with the way out that does not wait — and never retried in a loop (the user sends again).
+        if (route.mode === 'default' && err && err.busy) {
+          const busy = refuse(`The ${route.name} prover is busy; try again in a minute, or pair your own prover in Settings.`);
+          busy.busy = true;
+          throw busy;
+        }
+        throw err;
+      }
     };
   }
 
