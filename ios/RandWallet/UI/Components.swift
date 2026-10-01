@@ -58,7 +58,7 @@ struct Card<Content: View>: View {
     }
 }
 
-/// One of the round Receive / Send / Faucet actions under the balance card.
+/// One of the round Receive / Send / Swap actions under the balance card.
 struct RoundAction: View {
     let icon: String
     let label: String

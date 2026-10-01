@@ -99,6 +99,10 @@ final class RpcClient {
         let bundleGasLimit: Int?
         /// Fullnode #118: blocks a bundle's time and anchor stay valid (1024 on chain 20); nil = 256.
         var proofWindowBlocks: Int? = nil
+        /// RPL-2 (fullnode v0.6.8): `{cell_fee, max_reads, max_writes, max_payouts}` on a chain
+        /// whose genesis carries a `program_state` section; `nil` (`null`, or no key on an older
+        /// node) on one without — where every invoke is refused, so the wallet says so first.
+        var programState: ProgramState? = nil
         static let none = ChainLimits(envelopeBytes: nil, maxProofBytes: nil, bundleGasLimit: nil)
     }
 
@@ -117,7 +121,33 @@ final class RpcClient {
         return ChainLimits(envelopeBytes: try envelopeBytes(fromLimits: reply),
                            maxProofBytes: try sizeField("max_proof_bytes", fromLimits: reply, max: 1 << 30),
                            bundleGasLimit: try sizeField("bundle_gas_limit", fromLimits: reply, max: Int.max),
-                           proofWindowBlocks: try sizeField("proof_window_blocks", fromLimits: reply, max: 1 << 30))
+                           proofWindowBlocks: try sizeField("proof_window_blocks", fromLimits: reply, max: 1 << 30),
+                           programState: try programState(fromLimits: reply))
+    }
+
+    /// `rand_getLimits.program_state`, held to its shape (`validate.js`'s `checkLimits`).
+    static func programState(fromLimits reply: Any) throws -> ProgramState? {
+        let m = "rand_getLimits"
+        guard let obj = reply as? [String: Any] else { throw RpcError(code: 0, message: "\(m): not an object") }
+        guard let raw = obj["program_state"], !(raw is NSNull) else { return nil }
+        guard let ps = raw as? [String: Any] else { throw RpcError(code: 0, message: "\(m): program_state is not an object") }
+        func count(_ name: String) throws -> Int {
+            guard let n = ps[name] as? Int, n >= 0, n <= 1024 else {
+                throw RpcError(code: 0, message: "\(m): program_state.\(name) is not a count")
+            }
+            return n
+        }
+        return ProgramState(cellFee: try units(ps["cell_fee"], "\(m): program_state.cell_fee"),
+                            maxReads: try count("max_reads"), maxWrites: try count("max_writes"), maxPayouts: try count("max_payouts"))
+    }
+
+    /// A decimal string of base units (at most 30 digits: amounts exceed 2^53), refused otherwise.
+    static func units(_ v: Any?, _ what: String) throws -> String {
+        guard let s = v as? String, (1...30).contains(s.count), s.allSatisfy({ $0.isASCII && $0.isNumber }) else {
+            throw RpcError(code: 0, message: "\(what) is not a decimal amount")
+        }
+        let trimmed = s.drop { $0 == "0" }
+        return trimmed.isEmpty ? "0" : String(trimmed)
     }
 
     /// The chain's `envelope_bytes` alone (see `limits`).
@@ -275,6 +305,158 @@ final class RpcClient {
         let b = try await call("rand_getBlockByHeight", [height]) as? [String: Any]
         let txs = b?["transactions"] as? [[String: Any]] ?? []
         return txs.compactMap { $0["action"] }
+    }
+
+    // MARK: RPL-2 program state (fullnode v0.6.8, `docs/rpc.md`)
+    //
+    // What an invoke reads before it proves anything. None of it is trusted further than its
+    // shape (`ui/engine/validate.js`'s checks, the same rules): the core hashes the code and public
+    // input against the program id (`dry_run_invoke` refuses a node serving other code), and the
+    // cells are re-checked by the chain itself (a stale read is refused there).
+
+    /// `{"enabled": false}`: what every program-state method answers on a chain without the section.
+    private static func sectionOff(_ reply: Any) -> Bool {
+        (reply as? [String: Any])?["enabled"] as? Bool == false
+    }
+
+    private static func word8(_ v: Any?, _ what: String) throws -> String {
+        var s = (v as? String ?? "").lowercased()
+        if s.hasPrefix("0x") { s.removeFirst(2) }
+        guard s.count == 64, s.allSatisfy({ $0.isHexDigit }) else { throw RpcError(code: 0, message: "\(what) is not 64 hex characters") }
+        return s
+    }
+
+    private static func programId(_ program: String) throws -> String { try word8(program, "the program id") }
+
+    /// One page of `rand_getProgramCells [id, {after, limit}]`: the cells in key order and the key to
+    /// pass back as `after` (`nil` on the last page) — or `nil` on a chain without program state.
+    func programCells(_ program: String, after: String? = nil, limit: Int = 256) async throws -> (cells: [CellHex], next: String?)? {
+        var page: [String: Any] = ["limit": limit]
+        if let after { page["after"] = after }
+        return try Self.programCells(fromReply: await call("rand_getProgramCells", [try Self.programId(program), page]))
+    }
+
+    static func programCells(fromReply reply: Any) throws -> (cells: [CellHex], next: String?)? {
+        let m = "rand_getProgramCells"
+        if sectionOff(reply) { return nil }
+        guard let r = reply as? [String: Any], let rows = r["cells"] as? [Any], rows.count <= 4096 else {
+            throw RpcError(code: 0, message: "\(m): not a page of cells")
+        }
+        let cells = try rows.map { row -> CellHex in
+            guard let o = row as? [String: Any] else { throw RpcError(code: 0, message: "\(m): a cell is not an object") }
+            return CellHex(key: try word8(o["key"], "\(m): key"), value: try word8(o["value"], "\(m): value"))
+        }
+        let next = r["next"].flatMap { $0 is NSNull ? nil : $0 }
+        return (cells, try next.map { try word8($0, "\(m): next") })
+    }
+
+    /// Every cell of `program`, page by page — `nil` on a chain without program state. What the
+    /// Swap screen prices from. A cursor that does not move ends the walk rather than loop.
+    func allProgramCells(_ program: String) async throws -> [CellHex]? {
+        var out: [CellHex] = []
+        var after: String? = nil
+        for _ in 0..<64 {
+            guard let page = try await programCells(program, after: after) else { return nil }
+            out += page.cells
+            guard let next = page.next, next != after else { break }
+            after = next
+        }
+        return out
+    }
+
+    /// `rand_getProgramCell [id, key]`: the cell's value (64 hex; zeros for an absent cell), or
+    /// `nil` on a chain without program state. A reply for another key is refused.
+    func programCell(_ program: String, key: String) async throws -> String? {
+        try Self.programCell(fromReply: await call("rand_getProgramCell", [try Self.programId(program), key]), key: key)
+    }
+
+    static func programCell(fromReply reply: Any, key: String) throws -> String? {
+        let m = "rand_getProgramCell"
+        if sectionOff(reply) { return nil }
+        guard let r = reply as? [String: Any] else { throw RpcError(code: 0, message: "\(m): not an object") }
+        let got = try word8(r["key"], "\(m): key")
+        if got != (try word8(key, "the key asked")) { throw RpcError(code: 0, message: "\(m): the reply is for another key") }
+        return try word8(r["value"], "\(m): value")
+    }
+
+    /// `rand_getProgramCode [id]`: `{base_pc, words}`, or `nil` for an id no program has.
+    func programCode(_ program: String) async throws -> ProgramCode? {
+        try Self.programCode(fromReply: await call("rand_getProgramCode", [try Self.programId(program)]))
+    }
+
+    static func programCode(fromReply reply: Any) throws -> ProgramCode? {
+        let m = "rand_getProgramCode"
+        if reply is NSNull { return nil }
+        guard let r = reply as? [String: Any], let base = r["base_pc"] as? NSNumber, let raw = r["words"] as? [Any],
+              raw.count <= 1 << 20 else {
+            throw RpcError(code: 0, message: "\(m): not a program's code")
+        }
+        let words = try raw.map { w -> UInt32 in
+            guard let n = w as? NSNumber, let v = UInt32(exactly: n.uint64Value), n.int64Value >= 0 else {
+                throw RpcError(code: 0, message: "\(m): a code word is not a u32")
+            }
+            return v
+        }
+        guard let pc = UInt32(exactly: base.uint64Value), base.int64Value >= 0 else { throw RpcError(code: 0, message: "\(m): base_pc is not a u32") }
+        return ProgramCode(basePc: pc, words: words)
+    }
+
+    /// `rand_getProgramPublic [id]`: the public words as lowercase hex (`""` for none), or `nil`
+    /// for no program.
+    func programPublic(_ program: String) async throws -> String? {
+        try Self.programPublic(fromReply: await call("rand_getProgramPublic", [try Self.programId(program)]))
+    }
+
+    static func programPublic(fromReply reply: Any) throws -> String? {
+        let m = "rand_getProgramPublic"
+        if reply is NSNull { return nil }
+        guard var s = reply as? String else { throw RpcError(code: 0, message: "\(m): not a hex string") }
+        s = s.lowercased()
+        if s.hasPrefix("0x") { s.removeFirst(2) }
+        guard s.count % 8 == 0, s.count <= 8 << 20, s.allSatisfy({ $0.isHexDigit }) else {
+            throw RpcError(code: 0, message: "\(m): the public input is not whole words of hex")
+        }
+        return s
+    }
+
+    /// `rand_getProgramVault [id]`: `[{asset, amount}]` ascending, or `nil` without the section.
+    func programVault(_ program: String) async throws -> [AssetAmount]? {
+        try Self.programVault(fromReply: await call("rand_getProgramVault", [try Self.programId(program)]))
+    }
+
+    static func programVault(fromReply reply: Any) throws -> [AssetAmount]? {
+        let m = "rand_getProgramVault"
+        if sectionOff(reply) { return nil }
+        guard let rows = reply as? [Any], rows.count <= 4096 else { throw RpcError(code: 0, message: "\(m): not a list") }
+        var last: Int64 = -1
+        return try rows.map { row in
+            guard let o = row as? [String: Any], let a = o["asset"] as? NSNumber, a.int64Value >= 0, a.int64Value <= Int64(UInt32.max) else {
+                throw RpcError(code: 0, message: "\(m): a row has no asset index")
+            }
+            if a.int64Value <= last { throw RpcError(code: 0, message: "\(m): the vault is not in ascending asset order") }
+            last = a.int64Value
+            return AssetAmount(asset: UInt32(a.int64Value), amount: try units(o["amount"], "\(m): amount"))
+        }
+    }
+
+    /// `rand_estimateFee [spec]`: the minimum fee in units. For an invoke, `spec` is
+    /// `{"kind":"invoke", tier, keccak_log_height, sha256_log_height, created_cells}`, plus `gas` and
+    /// `bytes` under a `gas` section.
+    func estimateFee(_ spec: [String: Any]) async throws -> String {
+        try Self.units(await call("rand_estimateFee", [spec]), "rand_estimateFee: the fee")
+    }
+
+    /// `rand_getTokens [from, limit]`, the first page: each listed token's index, symbol and decimals
+    /// — what the Swap screen names a pool's token with. A row that does not read is left out.
+    func tokens(from: UInt32 = 0, limit: Int = 256) async throws -> [(index: UInt32, symbol: String, decimals: Int)] {
+        let r = try await call("rand_getTokens", [from, limit]) as? [String: Any]
+        let rows = r?["tokens"] as? [[String: Any]] ?? []
+        return rows.compactMap { row in
+            guard let i = (row["index"] as? NSNumber)?.uint32Value, i > 0,
+                  let d = (row["decimals"] as? NSNumber)?.intValue, (0...9).contains(d) else { return nil }
+            let symbol = (row["symbol"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return (i, symbol.isEmpty || symbol.count > 12 ? "#\(i)" : symbol, d)
+        }
     }
 
     private func u64(_ v: Any) throws -> UInt64 {

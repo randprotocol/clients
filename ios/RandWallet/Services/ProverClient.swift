@@ -239,6 +239,40 @@ enum RemoteSendParams {
     }
 }
 
+/// What a remote proof is of: the request a local proof would take (`prove_transfer`'s or
+/// `prove_invoke`'s JSON — the spend key inside it, never logged), the chain's guests it names, the
+/// core call that seals it (`prepare_*`) and the one that opens the reply (`finish_proof`, into the
+/// result that local proof would have returned). The pool path and the paired-prover path are the
+/// same for every kind; only these differ (`proveHookFor` in the JS branches on `kind` the same way).
+struct RemoteJob<R> {
+    let kind: String
+    let params: [String: Any]
+    let hcBundle: String?
+    let hcAuth: String?
+    let prepare: ([String: Any]) throws -> (sealedHex: String, pending: Any)
+    let finish: (Any, String) throws -> R
+}
+
+extension RemoteJob where R == ProveResult {
+    static func transfer(_ request: ProveRequest) throws -> RemoteJob<ProveResult> {
+        guard let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] else {
+            throw RandCore.CoreError(message: "the transfer request did not encode")
+        }
+        return RemoteJob<ProveResult>(kind: "transfer", params: json, hcBundle: request.hcBundle, hcAuth: request.hcAuth,
+                                      prepare: { try RandCore.prepareTransfer($0) },
+                                      finish: { try RandCore.finishProof(pending: $0, replyHex: $1) })
+    }
+}
+
+extension RemoteJob where R == InvokeResult {
+    /// An RPL-2 invoke: `prepare_invoke` makes the call proof and the auth proof on this device.
+    static func invoke(_ params: [String: Any], hcBundle: String?, hcAuth: String?) -> RemoteJob<InvokeResult> {
+        RemoteJob<InvokeResult>(kind: "invoke", params: params, hcBundle: hcBundle, hcAuth: hcAuth,
+                                prepare: { try RandCore.prepareInvoke($0) },
+                                finish: { try RandCore.finishInvoke(pending: $0, replyHex: $1) })
+    }
+}
+
 /// Refuses every HTTP redirect: a 307 would carry the POST to a host the URL rule never saw.
 final class NoRedirects: NSObject, URLSessionTaskDelegate {
     static let shared = NoRedirects()

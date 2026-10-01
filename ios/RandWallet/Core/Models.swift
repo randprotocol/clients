@@ -261,6 +261,7 @@ struct Submission: Codable, Equatable, Identifiable {
     enum Status: String, Codable { case pending, committed, failed }
     var hash: String
     var time: UInt32
+    /// RAND units that left the wallet besides the fee: a transfer's amount, an invoke's `burn_r`.
     var amount: String
     var to: String
     var fee: String
@@ -268,7 +269,135 @@ struct Submission: Codable, Equatable, Identifiable {
     var status: Status
     var height: UInt64?
     var submittedAt: Date
+    /// `nil` for a transfer (every record before 0.7.0); `"invoke"` for an RPL-2 invoke (a swap).
+    var kind: String? = nil
+    /// An invoke's token side: what it burned into the program (`burn_asset`, `burn_a`)…
+    var burnAsset: UInt32? = nil
+    var burnA: String? = nil
+    /// …and what the transition pays this wallet: the notes the next scan finds by trial decryption.
+    var payouts: [AssetAmount]? = nil
 
     var id: String { hash }
     var units: UInt64 { UInt64(amount) ?? 0 }
+    var isInvoke: Bool { kind == "invoke" }
+}
+
+/// An amount of one asset, in base units (a decimal string: amounts exceed 2^53).
+struct AssetAmount: Codable, Equatable {
+    var asset: UInt32
+    var amount: String
+}
+
+// MARK: RPL-2: invoking a program (`wallet_core`'s "invoking a program" section)
+
+/// A program cell as the node renders it (`rand_getProgramCell`): key and value, 64 hex each.
+struct CellHex: Codable, Equatable {
+    var key: String
+    var value: String
+}
+
+/// An RPL-2 invoke as a dapp asks for it (durian.market's `InvokeRequest`, `ui/engine/invoke.js`'s
+/// normalized form): the program, its private input words, the cells it read and the cells it
+/// writes, what the bundle burns into the program, and what the program pays or mints this wallet.
+/// Amounts are decimal strings of base units. `title` is the request's own heading, never shown as
+/// what the swap does (the screen shows the wallet's own reading).
+struct InvokeRequest: Equatable {
+    struct Inflow: Equatable {
+        /// RAND into the vault (the bundle's `burn_r`).
+        var rand: String
+        var asset: UInt32
+        /// The token the bundle burns (`burn_a` of `asset`).
+        var amount: String
+        /// `"none"`, `"deposit"` or `"burn"`.
+        var kind: String
+    }
+    var program: String
+    var inputs: [UInt32]
+    var reads: [CellHex]
+    var writes: [CellHex]
+    var inflow: Inflow
+    var pays: [AssetAmount]
+    var mints: [AssetAmount]
+    var title: String = ""
+
+    var cellsJSON: (reads: [[String: Any]], writes: [[String: Any]]) {
+        (reads.map { ["key": $0.key, "value": $0.value] }, writes.map { ["key": $0.key, "value": $0.value] })
+    }
+    var inflowJSON: [String: Any] { ["rand": inflow.rand, "asset": inflow.asset, "amount": inflow.amount, "kind": inflow.kind] }
+    static func amountsJSON(_ list: [AssetAmount]) -> [[String: Any]] { list.map { ["asset": $0.asset, "amount": $0.amount] } }
+}
+
+/// `rand_getProgramCode`: what the core hashes, with the public input, against the program id.
+struct ProgramCode: Codable, Equatable {
+    let basePc: UInt32
+    let words: [UInt32]
+    enum CodingKeys: String, CodingKey { case basePc = "base_pc", words }
+}
+
+/// `rand_getLimits.program_state` (fullnode v0.6.8): present on a chain that runs programs.
+struct ProgramState: Equatable {
+    let cellFee: String
+    let maxReads: Int
+    let maxWrites: Int
+    let maxPayouts: Int
+}
+
+/// `dry_run_invoke`: the tier and gas the call proof will have, which price the fee before it exists.
+struct InvokeDryRun: Decodable, Equatable {
+    let tier: Int
+    let gas: UInt64
+    let gasLimit: UInt64
+    let gasMax: UInt64
+    let keccakLogHeight: Int
+    let sha256LogHeight: Int
+    let contextWords: Int
+    enum CodingKeys: String, CodingKey {
+        case tier, gas, gasLimit = "gas_limit", gasMax = "gas_max"
+        case keccakLogHeight = "keccak_log_height", sha256LogHeight = "sha256_log_height", contextWords = "context_words"
+    }
+}
+
+/// `plan_invoke` (and `plan_transfer`): both groups' notes. With a token burn, `inputs` are notes of
+/// that token (slots 0–1) and `feeInputs` the RAND notes; without one, `inputs` are RAND and
+/// `feeInputs` is empty.
+struct TransferPlan: Decodable, Equatable {
+    let inputs: [OwnedNote]
+    let feeInputs: [OwnedNote]
+    let need: String
+    let change: String
+    let feeChange: String
+    let fee: String
+    let proofs: Int
+    enum CodingKeys: String, CodingKey {
+        case inputs, feeInputs = "fee_inputs", need, change, feeChange = "fee_change", fee, proofs
+    }
+}
+
+/// `prove_invoke` (and `finish_proof` for an invoke): the fields this wallet keeps or shows.
+struct InvokeResult: Decodable {
+    let txHex: String
+    let hash: String
+    let time: UInt32
+    let program: String
+    let asset: UInt32
+    let burnR: String
+    let burnAsset: UInt32
+    let burnA: String
+    let change: String
+    let fee: String
+    let feeChange: String
+    let tier: Int
+    let proofBytes: Int
+    let authProofBytes: Int?
+    let callTier: Int?
+    let callProofBytes: Int?
+    let spentIndices: [UInt64]
+    /// The payout notes as this wallet will own them (leaf index unknown until scanned).
+    let payouts: [OwnedNote]
+
+    enum CodingKeys: String, CodingKey {
+        case txHex = "tx_hex", hash, time, program, asset, burnR = "burn_r", burnAsset = "burn_asset", burnA = "burn_a"
+        case change, fee, feeChange = "fee_change", tier, proofBytes = "proof_bytes", authProofBytes = "auth_proof_bytes"
+        case callTier = "call_tier", callProofBytes = "call_proof_bytes", spentIndices = "spent_indices", payouts
+    }
 }
