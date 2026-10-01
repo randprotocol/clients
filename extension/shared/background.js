@@ -93,6 +93,20 @@ ext.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install' || details.reason === 'update') await reinjectProvider();
 });
 
+// ---- the toolbar button opens the side panel ----
+//
+// The wallet's home is the side panel — the window's full height beside the page — not a 360×600
+// popup (the owner's call, 2026-10-01): neither manifest names a `default_popup`, so the button
+// is ours to answer. Chrome opens the panel itself once told to (`setPanelBehavior`, kept by the
+// browser, set again on every start because it costs nothing); Firefox has no such setting, so its
+// click toggles the sidebar — inside the click's own handler, the only place Firefox allows it.
+// popup.html stays in the package for a browser that has neither.
+if (ext.sidePanel && typeof ext.sidePanel.setPanelBehavior === 'function') {
+  ext.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+} else if (ext.sidebarAction && typeof ext.sidebarAction.toggle === 'function' && ext.action?.onClicked) {
+  ext.action.onClicked.addListener(() => { ext.sidebarAction.toggle(); });
+}
+
 // A browser restart empties `storage.session`, so the wallet is already locked; the listener is
 // here only so the event has an owner and the worker starts cleanly.
 ext.runtime.onStartup?.addListener(() => {});

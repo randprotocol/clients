@@ -11,8 +11,8 @@ import vm from 'node:vm';
 const plain = (v) => JSON.parse(JSON.stringify(v)); // across the vm realm, for deepEqual
 const read = (f) => readFileSync(new URL(`../shared/${f}`, import.meta.url), 'utf8');
 
-function boot({ tabs = [], refuse = () => false } = {}) {
-  const calls = { executed: [], attempted: [], queried: [], created: [], listeners: {} };
+function boot({ tabs = [], refuse = () => false, browser = {} } = {}) {
+  const calls = { executed: [], attempted: [], queried: [], created: [], listeners: {}, panel: [], toggled: 0 };
   const on = (name) => ({ addListener: (fn) => { calls.listeners[name] = fn; } });
   const ext = {
     alarms: { onAlarm: on('alarm') },
@@ -28,7 +28,15 @@ function boot({ tabs = [], refuse = () => false } = {}) {
     },
     scripting: { executeScript: async (o) => { calls.attempted.push(o); if (refuse(o)) throw new Error('Cannot access contents of the page'); calls.executed.push(o); } },
     windows: { create: async () => {} },
+    ...browser,
   };
+  if (browser.chromePanel) {
+    ext.sidePanel = { setPanelBehavior: async (o) => { calls.panel.push(o); } };
+  }
+  if (browser.firefoxSidebar) {
+    ext.sidebarAction = { toggle: () => { calls.toggled += 1; } };
+    ext.action = { onClicked: on('actionClicked') };
+  }
   const sandbox = { chrome: ext, console, crypto: globalThis.crypto };
   sandbox.globalThis = sandbox;
   sandbox.importScripts = (f) => vm.runInContext(read(f), ctx);
@@ -85,5 +93,18 @@ test('the sites re-injected are exactly the ones both manifests inject into', ()
     for (const cs of m.content_scripts) assert.deepEqual(cs.matches, sites, `${which} content_scripts.matches`);
     assert.ok(m.permissions.includes('scripting'), `${which} may re-inject`);
     for (const site of sites.filter((s) => s.startsWith('https://'))) assert.ok(m.host_permissions.includes(site), `${which} host permission for ${site}`);
+  }
+});
+
+test('the toolbar button opens the side panel: Chrome is told to, Firefox toggles it on the click', () => {
+  const chrome = boot({ browser: { chromePanel: true } });
+  assert.deepEqual(plain(chrome.calls.panel), [{ openPanelOnActionClick: true }]);
+  const firefox = boot({ browser: { firefoxSidebar: true } });
+  assert.equal(firefox.calls.toggled, 0, 'nothing opens until the user clicks');
+  firefox.calls.listeners.actionClicked();
+  assert.equal(firefox.calls.toggled, 1);
+  for (const which of ['chrome', 'firefox']) {
+    const m = JSON.parse(readFileSync(new URL(`../../${which}/manifest.json`, import.meta.url), 'utf8'));
+    assert.equal(m.action.default_popup, undefined, `${which}: no popup, so the click is ours to answer`);
   }
 });
