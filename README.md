@@ -5,12 +5,12 @@ Wallets for the Rand Protocol RAND chain (the fully shielded pool served by
 
 | client | language | directory | ships as | can send |
 |---|---|---|---|---|
-| iOS | Swift (SwiftUI) | `ios/` | TestFlight / App Store | on a device with about 8 GB of memory; otherwise through a paired prover over TLS |
-| Android | Java | `android/` | Google Play (`.aab`) | on a device with about 8 GB of memory; otherwise through a paired prover over TLS |
-| Chrome | JavaScript, Manifest V3 | `chrome/` + `extension/` | Chrome Web Store | through a paired prover |
-| Firefox | JavaScript, Manifest V3 | `firefox/` + `extension/` | addons.mozilla.org | through a paired prover |
+| iOS | Swift (SwiftUI) | `ios/` | TestFlight / App Store | on a device with about 8 GB of memory; otherwise through the RandProtocol provers or your own |
+| Android | Java | `android/` | Google Play (`.aab`), `.apk` | on a device with about 8 GB of memory; otherwise through the RandProtocol provers or your own |
+| Chrome | JavaScript, Manifest V3 | `chrome/` + `extension/` | Chrome Web Store | through the RandProtocol provers or your own |
+| Firefox | JavaScript, Manifest V3 | `firefox/` + `extension/` | addons.mozilla.org | through the RandProtocol provers or your own |
 | Windows, Linux, macOS | Tauri (shared UI + Rust core) | `desktop/` | .msi / .AppImage, .deb, .rpm, .tar.gz / .dmg | yes, and proves for your other wallets |
-| Local web wallet | JavaScript (shared UI + WebAssembly core) | `web/wallet/` + `ui/` | nothing — served from a checkout | through a paired prover |
+| Local web wallet | JavaScript (shared UI + WebAssembly core) | `web/wallet/` + `ui/` | nothing — served from a checkout | through the RandProtocol provers or your own |
 
 The two extensions, the desktop app and the local web wallet share more than the core: `ui/` is one
 copy of the whole interface — the screens, the app shell and router, the design tokens, and
@@ -24,9 +24,14 @@ and per-transaction keys that [randscan.org](https://randscan.org) opens confide
 transactions with. The shells that can fit a proof in memory — the desktop app and the mobile
 apps — also prove and submit shielded transfers of RAND and of any listed RPL token; the browser
 extension and the web wallet build, authorise and submit the same transfers but have the bundle
-proof made by a prover you pair — the desktop app on the same machine, or a `rand-prover` (see the
-known limitation below and [`docs/prover.md`](docs/prover.md)); a phone without the memory can
-pair a `rand-prover` too, reached over https. Downloads are listed at https://randprotocol.org/clients (`web/`).
+proof made by a prover: by default **the RandProtocol provers** (four machines run by the
+validators under `prover.randprotocol.org`, each with its own key pinned in the wallet, no fee;
+the wallet says what they see before the first send), or one you pair for privacy — the desktop
+app on the same machine, or your own `rand-prover` (see the known limitation below and
+[`docs/prover.md`](docs/prover.md)). A phone without the memory does the same. The extensions
+also give sites a `window.rand` provider: randbridge.org connects to it, and durian.market swaps
+through `window.rand.invoke` (a program call the wallet shows, proves and submits on Approve).
+Downloads are listed at https://randprotocol.org/clients (`web/`).
 
 Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
@@ -95,19 +100,19 @@ words. None of these messages is about the file being damaged; check the sum, th
 
 ## Why there is a Rust core
 
-Chain 14 has no accounts and no signatures: a transfer is a 2-in-2-out bundle authorised by a
+The chain has no accounts and no signatures: a transfer is a 2-in-2-out bundle authorised by a
 STARK proof, keys are Poseidon2 hashes, envelopes are ML-KEM-768 + ChaCha20-Poly1305. Those
 primitives exist only in the fullnode's Rust crates, and a wallet that re-implemented them in
 Swift, Java or JavaScript would have to be byte-identical to the node or every transfer is
 refused. So `core/` vendors the fullnode crates (`core/vendor/fullnode`,
-a submodule at fullnode's `v0.6.7` tag, `86941a1` — the build chains 18 and 19 run: **constraint set 8**, whose proofs carry a declared gas limit and verify on no earlier chain, and **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key) and exposes one JSON entry point, `call(method, params)`, that each
+a submodule at fullnode's `v0.6.9` tag, `3f43101` — what chain 20's nodes run: **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key; **BIND-1**, a transaction bound to its chain's genesis; program state and the `Invoke` action (RPL-2); and the chain's bridge fee) and exposes one JSON entry point, `call(method, params)`, that each
 client wraps: an XCFramework on iOS, a `.so` on Android, WebAssembly in the browser. Everything
 above that line — the RPC client, note store, scan and send flow, key storage and the UI — is
 Swift, Java and JavaScript.
 
 ## Prerequisite: an RPC endpoint
 
-The public endpoint is **`https://rpc.randprotocol.org`** — a synced chain-14 node behind a
+The public endpoint is **`https://rpc.randprotocol.org`** — a synced chain-20 node behind a
 CORS-open reverse proxy, and the default in every client. Settings keeps one editable "RPC URL"
 that replaces it while filled in (a saved URL is probed before it is kept: an unreachable or
 wrong-chain node is refused rather than saved); clearing the field goes back to the default.
@@ -136,9 +141,8 @@ Android use `10.0.2.2` from the emulator).
 
 ## Known limitation: the proof does not fit on small devices yet
 
-A bundle proof (what authorises a transfer — of RAND, of an RPL token, or a bridge burn; on
-chain 14 they are all the same one proof) peaks at about **6.2 GB of memory** on chain 14's
-build, measured with `core/crates/wallet-core/examples/prove_fixture.rs`:
+A bundle proof (what authorises a transfer — of RAND, of an RPL token, or a bridge burn; they
+are all the same one proof) peaks at about **6.2 GB of memory**, measured with `core/crates/wallet-core/examples/prove_fixture.rs`:
 
 ```bash
 cd core && cargo build --release --example prove_fixture
@@ -147,23 +151,23 @@ cd core && cargo build --release --example prove_fixture
 
 Consequences today, per shell: the desktop app proves natively and sends everything; the browser
 extensions and the local web wallet cannot prove for themselves (WebAssembly is capped at 4 GB), so
-they prove through a paired prover — the desktop app on the same machine (Settings → **Prove for
-my other devices**), or your own `rand-prover` on a server — and without one the Send screen
-explains the wall. A prover receives the wallet's viewing key and a one-time salt with every job —
+they prove through a prover — by default the RandProtocol provers, or one you pair: the desktop
+app on the same machine (Settings → **Prove for my other devices**), or your own `rand-prover` on
+a server. With none (Settings → Prover → none) the Send screen explains the wall. A prover receives the wallet's viewing key and a one-time salt with every job —
 it can read that wallet's whole history and cannot spend; the spend key stays on the device, which
 makes the small authorisation proof itself — so it need not be yours, though running your own is
 what keeps your history to yourself; [`docs/prover.md`](docs/prover.md) is the whole guide. Phones with less than
 about 8 GB of RAM will have the app terminated mid-proof (the review step warns with the device's
-numbers) unless they pair your own `rand-prover` over https (Settings → Prover,
-[`docs/prover.md`](docs/prover.md) §6). Every other feature — creating and importing wallets, receiving, scanning, the faucet,
+numbers), so they too send through the RandProtocol provers or your own `rand-prover` over
+https (Settings → Prover, [`docs/prover.md`](docs/prover.md) §6). Every other feature — creating and importing wallets, receiving, scanning, the faucet,
 activity, viewing keys and per-transaction keys for randscan.org — works on all five shells
 (iOS, Android, the browser extension, the desktop app and the web wallet), and the whole send
 path is implemented and tested against the chain's own verifier in the core. The fix is in the
 prover (`randprotocol-zkvm`: it materialises every table's low-degree extension at once); when
 its peak drops, update `PROVER_PEAK_MEMORY_BYTES` in `core/crates/wallet-core/src/lib.rs` and
 the two mirrored constants in the mobile apps, rebuild, and the Send flows light up unchanged.
-Until then, a phone without the memory sends through a paired prover of your own, or from the
-desktop app or the `rand` command-line wallet using the key file every client exports.
+Until then, a phone without the memory sends through a prover, or from the desktop app or the
+`rand` command-line wallet using the key file every client exports.
 
 ## Build from source
 
@@ -194,7 +198,7 @@ git checkout v0.6.9 && git submodule update --init   # a release, rather than ma
 ```
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
-The submodule is the full node (`core/vendor/fullnode`, at its `v0.6.7` tag): the wallet's
+The submodule is the full node (`core/vendor/fullnode`, at its `v0.6.9` tag): the wallet's
 cryptography is the node's own code.
 
 ### 3. Test the core (optional, about a minute)
@@ -311,7 +315,7 @@ web/             the icon for the randprotocol.org /clients pages (the pages the
 web/wallet/      the local web wallet: index.html and main.js (the shell), worker.js (the wasm core
                  off the UI thread), idb.js (IndexedDB, and a Map for what must never be written),
                  and serve.mjs — a loopback-only static server. Built and served by serve.sh from a
-                 checkout; it is not deployed anywhere, and it sends only through a paired prover
+                 checkout; it is not deployed anywhere, and it sends through a prover
                  (docs/prover.md)
 design/          tokens.json, make-icons.py, generated icons
 docs/            prover.md (proving through a prover), rpc-endpoints.md, design specs
