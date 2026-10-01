@@ -7,6 +7,12 @@ import { registerScreen } from '../app.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { markSvg } from '../lib/entropy.js';
 
+/** A passkey prompt is open. The screen can mount twice in a row (a route resolved, then
+ *  re-entered), and a second fingerprint prompt stacked on the first is a bug the user sees: the
+ *  automatic ask waits a tick, asks only from the screen still on show, and never while another
+ *  ask is open. */
+let promptOpen = false;
+
 registerScreen('lock', {
   render() {
     return h`
@@ -14,7 +20,11 @@ registerScreen('lock', {
         <span class="mark-lg bare">${raw(markSvg())}</span>
         <div class="stack tight">
           <h1 class="title">Welcome back</h1>
-          <p class="subtitle">Enter your password to unlock Rand Wallet.</p>
+          <p class="subtitle" data-role="lock-subtitle">Enter your password to unlock Rand Wallet.</p>
+        </div>
+        <div class="stack onboard-actions" data-role="passkey-slot" hidden>
+          <button class="btn btn-primary block" type="button" data-action="passkey">Unlock</button>
+          <span class="hint" data-role="passkey-note"></span>
         </div>
         <form novalidate class="stack onboard-actions">
           <label class="field">
@@ -83,6 +93,67 @@ registerScreen('lock', {
       }
     }
     form.addEventListener('submit', onSubmit);
+
+    // ---- unlock with a passkey (Touch ID) ----
+    // Where the wallet has one set up it is the default: offered first, and asked for at once, so
+    // opening the wallet is a fingerprint. The password below stays, for when the passkey cannot
+    // answer — and for the day the password changed and the passkey's copy no longer opens the
+    // vault, when the record is dropped and the user is told to turn it on again.
+    const pkApi = ctx.backend.wallet && ctx.backend.wallet.passkey;
+    const pkSlot = root.querySelector('[data-role="passkey-slot"]');
+    const pkBtn = root.querySelector('[data-action="passkey"]');
+    const pkNote = root.querySelector('[data-role="passkey-note"]');
+    let pkBusy = false;
+    async function unlockWithPasskey() {
+      if (pkBusy || !pkApi || promptOpen) return;
+      pkBusy = true;
+      promptOpen = true;
+      pkBtn.disabled = true;
+      pkNote.textContent = '';
+      try {
+        const password = await pkApi.recoverPassword();
+        try {
+          await ctx.unlockWallet(password);
+        } catch (err) {
+          if (err && err.recoverable === true) { showDamaged(err); return; }
+          // The password changed since the passkey sealed it: the copy is worthless now.
+          await pkApi.disable();
+          pkSlot.hidden = true;
+          errorEl.textContent = `${pkApi.label()} no longer opens this wallet (its password changed). Unlock with the password, then turn ${pkApi.label()} on again in Settings.`;
+          markInvalid(wrap, input, 'lock-password-error');
+          input.focus();
+          return;
+        }
+        ctx.go('#home');
+      } catch (err) {
+        pkNote.textContent = err && err.code === 'CANCELLED'
+          ? `Cancelled. Press Unlock to try ${pkApi.label()} again, or use your password.`
+          : `${(err && err.message) || 'The passkey did not answer.'} Use your password instead.`;
+      } finally {
+        pkBusy = false;
+        promptOpen = false;
+        pkBtn.disabled = false;
+      }
+    }
+    pkBtn.addEventListener('click', () => { void unlockWithPasskey(); });
+    if (pkApi) {
+      void (async () => {
+        let on = false;
+        try { on = (await pkApi.enabled()) && (await pkApi.available()); } catch { on = false; }
+        if (!on || !ctx.isCurrent()) return;
+        const label = pkApi.label();
+        pkBtn.textContent = `Unlock with ${label}`;
+        root.querySelector('[data-role="lock-subtitle"]').textContent = `Use ${label}, or enter your password.`;
+        form.querySelector('button[type=submit]').classList.remove('btn-primary');
+        form.querySelector('button[type=submit]').textContent = 'Unlock with password';
+        pkSlot.hidden = false;
+        // Asked for at once where the browser lets a focused page do so; a browser that wants a
+        // click first simply leaves the button.
+        await new Promise((r) => setTimeout(r, 0));
+        const focused = typeof document === 'undefined' || !document.hasFocus || document.hasFocus();
+        if (focused && ctx.isCurrent() && !promptOpen) void unlockWithPasskey();
+      })();
+    }
 
     function onWipe(evt) {
       evt.preventDefault();

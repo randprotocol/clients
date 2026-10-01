@@ -131,3 +131,44 @@ export async function decryptSecret(password, vault) {
     throw new Error('wrong password');
   }
 }
+
+// ---------------------------------------------------------------- the passkey unlock record ---
+// "Unlock with Touch ID" (spec 2026-10-01): the WebAuthn PRF output of a platform passkey — 32 bytes
+// the authenticator derives from its own secret and a salt, released only after the user's
+// fingerprint (or face) — is HKDF'd into an AES-GCM key that seals the wallet PASSWORD. Unlocking
+// with the passkey recovers the password and runs the ordinary unlock: the same vault, the same
+// prover pairing, the same attempt throttle. Nothing derived from the PRF output is stored.
+
+const PASSKEY_RECORD_VERSION = 1;
+const PASSKEY_INFO = enc.encode('rand-wallet passkey unlock v1');
+
+async function passkeyKey(prfOutput, usage) {
+  const ikm = prfOutput instanceof Uint8Array ? prfOutput : new Uint8Array(prfOutput);
+  if (ikm.length < 32) throw new Error('the passkey gave too little key material');
+  const base = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: PASSKEY_INFO },
+    base, { name: 'AES-GCM', length: 256 }, false, usage,
+  );
+}
+
+/** `{v, iv, ct}` — `password` sealed under the passkey's PRF output. */
+export async function sealWithPasskey(prfOutput, password) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await passkeyKey(prfOutput, ['encrypt']);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(String(password))));
+  return { v: PASSKEY_RECORD_VERSION, iv: b64(iv), ct: b64(ct) };
+}
+
+/** The password, or a throw when the PRF output is not the one that sealed it. */
+export async function openWithPasskey(prfOutput, rec) {
+  if (!rec || rec.v !== PASSKEY_RECORD_VERSION || typeof rec.iv !== 'string' || typeof rec.ct !== 'string') {
+    throw new Error('the passkey unlock record is not one this build reads');
+  }
+  const key = await passkeyKey(prfOutput, ['decrypt']);
+  try {
+    return dec.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(rec.iv) }, key, unb64(rec.ct)));
+  } catch {
+    throw new Error('the passkey did not open this wallet');
+  }
+}

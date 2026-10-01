@@ -79,7 +79,7 @@
 // settings, platform, dispose }`. Every member is implemented here except `send.canProve` (which
 // *is* the `canProve` parameter) and the inside of `send.send` past the chain gate (which calls
 // `executeSend`) — those two are the only places a caller's choices show through.
-import { encryptSecret, decryptSecret, checkVault, isVaultRecordError } from './crypto.js';
+import { encryptSecret, decryptSecret, checkVault, isVaultRecordError, sealWithPasskey, openWithPasskey } from './crypto.js';
 import { makeRpc, isAllowedRpcMethod, rpcUrlList } from './rpc.js';
 import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, HEIGHT_SPAN, envelopeBytesOf } from './wallet.js';
 import { LEGACY_ENVELOPE_CHAIN_IDS } from '../lib/memo.js';
@@ -129,6 +129,9 @@ const K = Object.freeze({
   // too, and `settings.prover` is display only (a tampered plaintext copy cannot redirect a job).
   // Decrypted on unlock into the session record (`prover`), where the spend key already is.
   proverToken: 'proverToken',
+  // The passkey unlock record ("Unlock with Touch ID"): `{credentialId, salt, v, iv, ct}`, the
+  // password sealed under the passkey's PRF output (engine/crypto.js `sealWithPasskey`).
+  passkey: 'passkeyUnlock',
   // SESSION, not persistent (ruling R1): the one remote proof in flight, `{job, pending, url, name,
   // startedAt, kind, to?, memo?}` — `pending` is the core's, and carries no spend key. It is what
   // a popup closed mid-proof resumes from; it is cleared on lock like the spend key.
@@ -2189,6 +2192,57 @@ export function makeSharedBackend({
     }
   }
 
+  // --------------------------------------------------------------- unlock with a passkey --
+  /**
+   * OPTIONAL in the contract, present only where the shell supplies `platform.passkey` (the
+   * Chrome extension: a platform passkey with the WebAuthn PRF extension, Touch ID on a Mac).
+   * The passkey seals the PASSWORD (engine/crypto.js), so unlocking with it is the ordinary
+   * unlock — the screen recovers the password here and hands it to `ctx.unlockWallet`, the same
+   * call a typed password goes through, attempt throttle and all.
+   *
+   *   available() → boolean      this device and browser can make such a passkey
+   *   enabled()   → boolean      one is set up for this wallet
+   *   label()     → string       what to call it ("Touch ID", "Windows Hello", …)
+   *   enable(password)           checks the password, makes the passkey, stores the record
+   *   recoverPassword()          the user's fingerprint → the password; `code` CANCELLED when
+   *                              they dismiss the prompt, PASSKEY_FAILED when it does not open
+   *   disable()                  forgets the record (the passkey itself stays in the OS keychain
+   *                              until the user deletes it there; without the record it opens
+   *                              nothing)
+   */
+  const pk = platform && platform.passkey;
+  const passkey = pk && {
+    async available() { try { return !!(await pk.available()); } catch { return false; } },
+    async enabled() { return !!(await storage.get(K.passkey)); },
+    label() { return (typeof pk.label === 'function' && pk.label()) || 'a passkey'; },
+    async enable(password) {
+      const key = await openVault(password);
+      if (!key) throw new Error('wrong password');
+      const made = await pk.register();
+      const prf = made.prf || (await pk.prf({ credentialId: made.credentialId, salt: made.salt }));
+      const sealed = await sealWithPasskey(prf, password);
+      await storage.set(K.passkey, { credentialId: made.credentialId, salt: made.salt, ...sealed });
+      return true;
+    },
+    async recoverPassword() {
+      const rec = await storage.get(K.passkey);
+      if (!rec) throw Object.assign(new Error('Touch ID is not set up for this wallet.'), { code: 'PASSKEY_FAILED' });
+      let prf;
+      try {
+        prf = await pk.prf({ credentialId: rec.credentialId, salt: rec.salt });
+      } catch (err) {
+        const cancelled = err && (err.name === 'NotAllowedError' || err.name === 'AbortError');
+        throw Object.assign(new Error(cancelled ? 'Unlock was cancelled.' : `The passkey did not answer: ${(err && err.message) || err}`), { code: cancelled ? 'CANCELLED' : 'PASSKEY_FAILED' });
+      }
+      try {
+        return await openWithPasskey(prf, rec);
+      } catch (err) {
+        throw Object.assign(new Error((err && err.message) || 'The passkey did not open this wallet.'), { code: 'PASSKEY_FAILED' });
+      }
+    },
+    async disable() { await storage.remove(K.passkey); },
+  };
+
   const rpc = {
     /** The raw escape hatch — but only into this chain's own namespaces. */
     async call(method, params = []) {
@@ -2304,5 +2358,6 @@ export function makeSharedBackend({
   // `program` (RPL-2 invoke) is OPTIONAL and not in BACKEND_SHAPE either; every shell that can prove
   // a bundle — on the device or through a paired prover — has it.
   backend.program = program;
+  if (passkey) backend.wallet.passkey = passkey;
   return backend;
 }

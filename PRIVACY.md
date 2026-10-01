@@ -16,6 +16,10 @@ your device and stay there.
   encrypted: in the Keychain on iOS, in Keystore-backed encrypted preferences on Android, and in
   a password-encrypted vault (AES-256-GCM under PBKDF2-SHA256) in the extensions, the desktop
   app and the web wallet. We never receive it and cannot recover it for you.
+- **Unlock with Touch ID** (the Chrome extension, only if you turn it on) — a passkey made by your
+  device's own authenticator for this extension alone. The extension keeps the passkey's id and
+  your wallet password sealed under a key only that passkey can produce after your fingerprint
+  (WebAuthn PRF). The fingerprint never reaches the extension, and nothing leaves your device.
 - **Your notes and activity** — a local cache of the chain data your key can open, and the
   transaction keys of payments you made. A rescan rebuilds it.
 - **Your settings and contacts** — the RPC URL, the auto-lock interval, the theme, any addresses

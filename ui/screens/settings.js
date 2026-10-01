@@ -232,6 +232,11 @@ function securityMarkup(settings) {
         <span class="hint" id="settings-autolock-hint">The wallet asks for your password again after this long without use.</span>
       </div>
     </div>
+    <div class="card stack" data-role="passkey-card" hidden>
+      <div class="card-head"><h3 data-role="passkey-title">Unlock with a passkey</h3></div>
+      <p class="caption" data-role="passkey-caption"></p>
+      <button class="btn block" type="button" data-role="passkey-toggle"></button>
+    </div>
     <div class="card stack">
       <div class="card-head"><h3>Viewing key</h3></div>
       <p class="caption">A viewing key shows everything this wallet has ever received or sent, past and future. It cannot spend. It is all or nothing — to disclose one payment, use that payment's transaction key instead.</p>
@@ -806,6 +811,90 @@ registerScreen('settings', {
       ctx.toast('Saved', { kind: 'positive' });
     });
 
+    // ---- unlock with a passkey (Touch ID) ----
+    // Shown only where the shell can make one (`wallet.passkey`, the Chrome extension) and the
+    // device has a platform authenticator. Turning it on costs the password once — it is what the
+    // passkey seals — and the passkey prompt itself; turning it off forgets the sealed copy.
+    const pkApi = ctx.backend.wallet && ctx.backend.wallet.passkey;
+    const pkCard = body.querySelector('[data-role="passkey-card"]');
+    async function paintPasskey() {
+      if (!pkApi || !pkCard) return;
+      let available = false;
+      let enabled = false;
+      try { available = await pkApi.available(); enabled = await pkApi.enabled(); } catch { /* hidden */ }
+      if (!live()) return;
+      if (!available && !enabled) { pkCard.hidden = true; return; }
+      const label = pkApi.label();
+      pkCard.hidden = false;
+      pkCard.querySelector('[data-role="passkey-title"]').textContent = `Unlock with ${label}`;
+      pkCard.querySelector('[data-role="passkey-caption"]').textContent = enabled
+        ? `On. Rand Wallet opens with ${label}; your password still works, and is needed if ${label} cannot answer.`
+        : `Open the wallet with ${label} instead of typing your password. Your password still works, and stays the way to restore access.`;
+      pkCard.querySelector('[data-role="passkey-toggle"]').textContent = enabled ? `Turn off ${label}` : `Turn on ${label}`;
+      pkCard.dataset.enabled = enabled ? '1' : '';
+    }
+    function enablePasskey() {
+      const label = pkApi.label();
+      const dialog = ctx.sheet(h`
+        <h3 class="sheet-title">Turn on ${label}</h3>
+        <p class="sheet-sub">Enter your password once. ${label} will keep it sealed, and give it back to unlock this wallet.</p>
+        <form novalidate class="stack">
+          <label class="field">
+            <span class="label">Password</span>
+            <input name="password" type="password" autocomplete="current-password" aria-describedby="pk-hint">
+            <span class="hint" id="pk-hint">The password that unlocks this wallet on this device.</span>
+            <span class="error" id="pk-error">That is not the password for this wallet.</span>
+          </label>
+          <div class="sheet-foot">
+            <button class="btn" type="button" data-role="cancel">Cancel</button>
+            <button class="btn btn-primary" type="submit" data-role="pk-submit">Continue</button>
+          </div>
+        </form>`);
+      const input = dialog.querySelector('input[name=password]');
+      const wrap = input.closest('.field');
+      const submitBtn = dialog.querySelector('[data-role="pk-submit"]');
+      let busy = false;
+      on(dialog, '[data-role="cancel"]', 'click', () => ctx.closeSheet());
+      on(dialog, 'form', 'submit', async (evt) => {
+        evt.preventDefault();
+        if (busy) return;
+        busy = true;
+        submitBtn.disabled = true;
+        const password = input.value;
+        input.value = '';
+        try {
+          await pkApi.enable(password);
+        } catch (err) {
+          busy = false;
+          submitBtn.disabled = false;
+          if (!live()) return;
+          const wrong = err && /wrong password/.test(String(err.message));
+          dialog.querySelector('#pk-error').textContent = wrong
+            ? 'That is not the password for this wallet.'
+            : `${label} could not be set up: ${(err && err.message) || err}`;
+          markInvalid(wrap, input, 'pk-error');
+          input.focus();
+          return;
+        }
+        ctx.closeSheet();
+        if (!live()) return;
+        ctx.toast(`${label} is on`, { kind: 'positive' });
+        await paintPasskey();
+      });
+    }
+    const offPasskey = on(body, '[data-role="passkey-toggle"]', 'click', async () => {
+      if (!pkApi) return;
+      if (pkCard.dataset.enabled) {
+        await pkApi.disable();
+        if (!live()) return;
+        ctx.toast(`${pkApi.label()} is off`, { kind: 'positive' });
+        await paintPasskey();
+      } else {
+        enablePasskey();
+      }
+    });
+    void paintPasskey();
+
     // ---- re-authentication ----
     /**
      * Asks for the password in a sheet and calls `onOk()` once `wallet.verifyPassword` says yes.
@@ -1019,7 +1108,7 @@ registerScreen('settings', {
       for (const mask of body.querySelectorAll('[data-role="mask"]')) mask.textContent = '';
       if (proverLinkInput) proverLinkInput.value = '';
       if (proverPasswordInput) proverPasswordInput.value = '';
-      offSaveNetwork(); offTest(); offRescan(); offTheme(); offAutoLock();
+      offSaveNetwork(); offTest(); offRescan(); offTheme(); offAutoLock(); offPasskey();
       offSaveProver(); offScanProver(); offForgetProver();
       if (hostLinkText) hostLinkText.textContent = ''; // the pairing token leaves with the screen
       hostLink = '';

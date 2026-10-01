@@ -7,6 +7,7 @@
 // Node (extension/test/backend-extension.test.mjs) while that file's import graph only resolves
 // inside the packed extension.
 import { ext, IS_FIREFOX } from './browser.js';
+import { makePasskey } from './passkey.js';
 
 export function makePlatform() {
   const platform = {
@@ -60,5 +61,8 @@ export function makePlatform() {
   if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
     platform.paste = () => navigator.clipboard.readText();
   }
+  // Unlock with a passkey (Touch ID): Chrome only, see lib/passkey.js.
+  const passkey = makePasskey(ext);
+  if (passkey) platform.passkey = passkey;
   return platform;
 }
