@@ -41,7 +41,11 @@ targets:
   RandWalletTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [RandWalletTests]
+    sources:
+      - path: RandWalletTests
+      # durian-core's own AMM vectors: the very file ui/test/amm.test.mjs reads (AmmTests).
+      - path: ../ui/test/fixtures/amm-vectors.json
+        buildPhase: resources
     dependencies:
       - target: RandWallet
     settings:

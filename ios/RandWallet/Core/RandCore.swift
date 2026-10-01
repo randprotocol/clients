@@ -106,6 +106,50 @@ enum RandCore {
     static func finishProof(pending: Any, replyHex: String) throws -> ProveResult {
         try call("finish_proof", ["pending": pending, "reply_hex": replyHex], as: ProveResult.self)
     }
+
+    // MARK: RPL-2 invoke (`wallet_core`'s "invoking a program": dry_run / plan / prove / prepare)
+
+    /// Runs the program on the transition in the emulator, no proving: the tier and gas the fee is
+    /// priced at. `transition` is `TransitionRequest`'s JSON (program, program_code, public_hex,
+    /// private_inputs, reads, writes, inflow, pays, mints). A transition the program does not
+    /// accept is refused here, with the emulator's reason.
+    static func dryRunInvoke(_ transition: [String: Any]) throws -> InvokeDryRun {
+        try call("dry_run_invoke", transition, as: InvokeDryRun.self)
+    }
+
+    /// The bundle's notes for an invoke that burns `burnR` RAND and `burnA` of `burnAsset` and pays
+    /// `fee`: a token's notes in `inputs` and RAND's in `feeInputs` when it burns a token, RAND in
+    /// `inputs` otherwise. Refused when the notes do not cover it.
+    static func planInvoke(notes: [OwnedNote], burnR: String, burnAsset: UInt32, burnA: String, fee: String) throws -> TransferPlan {
+        let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(notes))
+        return try call("plan_invoke", ["notes": encoded, "burn_r": burnR, "burn_asset": burnAsset, "burn_a": burnA, "fee": fee],
+                        as: TransferPlan.self)
+    }
+
+    /// The call proof, the auth proof and the bundle proof, all on this device (the bundle proof
+    /// peaks at ~6 GB): call it off the main thread. `params` carries the spend key — never log it.
+    static func proveInvoke(_ params: [String: Any]) throws -> InvokeResult {
+        try call("prove_invoke", params, as: InvokeResult.self)
+    }
+
+    /// Delegated proving for an invoke: the call proof and the auth proof made HERE (the call's
+    /// witness is the program's private inputs; the auth proof's is the spend key), the bundle
+    /// witness sealed to the prover in `params["prover"]`. `params` carries the spend key and the
+    /// token — never log it. The reply's `pending` goes to `finishInvoke` with the prover's reply.
+    static func prepareInvoke(_ params: [String: Any]) throws -> (sealedHex: String, pending: Any) {
+        guard let v = try call("prepare_invoke", params) as? [String: Any],
+              let sealed = v["sealed_hex"] as? String, let pending = v["pending"] else {
+            throw CoreError(message: "prepare_invoke returned no sealed job")
+        }
+        return (sealed, pending)
+    }
+
+    /// `finish_proof` for an invoke's pending job: the reply opened, checked and verified, and the
+    /// result `prove_invoke` would have returned.
+    static func finishInvoke(pending: Any, replyHex: String) throws -> InvokeResult {
+        try call("finish_proof", ["pending": pending, "reply_hex": replyHex], as: InvokeResult.self)
+    }
+
     static func formatAmount(units: String) throws -> String {
         try call("format_amount", ["units": units]) as? String ?? units
     }

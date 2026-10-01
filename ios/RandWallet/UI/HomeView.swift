@@ -11,6 +11,7 @@ struct HomeView: View {
     @State private var handoff = LinkHandoff()
     @State private var showSend = false
     @State private var showSettings = false
+    @State private var showSwap = false
     @State private var faucetBusy = false
     @State private var faucetMessage: String?
     @State private var copied = false
@@ -23,10 +24,9 @@ struct HomeView: View {
                     HStack(spacing: 28) {
                         RoundAction(icon: "qrcode", label: "Receive") { showReceive = true }
                         RoundAction(icon: "paperplane.fill", label: "Send") { showSend = true }
-                        RoundAction(icon: "drop.fill", label: "Faucet") { Task { await faucet() } }
-                    }
-                    if let m = faucetMessage {
-                        Text(m).font(.ui(13)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
+                        // Swap replaces Faucet here, as in the other shells; the faucet stays
+                        // reachable from an empty activity list.
+                        RoundAction(icon: "arrow.left.arrow.right", label: "Swap") { showSwap = true }
                     }
                     if !settings.hasBackedUpKey {
                         Card {
@@ -36,7 +36,7 @@ struct HomeView: View {
                             }
                         }
                     }
-                    ActivityList()
+                    ActivityList(faucetMessage: faucetMessage, faucetBusy: faucetBusy) { Task { await faucet() } }
                 }
                 .padding(20)
             }
@@ -58,21 +58,27 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showReceive, onDismiss: presentationEnded) { ReceiveView() }
             .fullScreenCover(isPresented: $showSend, onDismiss: presentationEnded) { SendView() }
+            .fullScreenCover(isPresented: $showSwap, onDismiss: presentationEnded) { SwapView() }
             .sheet(isPresented: $showSettings, onDismiss: presentationEnded) { SettingsView(onForget: onForget) }
             .sheet(isPresented: $showContacts, onDismiss: presentationEnded) { ContactsView() }
             // A `randpay:` link opens Send (which takes the link from the router); a Send already
             // open takes it itself.
             .onAppear { if router.pending != nil { linkArrived() } }
             .onChange(of: router.pending) { p in if p != nil { linkArrived() } }
-            .task { await wallet.refresh() }
+            .task {
+                await wallet.refresh()
+                await wallet.loadTokens()
+            }
         }
     }
 
     private var sheetUp: Bool { showReceive || showSettings || showContacts }
+    /// Send, or Swap — a full-screen flow that may be proving: a link waits for it to close.
+    private var flowUp: Bool { showSend || showSwap }
 
     /// A link arrived: present Send now, or dismiss the sheets and let their `onDismiss` do it.
     private func linkArrived() {
-        switch handoff.linkArrived(sheetUp: sheetUp, sendUp: showSend) {
+        switch handoff.linkArrived(sheetUp: sheetUp, sendUp: flowUp) {
         case .presentSend: showSend = true
         case .dismissSheets:
             showReceive = false
@@ -84,12 +90,12 @@ struct HomeView: View {
 
     /// Any presentation finished dismissing: a link still pending opens Send now.
     private func presentationEnded() {
-        if router.settingsRequested && !showSend && !sheetUp {
+        if router.settingsRequested && !flowUp && !sheetUp {
             router.settingsRequested = false
             showSettings = true
             return
         }
-        if handoff.presentationEnded(linkPending: router.pending != nil, sheetUp: sheetUp, sendUp: showSend) == .presentSend {
+        if handoff.presentationEnded(linkPending: router.pending != nil, sheetUp: sheetUp, sendUp: flowUp) == .presentSend {
             showSend = true
         }
     }
@@ -162,6 +168,11 @@ struct HomeView: View {
 /// Received notes, sent payments and pending submissions, newest first.
 struct ActivityList: View {
     @EnvironmentObject var wallet: WalletService
+    /// The faucet lives here since Swap took its place on the action row: offered while the list
+    /// is empty (`ui/screens/home.js`'s empty activity).
+    var faucetMessage: String? = nil
+    var faucetBusy = false
+    var onFaucet: (() -> Void)? = nil
 
     enum Item: Identifiable {
         case received(OwnedNote)
@@ -199,9 +210,24 @@ struct ActivityList: View {
             SectionLabel(text: "Activity")
             if items.isEmpty {
                 Card {
-                    Text("No activity yet. Tap Faucet to get 100 testnet RAND, or share your address to receive.")
-                        .font(.ui(14)).foregroundColor(Theme.textSoft)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("No activity yet. Transactions you send or receive will appear here.")
+                            .font(.ui(14)).foregroundColor(Theme.textSoft)
+                        if let onFaucet {
+                            Button(action: onFaucet) {
+                                HStack(spacing: 6) {
+                                    if faucetBusy { ProgressView().scaleEffect(0.7) }
+                                    Text("Get test RAND from the faucet").font(.ui(14, .semibold))
+                                }
+                                .foregroundColor(Theme.accent)
+                            }
+                            .disabled(faucetBusy)
+                        }
+                    }
                 }
+            }
+            if let m = faucetMessage {
+                Text(m).font(.ui(13)).foregroundColor(Theme.textSoft)
             }
             ForEach(items) { item in
                 NavigationLink { ActivityDetailView(item: item) } label: { ActivityRow(item: item) }
@@ -213,6 +239,7 @@ struct ActivityList: View {
 
 struct ActivityRow: View {
     let item: ActivityList.Item
+    @EnvironmentObject var wallet: WalletService
     var body: some View {
         Card(padding: 14) {
             HStack(spacing: 12) {
@@ -233,7 +260,7 @@ struct ActivityRow: View {
     private var icon: String {
         switch item {
         case .received: return "arrow.down.left"
-        case .sent(let s): return s.status == .pending ? "clock" : (s.status == .failed ? "xmark" : "arrow.up.right")
+        case .sent(let s): return s.status == .pending ? "clock" : (s.status == .failed ? "xmark" : (s.isInvoke ? "arrow.left.arrow.right" : "arrow.up.right"))
         case .sentRow: return "arrow.up.right"
         }
     }
@@ -247,6 +274,7 @@ struct ActivityRow: View {
     private var title: String {
         switch item {
         case .received(let n): return n.spent ? "Received (spent)" : "Received"
+        case .sent(let s) where s.isInvoke: return s.status == .pending ? "Swapping" : (s.status == .failed ? "Not committed" : "Swapped")
         case .sent(let s): return s.status == .pending ? "Sending" : (s.status == .failed ? "Not committed" : "Sent")
         case .sentRow: return "Sent"
         }
@@ -260,7 +288,14 @@ struct ActivityRow: View {
     }
     private var amountText: String {
         switch item {
+        case .received(let n) where n.asset != 0:
+            // A token's own decimals and symbol (DUR has 6): never printed as if it were RAND.
+            let t = wallet.tokenName(n.asset)
+            return "+\(Amount.format(n.units, decimals: t.decimals)) \(t.symbol)"
         case .received(let n): return "+\(Amount.format(n.units))"
+        case .sent(let s) where s.isInvoke && (UInt64(s.burnA ?? "") ?? 0) > 0:
+            let t = wallet.tokenName(s.burnAsset ?? 0)
+            return "−\(Amount.format(UInt64(s.burnA ?? "") ?? 0, decimals: t.decimals)) \(t.symbol)"
         case .sent(let s): return "−\(Amount.format(s.units))"
         case .sentRow(let r): return "−\(Amount.format(r.units))"
         }

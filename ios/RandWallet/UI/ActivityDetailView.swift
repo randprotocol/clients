@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ActivityDetailView: View {
     let item: ActivityList.Item
+    @EnvironmentObject var wallet: WalletService
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -23,20 +24,22 @@ struct ActivityDetailView: View {
     private var title: String {
         switch item {
         case .received: return "Received"
+        case .sent(let s) where s.isInvoke: return "Swap"
         case .sent, .sentRow: return "Sent"
         }
     }
 
     private func received(_ n: OwnedNote) -> some View {
         Group {
-            Text("+\(Amount.format(n.units)) RAND").font(.balance).foregroundColor(Theme.positive)
+            Text("+\(Amount.format(n.units, decimals: wallet.tokenName(n.asset).decimals)) \(wallet.tokenName(n.asset).symbol)")
+                .font(.balance).foregroundColor(Theme.positive).lineLimit(1).minimumScaleFactor(0.5)
             Card {
                 VStack(alignment: .leading, spacing: 12) {
                     row("Status", n.spent ? "Spent" : (n.pending != nil ? "Held by a pending send" : "Unspent"))
                     row("Leaf", "#\(n.index)")
                     row("Block", "\(n.height)")
                     row("Note time", "\(n.time)")
-                    if n.asset != 0 { row("Asset", "bridged asset #\(n.asset)") }
+                    if n.asset != 0 { row("Asset", "\(wallet.tokenName(n.asset).symbol) (#\(n.asset))") }
                     CopyRow(label: "From (pk)", value: n.from)
                     CopyRow(label: "Commitment", value: n.cm)
                 }
@@ -49,7 +52,37 @@ struct ActivityDetailView: View {
         }
     }
 
-    private func sent(_ s: Submission) -> some View {
+    @ViewBuilder private func sent(_ s: Submission) -> some View {
+        if s.isInvoke { swap(s) } else { transfer(s) }
+    }
+
+    /// A swap: what it paid, what the pool pays back (found by the next scan), its transaction.
+    private func swap(_ s: Submission) -> some View {
+        Group {
+            if let a = s.burnAsset, let b = s.burnA, (UInt64(b) ?? 0) > 0 {
+                Text("−\(Amount.format(UInt64(b) ?? 0, decimals: wallet.tokenName(a).decimals)) \(wallet.tokenName(a).symbol)")
+                    .font(.balance).foregroundColor(Theme.text).lineLimit(1).minimumScaleFactor(0.5)
+            } else {
+                Text("−\(Amount.format(s.units)) RAND").font(.balance).foregroundColor(Theme.text).lineLimit(1).minimumScaleFactor(0.5)
+            }
+            Card {
+                VStack(alignment: .leading, spacing: 12) {
+                    row("Status", s.status == .pending ? "Pending" : (s.status == .failed ? "Not committed (notes released)" : "Committed"))
+                    if let h = s.height { row("Block", "\(h)") }
+                    ForEach(Array((s.payouts ?? []).enumerated()), id: \.offset) { _, p in
+                        row("You receive", "\(Amount.format(UInt64(p.amount) ?? 0, decimals: wallet.tokenName(p.asset).decimals)) \(wallet.tokenName(p.asset).symbol)")
+                    }
+                    row("Network fee", "\(Amount.format(s.fee)) RAND")
+                    row("Submitted", s.submittedAt.formatted(date: .abbreviated, time: .shortened))
+                    CopyRow(label: "Program", value: s.to)
+                    CopyRow(label: "Transaction", value: s.hash)
+                }
+            }
+            SecondaryButton(title: "Open transaction on RandScan") { openURL(Settings.explorerTransactionURL(s.hash)) }
+        }
+    }
+
+    private func transfer(_ s: Submission) -> some View {
         Group {
             Text("−\(Amount.format(s.units)) RAND").font(.balance).foregroundColor(Theme.text)
             Card {
