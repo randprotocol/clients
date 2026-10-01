@@ -26,7 +26,8 @@ export function explorerLink(explorerUrl, hash) {
   // response is something a network can rewrite.
   const local = base.hostname === 'localhost' || base.hostname === '127.0.0.1' || base.hostname === '[::1]';
   if (base.protocol !== 'https:' && !(base.protocol === 'http:' && local)) return null;
-  const url = new URL(`tx/${hash}`, base);
+  // RandScan's transaction page is `/transactions/<hash>` (no `0x`); `/tx/` is not one of its routes.
+  const url = new URL(`transactions/${String(hash).replace(/^0x/i, '')}`, base);
   const onRandscan = base.hostname === 'randscan.org' || base.hostname.endsWith('.randscan.org');
   return { url: url.href, label: onRandscan ? 'Open in randscan' : 'Open in explorer' };
 }

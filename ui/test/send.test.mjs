@@ -699,6 +699,19 @@ test('the transaction key never reaches an attribute, ctx.state, the hash or sto
   assert.equal(reaches(spied[0].state, txKey), false, 'the key was never put on ctx.state');
 });
 
+test('#sent copies the whole transaction hash, not the shortened one shown', async (t) => {
+  const hash = `0x${'ab'.repeat(32)}`;
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: true }), send: async () => ({ hash, txKey: `tk-${'ef'.repeat(16)}` }) } });
+  const { root, app } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await app.idle();
+  const btn = root.querySelector('[data-role="copy-hash"]');
+  assert.ok(btn, 'a copy button beside the transaction hash');
+  btn.click();
+  await app.idle();
+  assert.deepEqual(b.calls.filter((c) => c[0] === 'platform.copy').at(-1), ['platform.copy', hash]);
+});
+
 test('#sent reached cold (a reload) shows the hash and a link, and no key', async (t) => {
   const hash = `0x${'ab'.repeat(32)}`;
   const { app, root } = await mountApp(t, unlockedBackend(), { hash: `#sent/${hash}` });

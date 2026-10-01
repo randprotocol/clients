@@ -80,7 +80,13 @@ registerScreen('sent', {
         </div>
         <div class="card">
           ${toRow}
-          <div class="kv"><span class="k">Transaction</span><span class="v mono truncate">${shortHex(hash, 10)}</span></div>
+          <div class="kv">
+            <span class="k">Transaction</span>
+            <span class="v cluster">
+              <span class="mono truncate">${shortHex(hash, 10)}</span>
+              <button class="btn-icon" type="button" data-role="copy-hash" aria-label="Copy the transaction hash">${raw(icons.copy())}</button>
+            </span>
+          </div>
         </div>
         ${keyBlock}
         ${explorerBtn}
@@ -106,10 +112,19 @@ registerScreen('sent', {
       if (explorer) ctx.backend.platform.openExternal(explorer.url);
     });
 
+    // The whole hash, not the shortened one shown: it is what an explorer, a support thread or the
+    // recipient searches for.
+    const offCopyHash = on(root, '[data-role="copy-hash"]', 'click', async (evt) => {
+      evt.preventDefault();
+      try { await ctx.backend.platform.copy(String(hash)); } catch { if (live()) ctx.toast('That could not be copied.', { kind: 'negative' }); return; }
+      if (live()) ctx.toast('Transaction hash copied', { kind: 'positive' });
+    });
+
     return () => {
       reveal.destroy();
       txKey = null;
       offExplorer();
+      offCopyHash();
     };
   },
 });

@@ -487,8 +487,8 @@ test('tx detail: Open in randscan never passes a key to openExternal', async (t)
   assert.ok(call, 'platform.openExternal was called');
   const url = call[1];
   assert.ok(!url.includes(TX_KEY), 'the URL must never contain the transaction key');
-  assert.ok(url.includes(OUT_HASH), 'the URL should carry the (public) transaction hash');
-  assert.equal(url, `https://randscan.org/tx/${OUT_HASH}`);
+  assert.ok(url.includes(OUT_HASH.replace(/^0x/, '')), 'the URL should carry the (public) transaction hash');
+  assert.equal(url, `https://randscan.org/transactions/${OUT_HASH.replace(/^0x/, '')}`);
 });
 
 test('tx detail: the transaction key never appears in any DOM attribute', async (t) => {
@@ -1003,8 +1003,8 @@ test('explorerLink refuses plain http except on a local explorer', () => {
   assert.equal(explorerLink('https://randscan.org', hash).label, 'Open in randscan');
   assert.equal(explorerLink('http://randscan.org', hash), null, 'no plaintext to a remote host');
   assert.equal(explorerLink('http://explorer.example', hash), null);
-  assert.equal(explorerLink('http://localhost:3000', hash).url, `http://localhost:3000/tx/${hash}`);
-  assert.equal(explorerLink('http://127.0.0.1:3000', hash).url, `http://127.0.0.1:3000/tx/${hash}`);
+  assert.equal(explorerLink('http://localhost:3000', hash).url, `http://localhost:3000/transactions/${hash.replace(/^0x/, '')}`);
+  assert.equal(explorerLink('http://127.0.0.1:3000', hash).url, `http://127.0.0.1:3000/transactions/${hash.replace(/^0x/, '')}`);
   assert.equal(explorerLink('http://localhost:3000', hash).label, 'Open in explorer');
   assert.equal(explorerLink('javascript:alert(1)', hash), null);
   assert.equal(explorerLink('', hash), null);
