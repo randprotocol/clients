@@ -258,16 +258,21 @@ test('the artefact this wallet loads is built for chain 20 on the hidden-asset b
   // The sentence the settings screen shows before a pairing is saved is the core's own.
   assert.equal(k.prover_history_warning, PROVER_WARNING);
   assert.equal(k.prover_peak_memory_bytes, 6200000000);
-  // The prover every client ships the address of: the live pool's key, pinned, and its link
-  // parses through this very core to that key — not anybody's own.
-  assert.equal(k.trusted_prover.fingerprint, 'RGTF-7HKJ-XZFV-GQ1J');
-  assert.equal(k.trusted_prover.url, 'https://prover.randprotocol.org');
-  assert.equal(k.trusted_prover.own, false);
-  const link = await core.call('parse_prover_link', { link: k.trusted_prover.link });
-  assert.equal(link.fingerprint, k.trusted_prover.fingerprint);
-  assert.equal(link.url, k.trusted_prover.url);
-  assert.equal(link.own, false);
-  assert.equal(await core.call('prover_fingerprint', { kem_ek: link.kem_ek }), k.trusted_prover.fingerprint);
+  // The RandProtocol provers (wallet 0.6.9): each member pinned to its own key, its link parsing
+  // through this very core to that key and URL — nobody's own — and never the 0.6.8 shared key.
+  assert.equal(k.trusted_prover, undefined, 'the single shared prover is still reported');
+  const pool = k.trusted_prover_pool;
+  assert.ok(pool && pool.members.length >= 2);
+  for (const m of pool.members) {
+    assert.notEqual(m.fingerprint, 'RGTF-7HKJ-XZFV-GQ1J');
+    assert.match(m.url, /^https:\/\/prover\.randprotocol\.org\/m\//);
+    assert.equal(m.own, false);
+    const link = await core.call('parse_prover_link', { link: m.link });
+    assert.equal(link.fingerprint, m.fingerprint, m.name);
+    assert.equal(link.url, m.url, m.name);
+    assert.equal(link.own, false);
+    assert.equal(await core.call('prover_fingerprint', { kem_ek: link.kem_ek }), m.fingerprint);
+  }
   assert.deepEqual(k.legacy_envelope_chain_ids, [14, 15, 16, 17]);
   assert.equal(k.rpl_transfer, true, 'a token transfer is admitted (since chain 14)');
   assert.equal(k.transfer_proofs, 1);
