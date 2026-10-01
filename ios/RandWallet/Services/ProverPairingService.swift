@@ -153,57 +153,34 @@ enum ProverPairingService {
         return (ProverPairing(name: label, url: url, kemEk: p.kemEk, fingerprint: p.fingerprint, own: p.own), p.token)
     }
 
-    // MARK: the trusted prover (`prover.trusted` / `prover.pairTrusted` in the JS)
+    // MARK: the RandProtocol provers (`prover.trusted` / the default route in the JS)
 
-    /// What a screen may show of the prover the build ships the address of: never the link (it
-    /// carries the pairing token).
+    /// What a screen may show of the pool: names, URLs and fingerprints — never a link (each
+    /// carries a pairing token).
     struct Trusted: Equatable {
+        struct Member: Equatable {
+            let name: String
+            let url: String
+            let fingerprint: String
+        }
         let name: String
-        let url: String
-        let fingerprint: String
+        let members: [Member]
     }
 
-    /// The core's `version.trusted_prover` — the one source; `nil` when this build carries none.
-    static func trustedProver() -> TrustedProver? {
-        (try? RandCore.constants())?.trustedProver
+    /// The core's `version.trusted_prover_pool` — the one source; `nil` when this build carries none.
+    static func trustedPool() -> TrustedProverPool? {
+        (try? RandCore.constants())?.trustedProverPool
     }
 
-    /// The prover every client ships the address of (the RandProtocol validators' pool,
-    /// viewing-key jobs only, no fee) — `{name, url, fingerprint}` for Settings to offer in one
-    /// step beside the history warning, or `nil` when this build carries none. Asking pairs
-    /// nothing. `from` is the test seam; a screen passes nothing.
-    static func trusted(from source: TrustedProver?? = nil) -> Trusted? {
-        guard let t = source ?? trustedProver(), !t.link.isEmpty else { return nil }
+    /// The RandProtocol provers the build pins, for Settings and the notice — or `nil` when this
+    /// build carries none (no member with a link). Asking pairs and asks nothing. `from` is the
+    /// test seam; a screen passes nothing.
+    static func trusted(from source: TrustedProverPool?? = nil) -> Trusted? {
+        guard let t = source ?? trustedPool() else { return nil }
+        let members = t.members.filter { !$0.link.isEmpty }.map { Trusted.Member(name: $0.name, url: $0.url, fingerprint: $0.fingerprint) }
+        if members.isEmpty { return nil }
         let name = t.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return Trusted(name: name.isEmpty ? "RandProtocol" : name, url: t.url, fingerprint: t.fingerprint)
-    }
-
-    /// Pair the trusted prover: `pair` on the built-in link — the same checks (the link read by
-    /// the core, the URL rule, the prover's key asked of the prover itself and held to the link's)
-    /// and the same record, named after the pool and never own — after holding the link, through
-    /// the core, to the fingerprint the build pins, so a link that somehow named another key is
-    /// refused before the prover is asked anything. Stores nothing: Settings saves what comes back
-    /// through `save`, exactly as for a pasted link. Never called by the app itself — only by the
-    /// user's tap, after the history warning; `forget` undoes it like any pairing. `trusted` is
-    /// the test seam; a screen passes nothing.
-    static func pairTrusted(session: URLSession? = nil, trusted source: TrustedProver?? = nil) async throws -> (pairing: ProverPairing, token: String) {
-        guard let t = source ?? trustedProver(), !t.link.isEmpty else {
-            throw ProverRefusal(message: "This build ships no prover to use.")
-        }
-        let parsed = try parse(t.link)
-        guard !t.fingerprint.isEmpty, parsed.fingerprint == t.fingerprint else {
-            throw ProverRefusal(message: "The built-in prover link does not name the key this wallet pins; not pairing it.")
-        }
-        guard !t.own, !parsed.own else {
-            throw ProverRefusal(message: "The built-in prover link is marked as your own, which a shared prover is not; not pairing it.")
-        }
-        let label = trusted(from: .some(t))?.name ?? "RandProtocol"
-        let (pairing, token) = try await pair(t.link, session: session, name: label)
-        // A shared prover is never the user's own: what the link said is checked above, and the
-        // record says so too, whatever a later link might.
-        var shared = pairing
-        shared.own = false
-        return (shared, token)
+        return Trusted(name: name.isEmpty ? "RandProtocol" : name, members: members)
     }
 
     /// The Keychain record first — the token with the key and URL it belongs to — then the display
@@ -241,25 +218,95 @@ enum ProverPairingService {
     struct Route {
         let pairing: ProverPairing
         let token: String
-        /// The RandProtocol prover as the default (nothing paired): the one-time notice applies.
+        /// The RandProtocol provers as the default (nothing paired): the one-time notice applies.
         var isDefault = false
+        /// The default's members in the order a job tries them — the first is the one that
+        /// answered the route; each its own key and token. Empty for a paired prover.
+        var members: [PoolMember] = []
+        /// The pool's name ("RandProtocol").
+        var poolName: String? = nil
     }
 
-    /// The default prover's queue is full: said plainly, never retried in a loop.
-    static func defaultBusy(_ name: String) -> String {
-        "The \(name) prover is busy; try again in a minute, or pair your own prover in Settings."
+    /// One pool member as a job uses it: its pairing (named "RandProtocol (a)", never own) and token.
+    struct PoolMember {
+        let pairing: ProverPairing
+        let token: String
+        var member: String {
+            let n = pairing.name
+            guard let open = n.lastIndex(of: "("), n.hasSuffix(")") else { return n }
+            return String(n[n.index(after: open)..<n.index(before: n.endIndex)])
+        }
     }
 
-    /// The one-time notice before the first proof by the RandProtocol prover (the default where
-    /// this device cannot prove): what it learns, that it cannot spend, and the way to use a prover
-    /// of your own instead.
-    static let defaultNoticeTitle = "The RandProtocol prover can read your history"
-    static let defaultNotice = "This device cannot make the proof, so the prover RandProtocol runs for everyone makes it. "
-        + "It receives this wallet's viewing key, so it can read your whole history — every payment received and sent, past and future. "
-        + "It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead."
+    /// Why a member cannot take a job now — `nil` when it can: not answering, another key than its
+    /// pin, a fee, no viewing-key jobs, or a full queue (`busy`).
+    static func notReady(_ m: PoolMember, _ answer: Probe) -> (busy: Bool, reason: String)? {
+        switch answer {
+        case .unavailable(let w):
+            return (false, w.contains("different key") ? "\(m.member) answered with another key than the one this wallet pins" : "\(m.member) did not answer")
+        case .ok(let info):
+            if let fee = feeRefusal(info.fee) { return (false, "\(m.member): \(fee)") }
+            if !info.witnessKinds.contains("viewing_key") { return (false, "\(m.member) does not take this wallet's jobs") }
+            if info.max > 0 && info.depth >= info.max { return (true, "\(m.member) is busy") }
+            return nil
+        }
+    }
 
-    /// Whether proofs this device cannot make go to the RandProtocol prover: nothing paired, no
-    /// prover not chosen, and a build that ships one.
+    /// Every member busy, or none reachable: plainly, with the way out.
+    static func poolUnavailable(lead: String, pool: String, _ whys: [(busy: Bool, reason: String)]) -> ProverRefusal {
+        if !whys.isEmpty && whys.allSatisfy({ $0.busy }) {
+            return ProverRefusal(message: "\(lead)The \(pool) provers are all busy right now; try again in a minute, or pair your own prover in Settings.", busy: true)
+        }
+        return ProverRefusal(message: "\(lead)The \(pool) provers cannot be reached right now (\(whys.map { $0.reason }.joined(separator: "; "))). Try again later, or pair your own prover in Settings.")
+    }
+
+    /// One job through the RandProtocol provers: the members in order — for each, `probe` again
+    /// (`notReady`), `seal` the job to THAT member's key (the core's `prepare_transfer`, the auth
+    /// proof made here each time), `submit` it (the transport retry per member); a member busy,
+    /// refusing or unreachable at submit is skipped for the next. Once a member has named a job,
+    /// `poll` follows THAT member to the end — never another mid-job. Every member out: plainly.
+    static func provePool<R>(members: [PoolMember], poolName: String,
+                             probe: (ProverPairing) async -> Probe,
+                             seal: (PoolMember, ProverInfo) async throws -> (sealedHex: String, pending: Any),
+                             submit: (PoolMember, String) async throws -> String,
+                             poll: (PoolMember, String, Any) async throws -> R) async throws -> R {
+        var whys: [(busy: Bool, reason: String)] = []
+        for m in members {
+            let answer = await probe(m.pairing)
+            if let why = notReady(m, answer) { whys.append(why); continue }
+            guard case .ok(let info) = answer else { continue }
+            let sealed = try await seal(m, info)
+            let job: String
+            do {
+                job = try await submit(m, sealed.sealedHex)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                whys.append(((error as? ProverRefusal)?.busy ?? false, "\(m.member): \(error.localizedDescription)"))
+                continue
+            }
+            return try await poll(m, job, sealed.pending)
+        }
+        throw poolUnavailable(lead: "", pool: poolName, whys)
+    }
+
+    /// The RandProtocol provers, named the one way every surface names them (wallet 0.6.9).
+    static func poolPhrase(_ n: Int) -> String {
+        "the RandProtocol provers (\(n > 0 ? "\(n) machines" : "machines") run by the validators; each one that proves a send sees that wallet's viewing key)"
+    }
+
+    /// The one-time notice before the first proof by the RandProtocol provers (the default where
+    /// this device cannot prove): what the one that proves learns, that it cannot spend, and the
+    /// way to use a prover of your own instead.
+    static let defaultNoticeTitle = "The RandProtocol provers can read your history"
+    static func defaultNotice(_ n: Int) -> String {
+        "This device cannot make the proof, so one of \(poolPhrase(n)) makes it. "
+            + "The one that does receives this wallet's viewing key, so it can read your whole history — every payment received and sent, past and future. "
+            + "It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead."
+    }
+
+    /// Whether proofs this device cannot make go to the RandProtocol provers: nothing paired, no
+    /// prover not chosen, and a build that ships them.
     static func usesDefault(paired: Bool, noProver: Bool, shipsOne: Bool) -> Bool { !paired && !noProver && shipsOne }
 
     /// Whether `address`'s wallet has read the notice: the record names THIS wallet.
@@ -268,31 +315,26 @@ enum ProverPairingService {
     /// Whether a send from this wallet must show the notice first.
     static func needsNotice(deviceCanProve: Bool, usesDefault: Bool, read: Bool) -> Bool { !deviceCanProve && usesDefault && !read }
 
-    /// A remote proof's failure as the user reads it for `route`: the RandProtocol prover busy is
-    /// `defaultBusy`; anything else (a paired prover's busy included) is unchanged.
-    static func failure(_ error: Error, route: Route) -> Error {
-        if route.isDefault, let r = error as? ProverRefusal, r.busy { return ProverRefusal(message: defaultBusy(route.pairing.name), busy: true) }
-        return error
-    }
-
-    /// The RandProtocol prover as the DEFAULT route uses it (wallet 0.6.8: nothing paired, nothing
-    /// stored): the built-in link read through the core and held to the pinned fingerprint, the URL
-    /// rule and `own=0` — no network; the route asks the prover for its key before any job. Named
-    /// after the pool, NOT own; the token is the one every copy ships. `trusted` is the test seam.
-    static func builtIn(trusted source: TrustedProver?? = nil) throws -> (pairing: ProverPairing, token: String) {
-        guard let t = source ?? trustedProver(), !t.link.isEmpty else {
-            throw ProverRefusal(message: "This build ships no prover to use.")
-        }
-        let parsed = try parse(t.link)
-        guard !t.fingerprint.isEmpty, parsed.fingerprint == t.fingerprint else {
-            throw ProverRefusal(message: "The built-in prover link does not name the key this wallet pins; not pairing it.")
-        }
-        guard !t.own, !parsed.own else {
-            throw ProverRefusal(message: "The built-in prover link is marked as your own, which a shared prover is not; not pairing it.")
-        }
-        let url = try checkedURL(parsed.url)
+    /// The RandProtocol provers as the DEFAULT route uses them (wallet 0.6.9: nothing paired,
+    /// nothing stored): each member's link read through the core and held to THAT member's pinned
+    /// fingerprint, its pinned URL, the URL rule and `own=0` — no network. A member that fails is
+    /// left out (the others keep working) and never asked. Each named "RandProtocol (member)", NOT
+    /// own; its token is the one every copy ships. In the pool's order — the caller shuffles.
+    /// `pool` is the test seam.
+    static func builtInPool(pool source: TrustedProverPool?? = nil) throws -> [PoolMember] {
+        guard let t = source ?? trustedPool() else { throw ProverRefusal(message: "This build ships no prover to use.") }
         let name = trusted(from: .some(t))?.name ?? "RandProtocol"
-        return (ProverPairing(name: name, url: url, kemEk: parsed.kemEk.lowercased(), fingerprint: parsed.fingerprint, own: false), parsed.token)
+        var out: [PoolMember] = []
+        for m in t.members where !m.link.isEmpty && !m.own {
+            guard let parsed = try? parse(m.link), !m.fingerprint.isEmpty, parsed.fingerprint == m.fingerprint, !parsed.own,
+                  let url = try? checkedURL(parsed.url), url == (try? checkedURL(m.url)) else { continue }
+            out.append(PoolMember(pairing: ProverPairing(name: "\(name) (\(m.name))", url: url, kemEk: parsed.kemEk.lowercased(),
+                                                         fingerprint: parsed.fingerprint, own: false), token: parsed.token))
+        }
+        if out.isEmpty {
+            throw ProverRefusal(message: "None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.")
+        }
+        return out
     }
 
     /// `prover_info.fee` as a sentence when it is a fee, `nil` when the prover charges nothing
@@ -326,7 +368,7 @@ enum ProverPairingService {
     /// Settings. A paired prover is preferred over it.
     static func route(deviceCanProve: Bool, pairing display: ProverPairing?,
                       probe: (ProverPairing) async -> Probe, secret: () -> ProverSecret?,
-                      defaultProver: (() throws -> (pairing: ProverPairing, token: String))? = nil) async throws -> Route? {
+                      defaultProver: (() throws -> [PoolMember])? = nil) async throws -> Route? {
         if deviceCanProve { return nil }
         if display == nil, let defaultProver { return try await defaultRoute(probe: probe, defaultProver: defaultProver) }
         guard let d = display else { return nil }
@@ -352,26 +394,28 @@ enum ProverPairingService {
         return Route(pairing: p, token: s.token)
     }
 
+    /// The default: the members in `defaultProver`'s order, each probed — ITS pinned key, no fee,
+    /// viewing-key jobs, room in its queue; the first that can leads the route, the rest follow for
+    /// `provePool`. None can: "all busy" or "cannot be reached", plainly, pointing to Settings.
     private static func defaultRoute(probe: (ProverPairing) async -> Probe,
-                                     defaultProver: () throws -> (pairing: ProverPairing, token: String)) async throws -> Route {
-        let lead = "This device does not have the memory for this proof."
-        let b: (pairing: ProverPairing, token: String)
-        do { b = try defaultProver() } catch {
-            throw ProverRefusal(message: "\(lead) \(error.localizedDescription)")
+                                     defaultProver: () throws -> [PoolMember]) async throws -> Route {
+        let lead = "This device does not have the memory for this proof. "
+        let members: [PoolMember]
+        do { members = try defaultProver() } catch {
+            throw ProverRefusal(message: "\(lead)\(error.localizedDescription)")
         }
-        let why: String?
-        switch await probe(b.pairing) {
-        case .unavailable(let w):
-            why = w.contains("different key") ? "it answered with another key than the one this wallet pins" : w
-        case .ok(let info):
-            if let fee = feeRefusal(info.fee) { why = fee }
-            else if info.witnessKinds.contains("viewing_key") { why = nil }
-            else { why = "it does not take this wallet's jobs" }
+        let pool = members.first.map { m -> String in
+            let n = m.pairing.name
+            guard let r = n.range(of: " (", options: .backwards) else { return n }
+            return String(n[..<r.lowerBound])
+        } ?? "RandProtocol"
+        var whys: [(busy: Bool, reason: String)] = []
+        for (i, m) in members.enumerated() {
+            if let why = notReady(m, await probe(m.pairing)) { whys.append(why); continue }
+            let ordered = [m] + members.enumerated().filter { $0.offset != i }.map { $0.element }
+            return Route(pairing: m.pairing, token: m.token, isDefault: true, members: ordered, poolName: pool)
         }
-        if let why {
-            throw ProverRefusal(message: "\(lead) The \(b.pairing.name) prover cannot be reached right now (\(why)). Try again later, or pair your own prover in Settings.")
-        }
-        return Route(pairing: b.pairing, token: b.token, isDefault: true)
+        throw poolUnavailable(lead: lead, pool: pool, whys)
     }
 
     /// What one send's job is allowed to be, decided at the one point a job is built

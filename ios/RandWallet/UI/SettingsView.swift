@@ -140,15 +140,15 @@ struct SettingsView: View {
                 row("Fingerprint", p.fingerprint)
                 Text(probeLine).font(.ui(13)).foregroundColor(Theme.textSoft)
                 if trusted != nil {
-                    Text("Forgetting it goes back to the RandProtocol prover.").font(.ui(13)).foregroundColor(Theme.textSoft)
+                    Text("Forgetting it goes back to the RandProtocol provers.").font(.ui(13)).foregroundColor(Theme.textSoft)
                 }
                 Button("Forget this prover", role: .destructive) { forgetProver() }
             } else if wallet.usesDefaultProver, let t = trusted {
-                // The default (wallet 0.6.8): the RandProtocol prover makes the proofs this device
-                // cannot — named, with what it sees, asked whether it answers, off in one tap.
-                row("Proofs are made by", "\(t.name) prover · where this device cannot prove")
-                row("Fingerprint", t.fingerprint)
-                Text("The prover RandProtocol runs for everyone (\(t.url)), used until you choose another. It charges nothing. \(Self.defaultNote)")
+                // The default: the RandProtocol provers make the proofs this device cannot — each
+                // member named with its own fingerprint, what they see, asked, off in one tap.
+                row("Proofs are made by", "\(t.name) provers · where this device cannot prove")
+                ForEach(t.members, id: \.name) { m in row(m.name, m.fingerprint) }
+                Text("The RandProtocol provers: \(t.members.count) machines run by the validators, each with its own key, used until you choose another. They charge nothing. \(Self.defaultNote)")
                     .font(.ui(13)).foregroundColor(Theme.textSoft)
                 Text(probeLine).font(.ui(13)).foregroundColor(Theme.textSoft)
                 Button("Use no prover") { useNoProver() }
@@ -159,9 +159,10 @@ struct SettingsView: View {
                 // No prover chosen: the way back to the default is one tap, with what it sees.
                 if let t = trusted {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Or use the prover RandProtocol runs for everyone — \(t.url), fingerprint \(t.fingerprint). It charges nothing. \(Self.defaultNote)")
+                        Text("Or use the RandProtocol provers — \(t.members.count) machines run by the validators, each with its own key. They charge nothing. \(Self.defaultNote)")
                             .font(.ui(13)).foregroundColor(Theme.textSoft)
-                        Button("Use the RandProtocol prover") { useTrustedProver() }
+                        ForEach(t.members, id: \.name) { m in row(m.name, m.fingerprint) }
+                        Button("Use the RandProtocol provers") { useTrustedProver() }
                     }
                 }
             }
@@ -219,26 +220,26 @@ struct SettingsView: View {
     }
 
     /// What the RandProtocol prover sees, in one line, wherever it is offered or in use.
-    static let defaultNote = "It receives this wallet's viewing key, so it can read your whole history, past and future. It cannot spend."
+    static let defaultNote = "Each one that proves a send receives this wallet's viewing key, so it can read your whole history, past and future. None can spend."
 
     /// "Use the RandProtocol prover": back to the default — nothing paired, nothing asked; the
     /// one-time notice still comes before the first send through it.
     private func useTrustedProver() {
         guard let t = trusted, !pairing else { return }
         wallet.useDefaultProver()
-        proverStatus = (.warn, "Using the \(t.name) prover", "Proofs this device cannot make go to it. \(ProverPairingService.warning)")
+        proverStatus = (.warn, "Using the \(t.name) provers", "Proofs this device cannot make go to one of them; each one that proves a send sees that wallet's viewing key. \(ProverPairingService.warning)")
         Task { await probeProver() }
     }
 
     private func useNoProver() {
         wallet.useNoProver()
-        proverStatus = (.positive, "No prover", "Proofs are made on this device only; where it cannot make one, sending waits until you pair a prover or use the RandProtocol prover again.")
+        proverStatus = (.positive, "No prover", "Proofs are made on this device only; where it cannot make one, sending waits until you pair a prover or use the RandProtocol provers again.")
     }
 
     private func forgetProver() {
         ProverPairingService.forget(settings: settings)
         if wallet.usesDefaultProver, let t = trusted {
-            proverStatus = (.positive, "Forgotten", "The prover's pairing is gone from this wallet. Proofs this device cannot make go to the \(t.name) prover again.")
+            proverStatus = (.positive, "Forgotten", "The prover's pairing is gone from this wallet. Proofs this device cannot make go to the \(t.name) provers again.")
             Task { await probeProver() }
         } else {
             proverStatus = (.positive, "Forgotten", "Proofs are made on this device again. The prover's pairing is gone from this wallet.")
@@ -258,10 +259,16 @@ struct SettingsView: View {
         if let p = settings.prover {
             let answer = await ProverPairingService.probe(p)
             if settings.prover == p { probeLine = ProverPairingService.statusLine(answer) }
-        } else if wallet.usesDefaultProver, let b = try? ProverPairingService.builtIn() {
-            // The default, by the key the build pins.
-            let answer = await ProverPairingService.probe(b.pairing)
-            if settings.prover == nil { probeLine = ProverPairingService.statusLine(answer) }
+        } else if wallet.usesDefaultProver, let members = try? ProverPairingService.builtInPool() {
+            // The default: the first member that answers with its pinned key speaks for the pool.
+            for m in members {
+                let answer = await ProverPairingService.probe(m.pairing)
+                if case .ok = answer {
+                    if settings.prover == nil { probeLine = "\(m.pairing.name): \(ProverPairingService.statusLine(answer))" }
+                    return
+                }
+            }
+            if settings.prover == nil { probeLine = "None of the RandProtocol provers answers right now." }
         }
     }
 

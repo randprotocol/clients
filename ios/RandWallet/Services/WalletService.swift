@@ -360,14 +360,18 @@ final class WalletService: ObservableObject {
                                              defaultProver: defaultProver)
     }
 
-    // MARK: the default prover (wallet 0.6.8)
+    // MARK: the default: the RandProtocol provers (wallet 0.6.8; a keyed pool since 0.6.9)
 
-    /// The RandProtocol prover as the default would use it, or `nil`: the user chose none, or this
-    /// build ships none. Never paired, never stored.
-    var defaultProver: (() throws -> (pairing: ProverPairing, token: String))? {
+    /// The RandProtocol provers as the default would use them — every member that passes its pins,
+    /// in a fresh random order per send — or `nil`: the user chose none, or this build ships none.
+    /// Never paired, never stored.
+    var defaultProver: (() throws -> [ProverPairingService.PoolMember])? {
         if settings.noProver || ProverPairingService.trusted() == nil { return nil }
-        return { try ProverPairingService.builtIn() }
+        return { try ProverPairingService.builtInPool().shuffled() }
     }
+
+    /// How many RandProtocol provers this build pins (the notice names them by count).
+    var poolSize: Int { ProverPairingService.trusted()?.members.count ?? 0 }
 
     /// Whether proofs this device cannot make go to the RandProtocol prover (nothing paired, and
     /// no prover not chosen).
@@ -409,6 +413,7 @@ final class WalletService: ObservableObject {
     /// and only to a prover paired as the user's own (`checkJob`). No resume: the job lives in
     /// this call.
     private func proveRemotely(_ request: ProveRequest, route: ProveRoute, rpc: RpcClient, started: Date) async throws -> ProveResult {
+        if route.isDefault { return try await provePool(request, route: route, rpc: rpc, started: started) }
         let name = route.pairing.name
         phase = .provingRemotely(prover: name, position: nil, started: started)
         let maxProofBytes = try await rpc.maxProofBytes()
@@ -432,11 +437,51 @@ final class WalletService: ObservableObject {
         if check.guests.splitAuthorisation { phase = .authorising(prover: name, started: started) }
         let prepared = try await Task.detached(priority: .userInitiated) { try RandCore.prepareTransfer(job) }.value
         phase = .provingRemotely(prover: name, position: nil, started: started)
-        do {
-            return try await remoteProve(client: client, prepared: prepared, name: name, started: started)
-        } catch {
-            throw ProverPairingService.failure(error, route: route)
+        return try await remoteProve(client: client, prepared: prepared, name: name, started: started)
+    }
+
+    /// The same, through the RandProtocol provers: one member per job, in the route's order
+    /// (`ProverPairingService.provePool`) — each probed again, the job sealed to ITS key and
+    /// submitted to it; busy or away at submit, the next; once a job id is named, that member to the
+    /// end.
+    private func provePool(_ request: ProveRequest, route: ProveRoute, rpc: RpcClient, started: Date) async throws -> ProveResult {
+        let pool = route.poolName ?? "RandProtocol"
+        phase = .provingRemotely(prover: "\(pool) provers", position: nil, started: started)
+        let maxProofBytes = try await rpc.maxProofBytes()
+        UIApplication.shared.isIdleTimerDisabled = true
+        let bg = UIApplication.shared.beginBackgroundTask(withName: "remote-prove")
+        defer {
+            UIApplication.shared.isIdleTimerDisabled = false
+            if bg != .invalid { UIApplication.shared.endBackgroundTask(bg) }
         }
+        return try await ProverPairingService.provePool(
+            members: route.members, poolName: pool,
+            probe: { await ProverPairingService.probe($0) },
+            seal: { [weak self] m, info in
+                let memberRoute = ProverPairingService.Route(pairing: m.pairing, token: m.token, isDefault: true)
+                let check = try await ProverPairingService.checkJob(route: memberRoute, hcBundle: request.hcBundle, hcAuth: request.hcAuth,
+                                                                    info: { info })
+                let job = try RemoteSendParams.build(request: request, route: memberRoute, maxProofBytes: maxProofBytes, fee: check.fee)
+                if check.guests.splitAuthorisation { await MainActor.run { self?.phase = .authorising(prover: m.pairing.name, started: started) } }
+                let prepared = try await Task.detached(priority: .userInitiated) { try RandCore.prepareTransfer(job) }.value
+                await MainActor.run { self?.phase = .provingRemotely(prover: m.pairing.name, position: nil, started: started) }
+                return prepared
+            },
+            submit: { m, sealed in try await RemoteProver(client: try ProverClient(url: m.pairing.url)).submit(sealed) },
+            poll: { [weak self] m, job, pending in
+                let name = m.pairing.name
+                return try await RemoteProver(client: try ProverClient(url: m.pairing.url)).poll(
+                    job: job, pending: pending,
+                    finish: { pending, reply in try RandCore.finishProof(pending: pending, replyHex: reply) },
+                    onPhase: { p in
+                        await MainActor.run {
+                            switch p {
+                            case .proving: self?.phase = .provingRemotely(prover: name, position: nil, started: started)
+                            case .queued(let n): self?.phase = .provingRemotely(prover: name, position: n, started: started)
+                            }
+                        }
+                    })
+            })
     }
 
     private func remoteProve(client: ProverClient, prepared: (sealedHex: String, pending: Any), name: String, started: Date) async throws -> ProveResult {

@@ -279,6 +279,14 @@ struct RemoteProver {
                        finish: @escaping (Any, String) throws -> Result,
                        onPhase: @escaping (RemoteProofPhase) async -> Void) async throws -> Result {
         await onPhase(.proving)
+        let job = try await submit(sealedHex)
+        return try await poll(job: job, pending: pending, finish: finish, onPhase: onPhase)
+    }
+
+    /// Hands the sealed job over and returns the job id the prover named. Throws a `ProverRefusal`
+    /// when it took nothing — its answer (busy included, `busy` set) or no answer at all after the
+    /// transport retries — so a pool can ask its next member.
+    func submit(_ sealedHex: String) async throws -> String {
         var submitted: String?
         var attempt = 1
         while submitted == nil {
@@ -301,7 +309,13 @@ struct RemoteProver {
                 throw ProverRefusal(message: "Could not hand the proof to your prover: \(error.localizedDescription)")
             }
         }
-        let job = submitted!
+        return submitted!
+    }
+
+    /// Polls `job` on THIS prover until it answers, then opens the reply through `finish`.
+    func poll<Result: Sendable>(job: String, pending: Any,
+                                finish: @escaping (Any, String) throws -> Result,
+                                onPhase: @escaping (RemoteProofPhase) async -> Void) async throws -> Result {
         let started = now()
         var last: RemoteProofPhase = .proving
         func say(_ p: RemoteProofPhase) async {

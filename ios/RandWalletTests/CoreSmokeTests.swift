@@ -19,13 +19,13 @@ final class CoreSmokeTests: XCTestCase {
         XCTAssertEqual(c.splitAuthorisation, true)
         XCTAssertEqual(c.proverHistoryWarning, ProverPairingService.historyWarningFallback)
         XCTAssertEqual(ProverPairingService.warning, ProverPairingService.historyWarningFallback)
-        // The prover every client ships the address of: the RandProtocol pool, viewing-key jobs
-        // only, never own — the pins the Settings action holds the link to before asking it.
-        XCTAssertEqual(c.trustedProver?.fingerprint, "RGTF-7HKJ-XZFV-GQ1J")
-        XCTAssertEqual(c.trustedProver?.url, "https://prover.randprotocol.org")
-        XCTAssertEqual(c.trustedProver?.name, "RandProtocol")
-        XCTAssertEqual(c.trustedProver?.own, false)
-        XCTAssertTrue(c.trustedProver?.link.hasPrefix("randprover:") == true)
+        // The RandProtocol provers (wallet 0.6.9): a pool of members, each pinned to its own key at
+        // its own URL, nobody's own — never the 0.6.8 shared key.
+        let pool = try XCTUnwrap(c.trustedProverPool)
+        XCTAssertEqual(pool.name, "RandProtocol")
+        XCTAssertEqual(pool.members.map { $0.fingerprint }, ["ZEXQ-1JHV-ZT60-KFB5", "D2XV-WXVT-PZRC-D7G8", "SR28-MYT0-GR6A-03DE", "GMNX-Q1QD-FEXG-JHJM"])
+        XCTAssertEqual(pool.members.map { $0.url }, ["a", "archive2", "nyc3", "sfo3"].map { "https://prover.randprotocol.org/m/\($0)" })
+        XCTAssertTrue(pool.members.allSatisfy { !$0.own && $0.link.hasPrefix("randprover:") })
         XCTAssertEqual(c.timeWindow, NoteStore.timeWindow)
         XCTAssertFalse(RandCore.version.isEmpty)
     }

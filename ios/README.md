@@ -52,22 +52,25 @@ verifies the proof that comes back before anything is submitted. A pairing link 
 saying what it can read. This build pays no prover fee: a prover quoting one is refused before
 the auth proof is made.
 
-**The RandProtocol prover is the default** (wallet 0.6.8; `../docs/prover.md` §8): the pool at
-`https://prover.randprotocol.org`, fingerprint `RGTF-7HKJ-XZFV-GQ1J`, viewing-key jobs only, no fee,
-whose pairing link the core ships (`version.trusted_prover`). With nothing paired, a phone that
-cannot fit the proof sends through it at once: `ProverPairingService.route(…, defaultProver:)`
-builds the route from the built-in link (`builtIn` — the pinned fingerprint, the URL rule, `own=0`,
-no network), asks the pool for its key (it must be the pinned one), its fee (none) and viewing-key
-jobs, and seals the job to it — nothing is paired or stored in the Keychain. The first such send
-shows a one-time notice (it receives the viewing key: the whole history, past and future; it
-cannot spend) with "I understand — continue" and "Use my own prover" (Home then opens Settings);
-the read is remembered per wallet (`Settings.proverNoticeFor`, cleared with the wallet) and
-`WalletService.send` refuses until it is. A pool that does not answer, answers with another key,
-or is busy (never retried in a loop) is said plainly, pointing to Settings. Settings → Prover names
-it with its URL, fingerprint and what it sees, and offers "Use no prover" (`Settings.noProver`);
-with none, "Use the RandProtocol prover" turns it back on in one tap. A paired prover is preferred,
-and "Forget this prover" falls back to it. A `prover_submit` that never reached the prover is
-offered again, three tries, 1 s then 3 s apart; a JSON-RPC answer is final.
+**The RandProtocol provers are the default** (wallet 0.6.8; per-member keys since 0.6.9, audit v7
+VK-9; `../docs/prover.md` §8): the build pins a descriptor of members — the core's
+`version.trusted_prover_pool` (`TrustedProverPool`), data in
+`core/crates/wallet-core/src/trusted-prover-pool.json` — each with its own URL
+(`https://prover.randprotocol.org/m/<member>`), key fingerprint and pairing link. With nothing
+paired, a phone that cannot fit the proof sends through them at once:
+`ProverPairingService.builtInPool` holds every member's link to THAT member's pinned fingerprint and
+URL and `own=0` (a member that fails is left out, the others keep working); `WalletService`
+shuffles them per send; `route(…, defaultProver:)` takes the first that answers with its pinned key,
+no fee, viewing-key jobs and room in its queue; `provePool` seals the job to THAT member's key and
+polls only it — a member busy, refusing or unreachable at submit is skipped for the next. Every
+member out: "The RandProtocol provers are all busy right now …" / "… cannot be reached right now
+(…)", pointing to Settings. Nothing is paired or put in the Keychain. The first such send shows the
+one-time notice (one of the RandProtocol provers — N machines run by the validators; each one that
+proves a send sees that wallet's viewing key; it cannot spend) with "I understand — continue" and
+"Use my own prover"; it is remembered per wallet and `WalletService.send` refuses until it is read.
+Settings → Prover lists each member with its fingerprint and offers "Use no prover"; with none,
+"Use the RandProtocol provers". A paired prover is preferred; "Forget this prover" falls back to the
+pool. A `prover_submit` that never reached a member is offered again, three tries, 1 s then 3 s.
 
 ## TestFlight
 

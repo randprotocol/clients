@@ -117,286 +117,150 @@ final class ProverTests: XCTestCase {
         XCTAssertEqual(ProverPairingService.statusLine(moved), "Not answering: the prover at that address now has a different key; pair it again.")
     }
 
-    // MARK: the trusted prover — the built-in link (`prover.trusted` / `pairTrusted` in the JS)
+    // MARK: the RandProtocol provers (wallet 0.6.9) — a pinned pool of members, each its own key
 
-    static let trustedURL = "https://prover.randprotocol.org"
-    static let trustedFingerprint = "RGTF-7HKJ-XZFV-GQ1J"
-
-    /// The core's `version.trusted_prover` as this build ships it — the link included, which only
-    /// the test and the service ever read. A framework built from a core before `trusted_prover`
-    /// fails here, by name: rebuild `Frameworks/RandWalletCore.xcframework` from this core.
-    static func builtIn() throws -> TrustedProver {
-        try XCTUnwrap(try RandCore.constants().trustedProver,
-                      "this core ships no trusted prover — the XCFramework predates core `trusted_prover`")
+    /// The pool as this build's REAL core pins it — `version.trusted_prover_pool`, every member's
+    /// link included (only the test and the service read links). A framework built from a core
+    /// before the pool fails here by name: rebuild `Frameworks/RandWalletCore.xcframework`.
+    static func realPool() throws -> TrustedProverPool {
+        try XCTUnwrap(try RandCore.constants().trustedProverPool,
+                      "this core ships no prover pool — the XCFramework predates core `trusted_prover_pool`")
     }
 
-    /// A built-in prover the TEST ships, through the service's seam: the synthetic link above
-    /// (key 0x07…, fingerprint `Z254-BQX0-VPMT-8YJR`), never own. What `pairTrusted` does with a
-    /// built-in link is the same whichever core answered `version`.
-    static func syntheticBuiltIn(fingerprint: String = fingerprint, own: Bool = false, name: String = "RandProtocol") -> TrustedProver {
-        TrustedProver(name: name, url: "https://prover.example:8600", fingerprint: fingerprint, link: link(own: false), own: own)
-    }
-
-    /// A `prover_info` answering with a link's own key: what the live pool answers for its link.
-    static func infoFor(link: String) throws -> [String: Any] {
-        let parsed = try ProverPairingService.parse(link)
-        return ["kem_ek": parsed.kemEk, "kem_fingerprint": parsed.fingerprint, "witness_kinds": ["viewing_key"],
-                "fee": NSNull(), "queue": ["depth": 0, "max": 8, "proving": 0]]
-    }
-
-    /// The requests that reached `host` (by the host log alone) — never the whole stub log: another test class's RPC stub
-    /// (`node.example`, a deposit walk's retry, say) can still be landing in it while these run.
+    /// The requests that reached `host` (by the host log alone) — never the whole stub log: another
+    /// test class's RPC stub can still be landing in it while these run.
     static func asked(_ host: String) -> [String] {
         StubProver.hosts.filter { $0 == host }
     }
 
-    /// No prover, built-in or synthetic, was asked anything.
-    static var noProverAsked: Bool {
-        asked("prover.example").isEmpty && asked("prover.randprotocol.org").isEmpty
+    /// A probe answer for `m`: its own key (or `key`), viewing-key jobs, the queue given.
+    static func answer(_ m: ProverPairingService.PoolMember, key: String? = nil, depth: Int = 0, max: Int = 1) -> ProverPairingService.Probe {
+        .ok(try! ProverInfo(["kem_ek": key ?? m.pairing.kemEk, "witness_kinds": ["viewing_key"], "fee": NSNull(),
+                             "queue": ["depth": depth, "max": max, "proving": 0]]))
     }
 
-    /// `pairTrusted` then `save`, as the Settings button does: nothing is stored unless the
-    /// pairing came back.
-    @MainActor
-    private func pairTrustedAndSave(_ settings: Settings, trusted: TrustedProver?? = nil) async throws {
-        let (paired, token) = try await ProverPairingService.pairTrusted(session: StubProver.session(), trusted: trusted)
-        try ProverPairingService.save(paired, token: token, settings: settings)
-    }
-
-    /// Runs `body` with no pairing stored and restores whatever this simulator had afterwards.
-    @MainActor
-    private func withCleanPairing(_ body: (Settings) async throws -> Void) async throws {
-        let settings = Settings()
-        let hadDisplay = settings.prover
-        let hadSecret = Keychain.loadProverSecret()
-        ProverPairingService.forget(settings: settings)
-        defer {
-            ProverPairingService.forget(settings: settings)
-            if let s = hadSecret { try? Keychain.saveProverSecret(s) }
-            settings.prover = hadDisplay
+    /// Against the REAL core: every member's link names ITS pinned key and URL, nobody's own; the
+    /// screen gets names, URLs and fingerprints, never a link; the 0.6.8 shared key is nowhere.
+    func testThePinnedPoolIsReadMemberByMemberWithoutLinks() throws {
+        let pool = try Self.realPool()
+        XCTAssertGreaterThanOrEqual(pool.members.count, 2)
+        let members = try ProverPairingService.builtInPool(pool: pool)
+        XCTAssertEqual(members.count, pool.members.count, "a pinned member was left out")
+        for (m, pinned) in zip(members, pool.members) {
+            XCTAssertEqual(m.pairing.name, "RandProtocol (\(pinned.name))")
+            XCTAssertEqual(m.pairing.url, pinned.url)
+            XCTAssertTrue(pinned.url.hasPrefix("https://prover.randprotocol.org/m/"))
+            XCTAssertEqual(m.pairing.fingerprint, pinned.fingerprint)
+            XCTAssertNotEqual(m.pairing.fingerprint, "RGTF-7HKJ-XZFV-GQ1J", "the 0.6.8 shared key")
+            XCTAssertFalse(m.pairing.own)
+            XCTAssertEqual(try ProverPairingService.fingerprint(kemEk: m.pairing.kemEk), pinned.fingerprint)
         }
-        try await body(settings)
+        XCTAssertEqual(Set(members.map { $0.pairing.fingerprint }).count, members.count, "two members share a key")
+        let t = try XCTUnwrap(ProverPairingService.trusted())
+        XCTAssertEqual(t.members.map { $0.fingerprint }, pool.members.map { $0.fingerprint })
+        XCTAssertEqual(Mirror(reflecting: t.members[0]).children.map(\.label), ["name", "url", "fingerprint"], "a link reaches screens")
     }
 
-    /// Against the REAL core: the prover this build ships the address of is reported — the name,
-    /// URL and fingerprint, never the link — and its link names that key, that URL, not own.
-    func testTheTrustedProverIsReportedWithoutItsLink() throws {
-        let t = try XCTUnwrap(ProverPairingService.trusted(), "this core ships no trusted prover — the XCFramework predates core `trusted_prover`")
-        XCTAssertEqual(t, .init(name: "RandProtocol", url: Self.trustedURL, fingerprint: Self.trustedFingerprint))
-        let built = try Self.builtIn()
-        XCTAssertEqual(built.name, "RandProtocol")
-        XCTAssertEqual(built.url, Self.trustedURL)
-        XCTAssertEqual(built.fingerprint, Self.trustedFingerprint)
-        XCTAssertFalse(built.own)
-        let parsed = try ProverPairingService.parse(built.link)
-        XCTAssertEqual(parsed.fingerprint, Self.trustedFingerprint)
-        XCTAssertEqual(parsed.url, Self.trustedURL)
-        XCTAssertFalse(parsed.own)
-    }
-
-    /// What a screen gets never carries the link; a build that ships none offers nothing and
-    /// pairs nothing, asking nobody.
-    func testTrustedHandsNoLinkToScreensAndABuildWithoutOneOffersNothing() async throws {
-        let t = try XCTUnwrap(ProverPairingService.trusted(from: Self.syntheticBuiltIn()))
-        XCTAssertEqual(t, .init(name: "RandProtocol", url: "https://prover.example:8600", fingerprint: Self.fingerprint))
-        XCTAssertEqual(Mirror(reflecting: t).children.map(\.label), ["name", "url", "fingerprint"], "the link (with its token) is not handed to screens")
-        XCTAssertEqual(ProverPairingService.trusted(from: Self.syntheticBuiltIn(name: "  "))?.name, "RandProtocol")
-        // Asking pairs nothing and asks nobody.
-        XCTAssertTrue(Self.noProverAsked)
+    /// One member edited without its fingerprint is left out — only it; a build without a pool has none.
+    func testAMemberWhosePinDisagreesWithItsLinkIsLeftOutAndOnlyIt() throws {
+        let pool = try Self.realPool()
+        var members = pool.members
+        let first = members[0]
+        members[0] = TrustedProver(name: first.name, url: first.url, fingerprint: "ZZZZ-ZZZZ-ZZZZ-ZZZZ", link: first.link, own: false)
+        let kept = try ProverPairingService.builtInPool(pool: TrustedProverPool(name: pool.name, members: members))
+        XCTAssertEqual(kept.count, pool.members.count - 1)
+        XCTAssertFalse(kept.contains { $0.pairing.url == first.url })
+        XCTAssertThrowsError(try ProverPairingService.builtInPool(pool: .some(nil)))
         XCTAssertNil(ProverPairingService.trusted(from: .some(nil)))
-        let blank = TrustedProver(name: "RandProtocol", url: Self.trustedURL, fingerprint: Self.trustedFingerprint, link: "", own: false)
-        XCTAssertNil(ProverPairingService.trusted(from: blank))
-        for none in [TrustedProver??.some(nil), .some(blank)] {
-            do {
-                _ = try await ProverPairingService.pairTrusted(session: StubProver.session(), trusted: none)
-                XCTFail("paired with no built-in prover")
-            } catch {
-                XCTAssertEqual(error.localizedDescription, "This build ships no prover to use.")
-            }
-        }
-        XCTAssertTrue(Self.noProverAsked)
     }
 
-    /// One step: the built-in link through the same `pair` — the prover asked for its key, which
-    /// must be the link's — stored NOT own and named RandProtocol; `forget` undoes it like any.
-    /// Against the REAL core's link and key, as the live pool would answer.
-    @MainActor
-    func testPairTrustedStoresANotOwnPairingNamedRandProtocolWhenTheProverAnswersWithTheLinksKey() async throws {
-        let built = try Self.builtIn()
-        let info = try Self.infoFor(link: built.link)
-        StubProver.handler = { method, _ in
-            XCTAssertEqual(method, "prover_info")
-            return .result(info)
-        }
-        let parsed = try ProverPairingService.parse(built.link)
-        try await withCleanPairing { settings in
-            try await pairTrustedAndSave(settings)
-            XCTAssertEqual(settings.prover, ProverPairing(name: "RandProtocol", url: Self.trustedURL, kemEk: parsed.kemEk,
-                                                          fingerprint: Self.trustedFingerprint, own: false))
-            let secret = try XCTUnwrap(Keychain.loadProverSecret())
-            XCTAssertEqual(secret, ProverSecret(token: parsed.token, kemEk: parsed.kemEk, url: Self.trustedURL,
-                                                fingerprint: Self.trustedFingerprint, own: false))
-            XCTAssertEqual(Self.asked("prover.randprotocol.org").count, 1, "the pool itself was asked, once")
-            XCTAssertFalse(StubProver.requests.contains { $0.contains(parsed.token) }, "the token is never on the wire in clear")
-            // Forget works as for any pairing.
-            ProverPairingService.forget(settings: settings)
-            XCTAssertNil(settings.prover)
-            XCTAssertNil(Keychain.loadProverSecret())
-        }
-    }
-
-    /// The same, through the seam: the record is named after the built-in prover (not its host,
-    /// as a pasted link's is) and never own — whatever the `pair` of the plain link would say.
-    @MainActor
-    func testPairTrustedNamesTheRecordRandProtocolAndNeverOwn() async throws {
-        let built = Self.syntheticBuiltIn()
-        let info = try Self.infoFor(link: built.link)
-        StubProver.handler = { _, _ in .result(info) }
-        // The plain pairing of that link is named after its host.
-        let plain = try await ProverPairingService.pair(built.link, session: StubProver.session())
-        XCTAssertEqual(plain.pairing.name, "prover.example:8600")
-        StubProver.requests = []
-        StubProver.hosts = []
-        try await withCleanPairing { settings in
-            try await pairTrustedAndSave(settings, trusted: built)
-            XCTAssertEqual(settings.prover, ProverPairing(name: "RandProtocol", url: "https://prover.example:8600", kemEk: Self.kemEk,
-                                                          fingerprint: Self.fingerprint, own: false))
-            XCTAssertEqual(Keychain.loadProverSecret(), ProverSecret(token: Self.token, kemEk: Self.kemEk, url: "https://prover.example:8600",
-                                                                     fingerprint: Self.fingerprint, own: false))
-            XCTAssertFalse(StubProver.requests.contains { $0.contains(Self.token) })
-        }
-    }
-
-    /// A prover at that address answering with another key — however it names itself — is
-    /// refused, and nothing is stored.
-    @MainActor
-    func testPairTrustedRefusesAProverAnsweringWithAnotherKeyAndStoresNothing() async throws {
-        StubProver.handler = { _, _ in
-            .result(["kem_ek": String(repeating: "08", count: 1184), "kem_fingerprint": Self.fingerprint, "witness_kinds": ["viewing_key"]])
-        }
-        try await withCleanPairing { settings in
-            do {
-                try await pairTrustedAndSave(settings, trusted: Self.syntheticBuiltIn())
-                XCTFail("paired a prover with another key")
-            } catch {
-                XCTAssertEqual(error.localizedDescription, "The prover at that address has a different key from the one the link names. Do not pair it.")
-            }
-            XCTAssertNil(settings.prover)
-            XCTAssertNil(Keychain.loadProverSecret())
-            XCTAssertEqual(Self.asked("prover.example").count, 1, "the prover the link names was asked, once")
-        }
-    }
-
-    /// A build whose pinned fingerprint disagrees with its link — or pins none, or whose link is
-    /// marked own — never asks the prover at all.
-    @MainActor
-    func testABuildWhosePinnedFingerprintDisagreesWithTheLinkIsRefusedBeforeAnyRequest() async throws {
-        let info = try Self.infoFor(link: Self.link(own: false))
-        StubProver.handler = { _, _ in .result(info) }
-        try await withCleanPairing { settings in
-            for (built, want) in [
-                (Self.syntheticBuiltIn(fingerprint: "ZZZZ-ZZZZ-ZZZZ-ZZZZ"), "The built-in prover link does not name the key this wallet pins; not pairing it."),
-                (Self.syntheticBuiltIn(fingerprint: ""), "The built-in prover link does not name the key this wallet pins; not pairing it."),
-                (Self.syntheticBuiltIn(own: true), "The built-in prover link is marked as your own, which a shared prover is not; not pairing it."),
-            ] {
-                do {
-                    try await pairTrustedAndSave(settings, trusted: built)
-                    XCTFail("paired a built-in link the build should refuse (\(built.fingerprint), own \(built.own))")
-                } catch {
-                    XCTAssertEqual(error.localizedDescription, want)
-                }
-                XCTAssertTrue(Self.noProverAsked, "the prover was asked")
-                XCTAssertNil(settings.prover)
-                XCTAssertNil(Keychain.loadProverSecret())
-            }
-            // And the link's own flag, not only the build's word, is held: a built-in link that
-            // itself says `own=1` is refused the same way, before any request.
-            let ownLink = TrustedProver(name: "RandProtocol", url: "https://prover.example:8600", fingerprint: Self.fingerprint, link: Self.link(own: true), own: false)
-            do {
-                try await pairTrustedAndSave(settings, trusted: ownLink)
-                XCTFail("paired a built-in link marked own")
-            } catch {
-                XCTAssertEqual(error.localizedDescription, "The built-in prover link is marked as your own, which a shared prover is not; not pairing it.")
-            }
-            XCTAssertTrue(Self.noProverAsked)
-            // The same key, the right pin, not own: paired — the one path that asks.
-            try await pairTrustedAndSave(settings, trusted: Self.syntheticBuiltIn())
-            XCTAssertEqual(settings.prover?.name, "RandProtocol")
-            XCTAssertEqual(Self.asked("prover.example").count, 1)
-        }
-    }
-
-    // MARK: the default prover (wallet 0.6.8) — nothing paired, the RandProtocol prover
-
-    /// The synthetic built-in prover through `builtIn`'s seam: key 0x07…, not own.
-    static func builtInDefault(fingerprint: String = fingerprint) -> () throws -> (pairing: ProverPairing, token: String) {
-        { try ProverPairingService.builtIn(trusted: .some(Self.syntheticBuiltIn(fingerprint: fingerprint))) }
-    }
-
-    func testWithNothingPairedTheRandProtocolProverIsTheRouteNotOwnByItsPinnedKey() async throws {
-        var probedAt: [String] = []
+    /// The route: the first member that answers with ITS key, no fee, viewing-key jobs and room in
+    /// its queue leads; the rest follow. A device that can prove asks nobody; a paired prover wins.
+    func testWithNothingPairedTheRouteIsTheFirstMemberThatCanTakeAJob() async throws {
+        let members = try ProverPairingService.builtInPool(pool: Self.realPool())
+        let (a, b, c) = (members[0], members[1], members[2])
+        var asked: [String] = []
         let probe: (ProverPairing) async -> ProverPairingService.Probe = { p in
-            probedAt.append(p.url); return .ok(try! Self.info(["viewing_key"]))
+            asked.append(p.url)
+            // The probe holds a member to its key (ProverPairingService.probe): another key is unavailable.
+            if p.url == a.pairing.url { return .unavailable("the prover at that address now has a different key; pair it again") }
+            if p.url == b.pairing.url { return Self.answer(b, depth: 1, max: 1) }
+            return Self.answer(members.first { $0.pairing.url == p.url }!)
         }
         let r = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: probe, secret: { nil },
-                                                     defaultProver: Self.builtInDefault())
+                                                     defaultProver: { members })
         let route = try XCTUnwrap(r, "a fresh wallet that cannot prove had no route")
         XCTAssertTrue(route.isDefault)
-        XCTAssertEqual(route.pairing, ProverPairing(name: "RandProtocol", url: "https://prover.example:8600", kemEk: Self.kemEk,
-                                                    fingerprint: Self.fingerprint, own: false))
-        XCTAssertEqual(route.token, Self.token)
-        XCTAssertEqual(probedAt, ["https://prover.example:8600"])
-        // A device that can prove asks nobody; no prover chosen is no route; a paired one wins.
-        probedAt = []
-        let device = try await ProverPairingService.route(deviceCanProve: true, pairing: nil, probe: probe, secret: { nil }, defaultProver: Self.builtInDefault())
+        XCTAssertEqual(route.pairing.url, c.pairing.url)
+        XCTAssertEqual(route.token, c.token)
+        XCTAssertEqual(route.poolName, "RandProtocol")
+        XCTAssertEqual(route.members.map { $0.pairing.url }, [c, a, b].map { $0.pairing.url } + members.dropFirst(3).map { $0.pairing.url })
+        asked = []
+        let device = try await ProverPairingService.route(deviceCanProve: true, pairing: nil, probe: probe, secret: { nil }, defaultProver: { members })
         XCTAssertNil(device)
         let none = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: probe, secret: { nil }, defaultProver: nil)
         XCTAssertNil(none)
-        XCTAssertEqual(probedAt, [])
-        let paired = try await ProverPairingService.route(deviceCanProve: false, pairing: Self.route.pairing, probe: probe,
-                                                          secret: { Self.secret }, defaultProver: Self.builtInDefault())
+        XCTAssertEqual(asked, [])
+        let paired = try await ProverPairingService.route(deviceCanProve: false, pairing: Self.route.pairing, probe: { _ in .ok(try! Self.info(["viewing_key"])) },
+                                                          secret: { Self.secret }, defaultProver: { members })
         XCTAssertEqual(paired?.isDefault, false)
-        XCTAssertEqual(paired?.pairing.url, Self.secret.url)
     }
 
-    func testTheRandProtocolProverNotThereIsSaidPlainlyWithTheWayToPairYourOwn() async throws {
-        for (answer, why) in [
-            (ProverPairingService.Probe.unavailable("the prover at https://prover.example:8600 did not answer (offline)"),
-             "the prover at https://prover.example:8600 did not answer (offline)"),
-            (.unavailable("the prover at that address now has a different key; pair it again"), "it answered with another key than the one this wallet pins"),
-        ] {
-            do {
-                _ = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: { _ in answer }, secret: { nil },
-                                                         defaultProver: Self.builtInDefault())
-                XCTFail("routed to a prover that is not there")
-            } catch {
-                XCTAssertEqual(error.localizedDescription,
-                               "This device does not have the memory for this proof. The RandProtocol prover cannot be reached right now (\(why)). Try again later, or pair your own prover in Settings.")
-            }
-        }
-        // A build whose link names another key than its pin never asks anybody.
-        var asked = 0
+    func testNoMemberReadyIsSaidPlainlyAllBusyOrUnreachable() async throws {
+        let members = try ProverPairingService.builtInPool(pool: Self.realPool())
         do {
-            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: { _ in asked += 1; return .ok(try! Self.info(["viewing_key"])) },
-                                                     secret: { nil }, defaultProver: Self.builtInDefault(fingerprint: "ZZZZ-ZZZZ-ZZZZ-ZZZZ"))
-            XCTFail("routed to a link that fails its pin")
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: nil,
+                                                     probe: { p in Self.answer(members.first { $0.pairing.url == p.url }!, depth: 1, max: 1) },
+                                                     secret: { nil }, defaultProver: { members })
+            XCTFail("routed to a full pool")
         } catch {
-            XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. The built-in prover link does not name the key this wallet pins; not pairing it.")
+            XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. The RandProtocol provers are all busy right now; try again in a minute, or pair your own prover in Settings.")
+            XCTAssertEqual((error as? ProverRefusal)?.busy, true)
         }
-        XCTAssertEqual(asked, 0)
+        let two = Array(members.prefix(2))
+        do {
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: { p in
+                p.url == two[0].pairing.url ? .unavailable("the prover at \(p.url) did not answer (offline)") : .unavailable("the prover at that address now has a different key; pair it again")
+            }, secret: { nil }, defaultProver: { two })
+            XCTFail("routed to a pool that is not there")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. The RandProtocol provers cannot be reached right now (\(two[0].member) did not answer; \(two[1].member) answered with another key than the one this wallet pins). Try again later, or pair your own prover in Settings.")
+        }
     }
 
-    func testTheRandProtocolProverBusyIsSaidPlainlyAndAPairedOnesIsItsOwn() {
-        let busy = ProverRefusal(message: "The prover is full (2 waiting). Try again in a few minutes.", busy: true)
-        let def = ProverPairingService.Route(pairing: ProverPairing(name: "RandProtocol", url: "https://prover.example:8600", kemEk: Self.kemEk,
-                                                                    fingerprint: Self.fingerprint, own: false), token: Self.token, isDefault: true)
-        let mapped = ProverPairingService.failure(busy, route: def)
-        XCTAssertEqual(mapped.localizedDescription, "The RandProtocol prover is busy; try again in a minute, or pair your own prover in Settings.")
-        XCTAssertEqual((mapped as? ProverRefusal)?.busy, true)
-        XCTAssertEqual(ProverPairingService.failure(busy, route: Self.route).localizedDescription, busy.message)
-        // The client's busy refusal is marked busy.
-        let fromClient = ProverClient.refusal(ProverError(message: "busy", code: -32005, data: ["depth": 2]))
-        XCTAssertEqual((fromClient as? ProverRefusal)?.busy, true)
+    /// One job: a member busy at submit is skipped for the next, re-sealed for it; only the member
+    /// that named the job is polled. Every member busy: one submit each, then plainly.
+    func testProvePoolSkipsABusySubmitAndPollsOnlyTheMemberThatTookTheJob() async throws {
+        let members = Array(try ProverPairingService.builtInPool(pool: Self.realPool()).prefix(2))
+        var sealedFor: [String] = [], submittedTo: [String] = [], polled: [String] = []
+        let out: String = try await ProverPairingService.provePool(
+            members: members, poolName: "RandProtocol",
+            probe: { p in Self.answer(members.first { $0.pairing.url == p.url }!) },
+            seal: { m, _ in sealedFor.append(m.pairing.kemEk); return ("sealed-\(m.member)", m.member) },
+            submit: { m, sealed in
+                submittedTo.append(m.pairing.url)
+                if m.pairing.url == members[0].pairing.url { throw ProverRefusal(message: "The prover is full (1 waiting). Try again in a few minutes.", busy: true) }
+                XCTAssertEqual(sealed, "sealed-\(m.member)")
+                return "job-\(m.member)"
+            },
+            poll: { m, job, pending in polled.append(m.pairing.url); return "\(job):\(pending)" })
+        XCTAssertEqual(out, "job-\(members[1].member):\(members[1].member)")
+        XCTAssertEqual(sealedFor, members.map { $0.pairing.kemEk })
+        XCTAssertEqual(submittedTo, members.map { $0.pairing.url })
+        XCTAssertEqual(polled, [members[1].pairing.url])
+        var submits = 0
+        do {
+            let _: String = try await ProverPairingService.provePool(
+                members: members, poolName: "RandProtocol",
+                probe: { p in Self.answer(members.first { $0.pairing.url == p.url }!) },
+                seal: { m, _ in ("s", m.member) },
+                submit: { _, _ in submits += 1; throw ProverRefusal(message: "busy", busy: true) },
+                poll: { _, _, _ in XCTFail("polled after a busy submit"); return "" })
+            XCTFail("sent through a busy pool")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "The RandProtocol provers are all busy right now; try again in a minute, or pair your own prover in Settings.")
+        }
+        XCTAssertEqual(submits, members.count)
     }
 
     func testTheOneTimeNoticeIsForThisWalletAndOnlyWhereTheDefaultMakesTheProof() {
@@ -410,9 +274,9 @@ final class ProverTests: XCTestCase {
         XCTAssertTrue(ProverPairingService.needsNotice(deviceCanProve: false, usesDefault: true, read: false))
         XCTAssertFalse(ProverPairingService.needsNotice(deviceCanProve: true, usesDefault: true, read: false))
         XCTAssertFalse(ProverPairingService.needsNotice(deviceCanProve: false, usesDefault: true, read: true))
-        XCTAssertTrue(ProverPairingService.defaultNotice.contains("viewing key"))
-        XCTAssertTrue(ProverPairingService.defaultNotice.contains("past and future"))
-        XCTAssertTrue(ProverPairingService.defaultNotice.contains("It cannot spend"))
+        XCTAssertTrue(ProverPairingService.defaultNotice(4).contains("one of the RandProtocol provers (4 machines run by the validators; each one that proves a send sees that wallet's viewing key)"))
+        XCTAssertTrue(ProverPairingService.defaultNotice(4).contains("past and future"))
+        XCTAssertTrue(ProverPairingService.defaultNotice(4).contains("It cannot spend"))
     }
 
     func testASubmitThatNeverReachedTheProverIsOfferedAgainBoundedWithBackoff() async throws {
