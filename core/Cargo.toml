@@ -57,3 +57,6 @@ opt-level = 1
 # the patch is the fullnode's, and a `[patch]` reaches only the workspace that declares it.
 [patch.crates-io]
 p3-fri = { path = "vendor/fullnode/vendor/p3-fri" }
+# The other half (fullnode 0e70ddc, Plonky3 PR #2368): MerkleTreeHidingMmcs::commit held the same
+# spin lock across the parallel tree build.
+p3-merkle-tree = { path = "vendor/fullnode/vendor/p3-merkle-tree" }
