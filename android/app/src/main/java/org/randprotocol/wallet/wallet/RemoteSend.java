@@ -194,6 +194,21 @@ public final class RemoteSend {
      */
     public static JSONObject provePool(ProverCore core, java.util.function.Function<String, RemoteProver> proverFor, JSONObject request,
                                        Route route, Integer maxProofBytes, RemoteProver.PhaseListener onPhase) throws Exception {
+        return provePool(core, proverFor, KIND_TRANSFER, request, route, maxProofBytes, onPhase);
+    }
+
+    /** What a job is sealed as: {@code prepare_transfer}'s request, or {@code prepare_invoke}'s. */
+    public static final String KIND_TRANSFER = "transfer";
+    public static final String KIND_INVOKE = "invoke";
+
+    /**
+     * {@link #provePool} for a job of {@code kind}: {@link #KIND_TRANSFER}, or {@link #KIND_INVOKE}
+     * — an RPL-2 invoke, whose call proof and auth proof the core makes here inside {@code
+     * prepare_invoke} before only the bundle's witness is sealed. The member order, the skip on a
+     * busy submit and the never-move-mid-job rule are the same for both.
+     */
+    public static JSONObject provePool(ProverCore core, java.util.function.Function<String, RemoteProver> proverFor, String kind,
+                                       JSONObject request, Route route, Integer maxProofBytes, RemoteProver.PhaseListener onPhase) throws Exception {
         JSONObject guests = guestsOf(core, request);
         if (!"viewing_key".equals(guests.optString("witness_kind", ""))) {
             throw new ProverClient.Refusal("On this chain a proof needs the spend key, which goes only to a prover paired as your own. "
@@ -216,7 +231,7 @@ public final class RemoteSend {
                 whys.add(why);
                 continue;
             }
-            Sealed s = seal(core, request, m.pairing, m.token, answer.info.fee, maxProofBytes, guests, onPhase);
+            Sealed s = seal(core, kind, request, m.pairing, m.token, answer.info.fee, maxProofBytes, guests, onPhase);
             onPhase.phase(null);
             String job;
             try {
@@ -254,8 +269,9 @@ public final class RemoteSend {
     }
 
     /** The job, sealed by the core to {@code pairing}'s key with {@code token} — the auth proof made here first. */
-    private static Sealed seal(ProverCore core, JSONObject request, ProverPairing pairing, String token, Object fee,
+    private static Sealed seal(ProverCore core, String kind, JSONObject request, ProverPairing pairing, String token, Object fee,
                                Integer maxProofBytes, JSONObject guests, RemoteProver.PhaseListener onPhase) throws Exception {
+        boolean invoke = KIND_INVOKE.equals(kind);
         String hcBundle = request.has("hc_bundle") && !request.isNull("hc_bundle") ? request.optString("hc_bundle", null) : null;
         JSONObject params = new JSONObject(request.toString());
         JSONObject target = new JSONObject()
@@ -268,13 +284,15 @@ public final class RemoteSend {
         if (maxProofBytes != null) params.put("max_proof_bytes", maxProofBytes);
         // On a split-authorisation chain the core makes the auth proof inside prepare_transfer,
         // from the spend key, on this device: seconds natively. Said before the wait, so it is not
-        // a silent one and says what is happening where.
+        // a silent one and says what is happening where. An invoke's call proof is made here too.
         if (guests.optBoolean("split_authorisation", false)) onPhase.authorising();
-        JSONObject prepared = core.prepareTransfer(params);
+        JSONObject prepared = invoke ? core.prepareInvoke(params) : core.prepareTransfer(params);
         params = null; // the spend key and the token were in it
         String sealed = prepared.optString("sealed_hex", "");
         Object pending = prepared.opt("pending");
-        if (sealed.isEmpty() || pending == null) throw new ProverClient.Refusal("The wallet could not seal this transfer for the prover.");
+        if (sealed.isEmpty() || pending == null) {
+            throw new ProverClient.Refusal("The wallet could not seal this " + (invoke ? "swap" : "transfer") + " for the prover.");
+        }
         return new Sealed(sealed, pending);
     }
 
@@ -319,6 +337,12 @@ public final class RemoteSend {
      */
     public static JSONObject prove(ProverCore core, RemoteProver prover, JSONObject request, Route route,
                                    Integer maxProofBytes, RemoteProver.PhaseListener onPhase) throws Exception {
+        return prove(core, prover, KIND_TRANSFER, request, route, maxProofBytes, onPhase);
+    }
+
+    /** {@link #prove} for a job of {@code kind} ({@link #KIND_TRANSFER} or {@link #KIND_INVOKE}). */
+    public static JSONObject prove(ProverCore core, RemoteProver prover, String kind, JSONObject request, Route route,
+                                   Integer maxProofBytes, RemoteProver.PhaseListener onPhase) throws Exception {
         JSONObject guests = guestsOf(core, request);
         String wants = guests.optString("witness_kind", "");
         if ("spend_key".equals(wants) && !route.pairing.own) {
@@ -344,7 +368,7 @@ public final class RemoteSend {
             throw new ProverClient.Refusal(ProverClient.FEE_REFUSAL);
         }
 
-        Sealed s = seal(core, request, route.pairing, route.token, info.fee, maxProofBytes, guests, onPhase);
+        Sealed s = seal(core, kind, request, route.pairing, route.token, info.fee, maxProofBytes, guests, onPhase);
         return prover.prove(s.hex, s.pending, core::finishProof, onPhase);
     }
 

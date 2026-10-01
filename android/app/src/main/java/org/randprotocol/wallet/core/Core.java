@@ -132,6 +132,40 @@ public final class Core {
         return object("prove_transfer", request);
     }
 
+    // ---- RPL-2 invoke (wallet_core::dispatch: dry_run_invoke, plan_invoke, prove_invoke, prepare_invoke)
+
+    /**
+     * {@code {program, program_code, public_hex, private_inputs, reads, writes, inflow, pays,
+     * mints}} → {@code {tier, gas, gas_limit, gas_max, keccak_log_height, sha256_log_height,
+     * context_words}}. Fast (the emulator, no proof): the code is checked to hash to {@code program},
+     * and a transition the program refuses is an error naming why.
+     */
+    public static JSONObject dryRunInvoke(JSONObject transition) throws CoreException {
+        return object("dry_run_invoke", transition);
+    }
+
+    /**
+     * {@code {notes, burn_r, burn_asset, burn_a, fee}} → {@code {inputs, fee_inputs, need, change,
+     * fee_change, fee, proofs}}: the one bundle the invoke rides. Throws when the notes do not cover it.
+     */
+    public static JSONObject planInvoke(JSONObject params) throws CoreException {
+        return object("plan_invoke", params);
+    }
+
+    /** The slow one for an invoke: the call proof, the auth proof and the bundle proof, all here. Background thread only. */
+    public static JSONObject proveInvoke(JSONObject request) throws CoreException {
+        return object("prove_invoke", request);
+    }
+
+    /**
+     * {@code prove_invoke}'s request plus {@code prover} (and {@code max_proof_bytes}) → {@code
+     * {sealed_hex, pending, expected}}: the call proof and the auth proof are made here, only the
+     * bundle proof is sealed to the prover. {@code finish_proof} opens the reply.
+     */
+    public static JSONObject prepareInvoke(JSONObject params) throws CoreException {
+        return object("prepare_invoke", params);
+    }
+
     public static String formatAmount(String units) {
         try {
             return String.valueOf(call("format_amount", p("units", units)));

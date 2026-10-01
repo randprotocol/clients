@@ -1,16 +1,21 @@
 package org.randprotocol.wallet.store;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
  * A transfer this wallet submitted: what the user needs afterwards — the hash to look it up,
- * and the payment's per-transaction key so exactly that payment can be disclosed later.
+ * and the payment's per-transaction key so exactly that payment can be disclosed later. A swap
+ * (an RPL-2 invoke) is one too, of {@code kind} {@link #INVOKE}: its {@code amount} is what it
+ * put in, of {@code asset}, and {@code payouts} what the program pays back, found by the next scan.
  */
 public final class Submission {
     public static final String PENDING = "pending";
     public static final String COMMITTED = "committed";
     public static final String EXPIRED = "expired";
+    public static final String TRANSFER = "transfer";
+    public static final String INVOKE = "invoke";
 
     public String hash;
     public long time;
@@ -22,6 +27,13 @@ public final class Submission {
     public String status = PENDING;
     public long height;
     public long createdAtMs;
+    public String kind = TRANSFER;
+    /** An invoke's program id; empty for a transfer. */
+    public String program = "";
+    /** The asset {@code amount} is in: 0 (RAND) for a transfer. */
+    public int asset;
+    /** An invoke's payouts to this wallet, {@code [{asset, amount}]}; empty for a transfer. */
+    public JSONArray payouts = new JSONArray();
 
     public static Submission fromJson(JSONObject o) throws JSONException {
         Submission s = new Submission();
@@ -34,6 +46,11 @@ public final class Submission {
         s.status = o.optString("status", PENDING);
         s.height = o.optLong("height", 0);
         s.createdAtMs = o.optLong("created_at_ms", 0);
+        s.kind = o.optString("kind", TRANSFER);
+        s.program = o.optString("program", "");
+        s.asset = o.optInt("asset", 0);
+        JSONArray p = o.optJSONArray("payouts");
+        s.payouts = p == null ? new JSONArray() : p;
         return s;
     }
 
@@ -48,6 +65,10 @@ public final class Submission {
         o.put("status", status);
         o.put("height", height);
         o.put("created_at_ms", createdAtMs);
+        o.put("kind", kind);
+        o.put("program", program);
+        o.put("asset", asset);
+        o.put("payouts", payouts);
         return o;
     }
 }

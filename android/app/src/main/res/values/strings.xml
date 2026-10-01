@@ -35,6 +35,8 @@
     <string name="home_receive">Receive</string>
     <string name="home_send">Send</string>
     <string name="home_faucet">Faucet</string>
+    <string name="home_swap">Swap</string>
+    <string name="home_faucet_button">Get test RAND from the faucet</string>
     <string name="home_contacts">Contacts</string>
     <string name="home_activity">Activity</string>
     <string name="home_empty">No activity yet. Ask the faucet for testnet RAND, or share your address.</string>
@@ -211,4 +213,46 @@
     <string name="proving_channel">Proving</string>
     <string name="proving_notification_title">Proving your transfer</string>
     <string name="proving_notification_text">Keep Rand Wallet installed and the phone awake; this takes a few minutes.</string>
+
+    <!-- Swap (ui/screens/swap.js's words) -->
+    <string name="swap_title">Swap</string>
+    <string name="swap_pay">You pay</string>
+    <string name="swap_receive">You receive</string>
+    <string name="swap_amount_hint">0.0</string>
+    <string name="swap_available">Available %1$s %2$s</string>
+    <string name="swap_flip">Swap the two assets</string>
+    <string name="swap_review">Review</string>
+    <string name="swap_caption" formatted="false">Priced by the durian.market pools on this chain (0.3% pool fee). The swap is a transaction this wallet proves and sends itself.</string>
+    <string name="swap_rate">Rate</string>
+    <string name="swap_impact">Price impact</string>
+    <string name="swap_pool_fee">Pool fee</string>
+    <string name="swap_route">Route</string>
+    <string name="swap_checking">Checking the swap…</string>
+    <string name="swap_review_title">Review the swap</string>
+    <string name="swap_network_fee">Network fee</string>
+    <string name="swap_program">Program</string>
+    <string name="swap_review_caption">The amount you receive is exact: if the pool moves before the swap lands, nothing is sent and you get a new quote. %1$s</string>
+    <string name="swap_prove_default">One of the RandProtocol provers makes the large proof; this device makes the small ones. It takes a few minutes.</string>
+    <string name="swap_prove_paired">Your paired prover makes the large proof; this device makes the small ones. It takes a few minutes.</string>
+    <string name="swap_prove_device">This device proves the swap. It takes a few minutes.</string>
+    <string name="swap_go">Swap</string>
+    <string name="swap_edit">Edit</string>
+    <string name="swap_running_title">Swapping</string>
+    <string name="swap_running_body">You can look at other screens. The swap keeps going while the notification shows. If the phone stops it before it says sent, nothing is lost.</string>
+    <string name="swap_done_title">Swap submitted</string>
+    <string name="swap_paid">Paid</string>
+    <string name="swap_done_note">What the pool pays you arrives as a note your wallet finds on its next sync.</string>
+    <string name="swap_copy_hash">Copy the transaction hash</string>
+    <string name="swap_hash_copied">Transaction hash copied</string>
+    <string name="swap_failed_title">Not swapped</string>
+    <string name="swap_nothing_sent">Nothing was sent</string>
+    <string name="swap_try_again">Try again</string>
+    <string name="swap_back_home">Back to home</string>
+    <string name="swap_open_durian">Open durian.market</string>
+    <string name="swap_no_programs_here">This chain does not run programs, so there is nothing to swap through.</string>
+    <string name="swap_no_pools">durian.market has no pools on this chain yet.</string>
+    <string name="swap_pools_unread">The pools could not be read: %1$s.</string>
+    <string name="swap_cannot_check">The swap could not be checked.</string>
+    <string name="swap_notification_title">Swapping</string>
+    <string name="swap_pick">Choose an asset</string>
 </resources>

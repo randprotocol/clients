@@ -15,6 +15,8 @@ public final class SendState {
     public final String prover;
     /** The job's position in the prover's queue while it waits, else null. */
     public final Integer queuePosition;
+    /** On a failed swap, the engine's refusal code ({@link Invoke#STALE_READ}, …), else null. */
+    public final String code;
 
     public SendState(Phase phase, String message, String hash, String txKey, String amount, String to, long startedAtMs) {
         this(phase, message, hash, txKey, amount, to, startedAtMs, null, null);
@@ -22,6 +24,11 @@ public final class SendState {
 
     private SendState(Phase phase, String message, String hash, String txKey, String amount, String to, long startedAtMs,
                       String prover, Integer queuePosition) {
+        this(phase, message, hash, txKey, amount, to, startedAtMs, prover, queuePosition, null);
+    }
+
+    private SendState(Phase phase, String message, String hash, String txKey, String amount, String to, long startedAtMs,
+                      String prover, Integer queuePosition, String code) {
         this.phase = phase;
         this.message = message;
         this.hash = hash;
@@ -31,6 +38,7 @@ public final class SendState {
         this.startedAtMs = startedAtMs;
         this.prover = prover;
         this.queuePosition = queuePosition;
+        this.code = code;
     }
 
     /**
@@ -60,6 +68,11 @@ public final class SendState {
 
     public SendState with(Phase p, String msg) {
         return new SendState(p, msg, hash, txKey, amount, to, startedAtMs);
+    }
+
+    /** Failed with the engine's {@code code} (null for none): the screen branches on it. */
+    public SendState failed(String code, String msg) {
+        return new SendState(Phase.FAILED, msg, hash, txKey, amount, to, startedAtMs, null, null, code);
     }
 
     public SendState submitted(String h, String key) {

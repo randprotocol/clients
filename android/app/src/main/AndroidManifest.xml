@@ -45,6 +45,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".ui.ContactsActivity" android:exported="false" />
+        <!-- singleTop: the proving notification of a swap opens the Swap screen already showing it. -->
+        <activity android:name=".ui.SwapActivity" android:exported="false" android:launchMode="singleTop" />
         <!-- The scanner library locks itself to landscape; a phone scanning a QR is held upright. -->
         <activity
             android:name="com.journeyapps.barcodescanner.CaptureActivity"

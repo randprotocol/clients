@@ -28,7 +28,7 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:orientation="horizontal" android:gravity="center">
         <include android:id="@+id/action_receive" layout="@layout/view_action" />
         <include android:id="@+id/action_send" layout="@layout/view_action" />
-        <include android:id="@+id/action_faucet" layout="@layout/view_action" />
+        <include android:id="@+id/action_swap" layout="@layout/view_action" />
         <include android:id="@+id/action_contacts" layout="@layout/view_action" />
     </LinearLayout>
 
@@ -36,6 +36,9 @@
 
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/home_activity" />
     <TextView android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" style="@style/Text.Body" android:text="@string/home_empty" />
+    <!-- Swap took the Faucet's place in the action row (as in the shared UI); the faucet stays
+         reachable here, below the list's empty line, whether or not there is activity. -->
+    <com.google.android.material.button.MaterialButton android:id="@+id/faucet" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/home_faucet_button" />
     <androidx.recyclerview.widget.RecyclerView android:id="@+id/list" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:nestedScrollingEnabled="false" />
 </LinearLayout>
 </androidx.core.widget.NestedScrollView>

@@ -260,6 +260,15 @@ public class ProverTest {
             return new JSONObject().put("sealed_hex", "5e41ed").put("pending", new JSONObject().put("kind", "transfer")).put("expected", "ee");
         }
 
+        /** Every {@code prepare_invoke} the core was asked, in order. */
+        final List<JSONObject> invokesPrepared = new ArrayList<>();
+
+        @Override
+        public JSONObject prepareInvoke(JSONObject params) throws Exception {
+            invokesPrepared.add(params);
+            return new JSONObject().put("sealed_hex", "1a7e").put("pending", new JSONObject().put("kind", "invoke")).put("expected", "ee");
+        }
+
         @Override
         public String historyWarning() {
             return HISTORY;
@@ -1136,6 +1145,39 @@ public class ProverTest {
             assertTrue(e.busy);
         }
         assertEquals(3, busy.calls("prover_submit").size());
+    }
+
+    @Test
+    public void anInvokeTakesThePoolPathSealedByPrepareInvoke() throws Exception {
+        // A swap's bundle proof goes the transfer's way through the RandProtocol provers — member
+        // order, the skip on a busy submit, never another member mid-job — and only the sealing
+        // differs: prepare_invoke, whose call proof and auth proof are made on this device.
+        FakeCore core = new FakeCore().withTrustedProver();
+        PoolTransport t = new PoolTransport()
+                .member("a", (m, p) -> m.equals("prover_submit") ? Reply.error(-32005, "busy", null) : healthy("a").reply(m, p))
+                .member("b", healthy("b"));
+        RemoteSend.Route r = RemoteSend.route(false, null, core, probeWith(core, t), () -> null, inOrder(core, "a", "b"));
+        JSONObject request = new JSONObject().put("spend_key", SPEND_KEY).put("program", "db".repeat(32));
+        RemoteSend.applyProofParams(request, new JSONObject().put("hc_bundle", V3).put("hc_auth", AUTH));
+        JSONObject out = RemoteSend.provePool(core, url -> fastPoolProver(url, t), RemoteSend.KIND_INVOKE, request, r, 4194304, pos -> { });
+        assertEquals("invoke", out.getString("kind"));
+        assertTrue("no transfer was sealed", core.preparedAll.isEmpty());
+        assertEquals(2, core.invokesPrepared.size());
+        assertEquals(memberEk("b"), core.invokesPrepared.get(1).getJSONObject("prover").getString("kem_ek"));
+        assertEquals(memberToken("b"), core.invokesPrepared.get(1).getJSONObject("prover").getString("token"));
+        assertFalse(core.invokesPrepared.get(1).getJSONObject("prover").getBoolean("own"));
+        assertEquals(4194304, core.invokesPrepared.get(1).getInt("max_proof_bytes"));
+        assertEquals("db".repeat(32), core.invokesPrepared.get(1).getString("program"));
+        assertEquals(java.util.Collections.singletonList(memberUrl("b")), t.calls("prover_status"));
+        // A paired prover takes an invoke the same way.
+        FakeCore paired = new FakeCore();
+        FakeProver prover = new FakeProver(answering(info(KEM_EK, JSONObject.NULL, "viewing_key"), (m, p) -> m.equals("prover_submit")
+                ? Reply.result(new JSONObject().put("job", "j"))
+                : Reply.result(new JSONObject().put("state", "done").put("reply", "good"))));
+        RemoteSend.Route mine = new RemoteSend.Route(new ProverPairing("p", URL_OK, KEM_EK, FINGERPRINT, false), TOKEN);
+        RemoteSend.prove(paired, fastProver(new ProverClient(mine.pairing.url, prover)), RemoteSend.KIND_INVOKE, request, mine, null, pos -> { });
+        assertEquals(1, paired.invokesPrepared.size());
+        assertTrue(paired.preparedAll.isEmpty());
     }
 
     static RemoteProver fastPoolProver(String url, ProverClient.Transport t) {

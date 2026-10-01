@@ -738,6 +738,180 @@ public final class WalletService {
         }
     }
 
+    // ------------------------------------------------------------------ swaps (RPL-2 invoke)
+
+    /** The words of each step of a swap, as the shared UI's {@code PHASE_LABELS}. */
+    public static final String SELECTING = "Selecting notes";
+    static final String WITNESS = "Building the witness";
+    static final String DEVICE_PROVING = "Proving the bundle";
+    static final String SUBMITTING = "Submitting to the node";
+
+    /**
+     * Whether this device can swap here, before anything is quoted ({@code backend-shared.js}'s
+     * {@code program.canInvoke}): a proof route first, then the chain's {@code program_state}
+     * section. Returns the route (null: this device proves). Blocking.
+     */
+    public RemoteSend.Route canInvoke() throws Invoke.Refusal, RpcException {
+        RemoteSend.Route route;
+        try {
+            route = proveRoute();
+        } catch (ProverClient.Refusal e) {
+            throw new Invoke.Refusal(Invoke.PROVER_UNAVAILABLE, e.getMessage());
+        }
+        if (rpc().limits().programState == null) throw new Invoke.Refusal(Invoke.PROGRAMS_UNSUPPORTED, "This chain does not run programs yet.");
+        return route;
+    }
+
+    /** Every cell of {@code program} ({@code rand_getProgramCells}, page by page), or null on a chain without program state. Blocking. */
+    public JSONArray programCells(String program) throws RpcException {
+        return rpc().programCellsAll(program);
+    }
+
+    /** Scan, then the store's notes: what {@code plan_invoke} chooses from. */
+    private JSONArray scannedNotes() throws Exception {
+        scan();
+        synchronized (store) {
+            return store.notesJson();
+        }
+    }
+
+    /**
+     * Every refusal that needs no proof, and the network fee ({@link Invoke#quote}): what the
+     * Review step shows. Blocking: reads the node and scans.
+     */
+    public Invoke.Quote quoteInvoke(JSONObject request) throws Exception {
+        return Invoke.quote(rpc(), Invoke.InvokeCore.NATIVE, request, this::scannedNotes);
+    }
+
+    /**
+     * The whole swap: the route, the quote taken again (time has passed since Review: the pool may
+     * have moved, the notes may be spent), the anchor last, the proofs — on this device, or the
+     * bundle proof through the RandProtocol provers or the paired one ({@link RemoteSend}, kind
+     * {@code invoke}: the call proof and the auth proof are made here) — then submit, record,
+     * wait and rescan. Progress and the outcome go through {@link SwapMonitor}; a refusal carries
+     * the engine's code ({@link SendState#code}). Blocking and slow; {@link ProvingService} runs it.
+     */
+    public void invoke(JSONObject request, String amountIn) {
+        SendState st = new SendState(SendState.Phase.PREPARING, SELECTING, null, null, amountIn, null, System.currentTimeMillis());
+        SwapMonitor.post(st);
+        String sk = vault.spendKey();
+        if (sk == null) {
+            SwapMonitor.post(st.failed(null, "no wallet"));
+            return;
+        }
+        try {
+            RemoteSend.Route route;
+            try {
+                route = proveRoute();
+            } catch (ProverClient.Refusal e) {
+                throw new Invoke.Refusal(Invoke.PROVER_UNAVAILABLE, e.getMessage());
+            }
+            if (route != null && route.isDefault && !defaultNoticeRead()) {
+                throw new Invoke.Refusal(Invoke.PROVER_NOTICE, "Before the first swap through the RandProtocol provers, read what they can see: "
+                        + "they get this wallet's viewing key. Review the swap again and read the notice, or pair your own prover in Settings.");
+            }
+            RpcClient rpc = rpc();
+            Invoke.Quote q = Invoke.quote(rpc, Invoke.InvokeCore.NATIVE, request, this::scannedNotes);
+
+            final SendState base = st;
+            Invoke.Phases phases = step -> {
+                if ("witness".equals(step)) SwapMonitor.post(base.with(SendState.Phase.PREPARING, WITNESS));
+                else if ("prove".equals(step)) SwapMonitor.post(base.with(SendState.Phase.PROVING, DEVICE_PROVING));
+                else if ("submit".equals(step)) SwapMonitor.post(base.with(SendState.Phase.SUBMITTING, SUBMITTING));
+            };
+            Invoke.Prover remote = null;
+            if (route != null) {
+                final RemoteSend.Route r = route;
+                final String name = r.isDefault && r.poolName != null ? r.poolName + " provers" : r.pairing.name;
+                RemoteProver.PhaseListener listener = new RemoteProver.PhaseListener() {
+                    @Override
+                    public void phase(Integer pos) {
+                        SwapMonitor.post(base.remote(name, pos));
+                    }
+
+                    @Override
+                    public void authorising() {
+                        SwapMonitor.post(base.authorising(name));
+                    }
+                };
+                // The same pool path a transfer takes, with the job sealed as an invoke.
+                remote = (req, maxProofBytes) -> {
+                    SwapMonitor.post(base.remote(name, null));
+                    return r.isDefault
+                            ? RemoteSend.provePool(ProverCore.NATIVE, url -> {
+                                try {
+                                    return new RemoteProver(new ProverClient(url));
+                                } catch (ProverClient.Refusal e) {
+                                    throw new IllegalStateException(e);
+                                }
+                            }, RemoteSend.KIND_INVOKE, req, r, maxProofBytes, listener)
+                            : RemoteSend.prove(ProverCore.NATIVE, new RemoteProver(new ProverClient(r.pairing.url)), RemoteSend.KIND_INVOKE,
+                            req, r, maxProofBytes, listener);
+                };
+            }
+            JSONObject proved = Invoke.prove(rpc, Invoke.InvokeCore.NATIVE, q, sk, prefs.chainId(), remote, phases);
+            String hash = Invoke.submit(rpc, proved, phases);
+            long time = proved.optLong("time", 0);
+
+            Submission sub = new Submission();
+            sub.kind = Submission.INVOKE;
+            sub.hash = hash;
+            sub.time = time;
+            sub.program = proved.optString("program", "");
+            boolean token = proved.optLong("burn_asset", 0) != 0 && !"0".equals(proved.optString("burn_a", "0"));
+            sub.asset = token ? proved.optInt("burn_asset", 0) : 0;
+            sub.amount = token ? proved.optString("burn_a", "0") : proved.optString("burn_r", "0");
+            sub.fee = proved.optString("fee", q.fee);
+            sub.to = "";
+            sub.txKey = "";
+            sub.createdAtMs = System.currentTimeMillis();
+            // What the program pays this wallet: the notes the next scan finds by trial decryption.
+            JSONArray payouts = proved.optJSONArray("payouts");
+            if (payouts != null) {
+                for (int i = 0; i < payouts.length(); i++) {
+                    JSONObject n = payouts.getJSONObject(i);
+                    sub.payouts.put(new JSONObject().put("asset", n.optInt("asset", 0)).put("amount", n.optString("amount", "0")));
+                }
+            }
+            Set<Long> spentIdx = new HashSet<>();
+            JSONArray spent = proved.optJSONArray("spent_indices");
+            if (spent != null) for (int i = 0; i < spent.length(); i++) spentIdx.add(spent.getLong(i));
+            synchronized (store) {
+                store.markPending(spentIdx, time);
+                store.submissions.add(0, sub);
+            }
+            save();
+            publish(false, null);
+            st = st.submitted(hash, null);
+            SwapMonitor.post(st);
+
+            long deadline = System.currentTimeMillis() + COMMIT_TIMEOUT_MS;
+            boolean committed = false;
+            while (System.currentTimeMillis() < deadline) {
+                JSONObject t = rpc.transaction(hash);
+                if (t != null) {
+                    committed = true;
+                    synchronized (store) {
+                        sub.status = Submission.COMMITTED;
+                        sub.height = t.optLong("height", 0);
+                    }
+                    break;
+                }
+                Thread.sleep(POLL_MS);
+            }
+            // A swap pays into the wallet: this scan finds the note.
+            scan();
+            SwapMonitor.post(st.with(SendState.Phase.DONE, committed ? "Committed" : "Submitted; not yet committed"));
+        } catch (Invoke.Refusal e) {
+            SwapMonitor.post(st.failed(e.code, e.getMessage()));
+            publish(false, null);
+        } catch (Exception e) {
+            String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            SwapMonitor.post(st.failed(null, msg));
+            publish(false, null);
+        }
+    }
+
     // ------------------------------------------------------------------ faucet
 
     /** Ask a validator to mint 100 RAND to this wallet, wait for the commit, rescan. Blocking. */

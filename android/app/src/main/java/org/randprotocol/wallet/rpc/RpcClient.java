@@ -178,19 +178,46 @@ public class RpcClient {
         public final Long bundleGasLimit;
         /** Fullnode #118: blocks a bundle's time and anchor stay valid (1024 on chain 20); null = 256. */
         public final Long proofWindowBlocks;
+        /**
+         * RPL-2 (fullnode v0.6.8): the chain's {@code program_state} section — null on a chain
+         * without one (or a node that does not say), where every invoke is refused, so the wallet
+         * says so before anything is built.
+         */
+        public final ProgramState programState;
 
         public ChainLimits(Integer envelopeBytes, Integer maxProofBytes, Long bundleGasLimit) {
             this(envelopeBytes, maxProofBytes, bundleGasLimit, null);
         }
 
         public ChainLimits(Integer envelopeBytes, Integer maxProofBytes, Long bundleGasLimit, Long proofWindowBlocks) {
+            this(envelopeBytes, maxProofBytes, bundleGasLimit, proofWindowBlocks, null);
+        }
+
+        public ChainLimits(Integer envelopeBytes, Integer maxProofBytes, Long bundleGasLimit, Long proofWindowBlocks, ProgramState programState) {
             this.envelopeBytes = envelopeBytes;
             this.maxProofBytes = maxProofBytes;
             this.bundleGasLimit = bundleGasLimit;
             this.proofWindowBlocks = proofWindowBlocks;
+            this.programState = programState;
         }
 
-        public static final ChainLimits NONE = new ChainLimits(null, null, null, null);
+        public static final ChainLimits NONE = new ChainLimits(null, null, null, null, null);
+    }
+
+    /** {@code rand_getLimits.program_state}: {@code {cell_fee, max_reads, max_writes, max_payouts}}. */
+    public static final class ProgramState {
+        /** RAND units per cell a transition creates, a decimal string. */
+        public final String cellFee;
+        public final int maxReads;
+        public final int maxWrites;
+        public final int maxPayouts;
+
+        public ProgramState(String cellFee, int maxReads, int maxWrites, int maxPayouts) {
+            this.cellFee = cellFee;
+            this.maxReads = maxReads;
+            this.maxWrites = maxWrites;
+            this.maxPayouts = maxPayouts;
+        }
     }
 
     /**
@@ -215,7 +242,59 @@ public class RpcClient {
         Long proof = sizeField(reply, "max_proof_bytes", 1L << 30);
         Long gas = sizeField(reply, "bundle_gas_limit", Long.MAX_VALUE);
         Long window = sizeField(reply, "proof_window_blocks", 1L << 30);
-        return new ChainLimits(envelope == null ? null : (int) (long) envelope, proof == null ? null : (int) (long) proof, gas, window);
+        return new ChainLimits(envelope == null ? null : (int) (long) envelope, proof == null ? null : (int) (long) proof, gas, window,
+                programStateOf((JSONObject) reply));
+    }
+
+    /** {@code program_state}: null when absent or null, refused when it is there but not its shape. */
+    private static ProgramState programStateOf(JSONObject reply) throws RpcException {
+        String m = "rand_getLimits";
+        if (!reply.has("program_state") || reply.isNull("program_state")) return null;
+        Object ps = reply.opt("program_state");
+        if (!(ps instanceof JSONObject)) throw new RpcException(0, m + ": program_state is not an object");
+        JSONObject o = (JSONObject) ps;
+        return new ProgramState(
+                units(m, "program_state.cell_fee", o.opt("cell_fee")),
+                (int) intField(m, "program_state.max_reads", o.opt("max_reads"), 1024),
+                (int) intField(m, "program_state.max_writes", o.opt("max_writes"), 1024),
+                (int) intField(m, "program_state.max_payouts", o.opt("max_payouts"), 1024));
+    }
+
+    // ---- reply shapes, as ui/engine/validate.js holds them ----
+
+    private static final java.util.regex.Pattern UNITS = java.util.regex.Pattern.compile("[0-9]{1,30}");
+    private static final java.util.regex.Pattern WORD8 = java.util.regex.Pattern.compile("(0x)?[0-9a-fA-F]{64}");
+
+    /** A decimal string of units (or a non-negative JSON integer); never parsed as a double. */
+    static String units(String method, String what, Object v) throws RpcException {
+        String text = v instanceof Integer || v instanceof Long ? (((Number) v).longValue() >= 0 ? String.valueOf(v) : null)
+                : v instanceof String ? (String) v : null;
+        if (text == null || !UNITS.matcher(text).matches()) throw new RpcException(0, method + ": " + what + " is not a decimal amount");
+        return text;
+    }
+
+    /** A non-negative JSON integer no larger than {@code max}. */
+    static long intField(String method, String what, Object v, long max) throws RpcException {
+        if (v instanceof Integer || v instanceof Long) {
+            long n = ((Number) v).longValue();
+            if (n >= 0 && n <= max) return n;
+        }
+        throw new RpcException(0, method + ": " + what + " is not an integer in 0.." + max);
+    }
+
+    /** 64 hex characters, lowercased and without {@code 0x}. */
+    static String word8(String method, String what, Object v) throws RpcException {
+        if (!(v instanceof String) || !WORD8.matcher((String) v).matches()) throw new RpcException(0, method + ": " + what + " is not 64 hex characters");
+        return ((String) v).replaceFirst("^0x", "").toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** {@code {"enabled": false}}: what every program-state method answers on a chain without the section. */
+    private static boolean sectionOff(Object reply) {
+        return reply instanceof JSONObject && ((JSONObject) reply).has("enabled") && !((JSONObject) reply).optBoolean("enabled", true);
+    }
+
+    private static String id(String program) throws RpcException {
+        return word8("program", "the program id", program);
     }
 
     /**
@@ -348,5 +427,187 @@ public class RpcClient {
         } catch (JSONException ignored) {
         }
         return String.valueOf(call("rand_estimateFee", args(spec)));
+    }
+
+    /**
+     * {@code rand_estimateFee(spec)} → RAND units, a decimal string. An invoke's spec is {@code
+     * {kind: "invoke", tier, keccak_log_height, sha256_log_height, created_cells, gas?, bytes?}}.
+     */
+    public String estimateFee(JSONObject spec) throws RpcException {
+        return units("rand_estimateFee", "the fee", call("rand_estimateFee", args(spec)));
+    }
+
+    /** A token's {@code symbol} and {@code name} are node-controlled text and go into the UI. */
+    private static final int MAX_TOKEN_TEXT = 128;
+
+    /**
+     * {@code rand_getTokens}' registry as {@code [{index, symbol, name, decimals}]} — what the Swap
+     * screen names and scales a token by — or an empty list on a chain without one. A row whose
+     * index or decimals are not small integers is refused; text is cut at 128 characters (the
+     * screen sanitises it before showing it).
+     */
+    public JSONArray tokens() throws RpcException {
+        String m = "rand_getTokens";
+        Object r = call(m, null);
+        JSONArray out = new JSONArray();
+        if (!(r instanceof JSONObject) || !((JSONObject) r).optBoolean("enabled", false)) return out;
+        Object rows = ((JSONObject) r).opt("tokens");
+        if (!(rows instanceof JSONArray) || ((JSONArray) rows).length() > 4096) throw new RpcException(0, m + ": tokens is not a list");
+        for (int i = 0; i < ((JSONArray) rows).length(); i++) {
+            Object t = ((JSONArray) rows).opt(i);
+            if (!(t instanceof JSONObject)) throw new RpcException(0, m + ": a token is not an object");
+            JSONObject o = (JSONObject) t;
+            try {
+                out.put(new JSONObject()
+                        .put("index", intField(m, "index", o.opt("index"), 0xffff_ffffL))
+                        .put("decimals", intField(m, "decimals", o.opt("decimals"), 30))
+                        .put("symbol", text(o.opt("symbol")))
+                        .put("name", text(o.opt("name"))));
+            } catch (JSONException e) {
+                throw new RpcException("reading " + m, e);
+            }
+        }
+        return out;
+    }
+
+    private static String text(Object v) {
+        String s = v instanceof String ? (String) v : "";
+        return s.length() > MAX_TOKEN_TEXT ? s.substring(0, MAX_TOKEN_TEXT) : s;
+    }
+
+    // ---- RPL-2 program state ----
+    // What an invoke reads from the node before it proves anything. None of it is trusted further
+    // than its shape: the core hashes the code and public input against the program id
+    // (dry_run_invoke refuses a node serving other code), and the cells are re-checked by the chain
+    // itself (a stale read is refused there).
+
+    /** A program's code is at most {@code max_program_words} (65 535 on chain 20) words. */
+    private static final int MAX_PROGRAM_WORDS = 1 << 20;
+    private static final int MAX_CELLS_PAGE = 4096;
+
+    /** One page of {@code rand_getProgramCells}: the cells in key order, and the next page's cursor (null on the last). */
+    public static final class CellPage {
+        public final JSONArray cells;
+        public final String next;
+
+        CellPage(JSONArray cells, String next) {
+            this.cells = cells;
+            this.next = next;
+        }
+    }
+
+    /**
+     * {@code rand_getProgramCells(id, {after?, limit})}: one page of {@code [{key, value}]}, or null
+     * on a chain without program state.
+     */
+    public CellPage programCells(String program, String after, int limit) throws RpcException {
+        String m = "rand_getProgramCells";
+        JSONObject page = new JSONObject();
+        try {
+            if (after != null) page.put("after", after);
+            page.put("limit", limit);
+        } catch (JSONException e) {
+            throw new RpcException("building request", e);
+        }
+        Object r = call(m, args(id(program), page));
+        if (sectionOff(r)) return null;
+        if (!(r instanceof JSONObject)) throw new RpcException(0, m + ": not an object");
+        Object rows = ((JSONObject) r).opt("cells");
+        if (!(rows instanceof JSONArray) || ((JSONArray) rows).length() > MAX_CELLS_PAGE) throw new RpcException(0, m + ": cells is not a list");
+        JSONArray out = new JSONArray();
+        for (int i = 0; i < ((JSONArray) rows).length(); i++) {
+            Object c = ((JSONArray) rows).opt(i);
+            if (!(c instanceof JSONObject)) throw new RpcException(0, m + ": a cell is not an object");
+            try {
+                out.put(new JSONObject().put("key", word8(m, "key", ((JSONObject) c).opt("key"))).put("value", word8(m, "value", ((JSONObject) c).opt("value"))));
+            } catch (JSONException e) {
+                throw new RpcException("reading " + m, e);
+            }
+        }
+        Object next = ((JSONObject) r).opt("next");
+        return new CellPage(out, next == null || next == JSONObject.NULL ? null : word8(m, "next", next));
+    }
+
+    /**
+     * Every cell of a program, page by page ({@code ui/engine/backend-shared.js}'s
+     * {@code program.cells}), or null on a chain without program state. What the Swap screen prices
+     * from. At most 64 pages; a cursor that does not move would loop for ever, so it ends the walk.
+     */
+    public JSONArray programCellsAll(String program) throws RpcException {
+        JSONArray out = new JSONArray();
+        String after = null;
+        for (int page = 0; page < 64; page++) {
+            CellPage p = programCells(program, after, 256);
+            if (p == null) return null;
+            for (int i = 0; i < p.cells.length(); i++) out.put(p.cells.opt(i));
+            if (p.next == null || p.next.equals(after)) break;
+            after = p.next;
+        }
+        return out;
+    }
+
+    /** {@code rand_getProgramCell(id, key)} → the cell's value (64 hex; zeros for absent), or null without the section. */
+    public String programCell(String program, String key) throws RpcException {
+        String m = "rand_getProgramCell";
+        String k = word8(m, "the key asked", key);
+        Object r = call(m, args(id(program), k));
+        if (sectionOff(r)) return null;
+        if (!(r instanceof JSONObject)) throw new RpcException(0, m + ": not an object");
+        if (!k.equals(word8(m, "key", ((JSONObject) r).opt("key")))) throw new RpcException(0, m + ": the reply is for another key");
+        return word8(m, "value", ((JSONObject) r).opt("value"));
+    }
+
+    /** {@code rand_getProgramCode(id)} → {@code {base_pc, words}}, or null for an id no program has. */
+    public JSONObject programCode(String program) throws RpcException {
+        String m = "rand_getProgramCode";
+        Object r = call(m, args(id(program)));
+        if (r == null || r == JSONObject.NULL) return null;
+        if (!(r instanceof JSONObject)) throw new RpcException(0, m + ": not an object");
+        long basePc = intField(m, "base_pc", ((JSONObject) r).opt("base_pc"), 0xffff_ffffL);
+        Object words = ((JSONObject) r).opt("words");
+        if (!(words instanceof JSONArray) || ((JSONArray) words).length() > MAX_PROGRAM_WORDS) throw new RpcException(0, m + ": words is not a list");
+        JSONArray w = (JSONArray) words;
+        for (int i = 0; i < w.length(); i++) intField(m, "a code word", w.opt(i), 0xffff_ffffL);
+        try {
+            return new JSONObject().put("base_pc", basePc).put("words", w);
+        } catch (JSONException e) {
+            throw new RpcException("reading " + m, e);
+        }
+    }
+
+    /** {@code rand_getProgramPublic(id)} → the public words as lowercase hex ({@code ""} without), or null for no program. */
+    public String programPublic(String program) throws RpcException {
+        String m = "rand_getProgramPublic";
+        Object r = call(m, args(id(program)));
+        if (r == null || r == JSONObject.NULL) return null;
+        if (!(r instanceof String) || ((String) r).length() > 8 * MAX_PROGRAM_WORDS || !((String) r).matches("[0-9a-fA-F]*")) {
+            throw new RpcException(0, m + ": the public input is not hex");
+        }
+        if (((String) r).length() % 8 != 0) throw new RpcException(0, m + ": the public input is not whole words");
+        return ((String) r).toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** {@code rand_getProgramVault(id)} → {@code [{asset, amount}]} ascending by asset, or null without the section. */
+    public JSONArray programVault(String program) throws RpcException {
+        String m = "rand_getProgramVault";
+        Object r = call(m, args(id(program)));
+        if (sectionOff(r)) return null;
+        if (!(r instanceof JSONArray) || ((JSONArray) r).length() > MAX_CELLS_PAGE) throw new RpcException(0, m + ": not a list");
+        JSONArray rows = (JSONArray) r;
+        JSONArray out = new JSONArray();
+        long last = -1;
+        for (int i = 0; i < rows.length(); i++) {
+            Object row = rows.opt(i);
+            if (!(row instanceof JSONObject)) throw new RpcException(0, m + ": a row is not an object");
+            long asset = intField(m, "asset", ((JSONObject) row).opt("asset"), 0xffff_ffffL);
+            if (asset <= last) throw new RpcException(0, m + ": the vault is not in ascending asset order");
+            last = asset;
+            try {
+                out.put(new JSONObject().put("asset", asset).put("amount", units(m, "amount", ((JSONObject) row).opt("amount"))));
+            } catch (JSONException e) {
+                throw new RpcException("reading " + m, e);
+            }
+        }
+        return out;
     }
 }

@@ -36,7 +36,16 @@ public interface ProverCore {
      */
     JSONObject prepareTransfer(JSONObject params) throws Exception;
 
-    /** The ProveResult {@code prove_transfer} would have returned, once the reply checks out. */
+    /**
+     * {@code prepare_invoke}: {@link #prepareTransfer} for an RPL-2 invoke — the call proof and the
+     * auth proof made here, on this device, and only the bundle's witness sealed to the prover
+     * ({@code pending.kind} is {@code "invoke"}). The same secrets ride {@code params}.
+     */
+    default JSONObject prepareInvoke(JSONObject params) throws Exception {
+        throw new UnsupportedOperationException("This wallet cannot seal an invoke for a prover.");
+    }
+
+    /** The ProveResult {@code prove_transfer} would have returned (an InvokeResult for an invoke), once the reply checks out. */
     JSONObject finishProof(Object pending, String replyHex) throws Exception;
 
     /**
@@ -81,6 +90,11 @@ public interface ProverCore {
         @Override
         public JSONObject prepareTransfer(JSONObject params) throws CoreException {
             return Core.object("prepare_transfer", params);
+        }
+
+        @Override
+        public JSONObject prepareInvoke(JSONObject params) throws CoreException {
+            return Core.prepareInvoke(params);
         }
 
         @Override
