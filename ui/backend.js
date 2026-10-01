@@ -356,6 +356,14 @@
  *     · `prover.probe()` → `{ok: true, queue: {depth, max, proving}, witnessKinds, fee, hcBundles}`
  *       or `{ok: false, reason}`; never rejects.
  *     · `prover.forget()` — removes `settings.prover`, the vault's token and the session's copy.
+ *     · `prover.trusted?()` → `{name, url, fingerprint, warning}` or `null`: the prover the build
+ *       ships the address of (the core's `version.trusted_prover` — the RandProtocol validators'
+ *       pool, viewing-key jobs only, no fee), for a screen to offer in one step. Asking pairs
+ *       nothing. `warning` is the history sentence a screen shows before `pairTrusted`.
+ *     · `prover.pairTrusted?(password)` → the new `settings.prover`: `pair()` on the built-in
+ *       link, after holding it (through the core) to the fingerprint the build pins — the
+ *       prover must answer with that key, or nothing is stored. Never called by the backend
+ *       itself: the wallet never pairs a prover by itself, and `forget()` undoes it like any.
  *  - `send.pending?()` → `{job, name, kind, startedAt}` or `null`: a remote proof still in flight —
  *    typically a popup closed mid-proof. It lives in session storage and is forgotten on lock.
  *  - `send.resume?(onPhase, options?)` → `{hash, txKey}` (a transfer) or `{hash}` (a withdrawal):

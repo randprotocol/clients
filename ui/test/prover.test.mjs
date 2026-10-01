@@ -19,7 +19,7 @@ import {
 import {
   stubCore, stubFetch, mapStorage, stubPlatform, assertKeyNeverLeaked,
   PASSWORD, ADDRESS, SPEND_KEY, PROVER_URL, PROVER_TOKEN, PROVER_REPLY, PROVED_TX_HASH, SEALED_JOB,
-  proverLink, proverInfo, proverEk, proverFingerprint, HC_V2, HC_V3, HC_AUTH, CORE_VERSION,
+  proverLink, proverInfo, proverEk, proverFingerprint, HC_V2, HC_V3, HC_AUTH, CORE_VERSION, TRUSTED_PROVER,
 } from './backend-fixtures.mjs';
 
 const ROOT = '1b'.repeat(32);
@@ -219,6 +219,57 @@ test('forget_removes_settings_vault_and_session_copies', async () => {
   assert.equal(env.storage.sessionMap.get('unlocked').spend_key, SPEND_KEY, 'forgetting the prover kept the wallet unlocked');
   assert.deepEqual(await env.backend.send.canProve(), { ok: false, reason: CANNOT_PROVE_REASON });
   assert.equal((await env.backend.prover.probe()).ok, false);
+});
+
+// ------------------------------------------------------------------------ the trusted prover ---
+
+test('the trusted prover is reported, never paired by itself, and paired in one step through the same checks', async () => {
+  const env = build({ fetch: sendableFetch({ prover_info: () => proverInfo('TRUST') }) });
+  await env.backend.wallet.create(PASSWORD);
+  // Reported from the core's `version`, with the history sentence; nothing paired by asking.
+  const t = await env.backend.prover.trusted();
+  assert.deepEqual(t, {
+    name: 'RandProtocol', url: 'https://prover.randprotocol.org', fingerprint: TRUSTED_PROVER.fingerprint,
+    warning: CORE_VERSION.prover_history_warning,
+  });
+  assert.equal('link' in t, false, 'the link (with its token) is not handed to screens');
+  assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
+  assert.equal(count(env.fetch, 'prover_info'), 0);
+  assert.deepEqual(await env.backend.send.canProve(), { ok: false, reason: CANNOT_PROVE_REASON });
+
+  // One step: the built-in link through `pair` — the password first, the prover's key checked
+  // against the link's, the vault record written NOT own, the display copy named RandProtocol.
+  await assert.rejects(() => env.backend.prover.pairTrusted('not-the-password!'), /wrong password/);
+  assert.equal(count(env.fetch, 'prover_info'), 0);
+  const paired = await env.backend.prover.pairTrusted(PASSWORD);
+  assert.deepEqual(paired, {
+    mode: 'remote', name: 'RandProtocol', url: 'https://prover.randprotocol.org', kemEk: proverEk('TRUST'),
+    fingerprint: TRUSTED_PROVER.fingerprint, own: false,
+  });
+  assert.equal(JSON.parse(await decryptSecret(PASSWORD, env.storage.local.get('proverToken'))).own, false);
+  assert.deepEqual(await env.backend.send.canProve(), { ok: true, via: 'prover' });
+  assert.ok(env.fetch.requests.some((r) => r.body.method === 'prover_info' && String(r.url).startsWith('https://prover.randprotocol.org')));
+  // Forget works as for any pairing.
+  await env.backend.prover.forget();
+  assert.deepEqual((await env.backend.settings.get()).prover, { mode: 'device' });
+
+  // A prover at that address answering with another key is refused — nothing stored.
+  const other = build({ fetch: sendableFetch({ prover_info: () => proverInfo('OTHER') }) });
+  await other.backend.wallet.create(PASSWORD);
+  await assert.rejects(() => other.backend.prover.pairTrusted(PASSWORD), /different key/);
+  assert.equal(other.storage.local.get('proverToken'), undefined);
+
+  // A build whose link names another key than the one it pins never asks the prover at all.
+  const core = stubCore({ version: () => ({ ...CORE_VERSION, trusted_prover: { ...TRUSTED_PROVER, fingerprint: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ' } }) });
+  const pinned = build({ core, fetch: sendableFetch({ prover_info: () => proverInfo('TRUST') }) });
+  await pinned.backend.wallet.create(PASSWORD);
+  await assert.rejects(() => pinned.backend.prover.pairTrusted(PASSWORD), /does not name the key this wallet pins/);
+  assert.equal(count(pinned.fetch, 'prover_info'), 0);
+  // And a build that ships none: nothing to offer, nothing to pair.
+  const none = build({ core: stubCore({ version: () => ({ ...CORE_VERSION, trusted_prover: null }) }) });
+  await none.backend.wallet.create(PASSWORD);
+  assert.equal(await none.backend.prover.trusted(), null);
+  await assert.rejects(() => none.backend.prover.pairTrusted(PASSWORD), /ships no prover/);
 });
 
 // ------------------------------------------------------------------------------ canProve -------

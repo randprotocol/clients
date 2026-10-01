@@ -152,6 +152,10 @@ function proverMarkup(settings, platform, host = '') {
         <span class="hint" id="settings-prover-link-hint">The randprover: link your prover shows. It carries a secret — paste it here and nowhere else.</span>
       </div>
       ${scan}
+      <div class="stack tight" data-role="trusted-prover" hidden>
+        <p class="caption">Or use the prover RandProtocol runs for everyone — <span class="mono" data-role="trusted-prover-url"></span>, fingerprint <span class="mono" data-role="trusted-prover-fingerprint"></span>. It sees as much as any prover you pair (the warning below) and charges nothing; your spend key stays here either way.</p>
+        <button class="btn" type="button" data-role="use-trusted-prover">Use the RandProtocol prover</button>
+      </div>
       <div class="banner warn" data-role="prover-warning">
         <span class="ic">${raw(icons.warning())}</span>
         <span><span class="banner-title">A prover sees your history</span>${PROVER_WARNING}</span>
@@ -620,6 +624,63 @@ registerScreen('settings', {
       } else {
         showStatus('positive', 'Paired', where, proverStatusEl);
       }
+    });
+
+    // The one-step pairing of the prover the build ships the address of: shown only once the
+    // engine says there is one; the same password field, the same warning above it (the banner
+    // is part of the form, so it is on screen before this button is), the same host permission.
+    let trusted = null;
+    (async () => {
+      if (!proverGroup || typeof proverGroup.trusted !== 'function') return;
+      try { trusted = await proverGroup.trusted(); } catch { trusted = null; }
+      if (!live() || !trusted) return;
+      const box = body.querySelector('[data-role="trusted-prover"]');
+      if (!box) return;
+      box.querySelector('[data-role="trusted-prover-url"]').textContent = trusted.url;
+      box.querySelector('[data-role="trusted-prover-fingerprint"]').textContent = trusted.fingerprint;
+      box.removeAttribute('hidden');
+    })();
+
+    const offUseTrusted = on(body, '[data-role="use-trusted-prover"]', 'click', async (evt) => {
+      evt.preventDefault();
+      if (!proverGroup || typeof proverGroup.pairTrusted !== 'function' || !trusted || pairing) return;
+      let password = proverPasswordInput.value;
+      proverStatusEl.innerHTML = '';
+      if (!password) { showStatus('negative', 'Not paired', 'Enter this wallet\'s password — the pairing is sealed under it.', proverStatusEl); return; }
+      pairing = true;
+      const btn = evt.target.closest('button');
+      if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
+      const done = () => {
+        pairing = false;
+        password = '';
+        proverPasswordInput.value = '';
+        if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+      };
+      if (typeof platform.ensureHostPermission === 'function') {
+        let granted = false;
+        try { granted = await platform.ensureHostPermission(trusted.url); } catch { granted = false; }
+        if (!live()) { done(); return; }
+        if (!granted) {
+          done();
+          showStatus('negative', 'Not paired', 'Permission to reach that prover was not granted, so nothing was saved.', proverStatusEl);
+          return;
+        }
+      }
+      let paired;
+      try {
+        paired = await proverGroup.pairTrusted(password);
+      } catch (err) {
+        done();
+        if (!live()) return;
+        showStatus('negative', 'Not paired', (err && err.message) || 'The prover could not be paired.', proverStatusEl);
+        return;
+      }
+      done();
+      if (!live()) return;
+      settings = { ...settings, prover: paired };
+      paintProverState();
+      showStatus('warn', 'Paired — this prover can read your history',
+        `Proofs this device cannot make go to ${paired.name || trusted.name}. Its fingerprint is ${paired.fingerprint || trusted.fingerprint}. ${trusted.warning || PROVER_WARNING}`, proverStatusEl);
     });
 
     const offScanProver = on(body, '[data-role="scan-prover"]', 'click', async (evt) => {

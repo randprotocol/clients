@@ -416,6 +416,8 @@ function createBackend(initial = {}, overrides = {}) {
   // The core's `prover_history_warning`, which the engine relays for a link not marked own.
   const PROVER_NOT_OWN = 'This prover will be able to read this wallet\'s whole history — every payment '
     + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.';
+  const TRUSTED_LINK = `randprover:TRUST?url=${encodeURIComponent('https://prover.randprotocol.org')}&token=${'c3'.repeat(32)}`;
+  const TRUSTED_PROVER = Object.freeze({ name: 'RandProtocol', url: 'https://prover.randprotocol.org', fingerprint: fakeFingerprint('prover:TRUST') });
   const readProverLink = (link) => {
     const m = /^randprover:([A-Za-z0-9]+)\?(.*)$/.exec(String(link || '').trim());
     if (!m) throw new Error('not a randprover: link');
@@ -445,6 +447,9 @@ function createBackend(initial = {}, overrides = {}) {
       ? state.proverProbe
       : { ok: false, reason: 'No prover is paired.' }),
     forget: () => { state.settings.prover = { mode: 'device' }; },
+    // The prover the build ships the address of, and its one-step pairing (the same `pair`).
+    trusted: () => ({ ...TRUSTED_PROVER, warning: PROVER_NOT_OWN }),
+    pairTrusted: (password) => { const r = proverDefs.pair(TRUSTED_LINK, password); state.settings.prover.name = TRUSTED_PROVER.name; return { ...state.settings.prover }; },
   };
 
   const rpcDefs = {

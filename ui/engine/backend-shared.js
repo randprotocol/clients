@@ -1610,6 +1610,39 @@ export function makeSharedBackend({
       return probeAt(p);
     },
 
+    /**
+     * The prover every client ships the address of (the core's `version.trusted_prover`: the
+     * RandProtocol validators' pool, viewing-key jobs only, no fee) — `{name, url, fingerprint,
+     * warning}` for a screen to show beside its one-step action, or `null` when this build
+     * carries none. Nothing is paired by asking.
+     */
+    async trusted() {
+      const t = (await constants()).trusted_prover;
+      if (!t || typeof t !== 'object' || typeof t.link !== 'string' || !t.link) return null;
+      return {
+        name: String(t.name || 'RandProtocol'), url: String(t.url || ''), fingerprint: String(t.fingerprint || ''),
+        warning: await historyWarning(),
+      };
+    },
+
+    /**
+     * Pair the trusted prover: `pair()` on the built-in link — the same checks, the same vault
+     * record, the same `settings.prover` — after holding the link, through the core, to the
+     * fingerprint the build pins, so a link that somehow named another key is refused before
+     * the prover is asked anything. Never called by the engine itself: only a screen does, after
+     * showing the history warning, and `forget()` undoes it like any pairing.
+     */
+    async pairTrusted(password) {
+      const t = (await constants()).trusted_prover;
+      if (!t || typeof t !== 'object' || typeof t.link !== 'string' || !t.link) throw new Error('This build ships no prover to use.');
+      const parsed = await c.parseProverLink(t.link);
+      if (!t.fingerprint || String(parsed.fingerprint) !== String(t.fingerprint)) {
+        throw new Error('The built-in prover link does not name the key this wallet pins; not pairing it.');
+      }
+      if (parsed.own === true) throw new Error('The built-in prover link is marked as your own, which a shared prover is not; not pairing it.');
+      return prover.pair(t.link, password, { name: String(t.name || 'RandProtocol') });
+    },
+
     /** Forget the pairing: `settings.prover`, the vault's pairing record and the session's copy. */
     async forget() {
       await writeProverSetting(null);

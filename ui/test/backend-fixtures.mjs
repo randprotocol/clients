@@ -94,7 +94,16 @@ export const CORE_VERSION = Object.freeze({
   prover_witness_kinds: ['viewing_key', 'spend_key'],
   prover_history_warning: 'This prover will be able to read this wallet\'s whole history — every payment '
     + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.',
+  // The prover every client ships the address of (the real core pins the live pool's key;
+  // here the stub grammar's `TRUST` key, not marked own, at the real URL).
+  trusted_prover: {
+    name: 'RandProtocol', url: 'https://prover.randprotocol.org', fingerprint: 'A2A2-PROV-ERFP-0000', own: false,
+    link: `randprover:TRUST?url=${encodeURIComponent('https://prover.randprotocol.org')}&token=${'c3'.repeat(32)}`,
+  },
 });
+/** The stub's trusted prover: `CORE_VERSION.trusted_prover`, whose key is `proverEk('TRUST')`. */
+export const TRUSTED_PROVER = CORE_VERSION.trusted_prover;
+if (TRUSTED_PROVER.fingerprint !== proverFingerprint('TRUST')) throw new Error('the stub trusted prover must pin the fingerprint of proverEk("TRUST")');
 
 /** The stub chain's guests: bundle guest v3 and the auth guest (a split-authorisation chain)… */
 export const HC_V3 = CORE_VERSION.hc_bundle;

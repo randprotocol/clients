@@ -92,6 +92,7 @@
     "https://rpc1.randprotocol.org/*",
     "https://rpc2.randprotocol.org/*",
     "https://rpc3.randprotocol.org/*",
+    "https://prover.randprotocol.org/*",
     "https://randbridge.org/*",
     "https://*.randbridge.org/*",
     "https://durian.market/*",

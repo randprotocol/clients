@@ -665,6 +665,56 @@ test('a link that is not marked own is paired, and the engine\'s history warning
   assert.match(state.querySelector('[data-role="prover-not-own"]').textContent, /can read this wallet's whole history\. It cannot spend\./);
 });
 
+test('Use the RandProtocol prover pairs the built-in prover in one step, behind the password and the warning', async (t) => {
+  const b = unlockedBackend();
+  const { app, root } = await settings(t, b);
+  await app.idle();
+  const box = root.querySelector('[data-role="trusted-prover"]');
+  assert.ok(box && !box.hasAttribute('hidden'), 'the action is offered once the engine names a trusted prover');
+  assert.match(box.textContent, /prover\.randprotocol\.org/);
+  assert.match(box.textContent, /fingerprint [A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}/);
+  // The warning is part of the form, above the password and this button's password field alike.
+  const html = root.querySelector('[data-role="prover-form"]').innerHTML;
+  assert.ok(html.indexOf('data-role="trusted-prover"') < html.indexOf('data-role="prover-warning"'));
+  assert.ok(html.indexOf('data-role="prover-warning"') < html.indexOf('name="proverPassword"'));
+  // No password: nothing is paired.
+  root.querySelector('[data-role="use-trusted-prover"]').click();
+  await app.idle();
+  assert.match(root.querySelector('[data-role="prover-status"]').textContent, /Enter this wallet's password/);
+  assert.equal(b.calls.filter((c) => c[0] === 'prover.pairTrusted').length, 0);
+  // With it: the engine's one-step pairing, with that password and nothing else; the field is
+  // emptied, the state says a paired prover (not "my own"), the status carries the warning.
+  root.querySelector('[name=proverPassword]').value = PASSWORD;
+  root.querySelector('[data-role="use-trusted-prover"]').click();
+  await app.idle();
+  assert.deepEqual(b.calls.filter((c) => c[0] === 'prover.pairTrusted').map((c) => c.slice(1)), [[PASSWORD]]);
+  assert.equal(b.calls.filter((c) => c[0] === 'prover.pair').length, 0, 'the link never passes through the screen');
+  assert.equal(root.querySelector('[name=proverPassword]').value, '');
+  const status = root.querySelector('[data-role="prover-status"]').textContent;
+  assert.match(status, /Paired — this prover can read your history/);
+  assert.match(status, /go to RandProtocol/);
+  assert.ok(status.includes(PROVER_WARNING));
+  const state = root.querySelector('[data-role="prover-state"]').textContent;
+  assert.match(state, /Paired prover · RandProtocol/);
+  assert.doesNotMatch(state, /My own prover/);
+  assert.equal(root.innerHTML.includes('c3'.repeat(32)), false, 'the built-in token is in the page');
+});
+
+test('a backend without a trusted prover offers no such action, and a refused one pairs nothing', async (t) => {
+  const none = unlockedBackend({ prover: { trusted: () => null } });
+  const first = await settings(t, none);
+  await first.app.idle();
+  assert.ok(first.root.querySelector('[data-role="trusted-prover"]').hasAttribute('hidden'));
+  const refusing = unlockedBackend({ prover: { pairTrusted: () => { throw new Error('The prover at that address has a different key from the one the link names. Do not pair it.'); } } });
+  const { app, root } = await settings(t, refusing);
+  await app.idle();
+  root.querySelector('[name=proverPassword]').value = PASSWORD;
+  root.querySelector('[data-role="use-trusted-prover"]').click();
+  await app.idle();
+  assert.match(root.querySelector('[data-role="prover-status"]').textContent, /Not paired.*different key/);
+  assert.match(root.querySelector('[data-role="prover-state"]').textContent, /This device/);
+});
+
 test('a pairing marked own carries no history note under it', async (t) => {
   const { app, root } = await settings(t);
   submitProver(root, { link: proverLink({ own: true }) });
