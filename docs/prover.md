@@ -208,46 +208,60 @@ the send both say so), and one that starts charging between the pairing and a jo
 before the job is built; the prover's own refusal of an unpaid job (`-32006`) is reported in the
 same words. Pair a prover that charges nothing, or run your own.
 
-## 8. The RandProtocol prover
+## 8. The RandProtocol provers
 
-Every client ships with the address of one prover, run by the RandProtocol validators:
-**`https://prover.randprotocol.org`**, key fingerprint **`RGTF-7HKJ-XZFV-GQ1J`**. It is a pool —
-validator-hosted provers behind one name, every member holding the same prover key, so a job
-reaches whichever answers — it takes viewing-key jobs only, and it charges nothing.
+Every client ships a pinned descriptor of the provers the RandProtocol validators run (wallet
+0.6.9; before it, 0.6.8 pinned one key shared by every machine — audit v7 VK-9, fullnode #123). Each
+member has **its own key** at its own URL:
 
-**From wallet 0.6.8 it is the default.** A wallet with no prover of its own that cannot make a
-proof itself — the browser extension and the web wallet always (a bundle proof needs ~6.2 GB and
-wasm stops at 4 GiB), a phone almost always, a desktop without 8 GB of memory — sends through it
-at once, with nothing to pair. A desktop (or a phone) that has the memory keeps proving on the
-device: the device is always asked first. Nothing is stored for it: the wallet reads the built-in
-link through the core, holds it to the pinned fingerprint (`version.trusted_prover.fingerprint`),
-the URL rule and `own=0`, asks the pool for its key — refusing it unless it is the pinned one — and
-seals the job to that key.
+| member | fingerprint | URL |
+|---|---|---|
+| a | `ZEXQ-1JHV-ZT60-KFB5` | `https://prover.randprotocol.org/m/a` |
+| archive2 | `D2XV-WXVT-PZRC-D7G8` | `https://prover.randprotocol.org/m/archive2` |
+| nyc3 | `SR28-MYT0-GR6A-03DE` | `https://prover.randprotocol.org/m/nyc3` |
+| sfo3 | `GMNX-Q1QD-FEXG-JHJM` | `https://prover.randprotocol.org/m/sfo3` |
 
-**The first send through it shows a one-time notice**, before anything is built:
+The wallet pins it from data (`core/crates/wallet-core/src/trusted-prover-pool.json`, copied from
+the operators' `pool.json`; the same descriptor is served at
+`https://prover.randprotocol.org/.well-known/rand-prover-pool.json` for people and tools — a wallet
+never fetches it). Each member's pairing link is held to that member's pinned fingerprint and URL,
+by a test at build time and by every shell at run time, so a member removed or re-keyed is one
+entry changed and the others keep working. They take viewing-key jobs only and charge nothing.
 
-> This device cannot make the proof, so the prover RandProtocol runs for everyone makes it. It
-> receives this wallet's viewing key, so it can read your whole history — every payment received
-> and sent, past and future. It cannot spend. You are asked once; to keep your history to
+**They are the default.** A wallet with no prover of its own that cannot make a proof itself — the
+browser extension and the web wallet always, a phone almost always, a desktop without 8 GB of
+memory — sends through them at once. A device that has the memory keeps proving locally (the
+device is always asked first). For each job the members are tried in a fresh random order: a member
+must answer `prover_info` with ITS pinned key, no fee, viewing-key jobs and room in its queue;
+the job is sealed to that member's key and polled on that member until done — never another member
+mid-job. A member unreachable, busy (a full queue, or busy at submit) or refusing is skipped for
+the next. Only when every member is busy or away does the wallet say so — "The RandProtocol provers
+are all busy right now; try again in a minute, or pair your own prover in Settings." / "… cannot be
+reached right now (…)" — and it never retries in a loop. Nothing is stored for them.
+
+**The first send through them shows a one-time notice**, before anything is built:
+
+> This device cannot make the proof, so one of the RandProtocol provers (N machines run by the
+> validators; each one that proves a send sees that wallet's viewing key) makes it. The one that
+> does receives this wallet's viewing key, so it can read your whole history — every payment
+> received and sent, past and future. It cannot spend. You are asked once; to keep your history to
 > yourself, use your own prover instead.
 
-with **I understand — continue** and **Use my own prover** (to Settings) right there. The
-acknowledgement is remembered for that wallet; removing the wallet forgets it, and the engine
-refuses a send through the pool until it is read.
+with **I understand — continue** and **Use my own prover** (to Settings). It is remembered for that
+wallet; removing the wallet forgets it, and a job to a member is refused until it is read. In the
+Firefox extension the notice's button also asks Firefox's `financialAndPaymentInfo`
+data-collection permission (the job sends the viewing key to the developer's machines); declined,
+the browser has no prover.
 
-In Settings → **Prover** it is named with its URL, fingerprint and what it sees. **Use no prover**
-turns it off (proofs are then made on the device or not at all); **Use the RandProtocol prover**
-turns it back on. A prover you pair yourself (§3, §4) is always preferred over it, and **Forget
-this prover** falls back to it. When the pool does not answer, answers with another key, or is busy
-(its queue is small; a busy answer is never retried in a loop), the wallet says so plainly —
-"The RandProtocol prover cannot be reached right now (…)" / "The RandProtocol prover is busy; try
-again in a minute, or pair your own prover in Settings."
+In Settings → **Prover** each member is listed with its fingerprint. **Use no prover** turns them
+off; **Use the RandProtocol provers** turns them back on. A prover you pair yourself (§3, §4) is
+always preferred, and **Forget this prover** falls back to them.
 
-What it learns is what §2 says of every prover that is not your own: the viewing key of every
-wallet that uses it and a one-time salt with each job — that wallet's whole history, past and
-future — and never a spend key. A `rand-prover` you run (§4), or the desktop app (§3), is what
-keeps your history to yourself. The built-in link carries a token shared by every client, so it
-identifies the wallet software, not you.
+What a member learns is what §2 says of every prover that is not your own: the viewing key of each
+wallet whose job it proves and a one-time salt — that wallet's whole history, past and future — and
+never a spend key. A `rand-prover` you run (§4), or the desktop app (§3), keeps your history to
+yourself. Each member's link carries a token every client ships, so it identifies the wallet
+software, not you.
 
 A `prover_submit` that never reached a prover — no connection, or an HTTP error page instead of an
 answer — is offered again, three tries, 1 s then 3 s apart. A prover's own answer (busy included)
