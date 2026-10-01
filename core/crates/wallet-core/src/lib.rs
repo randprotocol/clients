@@ -81,8 +81,31 @@ pub const CHAIN_BUILD: &str = "86941a1";
 /// **hidden-asset bundle** (one 4-in/4-out proof for RAND, a bridged coin or an RPL token alike),
 /// transaction binding, RPL tokens, staking and the call limits, zkVM constraint set 6,
 /// production FRI profile.
-pub const DEFAULT_CHAIN_ID: u64 = 19;
-pub const DEFAULT_RPC_URL: &str = "https://rpc.randprotocol.org";
+///
+/// A **test build** for another chain sets `RAND_WALLET_CHAIN_ID` (and `RAND_WALLET_RPC_URL`) at
+/// compile time — `scripts/devnet/pack-devnet.sh`, durian.market's devnet, chain 1919. A release is
+/// never built with either: without them both constants are the ones written here.
+pub const DEFAULT_CHAIN_ID: u64 = match option_env!("RAND_WALLET_CHAIN_ID") {
+    Some(id) => parse_chain_id(id),
+    None => 19,
+};
+pub const DEFAULT_RPC_URL: &str = match option_env!("RAND_WALLET_RPC_URL") {
+    Some(url) => url,
+    None => "https://rpc.randprotocol.org",
+};
+/// The build-time chain id, refused at compile time unless it is decimal digits.
+const fn parse_chain_id(s: &str) -> u64 {
+    let b = s.as_bytes();
+    assert!(!b.is_empty(), "RAND_WALLET_CHAIN_ID is empty");
+    let mut i = 0;
+    let mut n: u64 = 0;
+    while i < b.len() {
+        assert!(b[i].is_ascii_digit(), "RAND_WALLET_CHAIN_ID is not a decimal number");
+        n = n * 10 + (b[i] - b'0') as u64;
+        i += 1;
+    }
+    n
+}
 pub const EXPLORER_URL: &str = "https://randscan.org";
 /// Peak resident memory of one bundle proof, measured on this crate's own fixture
 /// (`examples/prove_fixture.rs`, Apple M-series): the prover materialises every table's
@@ -3651,6 +3674,9 @@ pub fn constants() -> Value {
         "chain_build": CHAIN_BUILD,
         "default_chain_id": DEFAULT_CHAIN_ID,
         "default_rpc_url": DEFAULT_RPC_URL,
+        // Only a test build names its endpoint set (the shells' default set is otherwise their own,
+        // `https://rpc.randprotocol.org`): a devnet build must not reach the public node.
+        "default_rpc_urls": if option_env!("RAND_WALLET_RPC_URL").is_some() { json!([DEFAULT_RPC_URL]) } else { Value::Null },
         "explorer_url": EXPLORER_URL,
         "rpc_namespace": RPC_NAMESPACE,
         "address_hrp": ADDRESS_HRP,
