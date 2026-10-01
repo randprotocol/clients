@@ -397,7 +397,7 @@ the manifest and are already within their limits.
 | field (limit) | text |
 |---|---|
 | Name (75, from the manifest) | `Rand Wallet` |
-| Summary (132, from the manifest) | `A shielded wallet for RAND on the Rand Protocol chain: private balances, private transfers, and viewing keys for randscan.org.` |
+| Summary (132, from the manifest) | `Your private wallet for Rand Protocol: shielded RAND and tokens, private payments, bridge withdrawals and dapp approvals.` |
 | Category | Tools (there is no Finance category for extensions) |
 | Language | English |
 | Homepage URL | `https://randprotocol.org/clients/chrome` |
