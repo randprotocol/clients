@@ -411,7 +411,7 @@ public class SendActivity extends BaseActivity {
         if (!WalletService.deviceCanProve(this) && wallet().usesDefaultProver() && !wallet().defaultNoticeRead()) {
             new AlertDialog.Builder(this)
                     .setTitle(R.string.prover_notice_title)
-                    .setMessage(R.string.prover_notice_body)
+                    .setMessage(getString(R.string.prover_notice_body, poolSize()))
                     .setPositiveButton(R.string.prover_notice_continue, (d, w) -> {
                         wallet().acknowledgeDefaultProver();
                         startSend();
@@ -421,6 +421,12 @@ public class SendActivity extends BaseActivity {
             return;
         }
         startSend();
+    }
+
+    /** How many RandProtocol provers this build pins (the notice names them by count). */
+    private int poolSize() {
+        TrustedProver pool = wallet().trustedProver();
+        return pool == null ? 0 : pool.members.size();
     }
 
     private void startSend() {

@@ -112,7 +112,7 @@ public class SettingsActivity extends BaseActivity {
         // is). Its URL and fingerprint are shown beside it; its link never reaches this screen.
         trusted = wallet().trustedProver();
         if (trusted != null) {
-            b.proverTrustedBody.setText(getString(R.string.settings_prover_trusted_body, trusted.url, trusted.fingerprint));
+            b.proverTrustedBody.setText(getString(R.string.settings_prover_trusted_body, trusted.members.size()) + "\n" + membersText(trusted));
             b.proverUseTrusted.setOnClickListener(v -> useTrustedProver());
         }
         paintProver();
@@ -206,17 +206,26 @@ public class SettingsActivity extends BaseActivity {
             // The default (wallet 0.6.8): the RandProtocol prover makes the proofs this device
             // cannot — named, with what it sees, asked whether it answers, and off in one tap.
             b.proverBy.setText(getString(R.string.settings_prover_default, trusted.name));
-            b.proverFingerprint.setText(getString(R.string.settings_prover_fingerprint, trusted.fingerprint));
+            b.proverFingerprint.setText(membersText(trusted));
             b.proverFingerprint.setVisibility(View.VISIBLE);
-            b.proverNotOwn.setText(getString(R.string.settings_prover_default_note, trusted.url));
+            b.proverNotOwn.setText(getString(R.string.settings_prover_default_note, trusted.members.size()));
             b.proverNotOwn.setVisibility(View.VISIBLE);
             b.proverForget.setVisibility(View.GONE);
             b.proverUseNone.setVisibility(View.VISIBLE);
             b.proverProbe.setText(R.string.settings_prover_asking);
             wallet().runInBackground(() -> {
                 String line;
+                // The first member that answers with its pinned key speaks for the pool.
+                line = null;
                 try {
-                    line = wallet().probeProver(ProverPairing.builtIn(ProverCore.NATIVE).pairing).line();
+                    for (ProverPairing.Paired m : ProverPairing.builtInPool(ProverCore.NATIVE)) {
+                        ProverPairing.Probe answer = wallet().probeProver(m.pairing);
+                        if (answer.ok()) {
+                            line = m.pairing.name + ": " + answer.line();
+                            break;
+                        }
+                    }
+                    if (line == null) line = getString(R.string.settings_prover_pool_none);
                 } catch (Exception e) {
                     line = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                 }
@@ -308,6 +317,16 @@ public class SettingsActivity extends BaseActivity {
         wallet().useDefaultProver();
         paintProver();
         b.proverStatus.setText(getString(R.string.settings_prover_using_default, trusted.name, ProverCore.NATIVE.historyWarning()));
+    }
+
+    /** Each member on its own line: its name and the fingerprint the build pins for its key. */
+    static String membersText(TrustedProver pool) {
+        StringBuilder sb = new StringBuilder();
+        for (TrustedProver.Member m : pool.members) {
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(m.name).append("  ").append(m.fingerprint);
+        }
+        return sb.toString();
     }
 
     private interface Pick {

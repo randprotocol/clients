@@ -43,11 +43,29 @@ public class ProverTest {
     static final String V2 = "ab".repeat(32);
     static final String HISTORY = "the core's own history sentence";
     /** The prover the build ships the address of (the core's {@code version.trusted_prover}). */
-    static final String TRUSTED_URL = "https://prover.randprotocol.org";
-    static final String TRUSTED_FINGERPRINT = "RGTF-7HKJ-XZFV-GQ1J";
-    static final String TRUSTED_EK = "0a".repeat(1184);
-    static final String TRUSTED_TOKEN = "c3".repeat(32);
-    static final String TRUSTED_LINK = "randprover:trusted?url=https%3A%2F%2Fprover.randprotocol.org&token=" + TRUSTED_TOKEN;
+    /** The pool's members (wallet 0.6.9): each its own URL, key, fingerprint and public token. */
+    static final String[] POOL = {"a", "b", "c"};
+
+    static String memberUrl(String m) {
+        return "https://prover.randprotocol.org/m/" + m;
+    }
+
+    static String memberEk(String m) {
+        return ("0" + (char) ('a' + (m.charAt(0) - 'a'))).repeat(1184);
+    }
+
+    static String memberFingerprint(String m) {
+        String c = m.toUpperCase();
+        return (c + c + c + c) + "-" + (c + c + c + c) + "-" + (c + c + c + c) + "-POOL";
+    }
+
+    static String memberToken(String m) {
+        return ("c" + (m.charAt(0) - 'a')).repeat(32);
+    }
+
+    static String memberLink(String m) {
+        return "randprover:pool-" + m + "?url=https%3A%2F%2Fprover.randprotocol.org%2Fm%2F" + m + "&token=" + memberToken(m);
+    }
 
     // ------------------------------------------------------------------ fakes
 
@@ -170,41 +188,49 @@ public class ProverTest {
         JSONObject guestsAsked;
         boolean own = true;
         String url = URL_OK;
-        /** What the built-in link parses to: {@code own} as the link carries it. */
+        /** What a member's built-in link parses to: {@code own} as the link carries it. */
         boolean trustedOwn = false;
-        /** The core's {@code version}: carries {@code trusted_prover} only when a test puts it there. */
+        /** The core's {@code version}: carries {@code trusted_prover_pool} only when a test puts it there. */
         JSONObject version = new JSONObject();
+        /** Every {@code prepare_transfer} the core was asked, in order. */
+        final List<JSONObject> preparedAll = new ArrayList<>();
 
-        /** A {@code version} naming the trusted prover exactly as the real core reports it. */
+        /** A {@code version} naming the pool exactly as the real core reports it. */
         FakeCore withTrustedProver() throws Exception {
-            version.put("trusted_prover", trustedProverJson());
+            version.put("trusted_prover_pool", poolJson());
             return this;
         }
 
-        static JSONObject trustedProverJson() throws Exception {
-            return new JSONObject().put("name", "RandProtocol").put("url", TRUSTED_URL).put("fingerprint", TRUSTED_FINGERPRINT)
-                    .put("link", TRUSTED_LINK).put("own", false);
+        static JSONObject poolJson() throws Exception {
+            JSONArray members = new JSONArray();
+            for (String m : POOL) {
+                members.put(new JSONObject().put("name", m).put("url", memberUrl(m)).put("fingerprint", memberFingerprint(m))
+                        .put("link", memberLink(m)).put("own", false));
+            }
+            return new JSONObject().put("name", "RandProtocol").put("members", members);
         }
 
         @Override
         public JSONObject parseProverLink(String link) throws Exception {
             if (!link.startsWith("randprover:")) throw new Exception("not a pairing link");
-            if (link.equals(TRUSTED_LINK)) {
-                return new JSONObject().put("kem_ek", TRUSTED_EK).put("url", TRUSTED_URL).put("token", TRUSTED_TOKEN)
-                        .put("own", trustedOwn).put("fingerprint", TRUSTED_FINGERPRINT);
+            for (String m : POOL) {
+                if (link.equals(memberLink(m))) {
+                    return new JSONObject().put("kem_ek", memberEk(m)).put("url", memberUrl(m)).put("token", memberToken(m))
+                            .put("own", trustedOwn).put("fingerprint", memberFingerprint(m));
+                }
             }
             return new JSONObject().put("kem_ek", KEM_EK).put("url", url).put("token", TOKEN).put("own", own).put("fingerprint", FINGERPRINT);
         }
 
         @Override
         public String proverFingerprint(String kemEk) {
-            if (TRUSTED_EK.equals(kemEk)) return TRUSTED_FINGERPRINT;
+            for (String m : POOL) if (memberEk(m).equals(kemEk)) return memberFingerprint(m);
             return KEM_EK.equals(kemEk) ? FINGERPRINT : "0THR-0THR-0THR-0THR";
         }
 
         @Override
         public TrustedProver trustedProver() {
-            return TrustedProver.fromJson(version.optJSONObject("trusted_prover"));
+            return TrustedProver.fromJson(version.optJSONObject("trusted_prover_pool"));
         }
 
         @Override
@@ -230,6 +256,7 @@ public class ProverTest {
         @Override
         public JSONObject prepareTransfer(JSONObject params) throws Exception {
             prepared = params;
+            preparedAll.add(params);
             return new JSONObject().put("sealed_hex", "5e41ed").put("pending", new JSONObject().put("kind", "transfer")).put("expected", "ee");
         }
 
@@ -400,163 +427,59 @@ public class ProverTest {
         assertNull(ProverPairing.fromJson("not json"));
     }
 
-    // ------------------------------------------------------------------ the trusted prover
+    // ------------------------------------------------------------------ the RandProtocol provers (0.6.9)
 
-    /**
-     * The prover the build ships the address of is reported from the core's {@code version}
-     * ({@code trusted_prover}: name, URL, fingerprint — never the link, which carries a token),
-     * and null when the core names none; reading it pairs nothing, and a build that ships none
-     * has nothing to pair.
-     */
+    /** The pool is read from the core's {@code version.trusted_prover_pool}; links stay package-private. */
     @Test
-    public void theTrustedProverIsReportedFromTheCoresVersionAndNullWhenItNamesNone() throws Exception {
-        FakeCore core = new FakeCore().withTrustedProver();
-        TrustedProver t = core.trustedProver();
-        assertNotNull(t);
+    public void thePoolIsReadFromTheCoresVersionAndNullWhenItNamesNone() throws Exception {
+        TrustedProver t = new FakeCore().withTrustedProver().trustedProver();
         assertEquals("RandProtocol", t.name);
-        assertEquals(TRUSTED_URL, t.url);
-        assertEquals(TRUSTED_FINGERPRINT, t.fingerprint);
-        // The link is not handed to screens: no public field carries it.
-        for (java.lang.reflect.Field f : TrustedProver.class.getFields()) {
-            assertFalse("a public field carries the link: " + f.getName(), String.valueOf(f.get(t)).contains("randprover:"));
+        assertEquals(3, t.members.size());
+        for (int i = 0; i < POOL.length; i++) {
+            assertEquals(POOL[i], t.members.get(i).name);
+            assertEquals(memberUrl(POOL[i]), t.members.get(i).url);
+            assertEquals(memberFingerprint(POOL[i]), t.members.get(i).fingerprint);
         }
-        try {
-            TrustedProver.class.getField("link");
-            fail("the link is a public field");
-        } catch (NoSuchFieldException expected) {
-            // package-private: ProverPairing reads it, nothing else
-        }
-        // A core whose version names none, or names one without a link to pair: null.
         assertNull(new FakeCore().trustedProver());
-        FakeCore noLink = new FakeCore();
-        noLink.version.put("trusted_prover", FakeCore.trustedProverJson().put("link", ""));
-        assertNull(noLink.trustedProver());
-        noLink.version.put("trusted_prover", JSONObject.NULL);
-        assertNull(noLink.trustedProver());
-        // The name defaults to the pool's when the core leaves it out.
-        FakeCore unnamed = new FakeCore();
-        unnamed.version.put("trusted_prover", FakeCore.trustedProverJson().put("name", ""));
-        assertEquals("RandProtocol", unnamed.trustedProver().name);
-        // Nothing to pair where nothing is shipped — and the prover is never asked.
-        FakeProver prover = new FakeProver((m, p) -> Reply.result(info(TRUSTED_EK)));
+        assertNull(TrustedProver.fromJson(new JSONObject().put("members", new JSONArray())));
+        assertNull("a pool with no link is none", TrustedProver.fromJson(new JSONObject().put("members",
+                new JSONArray().put(new JSONObject().put("name", "a").put("url", memberUrl("a")).put("fingerprint", memberFingerprint("a"))))));
+    }
+
+    /** Each member is held to ITS pin; one that fails is left out, the others keep working. */
+    @Test
+    public void builtInPoolHoldsEachMemberToItsOwnPinAndLeavesOutOnlyAMismatch() throws Exception {
+        FakeCore core = new FakeCore().withTrustedProver();
+        List<ProverPairing.Paired> all = ProverPairing.builtInPool(core);
+        assertEquals(3, all.size());
+        for (int i = 0; i < POOL.length; i++) {
+            ProverPairing.Paired m = all.get(i);
+            assertEquals("RandProtocol (" + POOL[i] + ")", m.pairing.name);
+            assertEquals(memberUrl(POOL[i]), m.pairing.url);
+            assertEquals(memberEk(POOL[i]), m.pairing.kemEk);
+            assertEquals(memberFingerprint(POOL[i]), m.pairing.fingerprint);
+            assertEquals(memberToken(POOL[i]), m.token);
+            assertFalse(m.pairing.own);
+        }
+        core.version.getJSONObject("trusted_prover_pool").getJSONArray("members").getJSONObject(0).put("fingerprint", "ZZZZ-ZZZZ-ZZZZ-ZZZZ");
+        List<ProverPairing.Paired> rest = ProverPairing.builtInPool(core);
+        assertEquals("the mismatched member was kept", 2, rest.size());
+        assertEquals(memberUrl("b"), rest.get(0).pairing.url);
+        // A link marked own is nobody's pool member.
+        FakeCore own = new FakeCore().withTrustedProver();
+        own.trustedOwn = true;
         try {
-            ProverPairing.pairTrusted(new FakeCore(), prover);
-            fail("paired a prover the build does not ship");
+            ProverPairing.builtInPool(own);
+            fail("an own link joined the pool");
+        } catch (ProverClient.Refusal e) {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("None of the built-in RandProtocol prover links"));
+        }
+        try {
+            ProverPairing.builtInPool(new FakeCore());
+            fail("a build without a pool used one");
         } catch (ProverClient.Refusal e) {
             assertEquals("This build ships no prover to use.", e.getMessage());
         }
-        assertTrue(prover.methods.isEmpty());
-    }
-
-    /**
-     * One step, the same checks as a pasted link: the built-in link is read through the core, the
-     * prover at its address asked for its key, and a pairing returned NOT own, named after the pool
-     * — the vault record ({@link ProverSecret}) not own either, the Prefs copy named RandProtocol.
-     * The token never goes on the wire.
-     */
-    @Test
-    public void pairTrustedStoresANotOwnPairingNamedRandProtocolWhenTheProverAnswersWithTheLinksKey() throws Exception {
-        FakeCore core = new FakeCore().withTrustedProver();
-        FakeProver prover = new FakeProver((m, p) -> {
-            assertEquals("prover_info", m);
-            return Reply.result(info(TRUSTED_EK.toUpperCase()).put("kem_fingerprint", "LIES"));
-        });
-        ProverPairing.Paired paired = ProverPairing.pairTrusted(core, prover);
-        assertEquals("RandProtocol", paired.pairing.name);
-        assertEquals(TRUSTED_URL, paired.pairing.url);
-        assertEquals(TRUSTED_EK, paired.pairing.kemEk);
-        assertEquals(TRUSTED_FINGERPRINT, paired.pairing.fingerprint);
-        assertFalse("a shared pool is nobody's own", paired.pairing.own);
-        assertEquals(TRUSTED_TOKEN, paired.token);
-        assertEquals("the prover at the pool's address was asked", java.util.Collections.singletonList(TRUSTED_URL), prover.urls);
-        assertEquals(java.util.Collections.singletonList("prover_info"), prover.methods);
-        for (String body : prover.bodies) assertFalse("the token went on the wire", body.contains(TRUSTED_TOKEN));
-        // What the wallet then stores: the vault record not own, the display copy named RandProtocol, no token in it.
-        ProverSecret secret = ProverSecret.of(paired.pairing, paired.token);
-        assertFalse(secret.own);
-        assertEquals(TRUSTED_EK, secret.kemEk);
-        assertEquals(TRUSTED_URL, secret.url);
-        assertEquals(TRUSTED_TOKEN, ProverSecret.fromJson(secret.toJson()).token);
-        ProverPairing shown = ProverPairing.fromJson(paired.pairing.toJson().toString());
-        assertEquals("RandProtocol", shown.name);
-        assertFalse(shown.own);
-        assertFalse(paired.pairing.toJson().toString().contains(TRUSTED_TOKEN));
-        // ... and it probes like any pairing.
-        assertEquals("Answering · 1 of 8 in its queue.", ProverPairing.probe(core, paired.pairing, prover).line());
-    }
-
-    /** A prover at the pool's address answering with another key is refused: nothing is returned to store. */
-    @Test
-    public void pairTrustedRefusesAProverAnsweringWithAnotherKey() throws Exception {
-        FakeCore core = new FakeCore().withTrustedProver();
-        // Another key, naming itself with the pinned fingerprint: its word, not evidence.
-        FakeProver prover = new FakeProver((m, p) -> Reply.result(info("08".repeat(1184)).put("kem_fingerprint", TRUSTED_FINGERPRINT)));
-        try {
-            ProverPairing.pairTrusted(core, prover);
-            fail("paired a prover with another key");
-        } catch (ProverClient.Refusal e) {
-            assertEquals("The prover at that address has a different key from the one the link names. Do not pair it.", e.getMessage());
-        }
-        assertEquals(java.util.Collections.singletonList("prover_info"), prover.methods);
-        // The pasted-link pairing's own key, at the pool's address: still not the built-in link's key.
-        prover.handler = (m, p) -> Reply.result(info(KEM_EK));
-        try {
-            ProverPairing.pairTrusted(core, prover);
-            fail("paired a prover with another key");
-        } catch (ProverClient.Refusal e) {
-            assertEquals("The prover at that address has a different key from the one the link names. Do not pair it.", e.getMessage());
-        }
-        // Silence is a refusal too.
-        prover.handler = (m, p) -> {
-            throw new IOException("connection refused");
-        };
-        try {
-            ProverPairing.pairTrusted(core, prover);
-            fail();
-        } catch (ProverClient.Refusal e) {
-            assertTrue(e.getMessage(), e.getMessage().startsWith("The prover at " + TRUSTED_URL + " did not answer: "));
-        }
-    }
-
-    /**
-     * A build whose link names another key than the one it pins — or whose link is marked as the
-     * user's own, which a shared pool is not — never asks the prover at all.
-     */
-    @Test
-    public void aPinnedFingerprintThatDisagreesWithTheLinksIsRefusedBeforeAnyRequest() throws Exception {
-        FakeCore core = new FakeCore().withTrustedProver();
-        core.version.getJSONObject("trusted_prover").put("fingerprint", "ZZZZ-ZZZZ-ZZZZ-ZZZZ");
-        FakeProver prover = new FakeProver((m, p) -> Reply.result(info(TRUSTED_EK)));
-        try {
-            ProverPairing.pairTrusted(core, prover);
-            fail("paired a link that names another key than the pinned one");
-        } catch (ProverClient.Refusal e) {
-            assertEquals("The built-in prover link does not name the key this wallet pins; not pairing it.", e.getMessage());
-        }
-        assertTrue("the prover was asked", prover.methods.isEmpty());
-        // An empty pin is no pin.
-        core.version.getJSONObject("trusted_prover").put("fingerprint", "");
-        try {
-            ProverPairing.pairTrusted(core, prover);
-            fail();
-        } catch (ProverClient.Refusal e) {
-            assertEquals("The built-in prover link does not name the key this wallet pins; not pairing it.", e.getMessage());
-        }
-        assertTrue(prover.methods.isEmpty());
-        // The pin agrees, but the link says own=1: refused before any request.
-        core.version.getJSONObject("trusted_prover").put("fingerprint", TRUSTED_FINGERPRINT);
-        core.trustedOwn = true;
-        try {
-            ProverPairing.pairTrusted(core, prover);
-            fail("paired a shared prover marked as the user's own");
-        } catch (ProverClient.Refusal e) {
-            assertEquals("The built-in prover link is marked as your own, which a shared prover is not; not pairing it.", e.getMessage());
-        }
-        assertTrue(prover.methods.isEmpty());
-        // Both in order: the pairing goes through.
-        core.trustedOwn = false;
-        assertFalse(ProverPairing.pairTrusted(core, prover).pairing.own);
-        assertEquals(java.util.Collections.singletonList("prover_info"), prover.methods);
     }
 
     // ------------------------------------------------------------------ the client's errors
@@ -1072,81 +995,155 @@ public class ProverTest {
         assertEquals(java.util.Collections.singletonList(false), prover.followRedirects);
     }
 
-    // ------------------------------------------------------------------ the default prover (wallet 0.6.8)
+    // ------------------------------------------------------------------ the default: the pool
 
-    /** The probe the wallet runs, against a FakeProver. */
-    static java.util.function.Function<ProverPairing, ProverPairing.Probe> probeWith(FakeCore core, FakeProver prover) {
-        return p -> ProverPairing.probe(core, p, prover);
+    /** A transport that routes each member's URL to its own fake prover; any other URL to {@code rest}. */
+    static final class PoolTransport implements ProverClient.Transport {
+        final java.util.Map<String, FakeProver> members = new java.util.HashMap<>();
+        final List<String> urls = new ArrayList<>();
+        final List<String> methods = new ArrayList<>();
+
+        PoolTransport member(String m, Handler h) {
+            members.put(memberUrl(m), new FakeProver(h));
+            return this;
+        }
+
+        @Override
+        public HttpURLConnection open(URL url) throws IOException {
+            FakeProver p = members.get(url.toString());
+            if (p == null) throw new IOException("no such host " + url);
+            urls.add(url.toString());
+            HttpURLConnection c = p.open(url);
+            return c;
+        }
+
+        List<String> calls(String method) {
+            List<String> out = new ArrayList<>();
+            for (java.util.Map.Entry<String, FakeProver> e : members.entrySet()) {
+                for (String m : e.getValue().methods) if (m.equals(method)) out.add(e.getKey());
+            }
+            return out;
+        }
+    }
+
+    /** A member that answers with its own key, takes viewing-key jobs, has room, accepts and proves. */
+    static Handler healthy(String m) {
+        return (method, p) -> {
+            switch (method) {
+                case "prover_info": return Reply.result(info(memberEk(m), JSONObject.NULL, "viewing_key").put("queue", new JSONObject().put("depth", 0).put("max", 1).put("proving", 0)));
+                case "prover_submit": return Reply.result(new JSONObject().put("job", "job-" + m));
+                default: return Reply.result(new JSONObject().put("state", "done").put("reply", "good"));
+            }
+        };
+    }
+
+    static java.util.function.Function<ProverPairing, ProverPairing.Probe> probeWith(FakeCore core, ProverClient.Transport t) {
+        return p -> ProverPairing.probe(core, p, t);
+    }
+
+    static RemoteSend.DefaultProver inOrder(FakeCore core, String... names) {
+        return () -> {
+            List<ProverPairing.Paired> all = ProverPairing.builtInPool(core);
+            List<ProverPairing.Paired> out = new ArrayList<>();
+            for (String n : names) for (ProverPairing.Paired p : all) if (p.pairing.url.equals(memberUrl(n))) out.add(p);
+            return out;
+        };
     }
 
     @Test
-    public void withNothingPairedTheRandProtocolProverIsTheRouteNotOwnByItsPinnedKey() throws Exception {
+    public void withNothingPairedTheRouteIsTheFirstMemberThatCanTakeAJobByItsOwnKey() throws Exception {
         FakeCore core = new FakeCore().withTrustedProver();
-        FakeProver prover = new FakeProver((m, p) -> Reply.result(info(TRUSTED_EK, JSONObject.NULL, "viewing_key")));
-        RemoteSend.Route r = RemoteSend.route(false, null, core, probeWith(core, prover), () -> null, () -> ProverPairing.builtIn(core));
+        PoolTransport t = new PoolTransport()
+                .member("a", (m, p) -> Reply.result(info("08".repeat(1184), JSONObject.NULL, "viewing_key")))
+                .member("b", (m, p) -> Reply.result(info(memberEk("b"), JSONObject.NULL, "viewing_key").put("queue", new JSONObject().put("depth", 1).put("max", 1))))
+                .member("c", healthy("c"));
+        RemoteSend.Route r = RemoteSend.route(false, null, core, probeWith(core, t), () -> null, inOrder(core, "a", "b", "c"));
         assertNotNull("a fresh wallet that cannot prove had no route", r);
         assertTrue(r.isDefault);
-        assertEquals("RandProtocol", r.pairing.name);
-        assertEquals(TRUSTED_URL, r.pairing.url);
-        assertEquals(TRUSTED_EK, r.pairing.kemEk);
-        assertEquals(TRUSTED_FINGERPRINT, r.pairing.fingerprint);
+        assertEquals(memberUrl("c"), r.pairing.url);
+        assertEquals(memberEk("c"), r.pairing.kemEk);
+        assertEquals(memberToken("c"), r.token);
         assertFalse(r.pairing.own);
-        assertEquals(TRUSTED_TOKEN, r.token);
-        assertEquals(java.util.Collections.singletonList(TRUSTED_URL), prover.urls);
-        // A device that can prove never asks it.
-        FakeProver unasked = new FakeProver((m, p) -> Reply.result(info(TRUSTED_EK)));
-        assertNull(RemoteSend.route(true, null, core, probeWith(core, unasked), () -> null, () -> ProverPairing.builtIn(core)));
-        assertTrue(unasked.urls.isEmpty());
-        // No prover chosen (or a build without one): no route — the device, as before.
+        assertEquals("RandProtocol", r.poolName);
+        assertEquals("c leads, the rest follow in their order", java.util.Arrays.asList(memberUrl("c"), memberUrl("a"), memberUrl("b")),
+                java.util.Arrays.asList(r.members.get(0).pairing.url, r.members.get(1).pairing.url, r.members.get(2).pairing.url));
+        // A device that can prove asks nobody; no prover chosen is no route; a paired one wins.
+        PoolTransport unasked = new PoolTransport().member("a", healthy("a"));
+        assertNull(RemoteSend.route(true, null, core, probeWith(core, unasked), () -> null, inOrder(core, "a")));
         assertNull(RemoteSend.route(false, null, core, probeWith(core, unasked), () -> null, null));
         assertTrue(unasked.urls.isEmpty());
-        // A paired prover is preferred over the default.
         ProverPairing.Probe ok = okProbe("viewing_key");
         RemoteSend.Route paired = RemoteSend.route(false, new ProverPairing("mine", URL_OK, KEM_EK, FINGERPRINT, false), core,
-                p -> ok, () -> SECRET_NOT_OWN, () -> ProverPairing.builtIn(core));
+                p -> ok, () -> SECRET_NOT_OWN, inOrder(core, "a"));
         assertFalse(paired.isDefault);
         assertEquals(URL_OK, paired.pairing.url);
     }
 
     @Test
-    public void theRandProtocolProverNotThereIsSaidPlainlyWithTheWayToPairYourOwn() throws Exception {
+    public void noMemberReadyIsSaidPlainlyAllBusyOrUnreachable() throws Exception {
         FakeCore core = new FakeCore().withTrustedProver();
-        FakeProver down = new FakeProver((m, p) -> { throw new IOException("connection refused"); });
-        routeRefused(() -> RemoteSend.route(false, null, core, probeWith(core, down), () -> null, () -> ProverPairing.builtIn(core)),
-                "This device does not have the memory for this proof. The RandProtocol prover cannot be reached right now (the prover at "
-                        + TRUSTED_URL + " did not answer (cannot reach the prover at " + TRUSTED_URL
-                        + ": connection refused)). Try again later, or pair your own prover in Settings.");
-        FakeProver other = new FakeProver((m, p) -> Reply.result(info("08".repeat(1184), JSONObject.NULL, "viewing_key")));
-        routeRefused(() -> RemoteSend.route(false, null, core, probeWith(core, other), () -> null, () -> ProverPairing.builtIn(core)),
-                "This device does not have the memory for this proof. The RandProtocol prover cannot be reached right now (it answered "
-                        + "with another key than the one this wallet pins). Try again later, or pair your own prover in Settings.");
-        // A build whose link names another key than the pin never asks anybody.
-        core.version.getJSONObject("trusted_prover").put("fingerprint", "ZZZZ-ZZZZ-ZZZZ-ZZZZ");
-        FakeProver unasked = new FakeProver((m, p) -> Reply.result(info(TRUSTED_EK)));
-        routeRefused(() -> RemoteSend.route(false, null, core, probeWith(core, unasked), () -> null, () -> ProverPairing.builtIn(core)),
-                "This device does not have the memory for this proof. The built-in prover link does not name the key this wallet pins; not pairing it.");
-        assertTrue(unasked.urls.isEmpty());
+        PoolTransport full = new PoolTransport();
+        for (String m : POOL) {
+            full.member(m, (x, p) -> Reply.result(info(memberEk(m), JSONObject.NULL, "viewing_key").put("queue", new JSONObject().put("depth", 1).put("max", 1))));
+        }
+        try {
+            RemoteSend.route(false, null, core, probeWith(core, full), () -> null, inOrder(core, "a", "b", "c"));
+            fail("routed to a full pool");
+        } catch (ProverClient.Refusal e) {
+            assertEquals("This device does not have the memory for this proof. The RandProtocol provers are all busy right now; "
+                    + "try again in a minute, or pair your own prover in Settings.", e.getMessage());
+            assertTrue(e.busy);
+        }
+        PoolTransport mixed = new PoolTransport()
+                .member("a", (x, p) -> { throw new IOException("connection refused"); })
+                .member("b", (x, p) -> Reply.result(info("08".repeat(1184), JSONObject.NULL, "viewing_key")));
+        try {
+            RemoteSend.route(false, null, core, probeWith(core, mixed), () -> null, inOrder(core, "a", "b"));
+            fail("routed to a pool that is not there");
+        } catch (ProverClient.Refusal e) {
+            assertEquals("This device does not have the memory for this proof. The RandProtocol provers cannot be reached right now "
+                    + "(a did not answer; b answered with another key than the one this wallet pins). Try again later, or pair your own prover in Settings.",
+                    e.getMessage());
+            assertFalse(e.busy);
+        }
     }
 
     @Test
-    public void theRandProtocolProverBusyIsSaidPlainlyAfterOneSubmit() throws Exception {
+    public void provePoolSkipsABusySubmitAndPollsOnlyTheMemberThatTookTheJob() throws Exception {
         FakeCore core = new FakeCore().withTrustedProver();
-        int[] submits = {0};
-        FakeProver prover = new FakeProver(answering(info(TRUSTED_EK, JSONObject.NULL, "viewing_key"), (m, p) -> {
-            submits[0]++;
-            return Reply.error(-32005, "busy", new JSONObject().put("depth", 2));
-        }));
-        RemoteSend.Route r = new RemoteSend.Route(ProverPairing.builtIn(core).pairing, TRUSTED_TOKEN, true);
+        PoolTransport t = new PoolTransport()
+                .member("a", (m, p) -> m.equals("prover_submit") ? Reply.error(-32005, "busy", new JSONObject().put("depth", 1)) : healthy("a").reply(m, p))
+                .member("b", healthy("b"));
+        RemoteSend.Route r = RemoteSend.route(false, null, core, probeWith(core, t), () -> null, inOrder(core, "a", "b"));
         JSONObject request = new JSONObject().put("spend_key", SPEND_KEY).put("to", "rand1x");
         RemoteSend.applyProofParams(request, new JSONObject().put("hc_bundle", V3).put("hc_auth", AUTH));
+        JSONObject out = RemoteSend.provePool(core, url -> fastPoolProver(url, t), request, r, null, pos -> { });
+        assertEquals("aa", out.getString("tx_hex"));
+        assertEquals("sealed for a, then again for b", java.util.Arrays.asList(memberEk("a"), memberEk("b")),
+                java.util.Arrays.asList(core.preparedAll.get(0).getJSONObject("prover").getString("kem_ek"),
+                        core.preparedAll.get(1).getJSONObject("prover").getString("kem_ek")));
+        assertEquals(memberToken("b"), core.preparedAll.get(1).getJSONObject("prover").getString("token"));
+        assertEquals(java.util.Collections.singletonList(memberUrl("b")), t.calls("prover_status"));
+        // Every member busy at submit: one submit each, then plainly — never a loop.
+        PoolTransport busy = new PoolTransport();
+        for (String m : POOL) busy.member(m, (x, p) -> x.equals("prover_submit") ? Reply.error(-32005, "busy", null) : healthy(m).reply(x, p));
+        RemoteSend.Route all = RemoteSend.route(false, null, core, probeWith(core, busy), () -> null, inOrder(core, "a", "b", "c"));
         try {
-            RemoteSend.prove(core, fastProver(new ProverClient(TRUSTED_URL, prover)), request, r, null, pos -> { });
+            RemoteSend.provePool(core, url -> fastPoolProver(url, busy), request, all, null, pos -> { });
             fail("sent through a busy pool");
         } catch (ProverClient.Refusal e) {
-            assertEquals("The RandProtocol prover is busy; try again in a minute, or pair your own prover in Settings.", e.getMessage());
+            assertEquals("The RandProtocol provers are all busy right now; try again in a minute, or pair your own prover in Settings.", e.getMessage());
             assertTrue(e.busy);
         }
-        assertEquals("a busy pool was asked again", 1, submits[0]);
+        assertEquals(3, busy.calls("prover_submit").size());
+    }
+
+    static RemoteProver fastPoolProver(String url, ProverClient.Transport t) {
+        try {
+            return fastProver(new ProverClient(url, t));
+        } catch (ProverClient.Refusal e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test
@@ -1206,16 +1203,19 @@ public class ProverTest {
         String genesis = "ab".repeat(32);
         for (boolean isDefault : new boolean[]{false, true}) {
             FakeCore core = new FakeCore().withTrustedProver();
-            String ek = isDefault ? TRUSTED_EK : KEM_EK;
-            FakeProver prover = new FakeProver(answering(info(ek, JSONObject.NULL, "viewing_key"), (m, p) -> m.equals("prover_submit")
-                    ? Reply.result(new JSONObject().put("job", "j"))
-                    : Reply.result(new JSONObject().put("state", "done").put("reply", "good"))));
-            RemoteSend.Route r = isDefault
-                    ? new RemoteSend.Route(ProverPairing.builtIn(core).pairing, TRUSTED_TOKEN, true)
-                    : new RemoteSend.Route(new ProverPairing("p", URL_OK, KEM_EK, FINGERPRINT, false), TOKEN);
             JSONObject request = new JSONObject().put("spend_key", SPEND_KEY).put("to", "rand1x").put("genesis", genesis);
             RemoteSend.applyProofParams(request, new JSONObject().put("hc_bundle", V3).put("hc_auth", AUTH));
-            RemoteSend.prove(core, fastProver(new ProverClient(r.pairing.url, prover)), request, r, null, pos -> { });
+            if (isDefault) {
+                PoolTransport t = new PoolTransport().member("a", healthy("a"));
+                RemoteSend.Route r = RemoteSend.route(false, null, core, probeWith(core, t), () -> null, inOrder(core, "a"));
+                RemoteSend.provePool(core, url -> fastPoolProver(url, t), request, r, null, pos -> { });
+            } else {
+                FakeProver prover = new FakeProver(answering(info(KEM_EK, JSONObject.NULL, "viewing_key"), (m, p) -> m.equals("prover_submit")
+                        ? Reply.result(new JSONObject().put("job", "j"))
+                        : Reply.result(new JSONObject().put("state", "done").put("reply", "good"))));
+                RemoteSend.Route r = new RemoteSend.Route(new ProverPairing("p", URL_OK, KEM_EK, FINGERPRINT, false), TOKEN);
+                RemoteSend.prove(core, fastProver(new ProverClient(r.pairing.url, prover)), request, r, null, pos -> { });
+            }
             assertEquals("the job carries no genesis (default " + isDefault + ")", genesis, core.prepared.optString("genesis", null));
         }
     }

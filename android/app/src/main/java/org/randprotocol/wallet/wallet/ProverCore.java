@@ -106,7 +106,7 @@ public interface ProverCore {
         @Override
         public TrustedProver trustedProver() {
             try {
-                return TrustedProver.fromJson(Core.constants().optJSONObject("trusted_prover"));
+                return TrustedProver.fromJson(Core.constants().optJSONObject("trusted_prover_pool"));
             } catch (Exception e) {
                 return null;
             }

@@ -151,45 +151,34 @@ public final class ProverPairing {
     }
 
     /**
-     * The one-step pairing of the prover the build ships the address of (the core's
-     * {@code version.trusted_prover}; docs/prover.md §8): the built-in link read through the core
-     * and held to the fingerprint the build pins — a link that somehow named another key, or one
-     * marked as the user's own (a shared pool is nobody's), is refused BEFORE the prover is asked
-     * anything — then {@link #pair}'s own checks: the prover must answer with the link's key, or
-     * nothing is returned to store. The pairing is NOT own, and named after the pool
-     * ("RandProtocol"). Never called by the wallet itself: only Settings does, after showing the
-     * history warning; "Forget this prover" undoes it like any pairing. Stores nothing. Blocking.
+     * The RandProtocol provers as the DEFAULT route uses them (wallet 0.6.9: nothing paired, nothing
+     * stored): each member's link read through the core and held to THAT member's pinned
+     * fingerprint, its pinned URL, the URL rule and {@code own=0} — no network. A member that fails
+     * is left out (the others keep working) and is never asked anything. Each pairing is named
+     * "RandProtocol (member)" and NOT own; its token is the one every copy ships. In the pool's
+     * order: the caller shuffles. Throws when no member is left.
      */
-    public static Paired pairTrusted(ProverCore core, ProverClient.Transport transport) throws Exception {
+    public static java.util.List<Paired> builtInPool(ProverCore core) throws Exception {
         TrustedProver t = core.trustedProver();
-        return pairParsed(core, builtInLink(core, t), transport, t.name);
-    }
-
-    /**
-     * The RandProtocol prover as the DEFAULT route uses it (wallet 0.6.8: nothing paired, nothing
-     * stored): the built-in link read through the core and held to the pinned fingerprint, the URL
-     * rule and {@code own=0} — no network; the route asks the prover for its key before any job.
-     * The pairing is named after the pool and NOT own; the token is the one every copy ships.
-     */
-    public static Paired builtIn(ProverCore core) throws Exception {
-        TrustedProver t = core.trustedProver();
-        JSONObject p = builtInLink(core, t);
-        String url = ProverClient.checkUrl(p.getString("url"));
-        return new Paired(new ProverPairing(t.name, url, p.getString("kem_ek").toLowerCase(Locale.ROOT), p.getString("fingerprint"), false),
-                p.getString("token"));
-    }
-
-    /** The built-in link, parsed, after the pins every use of it is held to. */
-    private static JSONObject builtInLink(ProverCore core, TrustedProver t) throws Exception {
         if (t == null) throw new ProverClient.Refusal("This build ships no prover to use.");
-        JSONObject p = parse(core, t.link);
-        if (t.fingerprint.isEmpty() || !p.getString("fingerprint").equals(t.fingerprint)) {
-            throw new ProverClient.Refusal("The built-in prover link does not name the key this wallet pins; not pairing it.");
+        java.util.List<Paired> out = new java.util.ArrayList<>();
+        for (TrustedProver.Member m : t.members) {
+            try {
+                JSONObject p = parse(core, m.link);
+                if (!p.getString("fingerprint").equals(m.fingerprint)) continue;
+                if (p.optBoolean("own", false)) continue;
+                String url = ProverClient.checkUrl(p.getString("url"));
+                if (!url.equals(ProverClient.checkUrl(m.url))) continue;
+                out.add(new Paired(new ProverPairing(t.name + " (" + m.name + ")", url,
+                        p.getString("kem_ek").toLowerCase(Locale.ROOT), p.getString("fingerprint"), false), p.getString("token")));
+            } catch (Exception e) {
+                // this member is out; the others keep working
+            }
         }
-        if (p.optBoolean("own", false)) {
-            throw new ProverClient.Refusal("The built-in prover link is marked as your own, which a shared prover is not; not pairing it.");
+        if (out.isEmpty()) {
+            throw new ProverClient.Refusal("None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.");
         }
-        return p;
+        return out;
     }
 
     /**

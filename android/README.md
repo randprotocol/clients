@@ -104,27 +104,25 @@ prover paired as your own (a link made with `rand-prover pair --own`). The pendi
 (~2.8 MB of hex with the auth proof inside) lives in memory on the proving service's thread for
 the length of the call; nothing writes it to preferences or a file, and there is no resume.
 
-**The RandProtocol prover is the default** (wallet 0.6.8; `../docs/prover.md` §8): the build ships
-the address of one prover, the RandProtocol validators' pool (`https://prover.randprotocol.org`,
-fingerprint `RGTF-7HKJ-XZFV-GQ1J`, viewing-key jobs only, no fee), read from the core's
-`version.trusted_prover`. With nothing paired, a phone that cannot fit the proof sends through it
-at once: `RemoteSend.route(…, defaultProver)` builds the route from the built-in link
-(`ProverPairing.builtIn` — the pinned fingerprint, the URL rule, `own=0`, no network), asks the
-pool for its key (it must be the pinned one), its fee (none) and viewing-key jobs, and seals the
-job to it with the token every copy ships — nothing is paired or stored. Before the first such
-send, Send shows a one-time notice (it receives the viewing key: the whole history, past and
-future; it cannot spend) with **I understand — continue** and **Use my own prover**; the read is
-remembered per wallet (`Prefs.proverNoticeFor`, cleared with the wallet) and `WalletService.send`
-refuses until it is. A pool that does not answer, answers with another key, or is busy (-32005,
-never retried) is said plainly, pointing to Settings. Settings → Prover names it with its URL,
-fingerprint and what it sees, and offers **Use no prover** (`Prefs.noProver`); with none, **Use
-the RandProtocol prover** turns it back on in one tap. A paired prover is preferred over it, and
-**Forget this prover** falls back to it. A `prover_submit` that never reached the prover (no
-connection, an HTTP error page) is offered again, three tries, 1 s then 3 s apart; a JSON-RPC
-answer is final. `ProverTest` covers the route, the refusals, busy and the retry.
-- `files/notes.json`: the note cache (plaintext notes, nullifiers, leaf indices) and the
-  submissions list with each payment's transaction key. App-private; rebuilt by a rescan.
-- Settings (RPC URL, chain id, auto-lock, theme) in plain preferences.
+**The RandProtocol provers are the default** (wallet 0.6.8; per-member keys since 0.6.9, audit v7
+VK-9; `../docs/prover.md` §8): the build pins a descriptor of members — the core's
+`version.trusted_prover_pool`, data in `core/crates/wallet-core/src/trusted-prover-pool.json` —
+each with its own URL (`https://prover.randprotocol.org/m/<member>`), key fingerprint and pairing
+link. With nothing paired, a phone that cannot fit the proof sends through them at once:
+`ProverPairing.builtInPool` holds every member's link to THAT member's pinned fingerprint and URL
+and `own=0` (a member that fails is left out, the others keep working); `WalletService.defaultProver`
+shuffles them per send; `RemoteSend.route(…, defaultProver)` takes the first that answers with its
+pinned key, no fee, viewing-key jobs and room in its queue; `RemoteSend.provePool` seals the job to
+THAT member's key and polls only it — a member busy, refusing or unreachable at submit is skipped for
+the next. Every member out: "The RandProtocol provers are all busy right now …" / "… cannot be
+reached right now (…)", pointing to Settings. Nothing is paired or stored. Before the first such
+send, Send shows the one-time notice (one of the RandProtocol provers — N machines run by the
+validators; each one that proves a send sees that wallet's viewing key; it cannot spend) with
+**I understand — continue** and **Use my own prover**; it is remembered per wallet and
+`WalletService.send` refuses until it is read. Settings → Prover lists each member with its
+fingerprint and offers **Use no prover**; with none, **Use the RandProtocol provers**. A paired
+prover is preferred; **Forget this prover** falls back to the pool. `ProverTest` covers the pins,
+the route, the fall-through, busy and the retry.
 
 Backup is disabled (`allowBackup=false`) so the vault never leaves the device through Google's
 backup service.

@@ -64,6 +64,15 @@ public final class RemoteProver {
 
     public JSONObject prove(String sealedHex, Object pending, Finisher finisher, PhaseListener onPhase) throws Exception {
         onPhase.phase(null);
+        return poll(submit(sealedHex), pending, finisher, onPhase);
+    }
+
+    /**
+     * Hands the sealed job over and returns the job id the prover named. Throws {@link
+     * ProverClient.Refusal} when it took nothing — its answer (busy included, {@code busy} set) or
+     * no answer at all after the transport retries — so a pool can ask its next member.
+     */
+    public String submit(String sealedHex) throws Exception {
         String job = null;
         for (int attempt = 1; job == null; attempt++) {
             try {
@@ -82,6 +91,11 @@ public final class RemoteProver {
                 throw r != null ? r : new ProverClient.Refusal("Could not hand the proof to your prover: " + e.getMessage());
             }
         }
+        return job;
+    }
+
+    /** Polls {@code job} on THIS prover until it answers, then opens the reply through the core. */
+    public JSONObject poll(String job, Object pending, Finisher finisher, PhaseListener onPhase) throws Exception {
         long started = clock.nowMs();
         long minutes = Math.round(maxWaitMs / 60000.0);
         // What was last reported: null = "proving" (announced before the submit), else a position.

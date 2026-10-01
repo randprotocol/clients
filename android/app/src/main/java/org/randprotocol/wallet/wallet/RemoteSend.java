@@ -33,28 +33,72 @@ public final class RemoteSend {
     public static final class Route {
         public final ProverPairing pairing;
         final String token;
-        /** The RandProtocol prover as the default (nothing paired): the one-time notice applies. */
+        /** The RandProtocol provers as the default (nothing paired): the one-time notice applies. */
         public final boolean isDefault;
+        /**
+         * The default's members in the order a job tries them — the first is the one that answered
+         * the route — each its own key and token ({@link #provePool}). Empty for a paired prover.
+         */
+        public final List<ProverPairing.Paired> members;
+        /** The pool's name ("RandProtocol"), for the screen and the refusals. */
+        public final String poolName;
 
         public Route(ProverPairing pairing, String token) {
-            this(pairing, token, false);
+            this(pairing, token, false, java.util.Collections.emptyList(), null);
         }
 
-        public Route(ProverPairing pairing, String token, boolean isDefault) {
+        public Route(ProverPairing pairing, String token, boolean isDefault, List<ProverPairing.Paired> members, String poolName) {
             this.pairing = pairing;
             this.token = token;
             this.isDefault = isDefault;
+            this.members = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(members));
+            this.poolName = poolName;
         }
     }
 
-    /** The default prover, built from the build's own link ({@link ProverPairing#builtIn}). */
+    /**
+     * The default's members ({@link ProverPairing#builtInPool}) in the order to try them — a fresh
+     * random order per send in the app ({@link WalletService#defaultProver}), a fixed one in tests.
+     */
     public interface DefaultProver {
-        ProverPairing.Paired get() throws Exception;
+        List<ProverPairing.Paired> get() throws Exception;
     }
 
-    /** The default prover's queue is full: said plainly, never retried in a loop. */
-    static String defaultBusy(String name) {
-        return "The " + name + " prover is busy; try again in a minute, or pair your own prover in Settings.";
+    /** A member's short name: "a" of "RandProtocol (a)". */
+    static String memberOf(ProverPairing p) {
+        int i = p.name.lastIndexOf('(');
+        return i >= 0 && p.name.endsWith(")") ? p.name.substring(i + 1, p.name.length() - 1) : p.name;
+    }
+
+    /** Why one member cannot take a job now, or null: another key, a fee, no viewing-key jobs, a full queue. */
+    static String notReady(ProverCore core, ProverPairing m, ProverPairing.Probe answer) {
+        String who = memberOf(m);
+        if (!answer.ok()) {
+            return answer.reason.contains("different key") ? who + " answered with another key than the one this wallet pins" : who + " did not answer";
+        }
+        String fee = ProverClient.feeRefusal(answer.info.fee, core);
+        if (fee != null) return who + ": " + fee;
+        if (!answer.info.witnessKinds.contains("viewing_key")) return who + " does not take this wallet's jobs";
+        if (answer.info.max > 0 && answer.info.depth >= answer.info.max) return BUSY_MARK + who + " is busy";
+        return null;
+    }
+
+    private static final String BUSY_MARK = "\u0000busy:";
+
+    /** Every member busy, or none reachable: plainly, with the way out. */
+    static ProverClient.Refusal poolUnavailable(String lead, String pool, List<String> whys) {
+        boolean allBusy = !whys.isEmpty();
+        StringBuilder reasons = new StringBuilder();
+        for (String w : whys) {
+            if (!w.startsWith(BUSY_MARK)) allBusy = false;
+            if (reasons.length() > 0) reasons.append("; ");
+            reasons.append(w.startsWith(BUSY_MARK) ? w.substring(BUSY_MARK.length()) : w);
+        }
+        if (allBusy) {
+            return new ProverClient.Refusal(lead + "The " + pool + " provers are all busy right now; try again in a minute, or pair your own prover in Settings.", true);
+        }
+        return new ProverClient.Refusal(lead + "The " + pool + " provers cannot be reached right now (" + reasons
+                + "). Try again later, or pair your own prover in Settings.");
     }
 
     /**
@@ -103,28 +147,135 @@ public final class RemoteSend {
         return new Route(p, s.token);
     }
 
+    /**
+     * The default: the members in {@code defaultProver}'s order, each asked {@code prover_info} —
+     * ITS pinned key, no fee, viewing-key jobs, room in its queue; the first that can leads the
+     * route, the rest follow for {@link #provePool} to fall through on a busy submit. None can:
+     * "all busy" or "cannot be reached", plainly, pointing to Settings.
+     */
     private static Route defaultRoute(ProverCore core, java.util.function.Function<ProverPairing, ProverPairing.Probe> probe,
                                       DefaultProver defaultProver) throws ProverClient.Refusal {
         String lead = "This device does not have the memory for this proof. ";
-        ProverPairing.Paired b;
+        List<ProverPairing.Paired> members;
         try {
-            b = defaultProver.get();
+            members = defaultProver.get();
         } catch (Exception e) {
-            throw new ProverClient.Refusal(lead + (e.getMessage() == null ? "The built-in prover cannot be used." : e.getMessage()));
+            throw new ProverClient.Refusal(lead + (e.getMessage() == null ? "The built-in provers cannot be used." : e.getMessage()));
         }
-        String why;
-        ProverPairing.Probe answer = probe.apply(b.pairing);
-        if (!answer.ok()) {
-            why = answer.reason.contains("different key") ? "it answered with another key than the one this wallet pins" : answer.reason;
-        } else {
-            why = ProverClient.feeRefusal(answer.info.fee, core);
-            if (why == null && !answer.info.witnessKinds.contains("viewing_key")) why = "it does not take this wallet's jobs";
+        String pool = poolNameOf(members);
+        List<String> whys = new java.util.ArrayList<>();
+        for (int i = 0; i < members.size(); i++) {
+            ProverPairing.Paired m = members.get(i);
+            String why = notReady(core, m.pairing, probe.apply(m.pairing));
+            if (why == null) {
+                List<ProverPairing.Paired> ordered = new java.util.ArrayList<>();
+                ordered.add(m);
+                for (int j = 0; j < members.size(); j++) if (j != i) ordered.add(members.get(j));
+                return new Route(m.pairing, m.token, true, ordered, pool);
+            }
+            whys.add(why);
         }
-        if (why != null) {
-            throw new ProverClient.Refusal(lead + "The " + b.pairing.name + " prover cannot be reached right now (" + why
-                    + "). Try again later, or pair your own prover in Settings.");
+        throw poolUnavailable(lead, pool, whys);
+    }
+
+    static String poolNameOf(List<ProverPairing.Paired> members) {
+        if (members.isEmpty()) return "RandProtocol";
+        String n = members.get(0).pairing.name;
+        int i = n.lastIndexOf(" (");
+        return i > 0 ? n.substring(0, i) : n;
+    }
+
+    /**
+     * A send through the RandProtocol provers: the members in the route's order — for each,
+     * {@code prover_info} again ({@link #notReady}), the job sealed by the core to THAT member's key,
+     * and submitted to it (the transport retry per member); a member busy (-32005), refusing, or
+     * unreachable at submit is skipped for the next, re-sealed for it. Once a member has named a job
+     * it is polled to the end — never another member mid-job. Every member out: plainly, never a loop.
+     */
+    public static JSONObject provePool(ProverCore core, java.util.function.Function<String, RemoteProver> proverFor, JSONObject request,
+                                       Route route, Integer maxProofBytes, RemoteProver.PhaseListener onPhase) throws Exception {
+        JSONObject guests = guestsOf(core, request);
+        if (!"viewing_key".equals(guests.optString("witness_kind", ""))) {
+            throw new ProverClient.Refusal("On this chain a proof needs the spend key, which goes only to a prover paired as your own. "
+                    + "Pair your own prover in Settings, or send from the rand command-line wallet.");
         }
-        return new Route(b.pairing, b.token, true);
+        List<String> whys = new java.util.ArrayList<>();
+        for (ProverPairing.Paired m : route.members) {
+            RemoteProver prover = proverFor.apply(m.pairing.url);
+            ProverPairing.Probe answer;
+            try {
+                answer = new ProverPairing.Probe(prover.client().info(), null);
+            } catch (ProverClient.ProverError e) {
+                answer = new ProverPairing.Probe(null, "did not answer");
+            }
+            if (answer.ok() && !ProverPairing.sameKey(core, answer.info, m.pairing.kemEk, m.pairing.fingerprint)) {
+                answer = new ProverPairing.Probe(null, "different key");
+            }
+            String why = notReady(core, m.pairing, answer);
+            if (why != null) {
+                whys.add(why);
+                continue;
+            }
+            Sealed s = seal(core, request, m.pairing, m.token, answer.info.fee, maxProofBytes, guests, onPhase);
+            onPhase.phase(null);
+            String job;
+            try {
+                job = prover.submit(s.hex);
+            } catch (ProverClient.Refusal r) {
+                whys.add((r.busy ? BUSY_MARK : "") + memberOf(m.pairing) + ": " + r.getMessage());
+                continue;
+            }
+            return prover.poll(job, s.pending, core::finishProof, onPhase);
+        }
+        throw poolUnavailable("", route.poolName == null ? "RandProtocol" : route.poolName, whys);
+    }
+
+    private static final class Sealed {
+        final String hex;
+        final Object pending;
+
+        Sealed(String hex, Object pending) {
+            this.hex = hex;
+            this.pending = pending;
+        }
+    }
+
+    private static JSONObject guestsOf(ProverCore core, JSONObject request) throws Exception {
+        String hcBundle = request.has("hc_bundle") && !request.isNull("hc_bundle") ? request.optString("hc_bundle", null) : null;
+        String hcAuth = request.has("hc_auth") && !request.isNull("hc_auth") ? request.optString("hc_auth", null) : null;
+        try {
+            return core.chainGuests(new JSONObject()
+                    .put("hc_bundle", hcBundle == null ? JSONObject.NULL : hcBundle)
+                    .put("hc_auth", hcAuth == null ? JSONObject.NULL : hcAuth));
+        } catch (Exception e) {
+            String why = e.getMessage() == null || e.getMessage().isEmpty() ? "This wallet cannot prove for this chain." : e.getMessage();
+            throw new ProverClient.Refusal(why);
+        }
+    }
+
+    /** The job, sealed by the core to {@code pairing}'s key with {@code token} — the auth proof made here first. */
+    private static Sealed seal(ProverCore core, JSONObject request, ProverPairing pairing, String token, Object fee,
+                               Integer maxProofBytes, JSONObject guests, RemoteProver.PhaseListener onPhase) throws Exception {
+        String hcBundle = request.has("hc_bundle") && !request.isNull("hc_bundle") ? request.optString("hc_bundle", null) : null;
+        JSONObject params = new JSONObject(request.toString());
+        JSONObject target = new JSONObject()
+                .put("kem_ek", pairing.kemEk)
+                .put("token", token)
+                .put("own", pairing.own)
+                .put("fee", fee);
+        if (hcBundle != null) target.put("hc_bundle", hcBundle);
+        params.put("prover", target);
+        if (maxProofBytes != null) params.put("max_proof_bytes", maxProofBytes);
+        // On a split-authorisation chain the core makes the auth proof inside prepare_transfer,
+        // from the spend key, on this device: seconds natively. Said before the wait, so it is not
+        // a silent one and says what is happening where.
+        if (guests.optBoolean("split_authorisation", false)) onPhase.authorising();
+        JSONObject prepared = core.prepareTransfer(params);
+        params = null; // the spend key and the token were in it
+        String sealed = prepared.optString("sealed_hex", "");
+        Object pending = prepared.opt("pending");
+        if (sealed.isEmpty() || pending == null) throw new ProverClient.Refusal("The wallet could not seal this transfer for the prover.");
+        return new Sealed(sealed, pending);
     }
 
     /**
@@ -168,18 +319,7 @@ public final class RemoteSend {
      */
     public static JSONObject prove(ProverCore core, RemoteProver prover, JSONObject request, Route route,
                                    Integer maxProofBytes, RemoteProver.PhaseListener onPhase) throws Exception {
-        String hcBundle = request.has("hc_bundle") && !request.isNull("hc_bundle") ? request.optString("hc_bundle", null) : null;
-        String hcAuth = request.has("hc_auth") && !request.isNull("hc_auth") ? request.optString("hc_auth", null) : null;
-
-        JSONObject guests;
-        try {
-            guests = core.chainGuests(new JSONObject()
-                    .put("hc_bundle", hcBundle == null ? JSONObject.NULL : hcBundle)
-                    .put("hc_auth", hcAuth == null ? JSONObject.NULL : hcAuth));
-        } catch (Exception e) {
-            String why = e.getMessage() == null || e.getMessage().isEmpty() ? "This wallet cannot prove for this chain." : e.getMessage();
-            throw new ProverClient.Refusal(why);
-        }
+        JSONObject guests = guestsOf(core, request);
         String wants = guests.optString("witness_kind", "");
         if ("spend_key".equals(wants) && !route.pairing.own) {
             throw new ProverClient.Refusal("On this chain a proof needs the spend key, which goes only to a prover paired as your own. "
@@ -204,30 +344,8 @@ public final class RemoteSend {
             throw new ProverClient.Refusal(ProverClient.FEE_REFUSAL);
         }
 
-        JSONObject params = new JSONObject(request.toString());
-        JSONObject target = new JSONObject()
-                .put("kem_ek", route.pairing.kemEk)
-                .put("token", route.token)
-                .put("own", route.pairing.own)
-                .put("fee", info.fee);
-        if (hcBundle != null) target.put("hc_bundle", hcBundle);
-        params.put("prover", target);
-        if (maxProofBytes != null) params.put("max_proof_bytes", maxProofBytes);
-        // On a split-authorisation chain the core makes the auth proof inside prepare_transfer,
-        // from the spend key, on this device: seconds natively. Said before the wait, so it is not
-        // a silent one and says what is happening where.
-        if (guests.optBoolean("split_authorisation", false)) onPhase.authorising();
-        JSONObject prepared = core.prepareTransfer(params);
-        params = null; // the spend key and the token were in it
-        String sealed = prepared.optString("sealed_hex", "");
-        Object pending = prepared.opt("pending");
-        if (sealed.isEmpty() || pending == null) throw new ProverClient.Refusal("The wallet could not seal this transfer for the prover.");
-        try {
-            return prover.prove(sealed, pending, core::finishProof, onPhase);
-        } catch (ProverClient.Refusal r) {
-            if (route.isDefault && r.busy) throw new ProverClient.Refusal(defaultBusy(route.pairing.name), true);
-            throw r;
-        }
+        Sealed s = seal(core, request, route.pairing, route.token, info.fee, maxProofBytes, guests, onPhase);
+        return prover.prove(s.hex, s.pending, core::finishProof, onPhase);
     }
 
     /** {@code rand_status.hc_bundle}: null when absent or null (this build's default guest), else its 64 hex; refused otherwise. */

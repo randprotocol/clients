@@ -458,24 +458,11 @@ public final class WalletService {
     }
 
     /**
-     * The prover this build ships the address of (the core's {@code version.trusted_prover}), or
-     * null: what Settings offers in one step. Asking pairs nothing.
+     * The RandProtocol provers this build pins (the core's {@code version.trusted_prover_pool}),
+     * or null: what Settings shows and offers in one step. Asking pairs and asks nothing.
      */
     public TrustedProver trustedProver() {
         return ProverCore.NATIVE.trustedProver();
-    }
-
-    /**
-     * "Use the RandProtocol prover": {@link ProverPairing#pairTrusted} — the built-in link held to
-     * the pinned fingerprint, then the same checks as any pasted link — stored exactly as
-     * {@link #pairProver} stores a pairing (the vault's record NOT own, the display copy named
-     * after the pool). Only Settings calls it, after showing the history warning. Blocking.
-     */
-    public ProverPairing.Paired pairTrustedProver() throws Exception {
-        ProverPairing.Paired paired = ProverPairing.pairTrusted(ProverCore.NATIVE, ProverClient.HTTP);
-        vault.setProverSecret(ProverSecret.of(paired.pairing, paired.token));
-        prefs.setProver(paired.pairing);
-        return paired;
     }
 
     /**
@@ -501,12 +488,17 @@ public final class WalletService {
     }
 
     /**
-     * The RandProtocol prover as the default would use it right now, or null: the user chose none,
-     * or this build ships none. Never paired, never stored.
+     * The RandProtocol provers as the default would use them right now — every member that passes
+     * its pins, in a fresh random order per send — or null: the user chose none, or this build
+     * ships none. Never paired, never stored.
      */
     public RemoteSend.DefaultProver defaultProver() {
         if (prefs.noProver() || ProverCore.NATIVE.trustedProver() == null) return null;
-        return () -> ProverPairing.builtIn(ProverCore.NATIVE);
+        return () -> {
+            java.util.List<ProverPairing.Paired> members = new java.util.ArrayList<>(ProverPairing.builtInPool(ProverCore.NATIVE));
+            java.util.Collections.shuffle(members, new java.security.SecureRandom());
+            return members;
+        };
     }
 
     /** Whether proofs this device cannot make go to the RandProtocol prover (nothing paired, none not chosen). */
@@ -660,21 +652,31 @@ public final class WalletService {
                 proved = Core.proveTransfer(req);
             } else {
                 final SendState base = st;
-                final String name = route.pairing.name;
+                final String name = route.isDefault && route.poolName != null ? route.poolName + " provers" : route.pairing.name;
                 SendMonitor.post(base.remote(name, null));
                 Integer maxProofBytes = limits.maxProofBytes;
-                proved = RemoteSend.prove(ProverCore.NATIVE, new RemoteProver(new ProverClient(route.pairing.url)), req, route,
-                        maxProofBytes, new RemoteProver.PhaseListener() {
-                            @Override
-                            public void phase(Integer pos) {
-                                SendMonitor.post(base.remote(name, pos));
-                            }
+                RemoteProver.PhaseListener listener = new RemoteProver.PhaseListener() {
+                    @Override
+                    public void phase(Integer pos) {
+                        SendMonitor.post(base.remote(name, pos));
+                    }
 
-                            @Override
-                            public void authorising() {
-                                SendMonitor.post(base.authorising(name));
+                    @Override
+                    public void authorising() {
+                        SendMonitor.post(base.authorising(name));
+                    }
+                };
+                // The RandProtocol provers: one member per job, tried in the route's order.
+                proved = route.isDefault
+                        ? RemoteSend.provePool(ProverCore.NATIVE, url -> {
+                            try {
+                                return new RemoteProver(new ProverClient(url));
+                            } catch (ProverClient.Refusal e) {
+                                throw new IllegalStateException(e);
                             }
-                        });
+                        }, req, route, maxProofBytes, listener)
+                        : RemoteSend.prove(ProverCore.NATIVE, new RemoteProver(new ProverClient(route.pairing.url)), req, route,
+                        maxProofBytes, listener);
             }
             req = null; // the spend key was in it
 
