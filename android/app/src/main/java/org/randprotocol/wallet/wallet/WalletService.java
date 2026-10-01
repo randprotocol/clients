@@ -418,10 +418,23 @@ public final class WalletService {
                 return rpc.blockByHeight(height);
             }
         };
+        // v0.6.8 `bridge.fees`: the chain's fee recipient rebuilds its fee notes too.
+        JSONObject fees = bridge.optJSONObject("fees");
+        String feeRecipient = fees == null ? null : fees.optString("recipient", null);
         DepositWalk.Result walked = DepositWalk.run(node, from, head, action -> {
-            JSONObject note = Core.rebuiltDeposit(sk, action);
-            if (note != null) {
-                OwnedNote n = OwnedNote.fromJson(note);
+            boolean attest = "bridge_attest".equals(action.optString("kind"));
+            if (feeRecipient == null) {
+                if (!attest) return;
+                JSONObject note = Core.rebuiltDeposit(sk, action);
+                if (note != null) {
+                    OwnedNote n = OwnedNote.fromJson(note);
+                    out.notes.put(n.cm, n);
+                }
+                return;
+            }
+            JSONArray notes = Core.rebuiltNotes(sk, action, feeRecipient);
+            for (int i = 0; i < notes.length(); i++) {
+                OwnedNote n = OwnedNote.fromJson(notes.getJSONObject(i));
                 out.notes.put(n.cm, n);
             }
         });

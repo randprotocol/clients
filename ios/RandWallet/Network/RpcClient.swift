@@ -253,7 +253,15 @@ final class RpcClient {
     }
 
     func bridgeEnabled() async throws -> Bool {
-        (try await call("rand_getBridgeState") as? [String: Any])?["enabled"] as? Bool ?? false
+        try await bridgeInfo().enabled
+    }
+
+    /// `rand_getBridgeState`'s `enabled`, and (v0.6.8 `bridge.fees`) the fee recipient's address —
+    /// the wallet whose envelope-less fee notes are rebuilt rather than decrypted.
+    func bridgeInfo() async throws -> (enabled: Bool, feeRecipient: String?) {
+        let v = try await call("rand_getBridgeState") as? [String: Any]
+        let fees = v?["fees"] as? [String: Any]
+        return (v?["enabled"] as? Bool ?? false, fees?["recipient"] as? String)
     }
 
     /// `rand_getBlocks(from, to)`: the headers of that range, at most 1024 a call and never past

@@ -63,6 +63,16 @@ enum RandCore {
         let data = try JSONSerialization.data(withJSONObject: v)
         return try JSONDecoder().decode(OwnedNote.self, from: data)
     }
+    /// Every note a block action created for this wallet from its public fields: a bridge deposit
+    /// (net of the chain's fee, v0.6.8) and — when this wallet is `feeRecipient` — the envelope-less
+    /// fee notes of deposits and burns.
+    static func rebuiltNotes(spendKey: String, action: Any, feeRecipient: String?) throws -> [OwnedNote] {
+        var params: [String: Any] = ["spend_key": spendKey, "action": action]
+        if let r = feeRecipient { params["fee_recipient"] = r }
+        let v = try call("rebuilt_notes", params)
+        let data = try JSONSerialization.data(withJSONObject: v)
+        return try JSONDecoder().decode([OwnedNote].self, from: data)
+    }
     static func selectInputs(notes: [OwnedNote], need: UInt64) throws -> Selection {
         let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(notes))
         return try call("select_inputs", ["notes": encoded, "need": String(need)], as: Selection.self)

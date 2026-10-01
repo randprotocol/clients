@@ -155,7 +155,9 @@ enum DepositWalk {
 
     private static func offerAttests(_ actions: [Any], _ offer: (Any) throws -> Void) throws {
         for action in actions {
-            guard let a = action as? [String: Any], a["kind"] as? String == "bridge_attest" else { continue }
+            // A deposit, and a burn — whose fee note is the chain's fee recipient's (v0.6.8); the
+            // offer decides which it rebuilds.
+            guard let a = action as? [String: Any], let kind = a["kind"] as? String, kind == "bridge_attest" || kind == "bridge_burn" else { continue }
             try offer(action)
         }
     }

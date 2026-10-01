@@ -165,7 +165,10 @@ final class DepositWalk {
         for (int i = 0; i < txs.length(); i++) {
             JSONObject tx = txs.optJSONObject(i);
             JSONObject action = tx == null ? null : tx.optJSONObject("action");
-            if (action == null || !"bridge_attest".equals(action.optString("kind"))) continue;
+            // A deposit, and (for a chain's bridge fee recipient, which the sink decides) a burn,
+            // whose fee note carries no envelope and is found only by rebuilding it.
+            String kind = action == null ? "" : action.optString("kind");
+            if (!"bridge_attest".equals(kind) && !"bridge_burn".equals(kind)) continue;
             sink.offer(action);
         }
     }

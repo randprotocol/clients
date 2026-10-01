@@ -137,9 +137,9 @@ final class DepositWalkTests: XCTestCase {
         let r = try await DepositWalk.run(
             start: 0, head: 3,
             headers: { node.headers($0, $1) },
-            actions: { _ in [["kind": "bundle"], "not an action", ["kind": "bridge_attest", "at": UInt64(2)]] },
+            actions: { _ in [["kind": "bundle"], "not an action", ["kind": "bridge_attest", "at": UInt64(2)], ["kind": "bridge_burn", "at": UInt64(3)]] },
             offer: { seen.append(($0 as? [String: Any])?["at"] as? UInt64 ?? 0) })
-        XCTAssertEqual(seen, [2])
+        XCTAssertEqual(seen, [2, 3], "a burn is offered too: its fee note is the fee recipient's (v0.6.8)")
         XCTAssertEqual(r.next, 4)
     }
 

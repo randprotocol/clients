@@ -146,7 +146,12 @@ final class WalletService: ObservableObject {
         if s.scannedAttestHeight <= head0 {
             // `nil`: the bridge could not be asked, so the cursor stands still this scan.
             let enabled: Bool?
-            do { enabled = try await rpc.bridgeEnabled() } catch is CancellationError { throw CancellationError() } catch { enabled = nil }
+            var feeRecipient: String? = nil
+            do {
+                let info = try await rpc.bridgeInfo()
+                enabled = info.enabled
+                feeRecipient = info.feeRecipient
+            } catch is CancellationError { throw CancellationError() } catch { enabled = nil }
             if enabled == false {
                 s.scannedAttestHeight = head0 + 1
             } else if enabled == true {
@@ -157,7 +162,12 @@ final class WalletService: ObservableObject {
                     headers: { try await rpc.blockHeaders(from: $0, to: $1) },
                     actions: { try await rpc.blockActions(height: $0) },
                     offer: { action in
-                        if let n = try RandCore.rebuiltDeposit(spendKey: sk, action: action) { found.append(n) }
+                        let kind = (action as? [String: Any])?["kind"] as? String
+                        if let fr = feeRecipient {
+                            found.append(contentsOf: try RandCore.rebuiltNotes(spendKey: sk, action: action, feeRecipient: fr))
+                        } else if kind == "bridge_attest", let n = try RandCore.rebuiltDeposit(spendKey: sk, action: action) {
+                            found.append(n)
+                        }
                     }
                 )
                 for n in found { s.addDeposit(n) }

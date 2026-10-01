@@ -111,6 +111,18 @@ public final class Core {
         return v instanceof JSONObject ? (JSONObject) v : null;
     }
 
+    /**
+     * Every note a block action created for this wallet from its public fields: a bridge deposit (net
+     * of the chain's fee, v0.6.8) and — when this wallet is {@code feeRecipient}, the chain's
+     * {@code bridge.fees.recipient} — the envelope-less fee notes of deposits and burns.
+     */
+    public static JSONArray rebuiltNotes(String spendKey, JSONObject action, String feeRecipient) throws CoreException {
+        Object v = feeRecipient == null
+            ? call("rebuilt_notes", p("spend_key", spendKey, "action", action))
+            : call("rebuilt_notes", p("spend_key", spendKey, "action", action, "fee_recipient", feeRecipient));
+        return v instanceof JSONArray ? (JSONArray) v : new JSONArray();
+    }
+
     public static JSONObject selectInputs(JSONArray notes, int asset, String needUnits) throws CoreException {
         return object("select_inputs", p("notes", notes, "asset", asset, "need", needUnits));
     }

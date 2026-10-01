@@ -225,14 +225,16 @@ public class DepositWalkTest {
                     return new JSONObject().put("transactions", new JSONArray()
                             .put(new JSONObject().put("action", new JSONObject().put("kind", "bundle")))
                             .put(new JSONObject())
-                            .put(new JSONObject().put("action", new JSONObject().put("kind", "bridge_attest").put("at", 2))));
+                            .put(new JSONObject().put("action", new JSONObject().put("kind", "bridge_attest").put("at", 2)))
+                            // v0.6.8: a burn is offered too — its fee note is the fee recipient's.
+                            .put(new JSONObject().put("action", new JSONObject().put("kind", "bridge_burn").put("at", 3))));
                 } catch (JSONException e) {
                     throw new AssertionError(e);
                 }
             }
         };
         DepositWalk.Result[] r = new DepositWalk.Result[1];
-        assertEquals(Arrays.asList(2L), offered(node, 0, 3, r));
+        assertEquals(Arrays.asList(2L, 3L), offered(node, 0, 3, r));
         assertEquals(3, r[0].through);
     }
 }
