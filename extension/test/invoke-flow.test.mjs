@@ -21,7 +21,7 @@ function harness({ parked = { ok: true, result: { origin: 'https://durian.market
   };
   const flow = makeInvokeFlow({ id: 'i1', send, backend });
   const results = () => sent.filter((m) => m.type === 'rand:invokeResult');
-  return { flow, sent, results };
+  return { flow, sent, results, backendRef: backend };
 }
 
 test('review, approve, and the site hears the hash once, with every phase reported on the way', async () => {
@@ -71,4 +71,34 @@ test('a request that is no longer waiting tells nobody and shows why', async () 
   assert.equal(h.flow.state.step, 'failed');
   assert.equal(h.flow.state.error.code, 'GONE');
   assert.equal(h.results().length, 0);
+});
+
+test('the RandProtocol prover\'s notice stands in Approve\'s place; read (Firefox: consented inside the click), Approve goes', async () => {
+  for (const granted of [true, false, null]) {
+    const order = [];
+    const h = harness({ program: { canInvoke: async () => ({ ok: true, via: 'prover', prover: 'default', notice: true }) } });
+    await h.flow.start();
+    assert.equal(h.flow.state.step, 'review');
+    assert.equal(h.flow.state.notice, true);
+    await h.flow.approve();
+    assert.equal(h.flow.state.step, 'review', 'Approve went through before the notice was read');
+    // The harness's backend gains the prover group and (Firefox, when granted is not null) the
+    // platform's consent request.
+    h.backendRef.prover = { acknowledgeDefault: async () => { order.push('acknowledge'); } };
+    if (granted !== null) h.backendRef.platform = { requestDataCollectionConsent: () => { order.push('request'); return Promise.resolve(granted); } };
+    const done = h.flow.acknowledge();
+    if (granted !== null) assert.deepEqual(order, ['request'], 'the consent was not asked synchronously inside the click');
+    await done;
+    if (granted === false) {
+      assert.deepEqual(order, ['request']);
+      assert.equal(h.flow.state.step, 'failed');
+      assert.equal(h.results()[0].error.code, 'PROVER_UNAVAILABLE');
+      assert.match(h.results()[0].error.message, /Firefox did not allow/);
+      continue;
+    }
+    assert.deepEqual(order, granted ? ['request', 'acknowledge'] : ['acknowledge']);
+    assert.equal(h.flow.state.notice, false);
+    await h.flow.approve();
+    assert.equal(h.flow.state.step, 'done');
+  }
 });

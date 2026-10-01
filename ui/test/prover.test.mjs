@@ -485,6 +485,18 @@ test('a_viewing_key_job_goes_to_a_prover_that_is_not_the_users_own', async () =>
   assertKeyNeverLeaked(env);
 });
 
+test('an invoke through the RandProtocol prover waits for its one-time notice too', async () => {
+  const env = await sendableWallet({ fetch: poolFetch() });
+  const raw = { program: 'ab'.repeat(32), inputs: [], reads: [], writes: [], pays: [], mints: [] };
+  await assert.rejects(() => env.backend.program.invoke(raw, () => {}), (err) => {
+    assert.equal(err.code, 'PROVER_NOTICE');
+    assert.match(err.message, /viewing key/);
+    return true;
+  });
+  assert.equal(coreCalled(env, 'prepare_invoke').length, 0);
+  assert.equal(count(env.fetch, 'prover_submit'), 0);
+});
+
 test('a delegated job carries the chain\'s genesis, as a local proof does (BIND-1)', async () => {
   // Through a paired prover and through the default alike: the sealed job is made over the same
   // binding the device's own proof would be — a chain after 19 binds its genesis hash.

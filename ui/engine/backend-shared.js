@@ -2353,7 +2353,11 @@ export function makeSharedBackend({
       if (!limits.programState) {
         return { ok: false, code: 'PROGRAMS_UNSUPPORTED', reason: 'This chain does not run programs yet.' };
       }
-      return prove.via ? { ok: true, via: prove.via } : { ok: true };
+      // The RandProtocol prover's one-time notice (and Firefox's consent) comes before the first
+      // invoke through it too: the window shows it in Approve's place.
+      return prove.via
+        ? { ok: true, via: prove.via, ...(prove.prover ? { prover: prove.prover } : {}), ...(prove.notice ? { notice: true } : {}) }
+        : { ok: true };
     },
 
     /**
@@ -2382,8 +2386,9 @@ export function makeSharedBackend({
       const release = holdUnlock();
       try {
         await refuseWhilePending();
-        const { answer: { ok, reason }, route } = await proveRoute();
+        const { answer: { ok, reason, notice }, route } = await proveRoute();
         if (!ok) throw invokeError('PROVER_UNAVAILABLE', reason);
+        if (notice) throw invokeError('PROVER_NOTICE', noticeFirst().message);
         const prove = await proveHookFor(route);
         const { client, identity } = await requireVerifiedChain();
         return await runPhased(onPhase, async (report) => {

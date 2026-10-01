@@ -4,7 +4,7 @@
 // the request (ui/engine/invoke.js's `invokeEffects`), not the site's summary.
 import { ext } from './lib/browser.js';
 import { extensionBackend } from './backend-extension.js';
-import { makeInvokeFlow } from './lib/invoke-flow.js';
+import { makeInvokeFlow, PROVER_NOTICE } from './lib/invoke-flow.js';
 import { markSvg } from './ui/lib/entropy.js';
 import { formatUnits, shortHex } from './ui/lib/format.js';
 
@@ -90,6 +90,25 @@ function render(state) {
       ? 'Your paired prover makes the large proof; this browser makes the small ones. It takes a few minutes.'
       : 'Proving takes a few minutes. Keep this window open until it says sent.');
     const actions = el('div', 'onboard-actions');
+    if (state.notice) {
+      // The RandProtocol prover's one-time notice in Approve's place: read it, or leave for your
+      // own prover (Settings in the wallet) — and the request stays waiting meanwhile.
+      const warn = el('p', 'caption', PROVER_NOTICE);
+      const ok = el('button', 'btn btn-primary block', 'I understand — continue');
+      ok.type = 'button';
+      ok.addEventListener('click', () => { void flow.acknowledge(); });
+      const own = el('button', 'btn block', 'Use my own prover');
+      own.type = 'button';
+      own.addEventListener('click', () => { ext.tabs.create({ url: ext.runtime.getURL('app.html#settings') }); });
+      const no = el('button', 'btn block', 'Reject');
+      no.type = 'button';
+      no.addEventListener('click', () => { void flow.reject().then(() => window.close()); });
+      actions.append(ok, own, no);
+      box.append(card, warn, actions);
+      queueMicrotask(() => ok.focus());
+      root.append(box);
+      return;
+    }
     const yes = el('button', 'btn btn-primary block', 'Approve');
     yes.type = 'button';
     const no = el('button', 'btn block', 'Reject');

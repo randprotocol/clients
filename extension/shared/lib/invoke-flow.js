@@ -13,6 +13,14 @@
 //      anything left the device, unknown once it may have reached the node.
 //   4. `rand:invokeResult` — `{tx}` or `{code, message}` — exactly once.
 
+/** Firefox did not let the wallet send its viewing key to the RandProtocol prover. */
+export const CONSENT_DECLINED = 'Firefox did not allow this wallet to send your viewing key to the RandProtocol prover, so this browser has no prover to make the proof. Nothing was sent. Pair your own prover in the wallet\'s Settings.';
+
+/** The RandProtocol prover's one-time notice, as the approval window shows it. */
+export const PROVER_NOTICE = 'This device cannot make the proof, so the prover RandProtocol runs for everyone makes it. '
+  + 'It receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. '
+  + 'It cannot spend. You are asked once; to keep your history to yourself, pair your own prover in the wallet\'s Settings.';
+
 /** What the site sees for an error with no code of its own. */
 const FALLBACK_CODE = 'UNKNOWN';
 
@@ -74,14 +82,45 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {} }) {
       const can = await program.canInvoke();
       if (!can || !can.ok) throw Object.assign(new Error((can && can.reason) || 'Rand Wallet cannot send this here.'), { code: (can && can.code) || 'PROVER_UNAVAILABLE' });
       const quote = await program.quote(request);
-      set({ step: 'review', quote, via: can.via || null });
+      // The RandProtocol prover's one-time notice, when it is still to be read: the window shows it
+      // in Approve's place, and `acknowledge` (from its own click) reads it.
+      set({ step: 'review', quote, via: can.via || null, notice: can.notice === true });
     } catch (err) {
       await refuse(err);
     }
   }
 
+  /**
+   * "I understand — continue" on the RandProtocol prover's notice. Firefox's data-collection
+   * consent is asked FIRST and synchronously, inside the click that called this (Firefox grants
+   * nothing outside the user's gesture); declined, there is no prover and the site is told
+   * PROVER_UNAVAILABLE. Then the notice is remembered for this wallet and Approve is offered.
+   */
+  function acknowledge() {
+    if (state.step !== 'review' || !state.notice) return Promise.resolve();
+    const platform = backend && backend.platform;
+    const consent = platform && typeof platform.requestDataCollectionConsent === 'function' ? platform.requestDataCollectionConsent() : null;
+    return (async () => {
+      if (consent) {
+        let granted = false;
+        try { granted = (await consent) === true; } catch { granted = false; }
+        if (!granted) {
+          await refuse(Object.assign(new Error(CONSENT_DECLINED), { code: 'PROVER_UNAVAILABLE' }));
+          return;
+        }
+      }
+      try {
+        await backend.prover.acknowledgeDefault();
+      } catch (err) {
+        await refuse(err);
+        return;
+      }
+      set({ notice: false });
+    })();
+  }
+
   async function approve() {
-    if (state.step !== 'review') return;
+    if (state.step !== 'review' || state.notice) return;
     set({ step: 'running', phase: 'selecting', detail: null });
     const onPhase = (phase, detail) => {
       set({ phase, detail: detail || null });
@@ -105,5 +144,5 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {} }) {
     await refuse(Object.assign(new Error('The request was not approved in Rand Wallet.'), { code: 'USER_REJECTED' }));
   }
 
-  return { state, start, approve, reject };
+  return { state, start, acknowledge, approve, reject };
 }
