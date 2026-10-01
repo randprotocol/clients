@@ -30,7 +30,8 @@ the wallet says what they see before the first send), or one you pair for privac
 app on the same machine, or your own `rand-prover` (see the known limitation below and
 [`docs/prover.md`](docs/prover.md)). A phone without the memory does the same. The extensions
 also give sites a `window.rand` provider: randbridge.org connects to it, and durian.market swaps
-through `window.rand.invoke` (a program call the wallet shows, proves and submits on Approve).
+through `window.rand.invoke` (a program call the wallet shows, proves and submits on Approve);
+the wallet's own Swap screen trades through the same durian.market pools.
 Downloads are listed at https://randprotocol.org/clients (`web/`).
 
 Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
@@ -39,7 +40,7 @@ Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
 Every release is on [GitHub Releases](https://github.com/randprotocol/clients/releases/latest),
 and https://randprotocol.org/clients links the same files with their checksums. `<v>` below is
-the version, `0.6.9` today.
+the version, `0.7.0` today.
 
 | you have | download | then |
 |---|---|---|
@@ -72,7 +73,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing     # macOS
 sha256sum -c SHA256SUMS --ignore-missing         # Linux
 ```
 ```powershell
-Get-FileHash .\rand-wallet-0.6.9-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
+Get-FileHash .\rand-wallet-0.7.0-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
 ```
 
 A matching sum says the file is the one that was published. It does not say the file was built
@@ -105,7 +106,7 @@ STARK proof, keys are Poseidon2 hashes, envelopes are ML-KEM-768 + ChaCha20-Poly
 primitives exist only in the fullnode's Rust crates, and a wallet that re-implemented them in
 Swift, Java or JavaScript would have to be byte-identical to the node or every transfer is
 refused. So `core/` vendors the fullnode crates (`core/vendor/fullnode`,
-a submodule at fullnode's `v0.6.9` tag, `3f43101` — what chain 20's nodes run: **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key; **BIND-1**, a transaction bound to its chain's genesis; program state and the `Invoke` action (RPL-2); and the chain's bridge fee) and exposes one JSON entry point, `call(method, params)`, that each
+a submodule at fullnode's `v0.7.0` tag, `806ed34`, on chain 20: **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key; **BIND-1**, a transaction bound to its chain's genesis; program state and the `Invoke` action (RPL-2); and the chain's bridge fee) and exposes one JSON entry point, `call(method, params)`, that each
 client wraps: an XCFramework on iOS, a `.so` on Android, WebAssembly in the browser. Everything
 above that line — the RPC client, note store, scan and send flow, key storage and the UI — is
 Swift, Java and JavaScript.
@@ -194,11 +195,11 @@ The first build of any client compiles the prover and takes several minutes.
 ```bash
 git clone --recurse-submodules https://github.com/randprotocol/clients.git
 cd clients
-git checkout v0.6.9 && git submodule update --init   # a release, rather than main
+git checkout v0.7.0 && git submodule update --init   # a release, rather than main
 ```
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
-The submodule is the full node (`core/vendor/fullnode`, at its `v0.6.9` tag): the wallet's
+The submodule is the full node (`core/vendor/fullnode`, at its `v0.7.0` tag): the wallet's
 cryptography is the node's own code.
 
 ### 3. Test the core (optional, about a minute)

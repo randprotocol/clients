@@ -57,8 +57,11 @@ pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode's tag
-/// `v0.6.9` (`3f43101`), the build chain 20's nodes run — node-only over `v0.6.8` (`c9c9bd3`, the
-/// cut): its headers carry invokes in `public_notes`; nothing the wallet links changes. v0.6.8 is RPL-2 (program state, vaults and the `Invoke`
+/// `v0.7.0` (`806ed34`) — over `v0.6.9` (`3f43101`, node-only on chain 20: headers carry invokes in
+/// `public_notes`) it adds the audit v7 rows, the incremental token root (TOK-1) and the pool's
+/// per-member keys; the proof guests are byte-identical (circuits re-pinned at `6d2015d` for the
+/// provenance only), and evm-core/sbpf-core now come vendored inside the fullnode tree. Chain 20
+/// was cut on `v0.6.8` (`c9c9bd3`). v0.6.8 is RPL-2 (program state, vaults and the `Invoke`
 /// action, Action 33), BIND-1 (a transaction binds its chain's genesis hash on every chain after
 /// 19, [`binding_domain_of`]) and `bridge.fees` (a deposit is the gross less the chain's share,
 /// [`rebuilt_deposit`], [`bridge_fee_quote`]); the proof guests are v0.6.7's. Before it: fullnode's
@@ -75,7 +78,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
 /// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
 /// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "3f43101";
+pub const CHAIN_BUILD: &str = "806ed34";
 /// The chain the defaults below describe: chain 20, cut 2026-10-01 on fullnode v0.6.8 (`c9c9bd3`)
 /// from chain 19's state, with `program_state`, `binding_domain: 1` and `bridge.fees` (10 bps each
 /// way) in its genesis. Before it, chain 19, the next cut (not live on 2026-09-30; the
@@ -6113,7 +6116,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 20);
-            assert_eq!(v["chain_build"], "3f43101");
+            assert_eq!(v["chain_build"], "806ed34");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);

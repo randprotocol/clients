@@ -249,7 +249,7 @@ test('the artefact this wallet loads is built for chain 20 on the hidden-asset b
   // Fullnode v0.6.7 (constraint set 8 and split authorisation — the build chains 18 and 19 run):
   // every bundle proof declares the guest's ceiling, which the genesis pins; the chains on which a
   // memo claim is never believed; the two guests chain 18's `rand_status` names (2026-09-30).
-  assert.equal(k.chain_build, '3f43101');
+  assert.equal(k.chain_build, '806ed34');
   assert.equal(k.bundle_gas_limit, 20479);
   assert.equal(k.hc_bundle, '60af094acfe65d85fdb18fb3d06cf9085dcf28c96e59e87f1ee527226e6e3fce', 'bundle guest v3');
   assert.equal(k.hc_auth, '1e4e347f44cf86750b30a9a4bdf9ec9256efe353d4ff8017451eca7d195639c1', 'the auth guest');
