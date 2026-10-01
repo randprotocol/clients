@@ -34,6 +34,11 @@
         <com.google.android.material.button.MaterialButton android:id="@+id/prover_save" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/settings_save" />
         <com.google.android.material.button.MaterialButton android:id="@+id/prover_scan" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="@string/settings_prover_scan" />
     </LinearLayout>
+    <!-- The one-step pairing of the prover the build ships the address of (docs/prover.md §8): below the warning, shown only when the core names one. The link never reaches this screen. -->
+    <LinearLayout android:id="@+id/prover_trusted" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="12dp" android:visibility="gone">
+        <TextView android:id="@+id/prover_trusted_body" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Caption" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/prover_use_trusted" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/settings_prover_use_trusted" />
+    </LinearLayout>
     <TextView android:id="@+id/prover_status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Caption" />
 
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/settings_keys" />

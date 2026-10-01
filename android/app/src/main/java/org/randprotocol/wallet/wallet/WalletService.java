@@ -432,6 +432,27 @@ public final class WalletService {
         return paired;
     }
 
+    /**
+     * The prover this build ships the address of (the core's {@code version.trusted_prover}), or
+     * null: what Settings offers in one step. Asking pairs nothing.
+     */
+    public TrustedProver trustedProver() {
+        return ProverCore.NATIVE.trustedProver();
+    }
+
+    /**
+     * "Use the RandProtocol prover": {@link ProverPairing#pairTrusted} — the built-in link held to
+     * the pinned fingerprint, then the same checks as any pasted link — stored exactly as
+     * {@link #pairProver} stores a pairing (the vault's record NOT own, the display copy named
+     * after the pool). Only Settings calls it, after showing the history warning. Blocking.
+     */
+    public ProverPairing.Paired pairTrustedProver() throws Exception {
+        ProverPairing.Paired paired = ProverPairing.pairTrusted(ProverCore.NATIVE, ProverClient.HTTP);
+        vault.setProverSecret(ProverSecret.of(paired.pairing, paired.token));
+        prefs.setProver(paired.pairing);
+        return paired;
+    }
+
     public void forgetProver() {
         prefs.setProver(null);
         vault.eraseProverSecret();

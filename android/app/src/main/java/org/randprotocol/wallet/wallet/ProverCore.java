@@ -53,6 +53,15 @@ public interface ProverCore {
         return units;
     }
 
+    /**
+     * The prover this build ships the address of ({@code version.trusted_prover}: the RandProtocol
+     * validators' pool), for a screen to offer in one step — or null when the core names none.
+     * Asking pairs nothing.
+     */
+    default TrustedProver trustedProver() {
+        return null;
+    }
+
     ProverCore NATIVE = new ProverCore() {
         @Override
         public JSONObject parseProverLink(String link) throws CoreException, JSONException {
@@ -92,6 +101,15 @@ public interface ProverCore {
         @Override
         public String formatAmount(String units) {
             return Core.formatAmount(units);
+        }
+
+        @Override
+        public TrustedProver trustedProver() {
+            try {
+                return TrustedProver.fromJson(Core.constants().optJSONObject("trusted_prover"));
+            } catch (Exception e) {
+                return null;
+            }
         }
     };
 }

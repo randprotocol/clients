@@ -173,6 +173,10 @@
     <!-- The core's own sentence (version.prover_history_warning, ProverPairing.WARNING); SettingsActivity reads it from the core and falls back to this. -->
     <string name="settings_prover_warning">This prover will be able to read this wallet\'s whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.</string>
     <string name="settings_prover_forget">Forget this prover</string>
+    <!-- The prover the build ships the address of (the core's version.trusted_prover; docs/prover.md §8). Shown only when the core names one; the warning above applies to it. -->
+    <string name="settings_prover_trusted_body">Or use the prover RandProtocol runs for everyone — %1$s, fingerprint %2$s. It sees as much as any prover you pair (the warning above) and charges nothing; your spend key stays here either way.</string>
+    <string name="settings_prover_use_trusted">Use the RandProtocol prover</string>
+    <string name="settings_prover_paired_trusted">Paired — this prover can read your history. Proofs this device cannot make go to %1$s. Its fingerprint is %2$s. %3$s</string>
     <string name="settings_prover_asking">Asking the prover…</string>
     <string name="settings_prover_pairing">Pairing…</string>
     <string name="settings_prover_no_link">Not paired: paste the randprover: link your prover shows.</string>

@@ -147,7 +147,37 @@ public final class ProverPairing {
 
     /** Asks the prover for its key; returns the pairing and its token. Stores nothing. Blocking. */
     public static Paired pair(ProverCore core, String link, ProverClient.Transport transport) throws Exception {
-        JSONObject p = parse(core, link);
+        return pairParsed(core, parse(core, link), transport, null);
+    }
+
+    /**
+     * The one-step pairing of the prover the build ships the address of (the core's
+     * {@code version.trusted_prover}; docs/prover.md §8): the built-in link read through the core
+     * and held to the fingerprint the build pins — a link that somehow named another key, or one
+     * marked as the user's own (a shared pool is nobody's), is refused BEFORE the prover is asked
+     * anything — then {@link #pair}'s own checks: the prover must answer with the link's key, or
+     * nothing is returned to store. The pairing is NOT own, and named after the pool
+     * ("RandProtocol"). Never called by the wallet itself: only Settings does, after showing the
+     * history warning; "Forget this prover" undoes it like any pairing. Stores nothing. Blocking.
+     */
+    public static Paired pairTrusted(ProverCore core, ProverClient.Transport transport) throws Exception {
+        TrustedProver t = core.trustedProver();
+        if (t == null) throw new ProverClient.Refusal("This build ships no prover to use.");
+        JSONObject p = parse(core, t.link);
+        if (t.fingerprint.isEmpty() || !p.getString("fingerprint").equals(t.fingerprint)) {
+            throw new ProverClient.Refusal("The built-in prover link does not name the key this wallet pins; not pairing it.");
+        }
+        if (p.optBoolean("own", false)) {
+            throw new ProverClient.Refusal("The built-in prover link is marked as your own, which a shared prover is not; not pairing it.");
+        }
+        return pairParsed(core, p, transport, t.name);
+    }
+
+    /**
+     * The checks every pairing goes through, on a link the core has read: the URL rule, the
+     * prover's own key against the link's. {@code name} is the display name, the host when null.
+     */
+    private static Paired pairParsed(ProverCore core, JSONObject p, ProverClient.Transport transport, String name) throws Exception {
         String url = ProverClient.checkUrl(p.getString("url"));
         String kemEk = p.getString("kem_ek").toLowerCase(Locale.ROOT);
         String fp = p.getString("fingerprint");
@@ -160,7 +190,9 @@ public final class ProverPairing {
         if (!sameKey(core, info, kemEk, fp)) {
             throw new ProverClient.Refusal("The prover at that address has a different key from the one the link names. Do not pair it.");
         }
-        return new Paired(new ProverPairing(nameOf(url), url, kemEk, fp, p.optBoolean("own", false)), p.getString("token"));
+        String label = name == null || name.trim().isEmpty() ? nameOf(url) : name.trim();
+        if (label.length() > 64) label = label.substring(0, 64);
+        return new Paired(new ProverPairing(label, url, kemEk, fp, p.optBoolean("own", false)), p.getString("token"));
     }
 
     public static Probe probe(ProverCore core, ProverPairing pairing, ProverClient.Transport transport) {

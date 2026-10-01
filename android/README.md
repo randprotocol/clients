@@ -103,6 +103,20 @@ seals. On an older chain (bundle guest v1/v2) the job would carry the spend key 
 prover paired as your own (a link made with `rand-prover pair --own`). The pending transaction
 (~2.8 MB of hex with the auth proof inside) lives in memory on the proving service's thread for
 the length of the call; nothing writes it to preferences or a file, and there is no resume.
+
+**Use the RandProtocol prover** (Settings → Prover; `../docs/prover.md` §8): the build ships the
+address of one prover, the RandProtocol validators' pool (`https://prover.randprotocol.org`,
+fingerprint `RGTF-7HKJ-XZFV-GQ1J`, viewing-key jobs only, no fee), read from the core's
+`version.trusted_prover` (`ProverCore.trustedProver()` → `TrustedProver {name, url, fingerprint}`;
+the pairing link stays inside `ProverPairing.pairTrusted` and reaches neither the screen nor
+preferences). The button is shown only when the core names one, below the same history warning
+as any pairing, with the pool's URL and fingerprint beside it; a tap pairs it in one step through
+the same checks as a pasted link — the built-in link is held to the pinned fingerprint and must
+not be marked `own` (refused before any request), then the prover is asked for its key and
+refused unless it is the link's — and stores it exactly as a pasted pairing is stored: the vault
+record NOT own, the display copy named "RandProtocol" ("Paired prover · RandProtocol", with the
+not-own note). The wallet never pairs it by itself; **Forget this prover** removes it like any
+pairing. `ProverTest` covers the report, the refusals and the stored record.
 - `files/notes.json`: the note cache (plaintext notes, nullifiers, leaf indices) and the
   submissions list with each payment's transaction key. App-private; rebuilt by a rescan.
 - Settings (RPC URL, chain id, auto-lock, theme) in plain preferences.

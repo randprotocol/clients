@@ -42,6 +42,12 @@ public class ProverTest {
     /** A bundle guest that is not v3: an older chain, whose witness carries the spend key. */
     static final String V2 = "ab".repeat(32);
     static final String HISTORY = "the core's own history sentence";
+    /** The prover the build ships the address of (the core's {@code version.trusted_prover}). */
+    static final String TRUSTED_URL = "https://prover.randprotocol.org";
+    static final String TRUSTED_FINGERPRINT = "RGTF-7HKJ-XZFV-GQ1J";
+    static final String TRUSTED_EK = "0a".repeat(1184);
+    static final String TRUSTED_TOKEN = "c3".repeat(32);
+    static final String TRUSTED_LINK = "randprover:trusted?url=https%3A%2F%2Fprover.randprotocol.org&token=" + TRUSTED_TOKEN;
 
     // ------------------------------------------------------------------ fakes
 
@@ -82,6 +88,7 @@ public class ProverTest {
         Handler handler;
         final List<String> bodies = new ArrayList<>();
         final List<String> methods = new ArrayList<>();
+        final List<String> urls = new ArrayList<>();
         final List<Boolean> followRedirects = new ArrayList<>();
 
         FakeProver(Handler handler) {
@@ -90,6 +97,7 @@ public class ProverTest {
 
         @Override
         public HttpURLConnection open(URL url) {
+            urls.add(url.toString());
             return new HttpURLConnection(url) {
                 final ByteArrayOutputStream out = new ByteArrayOutputStream();
                 Reply reply;
@@ -162,16 +170,41 @@ public class ProverTest {
         JSONObject guestsAsked;
         boolean own = true;
         String url = URL_OK;
+        /** What the built-in link parses to: {@code own} as the link carries it. */
+        boolean trustedOwn = false;
+        /** The core's {@code version}: carries {@code trusted_prover} only when a test puts it there. */
+        JSONObject version = new JSONObject();
+
+        /** A {@code version} naming the trusted prover exactly as the real core reports it. */
+        FakeCore withTrustedProver() throws Exception {
+            version.put("trusted_prover", trustedProverJson());
+            return this;
+        }
+
+        static JSONObject trustedProverJson() throws Exception {
+            return new JSONObject().put("name", "RandProtocol").put("url", TRUSTED_URL).put("fingerprint", TRUSTED_FINGERPRINT)
+                    .put("link", TRUSTED_LINK).put("own", false);
+        }
 
         @Override
         public JSONObject parseProverLink(String link) throws Exception {
             if (!link.startsWith("randprover:")) throw new Exception("not a pairing link");
+            if (link.equals(TRUSTED_LINK)) {
+                return new JSONObject().put("kem_ek", TRUSTED_EK).put("url", TRUSTED_URL).put("token", TRUSTED_TOKEN)
+                        .put("own", trustedOwn).put("fingerprint", TRUSTED_FINGERPRINT);
+            }
             return new JSONObject().put("kem_ek", KEM_EK).put("url", url).put("token", TOKEN).put("own", own).put("fingerprint", FINGERPRINT);
         }
 
         @Override
         public String proverFingerprint(String kemEk) {
+            if (TRUSTED_EK.equals(kemEk)) return TRUSTED_FINGERPRINT;
             return KEM_EK.equals(kemEk) ? FINGERPRINT : "0THR-0THR-0THR-0THR";
+        }
+
+        @Override
+        public TrustedProver trustedProver() {
+            return TrustedProver.fromJson(version.optJSONObject("trusted_prover"));
         }
 
         @Override
@@ -365,6 +398,165 @@ public class ProverTest {
         assertFalse("no token in Prefs", p.toJson().toString().contains("token"));
         assertNull(ProverPairing.fromJson("{\"url\":\"" + URL_OK + "\"}"));
         assertNull(ProverPairing.fromJson("not json"));
+    }
+
+    // ------------------------------------------------------------------ the trusted prover
+
+    /**
+     * The prover the build ships the address of is reported from the core's {@code version}
+     * ({@code trusted_prover}: name, URL, fingerprint — never the link, which carries a token),
+     * and null when the core names none; reading it pairs nothing, and a build that ships none
+     * has nothing to pair.
+     */
+    @Test
+    public void theTrustedProverIsReportedFromTheCoresVersionAndNullWhenItNamesNone() throws Exception {
+        FakeCore core = new FakeCore().withTrustedProver();
+        TrustedProver t = core.trustedProver();
+        assertNotNull(t);
+        assertEquals("RandProtocol", t.name);
+        assertEquals(TRUSTED_URL, t.url);
+        assertEquals(TRUSTED_FINGERPRINT, t.fingerprint);
+        // The link is not handed to screens: no public field carries it.
+        for (java.lang.reflect.Field f : TrustedProver.class.getFields()) {
+            assertFalse("a public field carries the link: " + f.getName(), String.valueOf(f.get(t)).contains("randprover:"));
+        }
+        try {
+            TrustedProver.class.getField("link");
+            fail("the link is a public field");
+        } catch (NoSuchFieldException expected) {
+            // package-private: ProverPairing reads it, nothing else
+        }
+        // A core whose version names none, or names one without a link to pair: null.
+        assertNull(new FakeCore().trustedProver());
+        FakeCore noLink = new FakeCore();
+        noLink.version.put("trusted_prover", FakeCore.trustedProverJson().put("link", ""));
+        assertNull(noLink.trustedProver());
+        noLink.version.put("trusted_prover", JSONObject.NULL);
+        assertNull(noLink.trustedProver());
+        // The name defaults to the pool's when the core leaves it out.
+        FakeCore unnamed = new FakeCore();
+        unnamed.version.put("trusted_prover", FakeCore.trustedProverJson().put("name", ""));
+        assertEquals("RandProtocol", unnamed.trustedProver().name);
+        // Nothing to pair where nothing is shipped — and the prover is never asked.
+        FakeProver prover = new FakeProver((m, p) -> Reply.result(info(TRUSTED_EK)));
+        try {
+            ProverPairing.pairTrusted(new FakeCore(), prover);
+            fail("paired a prover the build does not ship");
+        } catch (ProverClient.Refusal e) {
+            assertEquals("This build ships no prover to use.", e.getMessage());
+        }
+        assertTrue(prover.methods.isEmpty());
+    }
+
+    /**
+     * One step, the same checks as a pasted link: the built-in link is read through the core, the
+     * prover at its address asked for its key, and a pairing returned NOT own, named after the pool
+     * — the vault record ({@link ProverSecret}) not own either, the Prefs copy named RandProtocol.
+     * The token never goes on the wire.
+     */
+    @Test
+    public void pairTrustedStoresANotOwnPairingNamedRandProtocolWhenTheProverAnswersWithTheLinksKey() throws Exception {
+        FakeCore core = new FakeCore().withTrustedProver();
+        FakeProver prover = new FakeProver((m, p) -> {
+            assertEquals("prover_info", m);
+            return Reply.result(info(TRUSTED_EK.toUpperCase()).put("kem_fingerprint", "LIES"));
+        });
+        ProverPairing.Paired paired = ProverPairing.pairTrusted(core, prover);
+        assertEquals("RandProtocol", paired.pairing.name);
+        assertEquals(TRUSTED_URL, paired.pairing.url);
+        assertEquals(TRUSTED_EK, paired.pairing.kemEk);
+        assertEquals(TRUSTED_FINGERPRINT, paired.pairing.fingerprint);
+        assertFalse("a shared pool is nobody's own", paired.pairing.own);
+        assertEquals(TRUSTED_TOKEN, paired.token);
+        assertEquals("the prover at the pool's address was asked", java.util.Collections.singletonList(TRUSTED_URL), prover.urls);
+        assertEquals(java.util.Collections.singletonList("prover_info"), prover.methods);
+        for (String body : prover.bodies) assertFalse("the token went on the wire", body.contains(TRUSTED_TOKEN));
+        // What the wallet then stores: the vault record not own, the display copy named RandProtocol, no token in it.
+        ProverSecret secret = ProverSecret.of(paired.pairing, paired.token);
+        assertFalse(secret.own);
+        assertEquals(TRUSTED_EK, secret.kemEk);
+        assertEquals(TRUSTED_URL, secret.url);
+        assertEquals(TRUSTED_TOKEN, ProverSecret.fromJson(secret.toJson()).token);
+        ProverPairing shown = ProverPairing.fromJson(paired.pairing.toJson().toString());
+        assertEquals("RandProtocol", shown.name);
+        assertFalse(shown.own);
+        assertFalse(paired.pairing.toJson().toString().contains(TRUSTED_TOKEN));
+        // ... and it probes like any pairing.
+        assertEquals("Answering · 1 of 8 in its queue.", ProverPairing.probe(core, paired.pairing, prover).line());
+    }
+
+    /** A prover at the pool's address answering with another key is refused: nothing is returned to store. */
+    @Test
+    public void pairTrustedRefusesAProverAnsweringWithAnotherKey() throws Exception {
+        FakeCore core = new FakeCore().withTrustedProver();
+        // Another key, naming itself with the pinned fingerprint: its word, not evidence.
+        FakeProver prover = new FakeProver((m, p) -> Reply.result(info("08".repeat(1184)).put("kem_fingerprint", TRUSTED_FINGERPRINT)));
+        try {
+            ProverPairing.pairTrusted(core, prover);
+            fail("paired a prover with another key");
+        } catch (ProverClient.Refusal e) {
+            assertEquals("The prover at that address has a different key from the one the link names. Do not pair it.", e.getMessage());
+        }
+        assertEquals(java.util.Collections.singletonList("prover_info"), prover.methods);
+        // The pasted-link pairing's own key, at the pool's address: still not the built-in link's key.
+        prover.handler = (m, p) -> Reply.result(info(KEM_EK));
+        try {
+            ProverPairing.pairTrusted(core, prover);
+            fail("paired a prover with another key");
+        } catch (ProverClient.Refusal e) {
+            assertEquals("The prover at that address has a different key from the one the link names. Do not pair it.", e.getMessage());
+        }
+        // Silence is a refusal too.
+        prover.handler = (m, p) -> {
+            throw new IOException("connection refused");
+        };
+        try {
+            ProverPairing.pairTrusted(core, prover);
+            fail();
+        } catch (ProverClient.Refusal e) {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("The prover at " + TRUSTED_URL + " did not answer: "));
+        }
+    }
+
+    /**
+     * A build whose link names another key than the one it pins — or whose link is marked as the
+     * user's own, which a shared pool is not — never asks the prover at all.
+     */
+    @Test
+    public void aPinnedFingerprintThatDisagreesWithTheLinksIsRefusedBeforeAnyRequest() throws Exception {
+        FakeCore core = new FakeCore().withTrustedProver();
+        core.version.getJSONObject("trusted_prover").put("fingerprint", "ZZZZ-ZZZZ-ZZZZ-ZZZZ");
+        FakeProver prover = new FakeProver((m, p) -> Reply.result(info(TRUSTED_EK)));
+        try {
+            ProverPairing.pairTrusted(core, prover);
+            fail("paired a link that names another key than the pinned one");
+        } catch (ProverClient.Refusal e) {
+            assertEquals("The built-in prover link does not name the key this wallet pins; not pairing it.", e.getMessage());
+        }
+        assertTrue("the prover was asked", prover.methods.isEmpty());
+        // An empty pin is no pin.
+        core.version.getJSONObject("trusted_prover").put("fingerprint", "");
+        try {
+            ProverPairing.pairTrusted(core, prover);
+            fail();
+        } catch (ProverClient.Refusal e) {
+            assertEquals("The built-in prover link does not name the key this wallet pins; not pairing it.", e.getMessage());
+        }
+        assertTrue(prover.methods.isEmpty());
+        // The pin agrees, but the link says own=1: refused before any request.
+        core.version.getJSONObject("trusted_prover").put("fingerprint", TRUSTED_FINGERPRINT);
+        core.trustedOwn = true;
+        try {
+            ProverPairing.pairTrusted(core, prover);
+            fail("paired a shared prover marked as the user's own");
+        } catch (ProverClient.Refusal e) {
+            assertEquals("The built-in prover link is marked as your own, which a shared prover is not; not pairing it.", e.getMessage());
+        }
+        assertTrue(prover.methods.isEmpty());
+        // Both in order: the pairing goes through.
+        core.trustedOwn = false;
+        assertFalse(ProverPairing.pairTrusted(core, prover).pairing.own);
+        assertEquals(java.util.Collections.singletonList("prover_info"), prover.methods);
     }
 
     // ------------------------------------------------------------------ the client's errors

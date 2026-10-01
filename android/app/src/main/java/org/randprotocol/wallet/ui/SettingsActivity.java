@@ -27,14 +27,17 @@ import org.randprotocol.wallet.rpc.RpcClient;
 import org.randprotocol.wallet.security.Prefs;
 import org.randprotocol.wallet.wallet.ProverCore;
 import org.randprotocol.wallet.wallet.ProverPairing;
+import org.randprotocol.wallet.wallet.TrustedProver;
 
 public class SettingsActivity extends BaseActivity {
     private ActivitySettingsBinding b;
     private ActivityResultLauncher<ScanOptions> proverScanner;
     private ActivityResultLauncher<String> cameraPermission;
-    /** One Save at a time; the latest probe only may paint. */
+    /** One pairing at a time (Save or the built-in prover); the latest probe only may paint. */
     private boolean pairing;
     private int probeRun;
+    /** The prover the build ships the address of, or null: then no such action is offered. */
+    private TrustedProver trusted;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,6 +97,15 @@ public class SettingsActivity extends BaseActivity {
         // What a paired prover learns, in the core's own words (version.prover_history_warning),
         // shown before any pairing is saved — own or not; the resource is the fallback.
         b.proverWarning.setText(ProverCore.NATIVE.historyWarning());
+        // The one-step pairing of the prover the build ships the address of: offered only once
+        // the core names one, under the same warning (it is above, on screen before the button
+        // is). Its URL and fingerprint are shown beside it; its link never reaches this screen.
+        trusted = wallet().trustedProver();
+        if (trusted != null) {
+            b.proverTrustedBody.setText(getString(R.string.settings_prover_trusted_body, trusted.url, trusted.fingerprint));
+            b.proverUseTrusted.setOnClickListener(v -> useTrustedProver());
+            b.proverTrusted.setVisibility(View.VISIBLE);
+        }
         paintProver();
 
         // Keys
@@ -217,6 +229,7 @@ public class SettingsActivity extends BaseActivity {
         }
         pairing = true;
         b.proverSave.setEnabled(false);
+        b.proverUseTrusted.setEnabled(false);
         b.proverStatus.setText(R.string.settings_prover_pairing);
         wallet().runInBackground(() -> {
             String status;
@@ -235,10 +248,48 @@ public class SettingsActivity extends BaseActivity {
                 pairing = false;
                 if (isFinishing() || isDestroyed()) return;
                 b.proverSave.setEnabled(true);
+                b.proverUseTrusted.setEnabled(true);
                 if (ok) {
                     b.proverLink.setText(""); // the token goes with it
                     paintProver();
                 }
+                b.proverStatus.setText(s);
+            });
+        });
+    }
+
+    /**
+     * "Use the RandProtocol prover": the built-in link pairs through the same checks as a pasted
+     * one ({@code pairTrustedProver}: the pinned fingerprint first, then the prover's own key),
+     * stored NOT own and named after the pool. Never run by itself — only from this tap, with the
+     * warning above on screen; the status says once more what the prover can then read.
+     */
+    private void useTrustedProver() {
+        if (pairing || trusted == null) return;
+        pairing = true;
+        b.proverUseTrusted.setEnabled(false);
+        b.proverSave.setEnabled(false);
+        b.proverStatus.setText(R.string.settings_prover_pairing);
+        TrustedProver t = trusted;
+        wallet().runInBackground(() -> {
+            String status;
+            boolean paired = false;
+            try {
+                ProverPairing.Paired done = wallet().pairTrustedProver();
+                paired = true;
+                status = getString(R.string.settings_prover_paired_trusted, done.pairing.name, done.pairing.fingerprint,
+                        ProverCore.NATIVE.historyWarning());
+            } catch (Exception e) {
+                status = getString(R.string.settings_prover_not_paired, e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            }
+            String s = status;
+            boolean ok = paired;
+            runOnUiThread(() -> {
+                pairing = false;
+                if (isFinishing() || isDestroyed()) return;
+                b.proverUseTrusted.setEnabled(true);
+                b.proverSave.setEnabled(true);
+                if (ok) paintProver();
                 b.proverStatus.setText(s);
             });
         });
