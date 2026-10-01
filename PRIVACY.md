@@ -43,15 +43,19 @@ your device until you delete them.
   run yourself sees only what you send it.
 - **To the testnet faucet, if you ask it.** A faucet request asks the node to mint test RAND
   into a note that only your key can open.
-- **To a prover, only if you pair one.** A browser wallet, or a phone without the memory for a
-  proof, can have the payment's proof made by a prover you pair in Settings → Prover: the
-  desktop app on your own computer, or a server you run or trust. Each proving job carries your
-  wallet's **viewing key** and a one-time salt, encrypted to that one prover. With them the
-  prover can read your wallet's whole history — every payment received and sent, before and
-  after the pairing — and it cannot spend: your **spend key never leaves your device**, which
-  makes the small authorisation proof itself. The app warns you before it saves a pairing to a
-  prover that is not your own. The wallet does not come with a prover of ours and never pairs
-  one by itself.
+- **To a prover, when your device cannot make the proof itself.** A browser wallet, or a phone
+  without the memory for a proof, has the payment's proof made by a prover. From version 0.6.8
+  the wallet uses **the RandProtocol prover** by default — https://prover.randprotocol.org
+  (fingerprint RGTF-7HKJ-XZFV-GQ1J), a pool of machines run by the RandProtocol validators,
+  sharing one prover key and charging no fee — and tells you so before your first send. Each
+  proving job carries your wallet's **viewing key** and a one-time salt, encrypted to that one
+  prover. With them the prover's operators can read your wallet's whole history — every
+  payment received and sent, past and future — and they cannot spend: your **spend key never
+  leaves your device**, which makes the small authorisation proof itself. For more privacy,
+  choose your own prover in Settings → Prover (the desktop app on your own computer, or a server
+  you run or trust), which the wallet then always prefers, or no prover at all (a browser
+  wallet then cannot send). The app warns you before it saves a pairing to a prover that is not
+  your own.
 - **To sites you connect, in the extension.** On randbridge.org the extension offers itself as
   `window.rand`. A site learns nothing until you approve it for that site, and an approved site
   learns your address and its bridge recipient hash, nothing else.

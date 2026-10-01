@@ -413,17 +413,17 @@ Rand is a fully shielded chain: there are no public accounts and no public balan
 WHAT IT DOES
 • Create a wallet, or import a spend key or a wallet.key.json
 • Receive: your rand1… address as text and as a QR code
-• Send RAND and listed RPL tokens: the extension builds the payment, a prover you pair makes the proof, the extension checks the proof and submits it
+• Send RAND and listed RPL tokens: the extension builds the payment, a prover makes the proof (the RandProtocol prover by default, or your own), the extension checks the proof and submits it
 • Connect to randbridge.org: the bridge sees your address only after you approve it
 • Activity: every note you received and every payment you sent
 • Disclose only what you choose: copy your viewing key to open your own history on randscan.org, or one payment's transaction key to show exactly that payment
 • Password-encrypted key storage, auto-lock, dark and light themes
 
 ABOUT SENDING
-A proof needs more memory than a browser gives an extension, so the extension does not make it. Pair a prover that you run yourself: the Rand Wallet desktop app on the same computer, or your own server (Settings → Prover). Without one, everything except sending works.
+A proof needs more memory than a browser gives an extension, so the extension makes only the small authorisation proof and a prover makes the rest. By default that is the RandProtocol prover, run by the network's validators at no fee: it learns your viewing key, so it can read your whole history, and it can never spend. The extension tells you this before your first send. For more privacy, choose your own prover in Settings → Prover: the Rand Wallet desktop app on the same computer, or your own server.
 
 YOUR KEYS STAY WITH YOU
-No account, no sign-up, no analytics, no advertising, no remote code. The extension talks only to the RPC node in Settings and, if you pair one, to your own prover.
+No account, no sign-up, no analytics, no advertising, no remote code. The extension talks only to the RPC node in Settings and to the prover that makes your proofs (the RandProtocol prover, or the one you chose).
 
 Testnet software: not audited, not for real value. Test RAND has no monetary value.
 
@@ -463,12 +463,15 @@ certifications:
 
 Privacy policy URL: `https://randprotocol.org/clients/privacy`.
 
-One thing to know before ticking: when the user pairs a prover, each proving job carries the
-wallet's viewing key and a one-time salt, encrypted to that prover — enough to read the wallet's
-history, not to spend (the spend key never leaves the device). It goes only to a prover the user
-chose and pasted the link of, never to the developer, which is why "financial and payment
-information" stays unticked; the app warns before saving a pairing that is not the user's own,
-and the description and the privacy policy both say all of this. They must keep saying so.
+**From 0.6.8, tick "Financial and payment information".** Each proving job carries the wallet's
+viewing key and a one-time salt, encrypted to the prover: enough to read the wallet's whole
+transaction history, not to spend (the spend key never leaves the device). In 0.6.7 a job went
+only to a prover the user chose and pasted the link of, so nothing reached the developer. In 0.6.8
+the default prover is the RandProtocol prover, run by the project's validators, so by default the
+developer receives what reveals the user's payment history. Declare it, say what it is used for
+(making the payment's proof, nothing else; not sold, not shared, not kept beyond the job), and keep
+the description and the privacy policy saying so: the extension tells the user before the first
+send, and Settings → Prover lets them choose their own prover or none.
 
 ### Graphics
 
@@ -516,7 +519,7 @@ code, and Mozilla's reviewers rebuild it.
 | field (limit) | text |
 |---|---|
 | Name | `Rand Wallet` |
-| Summary (250) | `A self-custody wallet for the Rand Protocol testnet: private balances and private transfers, proved by a prover you run yourself, and viewing keys to open your own history on randscan.org.` |
+| Summary (250) | `A self-custody wallet for the Rand Protocol testnet: private balances and private transfers, proved by the network's free prover or one you run yourself, and viewing keys for randscan.org.` |
 | Categories | Privacy & Security; Other |
 | Licence | GNU General Public License v3.0 only |
 | Homepage | `https://randprotocol.org/clients/firefox` |
@@ -539,7 +542,7 @@ No bundler, minifier or transpiler is used. Every .js file in the add-on is a so
 
 TESTING. No account is needed. Click the toolbar button → "Create a new wallet" → set a password → save the spend key. To test with funds, choose "I already have a wallet" and paste the review wallet's key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE> (the Faucet button is refused by the public node; it is for nodes that run an open faucet). Sending needs a prover the user runs themselves (the Rand Wallet desktop app); without one the Send screen explains this and stops.
 
-NETWORK. JSON-RPC POSTs to the node URL in Settings (default https://rpc.randprotocol.org; rpc1–rpc3.randprotocol.org are failover hosts). If, and only if, the user pairs a prover in Settings → Prover, requests go to that URL as well; a proving job contains the wallet's viewing key and a one-time salt, encrypted to that prover (enough to read the wallet's history, not to spend; the spend key never leaves the device, which makes the authorisation proof itself). No analytics, no telemetry, no remote code.
+NETWORK. JSON-RPC POSTs to the node URL in Settings (default https://rpc.randprotocol.org; rpc1–rpc3.randprotocol.org are failover hosts). When the user sends, a proving job goes to the prover: by default https://prover.randprotocol.org (run by the project's validators; the user is told before the first send), or the prover the user chose in Settings → Prover. A proving job contains the wallet's viewing key and a one-time salt, encrypted to that prover (enough to read the wallet's history, not to spend; the spend key never leaves the device, which makes the authorisation proof itself). No analytics, no telemetry, no remote code.
 
 CONTENT SCRIPTS run only on randbridge.org (and localhost, for a locally served bridge) and expose a provider object, window.rand. A page learns the wallet address only after the user approves that site.
 
