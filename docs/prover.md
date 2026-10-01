@@ -46,9 +46,10 @@ the spend key, sent only to a prover marked as your own — applies only to chai
 authorisation, which no public chain is any more; a wallet on such a chain still refuses to send a
 spend-key job anywhere but an `own=1` pairing.
 
-There is no directory of provers, and no prover is ever paired by itself: a prover exists in a
-wallet because its user pasted a pairing link into it — or pressed **Use the RandProtocol prover**
-(§8), which pairs the one every client ships the address of, after the same warning.
+There is no directory of provers. A prover you pair exists in a wallet because you pasted its
+pairing link into it. The one exception is the prover every client ships the address of — the
+RandProtocol prover (§8) — which, from wallet 0.6.8, is the default where a device cannot prove,
+after a one-time notice, and can be turned off.
 
 ## 3. Pair the desktop app with the extension or the web wallet
 
@@ -211,27 +212,43 @@ same words. Pair a prover that charges nothing, or run your own.
 
 Every client ships with the address of one prover, run by the RandProtocol validators:
 **`https://prover.randprotocol.org`**, key fingerprint **`RGTF-7HKJ-XZFV-GQ1J`**. It is a pool —
-five validator-hosted provers behind one name, every member holding the same prover key, so one
-pairing reaches whichever answers — it takes viewing-key jobs only, and it charges nothing.
+validator-hosted provers behind one name, every member holding the same prover key, so a job
+reaches whichever answers — it takes viewing-key jobs only, and it charges nothing.
 
-**It is never paired by itself.** A wallet that has done nothing proves on its own device or not
-at all, exactly as before. In Settings → **Prover**, **Use the RandProtocol prover** pairs it in
-one step: the wallet shows the same warning as for any pairing —
+**From wallet 0.6.8 it is the default.** A wallet with no prover of its own that cannot make a
+proof itself — the browser extension and the web wallet always (a bundle proof needs ~6.2 GB and
+wasm stops at 4 GiB), a phone almost always, a desktop without 8 GB of memory — sends through it
+at once, with nothing to pair. A desktop (or a phone) that has the memory keeps proving on the
+device: the device is always asked first. Nothing is stored for it: the wallet reads the built-in
+link through the core, holds it to the pinned fingerprint (`version.trusted_prover.fingerprint`),
+the URL rule and `own=0`, asks the pool for its key — refusing it unless it is the pinned one — and
+seals the job to that key.
 
-> This prover will be able to read this wallet's whole history — every payment received and
-> sent, before and after today. It cannot spend. To keep your history private, run your own.
+**The first send through it shows a one-time notice**, before anything is built:
 
-— asks for the wallet's password (the extension and the web wallet; the pairing is sealed under
-it), asks the prover for its key and refuses it unless the key's fingerprint is the one built into
-the wallet (`RGTF-7HKJ-XZFV-GQ1J`, `version.trusted_prover.fingerprint` in the core), and only
-then saves it. From then on it is a paired prover like any other: Settings reads "Paired prover ·
-RandProtocol", the send flow authorises the spend on the device and has the pool make the bundle
-proof, and **Forget this prover** removes it.
+> This device cannot make the proof, so the prover RandProtocol runs for everyone makes it. It
+> receives this wallet's viewing key, so it can read your whole history — every payment received
+> and sent, past and future. It cannot spend. You are asked once; to keep your history to
+> yourself, use your own prover instead.
+
+with **I understand — continue** and **Use my own prover** (to Settings) right there. The
+acknowledgement is remembered for that wallet; removing the wallet forgets it, and the engine
+refuses a send through the pool until it is read.
+
+In Settings → **Prover** it is named with its URL, fingerprint and what it sees. **Use no prover**
+turns it off (proofs are then made on the device or not at all); **Use the RandProtocol prover**
+turns it back on. A prover you pair yourself (§3, §4) is always preferred over it, and **Forget
+this prover** falls back to it. When the pool does not answer, answers with another key, or is busy
+(its queue is small; a busy answer is never retried in a loop), the wallet says so plainly —
+"The RandProtocol prover cannot be reached right now (…)" / "The RandProtocol prover is busy; try
+again in a minute, or pair your own prover in Settings."
 
 What it learns is what §2 says of every prover that is not your own: the viewing key of every
-wallet that pairs it and a one-time salt with each job — that wallet's whole history, past and
-future — and never a spend key. It is the convenience for a phone or a browser that cannot prove
-for itself and has no machine of its own to pair; a `rand-prover` you run (§4) is what keeps your
-history to yourself. The pairing link itself (`version.trusted_prover.link`) carries a token shared
-by every client, so it identifies the wallet software, not you; the pool distinguishes nothing by
-it.
+wallet that uses it and a one-time salt with each job — that wallet's whole history, past and
+future — and never a spend key. A `rand-prover` you run (§4), or the desktop app (§3), is what
+keeps your history to yourself. The built-in link carries a token shared by every client, so it
+identifies the wallet software, not you.
+
+A `prover_submit` that never reached a prover — no connection, or an HTTP error page instead of an
+answer — is offered again, three tries, 1 s then 3 s apart. A prover's own answer (busy included)
+is final, and a job is never submitted twice once the prover has named it.
