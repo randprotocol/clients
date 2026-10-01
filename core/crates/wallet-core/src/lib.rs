@@ -2571,6 +2571,13 @@ pub struct InvokeResult {
     pub payouts: Vec<OwnedNote>,
 }
 
+/// The leaf index of a payout note before the chain has placed it: 2^53 − 1, the largest integer a
+/// JavaScript client carries exactly. A payout's `OwnedNote` rides inside `pending` through the
+/// client and back into [`finish_proof`]; `u64::MAX` came back from a browser as the float
+/// `1.8446744073709552e19`, which serde refuses as a `u64`, so a delegated invoke failed after all
+/// three proofs were made (durian.market devnet, 2026-10-01). No tree reaches this index.
+pub const UNKNOWN_LEAF: u64 = (1 << 53) - 1;
+
 /// Everything an invoke's results say that its proofs do not decide — [`PendingScalars`]'s
 /// invoke half, `null` on a transfer and a burn.
 #[derive(Clone, Serialize, Deserialize)]
@@ -2795,7 +2802,7 @@ fn invoke_scalars(w: &Wallet, b: &InvokeBuild) -> PendingScalars {
         .payouts()
         .map(|p| {
             let note = payout_note(p, b.time);
-            owned_note(w, u64::MAX, 0, note.commitment(), note)
+            owned_note(w, UNKNOWN_LEAF, 0, note.commitment(), note)
         })
         .collect();
     PendingScalars {
