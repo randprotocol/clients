@@ -1849,6 +1849,8 @@ export function makeSharedBackend({
     try { members = await poolPairings(); } catch (err) {
       return { answer: { ok: false, reason: `${lead}${(err && err.message) || err}` } };
     }
+    // How many machines the pool has — what the notice names — whatever order (or subset) a job asks.
+    const total = ((await builtInPool()) || { members }).members.length;
     const results = [];
     let first = -1;
     for (let i = 0; i < members.length; i += 1) {
@@ -1858,7 +1860,7 @@ export function makeSharedBackend({
     }
     if (first < 0) {
       const err = poolUnavailable(members[0].pool, results, lead);
-      return { answer: { ok: false, ...(err.busy ? { busy: true } : { unreachable: true }), provers: members.length, reason: err.message } };
+      return { answer: { ok: false, ...(err.busy ? { busy: true } : { unreachable: true }), provers: total, reason: err.message } };
     }
     // Firefox: the user's consent to send the viewing key to the developer's service is part of
     // the notice — until it is given, the notice stands (its button asks for it).
@@ -1866,7 +1868,7 @@ export function makeSharedBackend({
     // The member that answered first leads; the rest follow in their random order.
     const ordered = [members[first], ...members.filter((_, i) => i !== first)];
     return {
-      answer: { ok: true, via: 'prover', prover: 'default', provers: members.length, ...(notice ? { notice: true } : {}) },
+      answer: { ok: true, via: 'prover', prover: 'default', provers: total, ...(notice ? { notice: true } : {}) },
       route: { mode: 'default', name: members[0].pool, members: ordered },
     };
   }

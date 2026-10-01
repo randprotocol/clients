@@ -351,6 +351,11 @@ test('members are tried in turn: another key, no answer, a full queue and a busy
   assert.deepEqual(coreCalled(env3, 'prepare_transfer').map(([, p]) => p.prover.kem_ek), [proverEk('POOLB')]);
 });
 
+test('the notice names the whole pool, whichever members a job asks', async () => {
+  const env = await sendableWallet({ fetch: poolFetch(), memberOrder: inOrder('b') });
+  assert.equal((await env.backend.send.canProve()).provers, 3);
+});
+
 test('every member busy is said plainly, once each, with the way to pair your own', async () => {
   const full = () => ({ queue: { depth: 1, max: 1, proving: 1 } });
   const env = await sendableWallet({
