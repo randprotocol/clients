@@ -1,7 +1,7 @@
 # Release packaging — design
 
 2026-09-30. Approved in session (GitHub Actions with a Jenkins backup; publish and deploy;
-version 0.6.6; generate an Android upload key, leave Apple unsigned).
+version 0.6.6 (renamed 0.6.7 on 2026-10-01, to match the fullnode it bundles); generate an Android upload key, leave Apple unsigned).
 
 ## Goal
 
