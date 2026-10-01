@@ -20,7 +20,7 @@ import {
 import {
   stubCore, stubFetch, mapStorage, stubPlatform, assertKeyNeverLeaked,
   PASSWORD, ADDRESS, SPEND_KEY, PROVER_URL, PROVER_TOKEN, PROVER_REPLY, PROVED_TX_HASH, SEALED_JOB,
-  proverLink, proverInfo, proverEk, proverFingerprint, HC_V2, HC_V3, HC_AUTH, CORE_VERSION, TRUSTED_PROVER,
+  proverLink, proverInfo, proverEk, proverFingerprint, HC_V2, HC_V3, HC_AUTH, CORE_VERSION, TRUSTED_PROVER, GENESIS,
 } from './backend-fixtures.mjs';
 
 const ROOT = '1b'.repeat(32);
@@ -483,6 +483,19 @@ test('a_viewing_key_job_goes_to_a_prover_that_is_not_the_users_own', async () =>
   assert.deepEqual(coreCalled(env, 'chain_guests')[0][1], { hc_bundle: HC_V3, hc_auth: HC_AUTH });
   assert.equal(count(env.fetch, 'prover_submit'), 1);
   assertKeyNeverLeaked(env);
+});
+
+test('a delegated job carries the chain\'s genesis, as a local proof does (BIND-1)', async () => {
+  // Through a paired prover and through the default alike: the sealed job is made over the same
+  // binding the device's own proof would be — a chain after 19 binds its genesis hash.
+  for (const via of ['paired', 'default']) {
+    const env = await sendableWallet({ fetch: poolFetch() });
+    if (via === 'paired') await env.backend.prover.pair(proverLink(), PASSWORD);
+    else await env.backend.prover.acknowledgeDefault();
+    await env.backend.send.send(SEND, () => {});
+    const [[, prepared]] = coreCalled(env, 'prepare_transfer');
+    assert.equal(prepared.genesis, GENESIS, `the ${via} job carries no genesis`);
+  }
 });
 
 test('a_spend_key_job_is_built_only_for_an_own_prover', async () => {

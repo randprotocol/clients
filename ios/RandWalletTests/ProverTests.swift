@@ -464,6 +464,19 @@ final class ProverTests: XCTestCase {
         }
     }
 
+    /// BIND-1: a chain after 19 binds its genesis hash; the sealed job is made over the same
+    /// binding the device's own proof would be — through a paired prover and the default alike.
+    func testADelegatedJobCarriesTheChainsGenesisAsALocalProofDoes() throws {
+        let genesis = String(repeating: "ab", count: 32)
+        let request: [String: Any] = ["spend_key": "00", "to": "rand1x", "genesis": genesis, "hc_bundle": "11"]
+        let def = ProverPairingService.Route(pairing: ProverPairing(name: "RandProtocol", url: "https://prover.example:8600", kemEk: Self.kemEk,
+                                                                    fingerprint: Self.fingerprint, own: false), token: Self.token, isDefault: true)
+        for route in [Self.route, def] {
+            let params = RemoteSendParams.build(requestJSON: request, route: route, maxProofBytes: nil)
+            XCTAssertEqual(params["genesis"] as? String, genesis, "the job carries no genesis (default \(route.isDefault))")
+        }
+    }
+
     // MARK: the client's errors
 
     func testRefusalsAreWordedAsTheOtherWallets() async throws {

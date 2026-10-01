@@ -1198,4 +1198,25 @@ public class ProverTest {
             assertEquals("resubmitted after " + first.body, 1, submits[0]);
         }
     }
+
+    @Test
+    public void aDelegatedJobCarriesTheChainsGenesisAsALocalProofDoes() throws Exception {
+        // BIND-1: a chain after 19 binds its genesis hash; the sealed job is made over the same
+        // binding the device's own proof would be — through a paired prover and the default alike.
+        String genesis = "ab".repeat(32);
+        for (boolean isDefault : new boolean[]{false, true}) {
+            FakeCore core = new FakeCore().withTrustedProver();
+            String ek = isDefault ? TRUSTED_EK : KEM_EK;
+            FakeProver prover = new FakeProver(answering(info(ek, JSONObject.NULL, "viewing_key"), (m, p) -> m.equals("prover_submit")
+                    ? Reply.result(new JSONObject().put("job", "j"))
+                    : Reply.result(new JSONObject().put("state", "done").put("reply", "good"))));
+            RemoteSend.Route r = isDefault
+                    ? new RemoteSend.Route(ProverPairing.builtIn(core).pairing, TRUSTED_TOKEN, true)
+                    : new RemoteSend.Route(new ProverPairing("p", URL_OK, KEM_EK, FINGERPRINT, false), TOKEN);
+            JSONObject request = new JSONObject().put("spend_key", SPEND_KEY).put("to", "rand1x").put("genesis", genesis);
+            RemoteSend.applyProofParams(request, new JSONObject().put("hc_bundle", V3).put("hc_auth", AUTH));
+            RemoteSend.prove(core, fastProver(new ProverClient(r.pairing.url, prover)), request, r, null, pos -> { });
+            assertEquals("the job carries no genesis (default " + isDefault + ")", genesis, core.prepared.optString("genesis", null));
+        }
+    }
 }
