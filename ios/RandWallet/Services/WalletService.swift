@@ -270,7 +270,7 @@ final class WalletService: ObservableObject {
         let request = ProveRequest(spendKey: sk, chainId: chainId, to: to, amount: String(amount), fee: String(fee),
                                    anchorHeight: anchor.height, anchorRoot: anchor.root, inputs: inputs, profile: params.profile,
                                    memo: memo, envelopeBytes: limits.envelopeBytes, hcBundle: params.hcBundle, hcAuth: params.hcAuth,
-                                   bundleGasLimit: limits.bundleGasLimit)
+                                   bundleGasLimit: limits.bundleGasLimit, genesis: try await rpc.genesisHash())
         let started = Date()
         let proof: ProveResult
         if let route {

@@ -66,3 +66,11 @@ strip = "debuginfo"
 # `cargo tauri dev` can actually prove a transfer rather than appearing to hang.
 [profile.dev.package."*"]
 opt-level = 3
+
+# The fullnode's own Plonky3 fix (vendored at core/vendor/fullnode/vendor/p3-fri, fullnode 4d5b039):
+# 0.7.0's HidingFriPcs held a spin lock across rayon work, and this app's prover host runs the
+# prover service, whose `parallel` feature turns rayon on — so without it a proof here could spin
+# for ever. A `[patch]` only applies in the workspace that declares it, so the fullnode's does not
+# reach this build; it is repeated here.
+[patch.crates-io]
+p3-fri = { path = "../../core/vendor/fullnode/vendor/p3-fri" }

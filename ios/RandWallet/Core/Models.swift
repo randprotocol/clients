@@ -164,8 +164,12 @@ struct ProveRequest: Encodable {
     /// every bundle proof must declare on a chain with a `gas` section; `nil` is a chain without
     /// one. The core refuses a value its guest does not declare before building anything.
     var bundleGasLimit: Int? = nil
+    /// The chain's genesis hash (BIND-1: bound by every transaction on a chain after 19; the core
+    /// ignores it on 14–19). Omitted when the node would not name it.
+    var genesis: String? = nil
 
     enum CodingKeys: String, CodingKey {
+        case genesis
         case spendKey = "spend_key", chainId = "chain_id", to, amount, fee
         case anchorHeight = "anchor_height", anchorRoot = "anchor_root", inputs, profile
         case memo, envelopeBytes = "envelope_bytes", hcBundle = "hc_bundle", hcAuth = "hc_auth"
@@ -193,6 +197,7 @@ struct ProveRequest: Encodable {
             try c.encode(hcAuth, forKey: .hcAuth)
         }
         try c.encode(bundleGasLimit, forKey: .bundleGasLimit)
+        try c.encodeIfPresent(genesis, forKey: .genesis)
     }
 }
 

@@ -531,6 +531,9 @@ public final class WalletService {
             JSONObject req = new JSONObject();
             req.put("spend_key", sk);
             req.put("chain_id", prefs.chainId());
+            // BIND-1: chains after 19 bind the genesis hash; the core ignores it on 14–19.
+            String genesis = rpc.genesisHash();
+            if (genesis != null) req.put("genesis", genesis);
             req.put("to", to);
             req.put("amount", amount.toString());
             req.put("fee", fee.toString());

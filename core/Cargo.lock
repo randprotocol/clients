@@ -149,7 +149,7 @@ dependencies = [
 
 [[package]]
 name = "bridge-codec"
-version = "0.6.7"
+version = "0.6.8"
 
 [[package]]
 name = "bs58"
@@ -1016,8 +1016,6 @@ dependencies = [
 [[package]]
 name = "p3-fri"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52e1cb8b63f02a9e3e441b20c341856d9bce85ae3e3bee6d3ed0da9bea8779d1"
 dependencies = [
  "itertools",
  "p3-challenger",
@@ -1373,7 +1371,7 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "randprotocol-core"
-version = "0.6.7"
+version = "0.6.8"
 dependencies = [
  "bincode",
  "blake3",
@@ -1393,7 +1391,7 @@ dependencies = [
 
 [[package]]
 name = "randprotocol-prover"
-version = "0.6.7"
+version = "0.6.8"
 dependencies = [
  "blake3",
  "bs58",
@@ -1413,7 +1411,7 @@ dependencies = [
 
 [[package]]
 name = "randprotocol-zkvm"
-version = "0.6.7"
+version = "0.6.8"
 dependencies = [
  "chacha20",
  "chacha20poly1305",

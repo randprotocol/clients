@@ -89,6 +89,8 @@ export const METHODS = {
   getBlocks: { params: ['fromHeight', 'toHeight'] },
   getFinality: { params: ['heightOrHash'] },
   getProposer: { params: ['view'] },
+  // Admission by vote (fullnode v0.6.8): which node addresses the validators admitted.
+  getAdmitted: { params: [] },
 
   // -- block aggregation ------------------------------------------------------------------------
   getAggregate: { params: ['hash'] },

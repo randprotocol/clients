@@ -399,6 +399,16 @@ export function coreApi(core) {
  * adopted — and a proof bound to the wrong chain id is refused by the chain at best. Shared by
  * `send` and `burn` so the two cannot drift.
  */
+/**
+ * The genesis hash a transaction binds (fullnode BIND-1): the verified identity's, else the
+ * store's — the one this wallet adopted at its first scan. The core needs it on every chain after
+ * 19 and ignores it on 14–19; it is sent whenever it is known.
+ */
+function provenGenesisOf(st, identity) {
+  const g = (identity && identity.genesis) || st.genesis;
+  return typeof g === 'string' && /^(0x)?[0-9a-fA-F]{64}$/.test(g) ? g.replace(/^0x/, '').toLowerCase() : null;
+}
+
 function provenChainIdOf(st, identity) {
   const proven = identity && identity.chainId !== null && identity.chainId !== undefined
     ? identity.chainId
@@ -1110,6 +1120,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     const request = {
       spend_key: spendKey,
       chain_id: provenChainId,
+      ...(provenGenesisOf(st, identity) ? { genesis: provenGenesisOf(st, identity) } : {}),
       to,
       asset: index,
       amount: String(amountUnits),
@@ -1245,6 +1256,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     const request = {
       spend_key: spendKey,
       chain_id: provenChainId,
+      ...(provenGenesisOf(st, identity) ? { genesis: provenGenesisOf(st, identity) } : {}),
       asset: Number(asset),
       amount: String(amountUnits),
       relayer_fee: String(relayerFeeUnits ?? '0'),
@@ -1429,6 +1441,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     const req = {
       spend_key: spendKey,
       chain_id: provenChainId,
+      ...(provenGenesisOf(q.st, identity) ? { genesis: provenGenesisOf(q.st, identity) } : {}),
       ...q.transition,
       fee: q.fee,
       tier: q.dry.tier,

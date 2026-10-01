@@ -265,6 +265,17 @@ public class RpcClient {
         return head().optLong("height", 0);
     }
 
+    /**
+     * The chain's genesis hash (64 hex), or null when the node will not say. A transaction on a
+     * chain after 19 binds it (fullnode BIND-1); a node that lies about it can only make this
+     * wallet's transaction invalid on the real chain, never valid on another.
+     */
+    public String genesisHash() throws RpcException {
+        Object v = call("rand_getGenesisHash", null);
+        String g = v instanceof String ? ((String) v).replaceFirst("^0x", "") : null;
+        return g != null && g.matches("[0-9a-fA-F]{64}") ? g.toLowerCase(java.util.Locale.ROOT) : null;
+    }
+
     public JSONObject treeInfo() throws RpcException {
         return (JSONObject) call("rand_getTreeInfo", null);
     }

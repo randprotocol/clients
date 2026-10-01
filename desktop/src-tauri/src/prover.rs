@@ -304,10 +304,8 @@ async fn start_with(
         })?;
         let fingerprint = key.fingerprint().to_string();
         let mut cfg = Config::new(key, pairings);
-        // Never a spend key, even on the owner's own machine: every chain this build can transact
-        // on runs split authorisation, whose bundle witness is the viewing key. A spend-key job
-        // (an older chain's) is refused by the service with `-32004`.
-        cfg.accept_spend_key = false;
+        // Never a spend key, even on the owner's own machine: the vendored service no longer has a
+        // spend-key path at all (fullnode VK-4), so every job it takes is a viewing-key one.
         cfg.max_parallel = 1;
         configure(&mut cfg);
         let shared_pairings = cfg.pairings.clone();

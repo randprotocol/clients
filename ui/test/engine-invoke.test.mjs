@@ -232,6 +232,7 @@ test('the anchor is read after every other question, and the proof gets the whol
   }
   const proved = t.coreCalls.find((c) => c[0] === 'prove_invoke')[1];
   assert.equal(proved.chain_id, 1919);
+  assert.equal(proved.genesis, GENESIS, 'the genesis the transaction binds (BIND-1) goes with every request');
   assert.equal(proved.program, PROGRAM);
   assert.deepEqual(proved.program_code, { base_pc: 0, words: [19, 115] });
   assert.equal(proved.public_hex, '');

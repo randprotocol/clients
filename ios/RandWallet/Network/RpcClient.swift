@@ -191,6 +191,15 @@ final class RpcClient {
         return try u64(v?["height"] ?? NSNull())
     }
 
+    /// The chain's genesis hash (64 hex), or nil when the node will not say. A transaction on a
+    /// chain after 19 binds it (fullnode BIND-1); a node that lies about it can only make this
+    /// wallet's transaction invalid on the real chain, never valid on another.
+    func genesisHash() async throws -> String? {
+        guard var g = try await call("rand_getGenesisHash") as? String else { return nil }
+        if g.hasPrefix("0x") { g.removeFirst(2) }
+        return g.count == 64 && g.allSatisfy({ $0.isHexDigit }) ? g.lowercased() : nil
+    }
+
     func treeInfo() async throws -> (nextIndex: UInt64, root: String) {
         let v = try await call("rand_getTreeInfo") as? [String: Any] ?? [:]
         return (try u64(v["next_index"] ?? NSNull()), v["root"] as? String ?? "")

@@ -34,8 +34,8 @@ use randprotocol_core::notes::{
 };
 use randprotocol_core::payment_uri::PaymentUri;
 use randprotocol_core::program::{program_id_with_public, ProgramId};
-use randprotocol_core::types::TX_BINDING_WORDS;
-use randprotocol_core::{format_amount, parse_amount, Action, Transaction, FAUCET_MAX_UNITS};
+use randprotocol_core::types::{BindingDomain, TX_BINDING_WORDS};
+use randprotocol_core::{format_amount, parse_amount, Action, Hash, Transaction, FAUCET_MAX_UNITS};
 use randprotocol_zkvm::address::{address_of, envelope_from_core, seal_note_as};
 use randprotocol_core::confidential::ConfidentialExecutor;
 use randprotocol_prover::wire::{fresh_reply_key, open_reply, seal_job, ProveJob, WitnessKind, WIRE_VERSION};
@@ -106,6 +106,29 @@ const fn parse_chain_id(s: &str) -> u64 {
     }
     n
 }
+/// BIND-1 (fullnode audit v6): the chains whose transactions bind the chain id alone — every chain
+/// cut before genesis `binding_domain` existed. Every other chain binds its genesis hash as well,
+/// so a transaction for it is valid there and on no other chain. The fullnode client's own
+/// `CHAIN_ID_BINDING_CHAIN_IDS`, held to it by a test that reads the vendored source.
+pub const CHAIN_ID_BINDING_CHAIN_IDS: &[u64] = &[14, 15, 16, 17, 18, 19];
+
+/// The binding a transaction for `chain_id` is built under: the chain id alone on the chains in
+/// [`CHAIN_ID_BINDING_CHAIN_IDS`], the genesis hash and the chain id on every other — where the
+/// request must carry `genesis` (64 hex: the store's, from `rand_getGenesisHash` at its first
+/// scan). A node lying about the hash can only make the transaction invalid on the real chain,
+/// never valid on a second one (upstream's `binding_domain_for`).
+fn binding_domain_of(chain_id: u64, genesis: Option<&str>) -> Result<BindingDomain> {
+    if CHAIN_ID_BINDING_CHAIN_IDS.contains(&chain_id) {
+        return Ok(BindingDomain::ChainId);
+    }
+    let g = genesis.map(str::trim).filter(|g| !g.is_empty()).ok_or_else(|| {
+        format!("chain {chain_id} binds its genesis hash into every transaction (BIND-1): the request must carry `genesis`")
+    })?;
+    let bytes = hex::decode(g.strip_prefix("0x").unwrap_or(g)).map_err(|_| "genesis is not hex".to_string())?;
+    let arr: [u8; 32] = bytes.try_into().map_err(|_| "genesis must be 32 bytes (64 hex characters)".to_string())?;
+    Ok(BindingDomain::Genesis(Hash(arr)))
+}
+
 pub const EXPLORER_URL: &str = "https://randscan.org";
 /// Peak resident memory of one bundle proof, measured on this crate's own fixture
 /// (`examples/prove_fixture.rs`, Apple M-series): the prover materialises every table's
@@ -1139,6 +1162,8 @@ struct Prepared {
     /// `auth::auth_commit(nk, salt)` — the bundle's `auth_commit`, which the auth proof must
     /// publish and the v3 digest folds in. Zero when not `v3`.
     auth_commit: Word8,
+    /// What this transaction's bindings bind (BIND-1): every proof of it is made over them.
+    domain: BindingDomain,
 }
 
 /// The witness carries a long-term secret — `nk` on v3, the spend key on v1/v2 — and `salt` is what
@@ -1172,6 +1197,7 @@ fn build_bundle(
     anchor: Word8,
     time: u32,
     guests: &ChainGuests,
+    domain: BindingDomain,
 ) -> Result<Prepared> {
     let pk_self = w.vk.pk();
     let asset = plan.asset;
@@ -1300,6 +1326,7 @@ fn build_bundle(
         v3: guests.v3,
         salt,
         auth_commit,
+        domain,
     })
 }
 
@@ -1330,11 +1357,11 @@ fn authorise(tx: &mut Transaction, prepared: &Prepared, sk: &SpendKey, profile: 
     if !prepared.v3 {
         return Ok(0);
     }
-    let binding: [u32; TX_BINDING_WORDS] = tx.binding();
+    let binding: [u32; TX_BINDING_WORDS] = tx.binding(&prepared.domain);
     let auth = prove_auth_locally(prepared, sk, &binding, profile)?;
     let bytes = auth.len();
     tx.bundle.as_mut().ok_or("a shielded transaction has a bundle")?.auth_proof = auth;
-    debug_assert_eq!(tx.binding(), binding, "filling the auth proof in never moves the binding");
+    debug_assert_eq!(tx.binding(&prepared.domain), binding, "filling the auth proof in never moves the binding");
     Ok(bytes)
 }
 
@@ -1356,7 +1383,7 @@ fn authorise(tx: &mut Transaction, prepared: &Prepared, sk: &SpendKey, profile: 
 /// over the same binding, from `sk` — the one place the spend key is used.
 fn prove_transaction(tx: &mut Transaction, prepared: &Prepared, sk: &SpendKey, profile: FriProfile) -> Result<(u8, usize)> {
     authorise(tx, prepared, sk, profile)?;
-    let binding: [u32; TX_BINDING_WORDS] = tx.binding();
+    let binding: [u32; TX_BINDING_WORDS] = tx.binding(&prepared.domain);
     let (proof, digest, tier) = prove_bundle_for(&prepared.guest, profile, &prepared.words, &binding, Backend::Cpu)
         .map_err(|e| format!("proving failed: {e}"))?;
     // The guest taints its digest instead of failing when a witness violates the relation, so a
@@ -1367,7 +1394,7 @@ fn prove_transaction(tx: &mut Transaction, prepared: &Prepared, sk: &SpendKey, p
     }
     let proof_bytes = proof.len();
     tx.bundle.as_mut().ok_or("a shielded transaction has a bundle")?.proof = proof;
-    debug_assert_eq!(tx.binding(), binding, "filling the proof in never moves the binding");
+    debug_assert_eq!(tx.binding(&prepared.domain), binding, "filling the proof in never moves the binding");
     Ok((tier, proof_bytes))
 }
 
@@ -1410,6 +1437,10 @@ fn group_slots(w: &Wallet, inputs: &[ProveInput], asset: u32) -> Result<(Vec<Slo
 pub struct ProveRequest {
     pub spend_key: String,
     pub chain_id: u64,
+    /// The chain's genesis hash, 64 hex — required on every chain that binds it (BIND-1,
+    /// [`binding_domain_of`]), ignored on the chain-id-bound chains 14–19.
+    #[serde(default)]
+    pub genesis: Option<String>,
     /// Recipient `rand1…` address.
     pub to: String,
     /// Units of `asset`, decimal string.
@@ -1671,7 +1702,7 @@ fn build_transfer_unproven(req: &ProveRequest, guests: &ChainGuests) -> Result<(
         burn_r: 0,
         memo: req.memo.clone(),
     };
-    let prepared = build_bundle(&w, &plan, format, root, time, guests)?;
+    let prepared = build_bundle(&w, &plan, format, root, time, guests, binding_domain_of(req.chain_id, req.genesis.as_deref())?)?;
     // The whole transaction first, its bundle's proofs empty; then the proofs, bound to it.
     let tx = Transaction::shielded(req.chain_id, prepared.bundle.clone(), Action::None);
     let spent_indices = a_spent.into_iter().chain(r_spent).collect();
@@ -1786,6 +1817,10 @@ fn auth_proof_bytes_of(tx: &Transaction) -> usize {
 pub struct BurnRequest {
     pub spend_key: String,
     pub chain_id: u64,
+    /// The chain's genesis hash, 64 hex — required on every chain that binds it (BIND-1,
+    /// [`binding_domain_of`]), ignored on the chain-id-bound chains 14–19.
+    #[serde(default)]
+    pub genesis: Option<String>,
     /// The registry index of the bridged token being burned. Never 0: see [`RAND_NOT_BRIDGED`].
     pub asset: u32,
     /// Units of `asset`, decimal string. The bundle burns exactly this through `burn_a`.
@@ -1965,7 +2000,7 @@ fn build_burn_unproven(req: &BurnRequest, guests: &ChainGuests) -> Result<(Walle
     // A burn pays nobody inside the pool: `to: None`, and the amount moves to `burn_a`.
     let plan =
         BundlePlan { asset: req.asset, a_slots, r_slots, to: None, fee, burn_a: amount, burn_r: 0, memo: String::new() };
-    let prepared = build_bundle(&w, &plan, format, root, time, guests)?;
+    let prepared = build_bundle(&w, &plan, format, root, time, guests, binding_domain_of(req.chain_id, req.genesis.as_deref())?)?;
     let action = Action::BridgeBurn {
         asset: req.asset,
         amount,
@@ -2487,6 +2522,10 @@ pub fn transition_from_hex(t: &TransitionHex) -> Result<Transition> {
 pub struct InvokeRequest {
     pub spend_key: String,
     pub chain_id: u64,
+    /// The chain's genesis hash, 64 hex — required on every chain that binds it (BIND-1,
+    /// [`binding_domain_of`]), ignored on the chain-id-bound chains 14–19.
+    #[serde(default)]
+    pub genesis: Option<String>,
     #[serde(flatten)]
     pub call: TransitionRequest,
     /// RAND units, decimal string: a call's fee for the tier plus `cell_fee` per cell created
@@ -2693,7 +2732,7 @@ fn build_invoke_unproven(req: &InvokeRequest, guests: &ChainGuests) -> Result<(W
         memo: String::new(),
     };
     // The bundle first: it fixes `time`, which every payout note below is stamped with.
-    let prepared = build_bundle(&w, &plan, format, root, time, guests)?;
+    let prepared = build_bundle(&w, &plan, format, root, time, guests, binding_domain_of(req.chain_id, req.genesis.as_deref())?)?;
     let transition = Transition {
         reads: call.reads.clone(),
         writes: call.writes.clone(),
@@ -2745,7 +2784,7 @@ fn build_invoke_unproven(req: &InvokeRequest, guests: &ChainGuests) -> Result<(W
 /// wherever this crate does: natively in seconds, in wasm32 in minutes. A proof over the chain's
 /// cap is refused here, before a bundle proof is paid for.
 fn bind_invoke(b: &mut InvokeBuild) -> Result<()> {
-    let binding = b.tx.call_binding();
+    let binding = b.tx.call_binding(&b.prepared.domain);
     let bundle = b.tx.bundle.as_ref().ok_or("a shielded transaction has a bundle")?;
     let context = b.transition.context(bundle.burn_r, bundle.burn_asset, bundle.burn_a);
     let salt = executor::fresh_call_salt();
@@ -2775,7 +2814,7 @@ fn bind_invoke(b: &mut InvokeBuild) -> Result<()> {
         Action::Invoke { proof: p, .. } => *p = proof,
         _ => return bad("a call binding for an action that is not an invoke (wallet bug)"),
     }
-    debug_assert_eq!(b.tx.call_binding(), binding, "filling the call proof in never moves the call binding");
+    debug_assert_eq!(b.tx.call_binding(&b.prepared.domain), binding, "filling the call proof in never moves the call binding");
     Ok(())
 }
 
@@ -2980,6 +3019,10 @@ pub struct Pending {
     /// then only to a prover paired as the owner's own). For a screen to say; nothing checks it.
     #[serde(default)]
     pub witness_kind: String,
+    /// The genesis hash this transaction's bindings bind (BIND-1), 64 hex; absent on a chain-id
+    /// bound chain (14–19). `finish_proof` verifies the prover's proof over the same binding.
+    #[serde(default)]
+    pub genesis: Option<String>,
     pub scalars: PendingScalars,
 }
 
@@ -3207,6 +3250,7 @@ fn check_target(t: &ProverTarget, request_hc: Option<&String>, request_auth: Opt
 fn seal_pending(
     kind: &str,
     target: &Target,
+    domain: &BindingDomain,
     tx: &Transaction,
     words: Vec<u32>,
     expected: &Word8,
@@ -3228,7 +3272,7 @@ fn seal_pending(
             witness_kind: target.kind,
             hc_bundle: target.guests.hc,
             profile: profile_name(profile).to_string(),
-            binding: tx.binding(),
+            binding: tx.binding(domain),
             inputs: words,
             reply_key,
         };
@@ -3247,6 +3291,7 @@ fn seal_pending(
             profile: profile_name(profile).to_string(),
             hc_bundle: word8_to_hex(&target.guests.hc),
             witness_kind: target.kind.as_str().to_string(),
+            genesis: domain.genesis().map(|g| hex::encode(g.0)),
             scalars,
         },
         expected,
@@ -3276,7 +3321,7 @@ fn prepare_transfer_with(
     authorise(&mut b.tx, &b.prepared, &w.sk, b.profile)?;
     let words = std::mem::take(&mut b.prepared.words);
     let scalars = transfer_scalars(b);
-    seal_pending("transfer", target, &b.tx, words, &b.prepared.expected, b.profile, max_proof_bytes, scalars)
+    seal_pending("transfer", target, &b.prepared.domain, &b.tx, words, &b.prepared.expected, b.profile, max_proof_bytes, scalars)
 }
 
 /// [`prepare_transfer`] for a bridge burn: [`prove_burn`]'s build, sealed to a prover.
@@ -3286,7 +3331,7 @@ pub fn prepare_burn(r: &PrepareBurnRequest) -> Result<PrepareResult> {
     authorise(&mut b.tx, &b.prepared, &w.sk, b.profile)?;
     let words = std::mem::take(&mut b.prepared.words);
     let scalars = burn_scalars(&b, r.req.to_chain);
-    seal_pending("burn", &target, &b.tx, words, &b.prepared.expected, b.profile, r.max_proof_bytes, scalars)
+    seal_pending("burn", &target, &b.prepared.domain, &b.tx, words, &b.prepared.expected, b.profile, r.max_proof_bytes, scalars)
 }
 
 /// [`prepare_transfer`] for an RPL-2 invoke: [`prove_invoke`]'s build, its **call proof made
@@ -3301,7 +3346,7 @@ pub fn prepare_invoke(r: &PrepareInvokeRequest) -> Result<PrepareResult> {
     authorise(&mut b.tx, &b.prepared, &w.sk, b.profile)?;
     let words = std::mem::take(&mut b.prepared.words);
     let scalars = invoke_scalars(&w, &b);
-    seal_pending(INVOKE_KIND, &target, &b.tx, words, &b.prepared.expected, b.profile, r.req.max_proof_bytes, scalars)
+    seal_pending(INVOKE_KIND, &target, &b.prepared.domain, &b.tx, words, &b.prepared.expected, b.profile, r.req.max_proof_bytes, scalars)
 }
 
 /// The pending transaction's auth fields against its guest, before any reply is opened: a v3
@@ -3347,6 +3392,9 @@ pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
     let profile = profile_from_str(&p.profile)?;
     let mut tx = Transaction::decode(&hex::decode(&p.tx_hex).map_err(|_| "pending.tx_hex is not hex")?)
         .map_err(|e| format!("pending.tx_hex is not a transaction: {e}"))?;
+    // The binding the job was sealed over: the pending's own record of it, held to the
+    // transaction's chain id exactly as the build was (a chain-id-bound chain has no genesis here).
+    let domain = binding_domain_of(tx.chain_id, p.genesis.as_deref())?;
     let exec = ZkExecutor::new(profile);
     {
         let bundle = tx.bundle.as_ref().ok_or("the pending transaction has no bundle")?;
@@ -3409,12 +3457,12 @@ pub fn finish_proof(r: &FinishRequest) -> Result<Value> {
         .bundle_gas_limit(&reply.proof)
         .map_err(|e| format!("the prover's proof does not decode as a bundle proof, so its gas limit cannot be read: {e}"))?;
     check_bundle_gas_limit(declared).map_err(|e| format!("the prover's proof: {e}"))?;
-    let binding: [u32; TX_BINDING_WORDS] = tx.binding();
+    let binding: [u32; TX_BINDING_WORDS] = tx.binding(&domain);
     exec.verify_bundle(&hc, &reply.proof, &binding).map_err(|e| format!("the proof does not verify: {e}"))?;
 
     let proof_bytes = reply.proof.len();
     tx.bundle.as_mut().ok_or("the pending transaction has no bundle")?.proof = reply.proof;
-    debug_assert_eq!(tx.binding(), binding, "filling the proof in never moves the binding");
+    debug_assert_eq!(tx.binding(&domain), binding, "filling the proof in never moves the binding");
     let ser = |v: &dyn erased::Ser| v.to_value();
     Ok(match &p.kind[..] {
         "transfer" => ser(&transfer_result(&p.scalars, &tx, reply.tier, proof_bytes)),
@@ -4193,6 +4241,26 @@ mod erased {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_chain_id_bound_chains_are_the_vendored_clients_list() {
+        let src = include_str!("../../../vendor/fullnode/crates/randprotocol-client/src/lib.rs");
+        let line = src.lines().find(|l| l.contains("pub const CHAIN_ID_BINDING_CHAIN_IDS")).expect("the vendored client names the list");
+        let list: Vec<u64> = line[line.rfind("&[").unwrap() + 2..line.rfind(']').unwrap()]
+            .split(',').map(|n| n.trim().parse().unwrap()).collect();
+        assert_eq!(CHAIN_ID_BINDING_CHAIN_IDS, &list[..], "BIND-1's list moved upstream: follow it");
+    }
+
+    #[test]
+    fn a_chain_after_19_binds_its_genesis_and_says_so_when_none_is_given() {
+        assert_eq!(binding_domain_of(19, None).unwrap(), BindingDomain::ChainId);
+        assert_eq!(binding_domain_of(14, Some("zz")).unwrap(), BindingDomain::ChainId, "ignored on a chain-id chain");
+        let err = binding_domain_of(20, None).unwrap_err();
+        assert!(err.contains("must carry `genesis`"), "{err}");
+        let g = "ab".repeat(32);
+        assert_eq!(binding_domain_of(20, Some(&g)).unwrap(), BindingDomain::Genesis(Hash([0xab; 32])));
+        assert!(binding_domain_of(20, Some("abcd")).is_err());
+    }
     use randprotocol_zkvm::address::seal_note;
 
     fn wallet(n: u32) -> Wallet {
@@ -5118,6 +5186,7 @@ mod tests {
         let owned = owned_note(&alice, 1, 1, note.commitment(), note);
         let v3 = ZkExecutor::hc_hidden_bundle_v3();
         let req = ProveRequest {
+            genesis: None,
             spend_key: alice.spend_key_hex(),
             chain_id: DEFAULT_CHAIN_ID,
             to: bob.address.to_string(),
@@ -5179,7 +5248,7 @@ mod tests {
         // commitment to this wallet's `nk` and a fresh salt, the auth proof publishes exactly
         // that commitment and verifies against the auth guest and THIS transaction's binding, and
         // the bundle proof publishes the v3 digest — the one with the commitment folded in.
-        let binding = tx.binding();
+        let binding = tx.binding(&BindingDomain::ChainId);
         assert_ne!(bundle.auth_commit, [0; 8], "a v3 bundle carries its auth commitment");
         assert_eq!(res.auth_proof_bytes, bundle.auth_proof.len());
         assert!(res.auth_proof_bytes > 0, "and its auth proof");
@@ -6279,12 +6348,12 @@ mod tests {
             use randprotocol_core::confidential::ConfidentialExecutor;
             let req: ProveRequest = serde_json::from_value(fixture_prove_request("test", 0).unwrap()).unwrap();
             let (w, mut b) = transfer_unproven(&req).unwrap();
-            let before = b.tx.binding();
+            let before = b.tx.binding(&BindingDomain::ChainId);
             let bytes = authorise(&mut b.tx, &b.prepared, &w.sk, FriProfile::Test).unwrap();
             let bundle = b.tx.bundle.as_ref().unwrap();
             assert_eq!(bytes, bundle.auth_proof.len());
             assert!(bytes > 0);
-            assert_eq!(b.tx.binding(), before, "the auth proof is outside the binding it is made over");
+            assert_eq!(b.tx.binding(&BindingDomain::ChainId), before, "the auth proof is outside the binding it is made over");
             let exec = ZkExecutor::new(FriProfile::Test);
             assert_eq!(exec.auth_proof_digest(&bundle.auth_proof).unwrap(), bundle.auth_commit);
             assert_eq!(exec.verify_auth(&ZkExecutor::hc_auth(), &bundle.auth_proof, &before).unwrap(), bundle.auth_commit);
@@ -6390,9 +6459,9 @@ mod tests {
             let tx = Transaction::decode(&hex::decode(&out.pending.tx_hex).unwrap()).unwrap();
             let bundle = tx.bundle.as_ref().unwrap();
             assert!(bundle.proof.is_empty(), "pending carries the transaction without its bundle proof");
-            assert_eq!(job.binding, tx.binding(), "the job proves this very transaction");
+            assert_eq!(job.binding, tx.binding(&BindingDomain::ChainId), "the job proves this very transaction");
             let exec = ZkExecutor::new(FriProfile::Test);
-            assert_eq!(exec.verify_auth(&ZkExecutor::hc_auth(), &bundle.auth_proof, &tx.binding()).unwrap(), bundle.auth_commit);
+            assert_eq!(exec.verify_auth(&ZkExecutor::hc_auth(), &bundle.auth_proof, &tx.binding(&BindingDomain::ChainId)).unwrap(), bundle.auth_commit);
             assert_eq!(bundle.auth_commit, randprotocol_zkvm::auth::auth_commit(&sender.vk.nk, &job.inputs[hidden_input_v3::SALT..].try_into().unwrap()));
 
             // Neither key is in what the client stores: not the spend key, and not the viewing
@@ -6426,7 +6495,7 @@ mod tests {
             assert_eq!(out.pending.scalars.payment_slot, None, "a burn pays nobody");
             let tx = Transaction::decode(&hex::decode(&out.pending.tx_hex).unwrap()).unwrap();
             assert!(matches!(tx.action, Action::BridgeBurn { .. }));
-            assert_eq!(job.binding, tx.binding());
+            assert_eq!(job.binding, tx.binding(&BindingDomain::ChainId));
             assert!(!tx.bundle.as_ref().unwrap().auth_proof.is_empty(), "a burn is authorised here too");
             assert!(!serde_json::to_string(&out.pending).unwrap().contains(&r.req.spend_key));
         }
@@ -6599,8 +6668,8 @@ mod tests {
             let tx = Transaction::decode(&hex::decode(&out.tx_hex).unwrap()).unwrap();
             let bundle = tx.bundle.as_ref().unwrap();
             let exec = ZkExecutor::new(FriProfile::Test);
-            exec.verify_bundle(&v2, &bundle.proof, &tx.binding()).unwrap();
-            assert!(exec.verify_bundle(&ZkExecutor::hc_hidden_bundle(), &bundle.proof, &tx.binding()).is_err());
+            exec.verify_bundle(&v2, &bundle.proof, &tx.binding(&BindingDomain::ChainId)).unwrap();
+            assert!(exec.verify_bundle(&ZkExecutor::hc_hidden_bundle(), &bundle.proof, &tx.binding(&BindingDomain::ChainId)).is_err());
         }
 
         #[test]
@@ -6743,7 +6812,7 @@ mod tests {
             assert!(b.prepared.words.is_empty(), "the witness moved into the job, which zeroizes it");
             // The prover's side: nothing but the opened job.
             let job = open_job(key.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
-            let binding = b.tx.binding();
+            let binding = b.tx.binding(&BindingDomain::ChainId);
             assert_eq!(job.binding, binding);
             let (proof, digest, tier) =
                 prove_bundle_for(&job.hc_bundle, FriProfile::Test, &job.inputs, &job.binding, Backend::Cpu).unwrap();
@@ -7155,7 +7224,7 @@ mod tests {
 
             // The prover: the opened job, a bundle proof, a sealed reply.
             let job = open_job(prover.dk(), &hex::decode(&out.sealed_hex).unwrap()).unwrap();
-            assert_eq!(job.binding, pending_tx.binding());
+            assert_eq!(job.binding, pending_tx.binding(&BindingDomain::ChainId));
             let (proof, digest, tier) = prove_bundle_for(&job.hc_bundle, FriProfile::Test, &job.inputs, &job.binding, Backend::Cpu).unwrap();
             assert_eq!(word8_to_hex(&digest), out.expected);
             let rk: [u8; 32] = hex::decode(&out.pending.reply_key).unwrap().try_into().unwrap();

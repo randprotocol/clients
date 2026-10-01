@@ -51,3 +51,9 @@ codegen-units = 16
 opt-level = 2
 [profile.wasm.package.randprotocol-zkvm]
 opt-level = 1
+
+# The fullnode's own Plonky3 fix (vendor/fullnode/vendor/p3-fri, fullnode 4d5b039): 0.7.0's
+# HidingFriPcs held a spin lock across rayon work. This workspace builds without rayon today, but
+# the patch is the fullnode's, and a `[patch]` reaches only the workspace that declares it.
+[patch.crates-io]
+p3-fri = { path = "vendor/fullnode/vendor/p3-fri" }
