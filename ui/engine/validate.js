@@ -586,6 +586,20 @@ export function checkProgramCell(reply, key) {
   return word8(m, 'value', r.value);
 }
 
+/** `rand_getProgramCells` (one page) → `{cells: [{key, value}], next}` (`next` a 64-hex key or
+ *  `null` on the last page), or `null` without the section. */
+export function checkProgramCells(reply) {
+  const m = 'rand_getProgramCells';
+  if (sectionOff(reply)) return null;
+  const r = objectReply(m, reply);
+  const cells = arrayReply(m, r.cells, 4096).map((c) => {
+    const o = objectReply(m, c);
+    return { key: word8(m, 'key', o.key), value: word8(m, 'value', o.value) };
+  });
+  const next = r.next === null || r.next === undefined ? null : word8(m, 'next', r.next);
+  return { cells, next };
+}
+
 /** `rand_getProgramVault` → `[{asset, amount}]` ascending, or `null` without the section. */
 export function checkProgramVault(reply) {
   const m = 'rand_getProgramVault';

@@ -809,6 +809,32 @@ body.compact .sidebar { display: none; }
   min-height: 56px;
 }
 
+/* Swap: the amount and its asset picker side by side, the flip between the two rows, and the
+   quoted amount in a box the same size as the input it answers. */
+.swap-row { display: flex; gap: var(--s-2); align-items: stretch; }
+.swap-row > input, .swap-row > .swap-out { flex: 1 1 auto; min-width: 0; }
+.field .swap-row > select { flex: 0 0 auto; width: auto; min-width: 7.5rem; font-weight: 600; }
+.swap-out {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text-strong);
+  font-size: 26px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A swap that moves the price by 5% or more: its impact in the negative colour. */
+.kv .v.negative { color: var(--negative); font-weight: 600; }
+.swap-flip { display: flex; justify-content: center; margin-block: calc(var(--s-2) * -1); }
+
 /* ============================================================================= check ========= */
 /* A consent checkbox with its sentence — "I understand anyone with this key can spend my funds".
    The whole label is the target (a 16 px box is not one), so it carries the 44 px height itself. */

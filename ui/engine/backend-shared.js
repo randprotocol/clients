@@ -84,7 +84,7 @@ import { makeRpc, isAllowedRpcMethod, rpcUrlList } from './rpc.js';
 import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, HEIGHT_SPAN, envelopeBytesOf } from './wallet.js';
 import { LEGACY_ENVELOPE_CHAIN_IDS } from '../lib/memo.js';
 import { listContacts, addContact, removeContact, nameOf as contactNameOf, addressOf as contactAddressOf, CONTACTS_KEY } from '../lib/contacts.js';
-import { checkFee, checkTokens, checkSubmitted, checkBridgeState, checkLimits, MAX_TOKEN_PAGE, NodeReplyError } from './validate.js';
+import { checkFee, checkTokens, checkSubmitted, checkBridgeState, checkLimits, checkProgramCells, MAX_TOKEN_PAGE, NodeReplyError } from './validate.js';
 import {
   PENDING_PROOF_KEY, checkProverUrl, makeProverClient, readInfo, remoteProve, startRemoteProof, pollRemoteProof,
   pendingProof, cancelPendingProof,
@@ -2461,6 +2461,27 @@ export function makeSharedBackend({
       return prove.via
         ? { ok: true, via: prove.via, ...(prove.prover ? { prover: prove.prover, provers: prove.provers } : {}), ...(prove.notice ? { notice: true } : {}) }
         : { ok: true };
+    },
+
+    /**
+     * Every cell of program `id`, in key order (`rand_getProgramCells`, page by page): `[{key,
+     * value}]`, or `null` on a chain without program state. What the Swap screen prices from.
+     */
+    async cells(id) {
+      const program = String(id || '').replace(/^0x/, '').toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(program)) throw invokeError('BAD_REQUEST', 'That is not a program id.');
+      const { client } = await requireVerifiedChain();
+      const out = [];
+      let after = null;
+      for (let page = 0; page < 64; page += 1) {
+        const r = checkProgramCells(await client.getProgramCells(program, after ? { after, limit: 256 } : { limit: 256 }));
+        if (r === null) return null;
+        out.push(...r.cells);
+        // A cursor that does not move would loop for ever.
+        if (r.next === null || r.next === after) break;
+        after = r.next;
+      }
+      return out;
     },
 
     /**

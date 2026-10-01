@@ -19,6 +19,8 @@ export const icons = {
   arrowUpRight: () => svg('<path d="M7 17 17 7"/><path d="M9 7h8v8"/>'),
   arrowDownLeft: () => svg('<path d="M17 7 7 17"/><path d="M15 17H7V9"/>'),
   droplet: () => svg('<path d="M12 3.5s5.5 5.9 5.5 9.7a5.5 5.5 0 0 1-11 0C6.5 9.4 12 3.5 12 3.5z"/><path d="M9.6 13.6a2.6 2.6 0 0 0 2.4 2.6"/>'),
+  // Two opposed arrows — trade one asset for another (Swap, through the durian.market pools).
+  swap: () => svg('<path d="M7 4v13"/><path d="m3.5 13.5 3.5 3.5 3.5-3.5"/><path d="M17 20V7"/><path d="m13.5 10.5 3.5-3.5 3.5 3.5"/>'),
   bridge: () => svg('<path d="M3 18h18"/><path d="M4 18c0-4.4 3.6-8 8-8s8 3.6 8 8"/><path d="M12 18v-8"/><path d="M7.6 18v-4.7"/><path d="M16.4 18v-4.7"/>'),
   copy: () => svg('<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5.5A1.5 1.5 0 0 0 13.5 4h-8A1.5 1.5 0 0 0 4 5.5v8A1.5 1.5 0 0 0 5.5 15"/>'),
   lock: () => svg('<rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>'),

@@ -103,7 +103,7 @@ test('home shows RAND hero, four actions, both assets', async (t) => {
   const { root } = await at(t, '#home');
   assert.match(root.querySelector('.hero .amount').textContent, /3\.5/);
   assert.match(root.querySelector('.hero').textContent, /RAND/);
-  assert.deepEqual([...root.querySelectorAll('.btn-round')].map((n) => n.dataset.go), ['receive', 'send', 'faucet', 'explore/bridge']);
+  assert.deepEqual([...root.querySelectorAll('.btn-round')].map((n) => n.dataset.go), ['receive', 'send', 'swap', 'explore/bridge']);
   assert.equal(root.querySelectorAll('.row[data-go^="asset/"]').length, 2);
 });
 

@@ -41,7 +41,7 @@ function applyVeil(on) {
 const ACTIONS = [
   { go: 'receive', icon: 'arrowDownLeft', label: 'Receive' },
   { go: 'send', icon: 'arrowUpRight', label: 'Send' },
-  { go: 'faucet', icon: 'droplet', label: 'Faucet' },
+  { go: 'swap', icon: 'swap', label: 'Swap' },
   { go: 'explore/bridge', icon: 'bridge', label: 'Bridge' },
 ];
 

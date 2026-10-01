@@ -433,6 +433,17 @@ test('program state replies: code, public input, cells and vault are held to the
   rejects(() => checkProgramVault([{ asset: 0, amount: '-1' }]), /amount/);
 });
 
+test('rand_getProgramCells: a page of cells and its cursor, held to their shape', async () => {
+  const { checkProgramCells } = await import('../engine/validate.js');
+  const key = 'ab'.repeat(32);
+  assert.deepEqual(checkProgramCells({ cells: [{ key, value: 'CD'.repeat(32) }], next: null }), { cells: [{ key, value: 'cd'.repeat(32) }], next: null });
+  assert.deepEqual(checkProgramCells({ cells: [], next: key }), { cells: [], next: key });
+  assert.equal(checkProgramCells({ enabled: false }), null, 'a chain without the section');
+  rejects(() => checkProgramCells({ cells: [{ key, value: 'zz' }], next: null }), /value/);
+  rejects(() => checkProgramCells({ cells: [{ key, value: '00'.repeat(32) }], next: 'zz' }), /next/);
+  rejects(() => checkProgramCells({ next: null }), /rand_getProgramCells/);
+});
+
 test('bridge state: v0.6.8 fees are read when the chain has them, and held to their shape', async () => {
   const { checkBridgeState } = await import('../engine/validate.js');
   const recipient = 'rand13V5' + 'a'.repeat(40);
