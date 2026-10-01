@@ -29,6 +29,7 @@ import org.randprotocol.wallet.store.Contacts;
 import org.randprotocol.wallet.util.Amounts;
 import org.randprotocol.wallet.wallet.ProvingService;
 import org.randprotocol.wallet.wallet.ProverPairing;
+import org.randprotocol.wallet.wallet.TrustedProver;
 import org.randprotocol.wallet.wallet.SendMonitor;
 import org.randprotocol.wallet.wallet.WalletService;
 import org.randprotocol.wallet.wallet.SendState;
@@ -389,8 +390,11 @@ public class SendActivity extends BaseActivity {
         boolean enough = WalletService.deviceCanProve(this);
         b.memoryWarning.setVisibility(enough ? android.view.View.GONE : android.view.View.VISIBLE);
         ProverPairing prover = wallet().prefs().prover();
+        TrustedProver pool = wallet().trustedProver();
         if (!enough && prover != null) {
             b.memoryWarning.setText(getString(R.string.review_remote_prover, prover.name));
+        } else if (!enough && wallet().usesDefaultProver() && pool != null) {
+            b.memoryWarning.setText(getString(R.string.review_default_prover, pool.name));
         } else if (!enough) {
             b.memoryWarning.setText(getString(R.string.review_memory_warning,
                     String.format(Locale.US, "%.1f", PROVER_PEAK_MEMORY_BYTES / 1e9),
@@ -398,7 +402,28 @@ public class SendActivity extends BaseActivity {
         }
     }
 
+    /**
+     * Before the first send this device cannot prove and the RandProtocol prover will (the
+     * default, nothing paired): the one-time notice — what it sees, that it cannot spend — with
+     * "Use my own prover" right there. Read once per wallet; the service refuses until it is.
+     */
     private void confirm() {
+        if (!WalletService.deviceCanProve(this) && wallet().usesDefaultProver() && !wallet().defaultNoticeRead()) {
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.prover_notice_title)
+                    .setMessage(R.string.prover_notice_body)
+                    .setPositiveButton(R.string.prover_notice_continue, (d, w) -> {
+                        wallet().acknowledgeDefaultProver();
+                        startSend();
+                    })
+                    .setNeutralButton(R.string.prover_notice_own, (d, w) -> startActivity(new Intent(this, SettingsActivity.class)))
+                    .show();
+            return;
+        }
+        startSend();
+    }
+
+    private void startSend() {
         Intent i = new Intent(this, ProvingService.class)
                 .putExtra(ProvingService.EXTRA_TO, to)
                 .putExtra(ProvingService.EXTRA_AMOUNT, amount.toString())

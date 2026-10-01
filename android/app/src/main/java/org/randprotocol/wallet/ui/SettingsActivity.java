@@ -92,7 +92,17 @@ public class SettingsActivity extends BaseActivity {
         b.proverForget.setOnClickListener(v -> {
             wallet().forgetProver();
             paintProver();
-            b.proverStatus.setText(R.string.settings_prover_forgotten);
+            // Forgetting your own prover falls back to the default, the RandProtocol prover.
+            if (wallet().usesDefaultProver() && trusted != null) {
+                b.proverStatus.setText(getString(R.string.settings_prover_forgotten_default, trusted.name));
+            } else {
+                b.proverStatus.setText(R.string.settings_prover_forgotten);
+            }
+        });
+        b.proverUseNone.setOnClickListener(v -> {
+            wallet().useNoProver();
+            paintProver();
+            b.proverStatus.setText(R.string.settings_prover_none);
         });
         // What a paired prover learns, in the core's own words (version.prover_history_warning),
         // shown before any pairing is saved — own or not; the resource is the fallback.
@@ -104,7 +114,6 @@ public class SettingsActivity extends BaseActivity {
         if (trusted != null) {
             b.proverTrustedBody.setText(getString(R.string.settings_prover_trusted_body, trusted.url, trusted.fingerprint));
             b.proverUseTrusted.setOnClickListener(v -> useTrustedProver());
-            b.proverTrusted.setVisibility(View.VISIBLE);
         }
         paintProver();
 
@@ -191,12 +200,43 @@ public class SettingsActivity extends BaseActivity {
     private void paintProver() {
         ProverPairing p = wallet().prefs().prover();
         int run = ++probeRun;
+        b.proverUseNone.setVisibility(View.GONE);
+        b.proverTrusted.setVisibility(View.GONE);
+        if (p == null && wallet().usesDefaultProver() && trusted != null) {
+            // The default (wallet 0.6.8): the RandProtocol prover makes the proofs this device
+            // cannot — named, with what it sees, asked whether it answers, and off in one tap.
+            b.proverBy.setText(getString(R.string.settings_prover_default, trusted.name));
+            b.proverFingerprint.setText(getString(R.string.settings_prover_fingerprint, trusted.fingerprint));
+            b.proverFingerprint.setVisibility(View.VISIBLE);
+            b.proverNotOwn.setText(getString(R.string.settings_prover_default_note, trusted.url));
+            b.proverNotOwn.setVisibility(View.VISIBLE);
+            b.proverForget.setVisibility(View.GONE);
+            b.proverUseNone.setVisibility(View.VISIBLE);
+            b.proverProbe.setText(R.string.settings_prover_asking);
+            wallet().runInBackground(() -> {
+                String line;
+                try {
+                    line = wallet().probeProver(ProverPairing.builtIn(ProverCore.NATIVE).pairing).line();
+                } catch (Exception e) {
+                    line = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                }
+                String l = line;
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed() || run != probeRun) return;
+                    b.proverProbe.setText(l);
+                });
+            });
+            return;
+        }
+        b.proverNotOwn.setText(R.string.settings_prover_not_own_note);
         if (p == null) {
             b.proverBy.setText(R.string.settings_prover_device);
             b.proverFingerprint.setVisibility(View.GONE);
             b.proverNotOwn.setVisibility(View.GONE);
             b.proverForget.setVisibility(View.GONE);
             b.proverProbe.setText(R.string.settings_prover_device_body);
+            // No prover chosen: the way back to the default is one tap, with what it sees.
+            if (trusted != null) b.proverTrusted.setVisibility(View.VISIBLE);
             return;
         }
         b.proverBy.setText(getString(p.own ? R.string.settings_prover_remote : R.string.settings_prover_remote_paired, p.name));
@@ -259,40 +299,15 @@ public class SettingsActivity extends BaseActivity {
     }
 
     /**
-     * "Use the RandProtocol prover": the built-in link pairs through the same checks as a pasted
-     * one ({@code pairTrustedProver}: the pinned fingerprint first, then the prover's own key),
-     * stored NOT own and named after the pool. Never run by itself — only from this tap, with the
-     * warning above on screen; the status says once more what the prover can then read.
+     * "Use the RandProtocol prover": back to the default (wallet 0.6.8) — nothing is paired and
+     * nothing is asked; the state shows the pool with what it sees, and the one-time notice still
+     * comes before the first send through it.
      */
     private void useTrustedProver() {
         if (pairing || trusted == null) return;
-        pairing = true;
-        b.proverUseTrusted.setEnabled(false);
-        b.proverSave.setEnabled(false);
-        b.proverStatus.setText(R.string.settings_prover_pairing);
-        TrustedProver t = trusted;
-        wallet().runInBackground(() -> {
-            String status;
-            boolean paired = false;
-            try {
-                ProverPairing.Paired done = wallet().pairTrustedProver();
-                paired = true;
-                status = getString(R.string.settings_prover_paired_trusted, done.pairing.name, done.pairing.fingerprint,
-                        ProverCore.NATIVE.historyWarning());
-            } catch (Exception e) {
-                status = getString(R.string.settings_prover_not_paired, e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
-            }
-            String s = status;
-            boolean ok = paired;
-            runOnUiThread(() -> {
-                pairing = false;
-                if (isFinishing() || isDestroyed()) return;
-                b.proverUseTrusted.setEnabled(true);
-                b.proverSave.setEnabled(true);
-                if (ok) paintProver();
-                b.proverStatus.setText(s);
-            });
-        });
+        wallet().useDefaultProver();
+        paintProver();
+        b.proverStatus.setText(getString(R.string.settings_prover_using_default, trusted.name, ProverCore.NATIVE.historyWarning()));
     }
 
     private interface Pick {

@@ -68,6 +68,33 @@ public final class Prefs {
         else p.edit().putString("prover", pairing.toJson().toString()).commit();
     }
 
+    /**
+     * Whether the user chose NO prover (wallet 0.6.8): then the RandProtocol prover, otherwise the
+     * default where this device cannot prove, is not used either. Pairing a prover, or "Use the
+     * RandProtocol prover", clears it.
+     */
+    public boolean noProver() {
+        return p.getBoolean("no_prover", false);
+    }
+
+    public void setNoProver(boolean none) {
+        if (none) p.edit().putBoolean("no_prover", true).commit();
+        else p.edit().remove("no_prover").commit();
+    }
+
+    /**
+     * The address of the wallet that read the one-time notice about the RandProtocol prover, or
+     * null. A record naming another wallet counts for nothing; removing the wallet clears it.
+     */
+    public String proverNoticeFor() {
+        return p.getString("prover_notice_for", null);
+    }
+
+    public void setProverNoticeFor(String address) {
+        if (address == null) p.edit().remove("prover_notice_for").commit();
+        else p.edit().putString("prover_notice_for", address).commit();
+    }
+
     /** Set once the user has confirmed they saved the spend key shown at creation. */
     public boolean backedUp() {
         return p.getBoolean("backed_up", false);

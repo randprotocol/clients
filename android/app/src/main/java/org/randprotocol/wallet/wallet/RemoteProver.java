@@ -41,6 +41,10 @@ public final class RemoteProver {
     }
 
     public static final long DEFAULT_POLL_MS = 1_000;
+    /** How many times a job is offered when the prover could not be reached at all. */
+    public static final int SUBMIT_TRIES = 3;
+    /** The waits between those tries. */
+    static final long[] SUBMIT_BACKOFF_MS = {1_000, 3_000};
     public static final long DEFAULT_MAX_WAIT_MS = 20 * 60 * 1000L;
 
     private final ProverClient client;
@@ -60,12 +64,23 @@ public final class RemoteProver {
 
     public JSONObject prove(String sealedHex, Object pending, Finisher finisher, PhaseListener onPhase) throws Exception {
         onPhase.phase(null);
-        String job;
-        try {
-            job = client.submit(sealedHex);
-        } catch (ProverClient.ProverError e) {
-            ProverClient.Refusal r = ProverClient.refusal(e);
-            throw r != null ? r : new ProverClient.Refusal("Could not hand the proof to your prover: " + e.getMessage());
+        String job = null;
+        for (int attempt = 1; job == null; attempt++) {
+            try {
+                job = client.submit(sealedHex);
+            } catch (ProverClient.ProverError e) {
+                // No JSON-RPC reply at all — the connection failed, or an HTTP error page came back
+                // — means the prover accepted nothing: the same sealed job is offered again, a
+                // bounded number of times. A JSON-RPC error (busy included) is final; a timeout
+                // (the prover may have taken it) and a reply naming no job id are never resubmitted.
+                boolean transport = "connect".equals(e.failure) || "http".equals(e.failure);
+                if (transport && attempt < SUBMIT_TRIES) {
+                    sleeper.sleep(SUBMIT_BACKOFF_MS[Math.min(attempt - 1, SUBMIT_BACKOFF_MS.length - 1)]);
+                    continue;
+                }
+                ProverClient.Refusal r = ProverClient.refusal(e);
+                throw r != null ? r : new ProverClient.Refusal("Could not hand the proof to your prover: " + e.getMessage());
+            }
         }
         long started = clock.nowMs();
         long minutes = Math.round(maxWaitMs / 60000.0);

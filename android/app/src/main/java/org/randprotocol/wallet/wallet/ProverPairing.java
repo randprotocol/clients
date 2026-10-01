@@ -162,6 +162,25 @@ public final class ProverPairing {
      */
     public static Paired pairTrusted(ProverCore core, ProverClient.Transport transport) throws Exception {
         TrustedProver t = core.trustedProver();
+        return pairParsed(core, builtInLink(core, t), transport, t.name);
+    }
+
+    /**
+     * The RandProtocol prover as the DEFAULT route uses it (wallet 0.6.8: nothing paired, nothing
+     * stored): the built-in link read through the core and held to the pinned fingerprint, the URL
+     * rule and {@code own=0} — no network; the route asks the prover for its key before any job.
+     * The pairing is named after the pool and NOT own; the token is the one every copy ships.
+     */
+    public static Paired builtIn(ProverCore core) throws Exception {
+        TrustedProver t = core.trustedProver();
+        JSONObject p = builtInLink(core, t);
+        String url = ProverClient.checkUrl(p.getString("url"));
+        return new Paired(new ProverPairing(t.name, url, p.getString("kem_ek").toLowerCase(Locale.ROOT), p.getString("fingerprint"), false),
+                p.getString("token"));
+    }
+
+    /** The built-in link, parsed, after the pins every use of it is held to. */
+    private static JSONObject builtInLink(ProverCore core, TrustedProver t) throws Exception {
         if (t == null) throw new ProverClient.Refusal("This build ships no prover to use.");
         JSONObject p = parse(core, t.link);
         if (t.fingerprint.isEmpty() || !p.getString("fingerprint").equals(t.fingerprint)) {
@@ -170,7 +189,7 @@ public final class ProverPairing {
         if (p.optBoolean("own", false)) {
             throw new ProverClient.Refusal("The built-in prover link is marked as your own, which a shared prover is not; not pairing it.");
         }
-        return pairParsed(core, p, transport, t.name);
+        return p;
     }
 
     /**

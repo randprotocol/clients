@@ -33,11 +33,28 @@ public final class RemoteSend {
     public static final class Route {
         public final ProverPairing pairing;
         final String token;
+        /** The RandProtocol prover as the default (nothing paired): the one-time notice applies. */
+        public final boolean isDefault;
 
         public Route(ProverPairing pairing, String token) {
+            this(pairing, token, false);
+        }
+
+        public Route(ProverPairing pairing, String token, boolean isDefault) {
             this.pairing = pairing;
             this.token = token;
+            this.isDefault = isDefault;
         }
+    }
+
+    /** The default prover, built from the build's own link ({@link ProverPairing#builtIn}). */
+    public interface DefaultProver {
+        ProverPairing.Paired get() throws Exception;
+    }
+
+    /** The default prover's queue is full: said plainly, never retried in a loop. */
+    static String defaultBusy(String name) {
+        return "The " + name + " prover is busy; try again in a minute, or pair your own prover in Settings.";
     }
 
     /**
@@ -54,7 +71,20 @@ public final class RemoteSend {
     public static Route route(boolean deviceCanProve, ProverPairing display, ProverCore core,
                               java.util.function.Function<ProverPairing, ProverPairing.Probe> probe,
                               java.util.function.Supplier<ProverSecret> secret) throws ProverClient.Refusal {
+        return route(deviceCanProve, display, core, probe, secret, null);
+    }
+
+    /**
+     * {@link #route} with the default (wallet 0.6.8): with nothing paired, {@code defaultProver}
+     * — null when the user chose no prover or the build ships none — is the RandProtocol prover,
+     * asked for its key (it must be the pinned one), its fee (none) and viewing-key jobs. When it
+     * is not there the refusal says so plainly and points to Settings; nothing is built.
+     */
+    public static Route route(boolean deviceCanProve, ProverPairing display, ProverCore core,
+                              java.util.function.Function<ProverPairing, ProverPairing.Probe> probe,
+                              java.util.function.Supplier<ProverSecret> secret, DefaultProver defaultProver) throws ProverClient.Refusal {
         if (deviceCanProve) return null;
+        if (display == null && defaultProver != null) return defaultRoute(core, probe, defaultProver);
         if (display == null) return null;
         ProverSecret s = secret.get();
         if (s == null || s.token == null || s.token.isEmpty()) {
@@ -71,6 +101,30 @@ public final class RemoteSend {
             throw new ProverClient.Refusal(reason + " Your paired prover is not available: it does not take this wallet's jobs.");
         }
         return new Route(p, s.token);
+    }
+
+    private static Route defaultRoute(ProverCore core, java.util.function.Function<ProverPairing, ProverPairing.Probe> probe,
+                                      DefaultProver defaultProver) throws ProverClient.Refusal {
+        String lead = "This device does not have the memory for this proof. ";
+        ProverPairing.Paired b;
+        try {
+            b = defaultProver.get();
+        } catch (Exception e) {
+            throw new ProverClient.Refusal(lead + (e.getMessage() == null ? "The built-in prover cannot be used." : e.getMessage()));
+        }
+        String why;
+        ProverPairing.Probe answer = probe.apply(b.pairing);
+        if (!answer.ok()) {
+            why = answer.reason.contains("different key") ? "it answered with another key than the one this wallet pins" : answer.reason;
+        } else {
+            why = ProverClient.feeRefusal(answer.info.fee, core);
+            if (why == null && !answer.info.witnessKinds.contains("viewing_key")) why = "it does not take this wallet's jobs";
+        }
+        if (why != null) {
+            throw new ProverClient.Refusal(lead + "The " + b.pairing.name + " prover cannot be reached right now (" + why
+                    + "). Try again later, or pair your own prover in Settings.");
+        }
+        return new Route(b.pairing, b.token, true);
     }
 
     /**
@@ -168,7 +222,12 @@ public final class RemoteSend {
         String sealed = prepared.optString("sealed_hex", "");
         Object pending = prepared.opt("pending");
         if (sealed.isEmpty() || pending == null) throw new ProverClient.Refusal("The wallet could not seal this transfer for the prover.");
-        return prover.prove(sealed, pending, core::finishProof, onPhase);
+        try {
+            return prover.prove(sealed, pending, core::finishProof, onPhase);
+        } catch (ProverClient.Refusal r) {
+            if (route.isDefault && r.busy) throw new ProverClient.Refusal(defaultBusy(route.pairing.name), true);
+            throw r;
+        }
     }
 
     /** {@code rand_status.hc_bundle}: null when absent or null (this build's default guest), else its 64 hex; refused otherwise. */

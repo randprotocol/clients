@@ -104,19 +104,24 @@ prover paired as your own (a link made with `rand-prover pair --own`). The pendi
 (~2.8 MB of hex with the auth proof inside) lives in memory on the proving service's thread for
 the length of the call; nothing writes it to preferences or a file, and there is no resume.
 
-**Use the RandProtocol prover** (Settings → Prover; `../docs/prover.md` §8): the build ships the
-address of one prover, the RandProtocol validators' pool (`https://prover.randprotocol.org`,
+**The RandProtocol prover is the default** (wallet 0.6.8; `../docs/prover.md` §8): the build ships
+the address of one prover, the RandProtocol validators' pool (`https://prover.randprotocol.org`,
 fingerprint `RGTF-7HKJ-XZFV-GQ1J`, viewing-key jobs only, no fee), read from the core's
-`version.trusted_prover` (`ProverCore.trustedProver()` → `TrustedProver {name, url, fingerprint}`;
-the pairing link stays inside `ProverPairing.pairTrusted` and reaches neither the screen nor
-preferences). The button is shown only when the core names one, below the same history warning
-as any pairing, with the pool's URL and fingerprint beside it; a tap pairs it in one step through
-the same checks as a pasted link — the built-in link is held to the pinned fingerprint and must
-not be marked `own` (refused before any request), then the prover is asked for its key and
-refused unless it is the link's — and stores it exactly as a pasted pairing is stored: the vault
-record NOT own, the display copy named "RandProtocol" ("Paired prover · RandProtocol", with the
-not-own note). The wallet never pairs it by itself; **Forget this prover** removes it like any
-pairing. `ProverTest` covers the report, the refusals and the stored record.
+`version.trusted_prover`. With nothing paired, a phone that cannot fit the proof sends through it
+at once: `RemoteSend.route(…, defaultProver)` builds the route from the built-in link
+(`ProverPairing.builtIn` — the pinned fingerprint, the URL rule, `own=0`, no network), asks the
+pool for its key (it must be the pinned one), its fee (none) and viewing-key jobs, and seals the
+job to it with the token every copy ships — nothing is paired or stored. Before the first such
+send, Send shows a one-time notice (it receives the viewing key: the whole history, past and
+future; it cannot spend) with **I understand — continue** and **Use my own prover**; the read is
+remembered per wallet (`Prefs.proverNoticeFor`, cleared with the wallet) and `WalletService.send`
+refuses until it is. A pool that does not answer, answers with another key, or is busy (-32005,
+never retried) is said plainly, pointing to Settings. Settings → Prover names it with its URL,
+fingerprint and what it sees, and offers **Use no prover** (`Prefs.noProver`); with none, **Use
+the RandProtocol prover** turns it back on in one tap. A paired prover is preferred over it, and
+**Forget this prover** falls back to it. A `prover_submit` that never reached the prover (no
+connection, an HTTP error page) is offered again, three tries, 1 s then 3 s apart; a JSON-RPC
+answer is final. `ProverTest` covers the route, the refusals, busy and the retry.
 - `files/notes.json`: the note cache (plaintext notes, nullifiers, leaf indices) and the
   submissions list with each payment's transaction key. App-private; rebuilt by a rescan.
 - Settings (RPC URL, chain id, auto-lock, theme) in plain preferences.

@@ -182,6 +182,8 @@ public final class WalletService {
     public void removeWallet() {
         vault.erase(); // the prover's token with it
         prefs.setProver(null);
+        prefs.setNoProver(false);
+        prefs.setProverNoticeFor(null);
         prefs.setBackedUp(false);
         contacts().clear();
         synchronized (store) {
@@ -429,6 +431,7 @@ public final class WalletService {
         ProverPairing.Paired paired = ProverPairing.pair(ProverCore.NATIVE, link, ProverClient.HTTP);
         vault.setProverSecret(ProverSecret.of(paired.pairing, paired.token));
         prefs.setProver(paired.pairing);
+        prefs.setNoProver(false);
         return paired;
     }
 
@@ -453,12 +456,54 @@ public final class WalletService {
         return paired;
     }
 
+    /**
+     * Forget the paired prover: the wallet falls back to the default, the RandProtocol prover
+     * (where the build ships one) — the same as {@link #useDefaultProver}.
+     */
     public void forgetProver() {
         prefs.setProver(null);
         vault.eraseProverSecret();
     }
 
     /** Blocking. */
+    /** Back to the default: forgets a paired prover and a choice of none. Nothing is asked. */
+    public void useDefaultProver() {
+        forgetProver();
+        prefs.setNoProver(false);
+    }
+
+    /** No prover at all: forgets a paired one and turns the default off. */
+    public void useNoProver() {
+        forgetProver();
+        prefs.setNoProver(true);
+    }
+
+    /**
+     * The RandProtocol prover as the default would use it right now, or null: the user chose none,
+     * or this build ships none. Never paired, never stored.
+     */
+    public RemoteSend.DefaultProver defaultProver() {
+        if (prefs.noProver() || ProverCore.NATIVE.trustedProver() == null) return null;
+        return () -> ProverPairing.builtIn(ProverCore.NATIVE);
+    }
+
+    /** Whether proofs this device cannot make go to the RandProtocol prover (nothing paired, none not chosen). */
+    public boolean usesDefaultProver() {
+        return prefs.prover() == null && defaultProver() != null;
+    }
+
+    /** Whether THIS wallet has read the one-time notice about the RandProtocol prover. */
+    public boolean defaultNoticeRead() {
+        String a = address();
+        return a != null && !a.isEmpty() && a.equals(prefs.proverNoticeFor());
+    }
+
+    /** The notice was read: remembered for this wallet until it is removed. */
+    public void acknowledgeDefaultProver() {
+        String a = address();
+        if (a != null && !a.isEmpty()) prefs.setProverNoticeFor(a);
+    }
+
     public ProverPairing.Probe probeProver(ProverPairing pairing) {
         return ProverPairing.probe(ProverCore.NATIVE, pairing, ProverClient.HTTP);
     }
@@ -470,7 +515,8 @@ public final class WalletService {
      * send refuses the send here, before anything is built: nothing is sent. Blocking.
      */
     public RemoteSend.Route proveRoute() throws ProverClient.Refusal {
-        return RemoteSend.route(deviceCanProve(app), prefs.prover(), ProverCore.NATIVE, this::probeProver, vault::proverSecret);
+        return RemoteSend.route(deviceCanProve(app), prefs.prover(), ProverCore.NATIVE, this::probeProver, vault::proverSecret,
+                defaultProver());
     }
 
     // ------------------------------------------------------------------ sending
@@ -506,6 +552,12 @@ public final class WalletService {
             // prover (delegated proving). On a split-authorisation chain the prover gets the
             // viewing key and a salt, never the spend key — the auth proof is made here.
             RemoteSend.Route route = proveRoute();
+            // The RandProtocol prover only once this wallet has read what it sees (Send shows the
+            // notice before it starts a send; this is the rule, not the screen).
+            if (route != null && route.isDefault && !defaultNoticeRead()) {
+                throw new ProverClient.Refusal("Before the first send through the RandProtocol prover, read what it can see: it gets "
+                        + "this wallet's viewing key. Send again and read the notice, or pair your own prover in Settings.");
+            }
             RpcClient rpc = rpc();
             scan();
             JSONObject selection;

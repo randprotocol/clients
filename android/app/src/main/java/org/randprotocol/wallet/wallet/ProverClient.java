@@ -59,8 +59,16 @@ public class ProverClient {
 
     /** A definite failure of a send: nothing reached the node. The message is shown verbatim. */
     public static final class Refusal extends Exception {
+        /** The prover answered busy (-32005): its queue is full. Said plainly, never retried in a loop. */
+        public final boolean busy;
+
         public Refusal(String message) {
+            this(message, false);
+        }
+
+        public Refusal(String message, boolean busy) {
             super(message);
+            this.busy = busy;
         }
     }
 
@@ -255,7 +263,7 @@ public class ProverClient {
                     int d = e.data.optInt("depth", -1);
                     if (d >= 0) n = String.valueOf(d);
                 }
-                return new Refusal("The prover is full (" + n + " waiting). Try again in a few minutes.");
+                return new Refusal("The prover is full (" + n + " waiting). Try again in a few minutes.", true);
             }
             case UNPAIRED:
                 return new Refusal("This prover does not know this pairing. Pair it again in Settings.");

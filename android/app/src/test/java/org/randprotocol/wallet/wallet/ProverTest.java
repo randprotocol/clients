@@ -1071,4 +1071,131 @@ public class ProverTest {
         }
         assertEquals(java.util.Collections.singletonList(false), prover.followRedirects);
     }
+
+    // ------------------------------------------------------------------ the default prover (wallet 0.6.8)
+
+    /** The probe the wallet runs, against a FakeProver. */
+    static java.util.function.Function<ProverPairing, ProverPairing.Probe> probeWith(FakeCore core, FakeProver prover) {
+        return p -> ProverPairing.probe(core, p, prover);
+    }
+
+    @Test
+    public void withNothingPairedTheRandProtocolProverIsTheRouteNotOwnByItsPinnedKey() throws Exception {
+        FakeCore core = new FakeCore().withTrustedProver();
+        FakeProver prover = new FakeProver((m, p) -> Reply.result(info(TRUSTED_EK, JSONObject.NULL, "viewing_key")));
+        RemoteSend.Route r = RemoteSend.route(false, null, core, probeWith(core, prover), () -> null, () -> ProverPairing.builtIn(core));
+        assertNotNull("a fresh wallet that cannot prove had no route", r);
+        assertTrue(r.isDefault);
+        assertEquals("RandProtocol", r.pairing.name);
+        assertEquals(TRUSTED_URL, r.pairing.url);
+        assertEquals(TRUSTED_EK, r.pairing.kemEk);
+        assertEquals(TRUSTED_FINGERPRINT, r.pairing.fingerprint);
+        assertFalse(r.pairing.own);
+        assertEquals(TRUSTED_TOKEN, r.token);
+        assertEquals(java.util.Collections.singletonList(TRUSTED_URL), prover.urls);
+        // A device that can prove never asks it.
+        FakeProver unasked = new FakeProver((m, p) -> Reply.result(info(TRUSTED_EK)));
+        assertNull(RemoteSend.route(true, null, core, probeWith(core, unasked), () -> null, () -> ProverPairing.builtIn(core)));
+        assertTrue(unasked.urls.isEmpty());
+        // No prover chosen (or a build without one): no route — the device, as before.
+        assertNull(RemoteSend.route(false, null, core, probeWith(core, unasked), () -> null, null));
+        assertTrue(unasked.urls.isEmpty());
+        // A paired prover is preferred over the default.
+        ProverPairing.Probe ok = okProbe("viewing_key");
+        RemoteSend.Route paired = RemoteSend.route(false, new ProverPairing("mine", URL_OK, KEM_EK, FINGERPRINT, false), core,
+                p -> ok, () -> SECRET_NOT_OWN, () -> ProverPairing.builtIn(core));
+        assertFalse(paired.isDefault);
+        assertEquals(URL_OK, paired.pairing.url);
+    }
+
+    @Test
+    public void theRandProtocolProverNotThereIsSaidPlainlyWithTheWayToPairYourOwn() throws Exception {
+        FakeCore core = new FakeCore().withTrustedProver();
+        FakeProver down = new FakeProver((m, p) -> { throw new IOException("connection refused"); });
+        routeRefused(() -> RemoteSend.route(false, null, core, probeWith(core, down), () -> null, () -> ProverPairing.builtIn(core)),
+                "This device does not have the memory for this proof. The RandProtocol prover cannot be reached right now (the prover at "
+                        + TRUSTED_URL + " did not answer (cannot reach the prover at " + TRUSTED_URL
+                        + ": connection refused)). Try again later, or pair your own prover in Settings.");
+        FakeProver other = new FakeProver((m, p) -> Reply.result(info("08".repeat(1184), JSONObject.NULL, "viewing_key")));
+        routeRefused(() -> RemoteSend.route(false, null, core, probeWith(core, other), () -> null, () -> ProverPairing.builtIn(core)),
+                "This device does not have the memory for this proof. The RandProtocol prover cannot be reached right now (it answered "
+                        + "with another key than the one this wallet pins). Try again later, or pair your own prover in Settings.");
+        // A build whose link names another key than the pin never asks anybody.
+        core.version.getJSONObject("trusted_prover").put("fingerprint", "ZZZZ-ZZZZ-ZZZZ-ZZZZ");
+        FakeProver unasked = new FakeProver((m, p) -> Reply.result(info(TRUSTED_EK)));
+        routeRefused(() -> RemoteSend.route(false, null, core, probeWith(core, unasked), () -> null, () -> ProverPairing.builtIn(core)),
+                "This device does not have the memory for this proof. The built-in prover link does not name the key this wallet pins; not pairing it.");
+        assertTrue(unasked.urls.isEmpty());
+    }
+
+    @Test
+    public void theRandProtocolProverBusyIsSaidPlainlyAfterOneSubmit() throws Exception {
+        FakeCore core = new FakeCore().withTrustedProver();
+        int[] submits = {0};
+        FakeProver prover = new FakeProver(answering(info(TRUSTED_EK, JSONObject.NULL, "viewing_key"), (m, p) -> {
+            submits[0]++;
+            return Reply.error(-32005, "busy", new JSONObject().put("depth", 2));
+        }));
+        RemoteSend.Route r = new RemoteSend.Route(ProverPairing.builtIn(core).pairing, TRUSTED_TOKEN, true);
+        JSONObject request = new JSONObject().put("spend_key", SPEND_KEY).put("to", "rand1x");
+        RemoteSend.applyProofParams(request, new JSONObject().put("hc_bundle", V3).put("hc_auth", AUTH));
+        try {
+            RemoteSend.prove(core, fastProver(new ProverClient(TRUSTED_URL, prover)), request, r, null, pos -> { });
+            fail("sent through a busy pool");
+        } catch (ProverClient.Refusal e) {
+            assertEquals("The RandProtocol prover is busy; try again in a minute, or pair your own prover in Settings.", e.getMessage());
+            assertTrue(e.busy);
+        }
+        assertEquals("a busy pool was asked again", 1, submits[0]);
+    }
+
+    @Test
+    public void aSubmitThatNeverReachedTheProverIsOfferedAgainBoundedWithBackoff() throws Exception {
+        int[] submits = {0};
+        FakeProver prover = new FakeProver((m, p) -> {
+            if (m.equals("prover_submit")) {
+                submits[0]++;
+                if (submits[0] == 1) throw new IOException("fetch failed");
+                if (submits[0] == 2) return new Reply(502, "<html>bad gateway</html>");
+                return Reply.result(new JSONObject().put("job", "job-9"));
+            }
+            return Reply.result(new JSONObject().put("state", "done").put("reply", "good"));
+        });
+        RemoteProver rp = fastProver(new ProverClient(URL_OK, prover));
+        List<Long> waits = new ArrayList<>();
+        rp.sleeper = waits::add;
+        FakeCore core = new FakeCore();
+        JSONObject out = rp.prove("5e41ed", new JSONObject().put("kind", "transfer"), core::finishProof, pos -> { });
+        assertEquals("aa", out.getString("tx_hex"));
+        assertEquals(3, submits[0]);
+        assertEquals(java.util.Arrays.asList(1_000L, 3_000L), waits.subList(0, 2));
+        // Three failures: given up, with the transport's words.
+        int[] down = {0};
+        FakeProver gone = new FakeProver((m, p) -> { down[0]++; throw new IOException("fetch failed"); });
+        try {
+            fastProver(new ProverClient(URL_OK, gone)).prove("5e41ed", new JSONObject(), core::finishProof, pos -> { });
+            fail();
+        } catch (ProverClient.Refusal e) {
+            assertTrue(e.getMessage(), e.getMessage().startsWith("Could not hand the proof to your prover"));
+        }
+        assertEquals(RemoteProver.SUBMIT_TRIES, down[0]);
+    }
+
+    @Test
+    public void aJsonRpcRefusalOrAReplyWithoutAJobIdIsNeverResubmitted() throws Exception {
+        for (Reply first : new Reply[]{Reply.error(-32003, "unpaired", null), Reply.result(new JSONObject().put("nojob", true))}) {
+            int[] submits = {0};
+            FakeProver prover = new FakeProver((m, p) -> {
+                submits[0]++;
+                return submits[0] == 1 ? first : Reply.result(new JSONObject().put("job", "j"));
+            });
+            try {
+                fastProver(new ProverClient(URL_OK, prover)).prove("5e41ed", new JSONObject(), new FakeCore()::finishProof, pos -> { });
+                fail();
+            } catch (ProverClient.Refusal expected) {
+                // final
+            }
+            assertEquals("resubmitted after " + first.body, 1, submits[0]);
+        }
+    }
 }

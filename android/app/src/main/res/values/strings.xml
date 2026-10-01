@@ -174,8 +174,20 @@
     <string name="settings_prover_warning">This prover will be able to read this wallet\'s whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.</string>
     <string name="settings_prover_forget">Forget this prover</string>
     <!-- The prover the build ships the address of (the core's version.trusted_prover; docs/prover.md §8). Shown only when the core names one; the warning above applies to it. -->
-    <string name="settings_prover_trusted_body">Or use the prover RandProtocol runs for everyone — %1$s, fingerprint %2$s. It sees as much as any prover you pair (the warning above) and charges nothing; your spend key stays here either way.</string>
+    <string name="settings_prover_trusted_body">Or use the prover RandProtocol runs for everyone — %1$s, fingerprint %2$s. It charges nothing. It receives this wallet\'s viewing key, so it can read your whole history, past and future. It cannot spend.</string>
     <string name="settings_prover_use_trusted">Use the RandProtocol prover</string>
+    <!-- Wallet 0.6.8: the RandProtocol prover is the default where this device cannot prove. -->
+    <string name="settings_prover_default">%1$s prover · where this device cannot prove</string>
+    <string name="settings_prover_default_note">The prover RandProtocol runs for everyone (%1$s), used until you choose another. It charges nothing. It receives this wallet\'s viewing key, so it can read your whole history, past and future. It cannot spend.</string>
+    <string name="settings_prover_use_none">Use no prover</string>
+    <string name="settings_prover_using_default">Using the %1$s prover. Proofs this device cannot make go to it. %2$s</string>
+    <string name="settings_prover_none">No prover. Proofs are made on this device only; where it cannot make one, sending waits until you pair a prover or use the RandProtocol prover again.</string>
+    <string name="settings_prover_forgotten_default">Forgotten. The prover\'s pairing is gone from this wallet. Proofs this device cannot make go to the %1$s prover again.</string>
+    <string name="review_default_prover">This device does not have the memory for this proof, so the %1$s prover will make it. It receives your viewing key and a salt inside a sealed job — it can read this wallet\'s whole history and cannot spend; this phone authorises the spend itself and checks the proof before anything is sent.</string>
+    <string name="prover_notice_title">The RandProtocol prover can read your history</string>
+    <string name="prover_notice_body">This device cannot make the proof, so the prover RandProtocol runs for everyone makes it. It receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.</string>
+    <string name="prover_notice_continue">I understand — continue</string>
+    <string name="prover_notice_own">Use my own prover</string>
     <string name="settings_prover_paired_trusted">Paired — this prover can read your history. Proofs this device cannot make go to %1$s. Its fingerprint is %2$s. %3$s</string>
     <string name="settings_prover_asking">Asking the prover…</string>
     <string name="settings_prover_pairing">Pairing…</string>
