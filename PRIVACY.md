@@ -58,9 +58,13 @@ your device until you delete them.
   you run or trust), which the wallet then always prefers, or no prover at all (a browser
   wallet then cannot send). The app warns you before it saves a pairing to a prover that is not
   your own.
-- **To sites you connect, in the extension.** On randbridge.org the extension offers itself as
-  `window.rand`. A site learns nothing until you approve it for that site, and an approved site
-  learns your address and its bridge recipient hash, nothing else.
+- **To sites you connect, in the extension.** On randbridge.org and durian.market the extension
+  offers itself as `window.rand`. A site learns nothing until you approve it for that site, and an
+  approved site learns your address and its bridge recipient hash, nothing else. When an approved
+  site asks for a transaction (a durian.market swap), the wallet shows it in its own window and
+  sends it only if you approve; the site then learns that transaction's hash.
+- **When you swap.** A swap reads the pool from the RPC node and is proved and sent like a
+  payment (above). Nothing is sent to durian.market's own servers.
 - **When you open a link.** "View on RandScan" and similar buttons open randscan.org or
   randprotocol.org in your browser. Viewing keys and transaction keys are decrypted there in
   your browser; the wallet never sends them anywhere by itself.
