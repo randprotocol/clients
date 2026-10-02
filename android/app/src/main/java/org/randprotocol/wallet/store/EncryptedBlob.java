@@ -43,7 +43,7 @@ public final class EncryptedBlob implements Contacts.Backing {
     @Override
     public void write(String json) {
         if (!prefs.edit().putString(VALUE, json).commit()) {
-            throw new Contacts.ContactException("could not save contacts");
+            throw new Contacts.ContactException(org.randprotocol.wallet.util.L10n.t(org.randprotocol.wallet.R.string.contacts_save_failed, "could not save contacts"));
         }
     }
 }

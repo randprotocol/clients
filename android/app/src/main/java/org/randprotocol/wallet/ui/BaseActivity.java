@@ -69,7 +69,23 @@ public abstract class BaseActivity extends AppCompatActivity {
         startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
     }
 
+    /** {@code formatted} (ASCII, {@link org.randprotocol.wallet.util.Amounts#format}) with the RAND symbol. */
+    protected String rand(String formatted) {
+        return getString(org.randprotocol.wallet.R.string.amount_with_symbol, formatted, getString(org.randprotocol.wallet.R.string.symbol));
+    }
+
+    /** An outgoing RAND amount: "−1.5 RAND". */
+    protected String randOut(String formatted) {
+        return getString(org.randprotocol.wallet.R.string.amount_out, rand(formatted));
+    }
+
+    /** An incoming RAND amount: "+1.5 RAND". */
+    protected String randIn(String formatted) {
+        return getString(org.randprotocol.wallet.R.string.amount_in, rand(formatted));
+    }
+
     protected void toast(String s) {
+
         Toast.makeText(this, s, Toast.LENGTH_LONG).show();
     }
 }

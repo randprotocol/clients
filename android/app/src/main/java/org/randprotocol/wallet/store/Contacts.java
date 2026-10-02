@@ -2,6 +2,8 @@ package org.randprotocol.wallet.store;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.randprotocol.wallet.R;
+import org.randprotocol.wallet.util.L10n;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -94,10 +96,10 @@ public final class Contacts {
 
     /** Null if {@code name} is a name the CLI would accept, else the CLI's sentence. */
     public static String checkName(String name) {
-        if (name == null) return NAME_RULE;
+        if (name == null) return L10n.t(R.string.contacts_name_rule, NAME_RULE);
         int chars = name.codePointCount(0, name.length());
         String lower = name.toLowerCase(Locale.ROOT);
-        if (chars == 0 || chars > 64 || lower.startsWith("rand1") || lower.startsWith("randpay:")) return NAME_RULE;
+        if (chars == 0 || chars > 64 || lower.startsWith("rand1") || lower.startsWith("randpay:")) return L10n.t(R.string.contacts_name_rule, NAME_RULE);
         return null;
     }
 
@@ -105,17 +107,17 @@ public final class Contacts {
         String bad = checkName(name);
         if (bad != null) throw new ContactException(bad);
         String addr = address == null ? "" : address.trim();
-        if (addr.isEmpty()) throw new ContactException("a contact needs an address");
-        if (entries.containsKey(name)) throw new ContactException("a contact named " + name + " exists");
+        if (addr.isEmpty()) throw new ContactException(L10n.t(R.string.contacts_needs_address, "a contact needs an address"));
+        if (entries.containsKey(name)) throw new ContactException(L10n.t(R.string.contacts_name_exists, "a contact named %1$s exists", name));
         String other = nameOf(addr);
-        if (other != null) throw new ContactException("this address is already saved as " + other);
+        if (other != null) throw new ContactException(L10n.t(R.string.contacts_address_saved_as, "this address is already saved as %1$s", other));
         Map<String, String> next = new HashMap<>(entries);
         next.put(name, addr);
         save(next);
     }
 
     public synchronized void remove(String name) {
-        if (!entries.containsKey(name)) throw new ContactException("no contact named " + name);
+        if (!entries.containsKey(name)) throw new ContactException(L10n.t(R.string.contacts_no_such, "no contact named %1$s", name));
         Map<String, String> next = new HashMap<>(entries);
         next.remove(name);
         save(next);
@@ -166,7 +168,7 @@ public final class Contacts {
             for (Map.Entry<String, String> kv : next.entrySet()) e.put(kv.getKey(), kv.getValue());
             backing.write(new JSONObject().put("entries", e).toString());
         } catch (JSONException x) {
-            throw new ContactException("could not save contacts: " + x.getMessage());
+            throw new ContactException(L10n.t(R.string.contacts_save_failed_detail, "could not save contacts: %1$s", x.getMessage()));
         }
         entries.clear();
         entries.putAll(next);

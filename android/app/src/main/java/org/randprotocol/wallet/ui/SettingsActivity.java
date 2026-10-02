@@ -12,6 +12,8 @@ import android.widget.ArrayAdapter;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.os.LocaleListCompat;
 import androidx.core.content.ContextCompat;
 
 import com.journeyapps.barcodescanner.ScanContract;
@@ -69,7 +71,7 @@ public class SettingsActivity extends BaseActivity {
                     JSONObject st = rpc.status();
                     result = getString(R.string.settings_test_ok, chain, st.optLong("height", 0), st.optLong("peer_count", 0));
                 } catch (Exception e) {
-                    result = e.getMessage();
+                    result = e.getLocalizedMessage();
                 }
                 String r = result;
                 runOnUiThread(() -> b.testResult.setText(r));
@@ -106,13 +108,14 @@ public class SettingsActivity extends BaseActivity {
         });
         // What a paired prover learns, in the core's own words (version.prover_history_warning),
         // shown before any pairing is saved — own or not; the resource is the fallback.
-        b.proverWarning.setText(ProverCore.NATIVE.historyWarning());
+        b.proverWarning.setText(CoreErrors.translate(ProverCore.NATIVE.historyWarning()));
         // The one-step pairing of the prover the build ships the address of: offered only once
         // the core names one, under the same warning (it is above, on screen before the button
         // is). Its URL and fingerprint are shown beside it; its link never reaches this screen.
         trusted = wallet().trustedProver();
         if (trusted != null) {
-            b.proverTrustedBody.setText(getString(R.string.settings_prover_trusted_body, trusted.members.size()) + "\n" + membersText(trusted));
+            int n = trusted.members.size();
+            b.proverTrustedBody.setText(getResources().getQuantityString(R.plurals.settings_prover_trusted_body, n, n) + "\n" + membersText(trusted));
             b.proverUseTrusted.setOnClickListener(v -> useTrustedProver());
         }
         paintProver();
@@ -120,9 +123,9 @@ public class SettingsActivity extends BaseActivity {
         // Keys
         String viewing = wallet().viewingKey();
         b.viewingKey.setText(viewing);
-        b.copyViewing.setOnClickListener(v -> copy("viewing key", viewing, getString(R.string.copied)));
+        b.copyViewing.setOnClickListener(v -> copy(getString(R.string.clip_viewing_key), viewing, getString(R.string.copied)));
         b.openHistory.setOnClickListener(v -> {
-            copy("viewing key", viewing, null);
+            copy(getString(R.string.clip_viewing_key), viewing, null);
             open(EXPLORER + "/viewing");
         });
         b.exportFile.setOnClickListener(v -> confirmSecret(() -> {
@@ -131,7 +134,7 @@ public class SettingsActivity extends BaseActivity {
                 Intent i = new Intent(Intent.ACTION_SEND).setType("application/json").putExtra(Intent.EXTRA_TEXT, file).putExtra(Intent.EXTRA_SUBJECT, "wallet.key.json");
                 startActivity(Intent.createChooser(i, getString(R.string.settings_export_file)));
             } catch (Exception e) {
-                toast(e.getMessage());
+                toast(e.getLocalizedMessage());
             }
         }));
         b.exportSpend.setOnClickListener(v -> confirmSecret(() -> {
@@ -140,11 +143,11 @@ public class SettingsActivity extends BaseActivity {
                 new AlertDialog.Builder(this)
                         .setTitle(R.string.settings_export_spend)
                         .setMessage(sk)
-                        .setPositiveButton(R.string.create_copy, (d, w) -> copy("spend key", sk, getString(R.string.copied)))
+                        .setPositiveButton(R.string.create_copy, (d, w) -> copy(getString(R.string.clip_spend_key), sk, getString(R.string.copied)))
                         .setNegativeButton(R.string.ok, null)
                         .show();
             } catch (Exception e) {
-                toast(e.getMessage());
+                toast(e.getLocalizedMessage());
             }
         }));
 
@@ -156,6 +159,7 @@ public class SettingsActivity extends BaseActivity {
             prefs.setTheme(themes[i]);
             App.applyTheme(themes[i]);
         });
+        language();
 
         // Wallet
         b.rescan.setOnClickListener(v -> {
@@ -208,7 +212,7 @@ public class SettingsActivity extends BaseActivity {
             b.proverBy.setText(getString(R.string.settings_prover_default, trusted.name));
             b.proverFingerprint.setText(membersText(trusted));
             b.proverFingerprint.setVisibility(View.VISIBLE);
-            b.proverNotOwn.setText(getString(R.string.settings_prover_default_note, trusted.members.size()));
+            b.proverNotOwn.setText(getResources().getQuantityString(R.plurals.settings_prover_default_note, trusted.members.size(), trusted.members.size()));
             b.proverNotOwn.setVisibility(View.VISIBLE);
             b.proverForget.setVisibility(View.GONE);
             b.proverUseNone.setVisibility(View.VISIBLE);
@@ -221,13 +225,13 @@ public class SettingsActivity extends BaseActivity {
                     for (ProverPairing.Paired m : ProverPairing.builtInPool(ProverCore.NATIVE)) {
                         ProverPairing.Probe answer = wallet().probeProver(m.pairing);
                         if (answer.ok()) {
-                            line = m.pairing.name + ": " + answer.line();
+                            line = getString(R.string.settings_prover_member_line, m.pairing.name, answer.line());
                             break;
                         }
                     }
                     if (line == null) line = getString(R.string.settings_prover_pool_none);
                 } catch (Exception e) {
-                    line = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                    line = CoreErrors.of(e);
                 }
                 String l = line;
                 runOnUiThread(() -> {
@@ -289,7 +293,7 @@ public class SettingsActivity extends BaseActivity {
                 status = getString(R.string.settings_prover_paired, done.pairing.name, done.pairing.fingerprint)
                         + (done.pairing.own ? "" : " " + getString(R.string.settings_prover_not_own_note));
             } catch (Exception e) {
-                status = getString(R.string.settings_prover_not_paired, e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                status = getString(R.string.settings_prover_not_paired, CoreErrors.of(e));
             }
             String s = status;
             boolean ok = paired;
@@ -316,7 +320,7 @@ public class SettingsActivity extends BaseActivity {
         if (pairing || trusted == null) return;
         wallet().useDefaultProver();
         paintProver();
-        b.proverStatus.setText(getString(R.string.settings_prover_using_default, trusted.name, ProverCore.NATIVE.historyWarning()));
+        b.proverStatus.setText(getString(R.string.settings_prover_using_default, trusted.name, CoreErrors.translate(ProverCore.NATIVE.historyWarning())));
     }
 
     /** Each member on its own line: its name and the fingerprint the build pins for its key. */
@@ -329,7 +333,57 @@ public class SettingsActivity extends BaseActivity {
         return sb.toString();
     }
 
+    /**
+     * The Language row: "System default" first, then each language by its own name, in the shared
+     * UI's order (ui/i18n.js LOCALES). AppCompat keeps the choice (autoStoreLocales below API 33,
+     * the platform's per-app language from API 33) and recreates the screens in it.
+     */
+    private void language() {
+        String[] tags = getResources().getStringArray(R.array.language_tags);
+        java.util.List<String> labels = new java.util.ArrayList<>();
+        labels.add(getString(R.string.settings_language_system));
+        labels.addAll(java.util.Arrays.asList(getResources().getStringArray(R.array.language_names)));
+        ArrayAdapter<String> a = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, labels);
+        a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        b.language.setAdapter(a);
+        final int current = languageIndex(tags, AppCompatDelegate.getApplicationLocales());
+        b.language.setSelection(current, false);
+        b.language.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (position == current) return; // the initial selection, or no change
+                AppCompatDelegate.setApplicationLocales(position == 0
+                        ? LocaleListCompat.getEmptyLocaleList()
+                        : LocaleListCompat.forLanguageTags(tags[position - 1]));
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+            }
+        });
+    }
+
+    /** The row for the app's language: 0 (System default) when none is set or it is not one of {@code tags}. */
+    static int languageIndex(String[] tags, LocaleListCompat locales) {
+        if (locales == null || locales.isEmpty() || locales.get(0) == null) return 0;
+        java.util.Locale l = locales.get(0);
+        int languageOnly = 0;
+        for (int i = 0; i < tags.length; i++) {
+            java.util.Locale o = java.util.Locale.forLanguageTag(tags[i]);
+            if (!legacyLanguage(o.getLanguage()).equals(legacyLanguage(l.getLanguage()))) continue;
+            if (o.getCountry().equals(l.getCountry())) return i + 1;
+            if (o.getCountry().isEmpty() && languageOnly == 0) languageOnly = i + 1;
+        }
+        return languageOnly;
+    }
+
+    /** Indonesian is "in" to Android's resources and "id" to BCP 47; either is the same language. */
+    private static String legacyLanguage(String language) {
+        return "id".equals(language) ? "in" : language;
+    }
+
     private interface Pick {
+
         void pick(int index);
     }
 

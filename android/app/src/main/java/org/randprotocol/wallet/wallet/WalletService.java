@@ -8,6 +8,7 @@ import androidx.lifecycle.MutableLiveData;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.randprotocol.wallet.R;
 import org.randprotocol.wallet.core.Core;
 import org.randprotocol.wallet.core.CoreException;
 import org.randprotocol.wallet.rpc.RpcClient;
@@ -19,7 +20,9 @@ import org.randprotocol.wallet.store.EncryptedBlob;
 import org.randprotocol.wallet.store.NoteStore;
 import org.randprotocol.wallet.store.OwnedNote;
 import org.randprotocol.wallet.store.Submission;
+import org.randprotocol.wallet.ui.CoreErrors;
 import org.randprotocol.wallet.ui.Memo;
+import org.randprotocol.wallet.util.L10n;
 
 import java.io.File;
 import java.io.IOException;
@@ -217,7 +220,7 @@ public final class WalletService {
 
     public JSONObject walletInfo() throws CoreException {
         String sk = vault.spendKey();
-        if (sk == null) throw new CoreException("no wallet");
+        if (sk == null) throw new CoreException(L10n.t(R.string.error_no_wallet, "no wallet"));
         return Core.walletInfo(sk);
     }
 
@@ -247,7 +250,7 @@ public final class WalletService {
             try {
                 scan();
             } catch (Exception e) {
-                err = e.getMessage();
+                err = e.getLocalizedMessage();
             }
             publish(false, err);
             if (onDone != null) onDone.run();
@@ -569,11 +572,11 @@ public final class WalletService {
      */
     public void send(String to, BigInteger amount, BigInteger fee, String memo) {
         if (memo == null) memo = "";
-        SendState st = new SendState(SendState.Phase.PREPARING, "Syncing notes", null, null, amount.toString(), to, System.currentTimeMillis());
+        SendState st = new SendState(SendState.Phase.PREPARING, L10n.t(R.string.phase_syncing_notes, "Syncing notes"), null, null, amount.toString(), to, System.currentTimeMillis());
         SendMonitor.post(st);
         String sk = vault.spendKey();
         if (sk == null) {
-            SendMonitor.post(st.with(SendState.Phase.FAILED, "no wallet"));
+            SendMonitor.post(st.with(SendState.Phase.FAILED, L10n.t(R.string.error_no_wallet, "no wallet")));
             return;
         }
         try {
@@ -584,8 +587,8 @@ public final class WalletService {
             // The RandProtocol prover only once this wallet has read what it sees (Send shows the
             // notice before it starts a send; this is the rule, not the screen).
             if (route != null && route.isDefault && !defaultNoticeRead()) {
-                throw new ProverClient.Refusal("Before the first send through the RandProtocol prover, read what it can see: it gets "
-                        + "this wallet's viewing key. Send again and read the notice, or pair your own prover in Settings.");
+                throw new ProverClient.Refusal(L10n.t(R.string.refusal_default_notice_send, "Before the first send through the RandProtocol prover, read what it can see: it gets "
+                        + "this wallet's viewing key. Send again and read the notice, or pair your own prover in Settings."));
             }
             RpcClient rpc = rpc();
             scan();
@@ -599,7 +602,7 @@ public final class WalletService {
             JSONObject anchor = null;
             JSONArray inputs = null;
             for (int attempt = 1; attempt <= 3 && inputs == null; attempt++) {
-                SendMonitor.post(st.with(SendState.Phase.PREPARING, "Fetching witnesses"));
+                SendMonitor.post(st.with(SendState.Phase.PREPARING, L10n.t(R.string.phase_fetching_witnesses, "Fetching witnesses")));
                 anchor = rpc.anchor();
                 String root = anchor.getString("root");
                 JSONArray candidate = new JSONArray();
@@ -663,11 +666,11 @@ public final class WalletService {
             if (route == null) {
                 // Locally: the bundle proof and, on a split-authorisation chain, the auth proof
                 // before it — one call; the reply's auth_proof_bytes says whether there was one.
-                SendMonitor.post(st.with(SendState.Phase.PROVING, "Proving your transfer"));
+                SendMonitor.post(st.with(SendState.Phase.PROVING, L10n.t(R.string.phase_proving_transfer, "Proving your transfer")));
                 proved = Core.proveTransfer(req);
             } else {
                 final SendState base = st;
-                final String name = route.isDefault && route.poolName != null ? route.poolName + " provers" : route.pairing.name;
+                final String name = route.isDefault && route.poolName != null ? L10n.t(R.string.prover_pool_name, "%1$s provers", route.poolName) : route.pairing.name;
                 SendMonitor.post(base.remote(name, null));
                 Integer maxProofBytes = limits.maxProofBytes;
                 RemoteProver.PhaseListener listener = new RemoteProver.PhaseListener() {
@@ -705,7 +708,7 @@ public final class WalletService {
             }
             String txKey = proved.getString("payment_tx_key");
 
-            SendMonitor.post(st.with(SendState.Phase.SUBMITTING, "Submitting"));
+            SendMonitor.post(st.with(SendState.Phase.SUBMITTING, L10n.t(R.string.phase_submitting, "Submitting")));
             String hash = rpc.sendTransaction(proved.getString("tx_hex"));
             long time = proved.getLong("time");
 
@@ -745,9 +748,9 @@ public final class WalletService {
                 Thread.sleep(POLL_MS);
             }
             scan();
-            SendMonitor.post(st.with(SendState.Phase.DONE, committed ? "Committed" : "Submitted; not yet committed"));
+            SendMonitor.post(st.with(SendState.Phase.DONE, committed ? L10n.t(R.string.phase_committed, "Committed") : L10n.t(R.string.phase_not_yet_committed, "Submitted; not yet committed")));
         } catch (Exception e) {
-            String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            String msg = CoreErrors.of(e);
             SendMonitor.post(st.with(SendState.Phase.FAILED, msg));
             publish(false, null);
         }
@@ -770,7 +773,7 @@ public final class WalletService {
         // Said before anything is quoted: otherwise Android stops the app half-way through the
         // proofs and the screen simply disappears (nothing is sent either way).
         if (!deviceCanMakeCallProof(app)) {
-            throw new Invoke.Refusal(Invoke.PROVER_UNAVAILABLE, "This phone does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead.");
+            throw new Invoke.Refusal(Invoke.PROVER_UNAVAILABLE, L10n.t(R.string.refusal_swap_memory, "This phone does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead."));
         }
         RemoteSend.Route route;
         try {
@@ -778,7 +781,7 @@ public final class WalletService {
         } catch (ProverClient.Refusal e) {
             throw new Invoke.Refusal(Invoke.PROVER_UNAVAILABLE, e.getMessage());
         }
-        if (rpc().limits().programState == null) throw new Invoke.Refusal(Invoke.PROGRAMS_UNSUPPORTED, "This chain does not run programs yet.");
+        if (rpc().limits().programState == null) throw new Invoke.Refusal(Invoke.PROGRAMS_UNSUPPORTED, L10n.t(R.string.refusal_no_programs_yet, "This chain does not run programs yet."));
         return route;
     }
 
@@ -812,11 +815,11 @@ public final class WalletService {
      * the engine's code ({@link SendState#code}). Blocking and slow; {@link ProvingService} runs it.
      */
     public void invoke(JSONObject request, String amountIn) {
-        SendState st = new SendState(SendState.Phase.PREPARING, SELECTING, null, null, amountIn, null, System.currentTimeMillis());
+        SendState st = new SendState(SendState.Phase.PREPARING, L10n.t(R.string.phase_selecting_notes, SELECTING), null, null, amountIn, null, System.currentTimeMillis());
         SwapMonitor.post(st);
         String sk = vault.spendKey();
         if (sk == null) {
-            SwapMonitor.post(st.failed(null, "no wallet"));
+            SwapMonitor.post(st.failed(null, L10n.t(R.string.error_no_wallet, "no wallet")));
             return;
         }
         try {
@@ -827,22 +830,22 @@ public final class WalletService {
                 throw new Invoke.Refusal(Invoke.PROVER_UNAVAILABLE, e.getMessage());
             }
             if (route != null && route.isDefault && !defaultNoticeRead()) {
-                throw new Invoke.Refusal(Invoke.PROVER_NOTICE, "Before the first swap through the RandProtocol provers, read what they can see: "
-                        + "they get this wallet's viewing key. Review the swap again and read the notice, or pair your own prover in Settings.");
+                throw new Invoke.Refusal(Invoke.PROVER_NOTICE, L10n.t(R.string.refusal_default_notice_swap, "Before the first swap through the RandProtocol provers, read what they can see: "
+                        + "they get this wallet's viewing key. Review the swap again and read the notice, or pair your own prover in Settings."));
             }
             RpcClient rpc = rpc();
             Invoke.Quote q = Invoke.quote(rpc, Invoke.InvokeCore.NATIVE, request, this::scannedNotes);
 
             final SendState base = st;
             Invoke.Phases phases = step -> {
-                if ("witness".equals(step)) SwapMonitor.post(base.with(SendState.Phase.PREPARING, WITNESS));
-                else if ("prove".equals(step)) SwapMonitor.post(base.with(SendState.Phase.PROVING, DEVICE_PROVING));
-                else if ("submit".equals(step)) SwapMonitor.post(base.with(SendState.Phase.SUBMITTING, SUBMITTING));
+                if ("witness".equals(step)) SwapMonitor.post(base.with(SendState.Phase.PREPARING, L10n.t(R.string.phase_building_witness, WITNESS)));
+                else if ("prove".equals(step)) SwapMonitor.post(base.with(SendState.Phase.PROVING, L10n.t(R.string.phase_proving_bundle, DEVICE_PROVING)));
+                else if ("submit".equals(step)) SwapMonitor.post(base.with(SendState.Phase.SUBMITTING, L10n.t(R.string.phase_submitting_node, SUBMITTING)));
             };
             Invoke.Prover remote = null;
             if (route != null) {
                 final RemoteSend.Route r = route;
-                final String name = r.isDefault && r.poolName != null ? r.poolName + " provers" : r.pairing.name;
+                final String name = r.isDefault && r.poolName != null ? L10n.t(R.string.prover_pool_name, "%1$s provers", r.poolName) : r.pairing.name;
                 RemoteProver.PhaseListener listener = new RemoteProver.PhaseListener() {
                     @Override
                     public void phase(Integer pos) {
@@ -921,12 +924,12 @@ public final class WalletService {
             }
             // A swap pays into the wallet: this scan finds the note.
             scan();
-            SwapMonitor.post(st.with(SendState.Phase.DONE, committed ? "Committed" : "Submitted; not yet committed"));
+            SwapMonitor.post(st.with(SendState.Phase.DONE, committed ? L10n.t(R.string.phase_committed, "Committed") : L10n.t(R.string.phase_not_yet_committed, "Submitted; not yet committed")));
         } catch (Invoke.Refusal e) {
-            SwapMonitor.post(st.failed(e.code, e.getMessage()));
+            SwapMonitor.post(st.failed(e.code, e.getLocalizedMessage()));
             publish(false, null);
         } catch (Exception e) {
-            String msg = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+            String msg = CoreErrors.of(e);
             SwapMonitor.post(st.failed(null, msg));
             publish(false, null);
         }
@@ -953,7 +956,7 @@ public final class WalletService {
                 String hash = faucet();
                 onDone.accept(hash);
             } catch (Exception e) {
-                onError.accept(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                onError.accept(CoreErrors.of(e));
             }
         });
     }

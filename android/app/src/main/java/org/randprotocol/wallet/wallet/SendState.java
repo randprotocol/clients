@@ -1,5 +1,8 @@
 package org.randprotocol.wallet.wallet;
 
+import org.randprotocol.wallet.R;
+import org.randprotocol.wallet.util.L10n;
+
 /** Where a send is, for the Proving and Sent screens. Immutable; posted through {@link SendMonitor}. */
 public final class SendState {
     public enum Phase { IDLE, PREPARING, PROVING, SUBMITTING, WAITING_COMMIT, DONE, FAILED }
@@ -53,13 +56,15 @@ public final class SendState {
      * queue, "Proving on NAME…" while it is handed over or proved — the shared UI's words.
      */
     public SendState remote(String name, Integer position) {
-        String msg = position != null ? "Waiting at position " + position + " on " + name : "Proving on " + name + "…";
+        String msg = position != null
+                ? L10n.t(R.string.phase_waiting_position, "Waiting at position %1$d on %2$s", position, name)
+                : L10n.t(R.string.phase_proving_on, "Proving on %1$s…", name);
         return new SendState(Phase.PROVING, msg, hash, txKey, amount, to, startedAtMs, name, position);
     }
 
     /** The step before {@link #remote}: the spend authorised here, the bundle proof still to come from NAME. */
     public SendState authorising(String name) {
-        return new SendState(Phase.PROVING, AUTHORISING_LABEL, hash, txKey, amount, to, startedAtMs, name, null);
+        return new SendState(Phase.PROVING, L10n.t(R.string.phase_authorising, AUTHORISING_LABEL), hash, txKey, amount, to, startedAtMs, name, null);
     }
 
     public static SendState idle() {
@@ -76,7 +81,8 @@ public final class SendState {
     }
 
     public SendState submitted(String h, String key) {
-        return new SendState(Phase.WAITING_COMMIT, "Submitted; waiting for the commit", h, key, amount, to, startedAtMs);
+        return new SendState(Phase.WAITING_COMMIT, L10n.t(R.string.phase_waiting_commit, "Submitted; waiting for the commit"), h, key, amount, to, startedAtMs);
+
     }
 
     public boolean busy() {

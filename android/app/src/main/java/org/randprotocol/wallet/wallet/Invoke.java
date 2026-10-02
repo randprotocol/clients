@@ -3,10 +3,12 @@ package org.randprotocol.wallet.wallet;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.randprotocol.wallet.R;
 import org.randprotocol.wallet.core.Core;
 import org.randprotocol.wallet.core.CoreException;
 import org.randprotocol.wallet.rpc.RpcClient;
 import org.randprotocol.wallet.rpc.RpcException;
+import org.randprotocol.wallet.util.L10n;
 
 import java.math.BigInteger;
 import java.util.HashMap;
@@ -145,11 +147,11 @@ public final class Invoke {
      */
     public static Quote quote(RpcClient rpc, InvokeCore core, JSONObject request, Notes notes) throws Exception {
         RpcClient.ChainLimits limits = rpc.limits();
-        if (limits.programState == null) throw new Refusal(PROGRAMS_UNSUPPORTED, NO_PROGRAMS);
+        if (limits.programState == null) throw new Refusal(PROGRAMS_UNSUPPORTED, L10n.t(R.string.invoke_no_programs, NO_PROGRAMS));
         String program = word8(request.opt("program"), "program");
         JSONObject code = rpc.programCode(program);
         if (code == null) {
-            throw new Refusal(NO_PROGRAM, "There is no program " + program.substring(0, 12) + "… on this chain. Nothing was sent.");
+            throw new Refusal(NO_PROGRAM, L10n.t(R.string.invoke_no_program, "There is no program %1$s… on this chain. Nothing was sent.", program.substring(0, 12)));
         }
         String publicHex = rpc.programPublic(program);
         if (publicHex == null) publicHex = "";
@@ -160,7 +162,7 @@ public final class Invoke {
             JSONObject r = reads.getJSONObject(i);
             String now = live(rpc, program, r.getString("key"));
             if (!now.equals(r.getString("value"))) {
-                throw new Refusal(STALE_READ, "The pool changed since it was read. Nothing was sent.");
+                throw new Refusal(STALE_READ, L10n.t(R.string.invoke_stale_read, "The pool changed since it was read. Nothing was sent."));
             }
             seen.put(r.getString("key"), r.getString("value"));
         }
@@ -173,7 +175,7 @@ public final class Invoke {
             if (ZERO_WORD8.equals(now)) cells++;
         }
         JSONObject inflow = request.optJSONObject("inflow");
-        if (inflow == null) throw new Refusal(BAD_REQUEST, "The swap has no inflow. Nothing was sent.");
+        if (inflow == null) throw new Refusal(BAD_REQUEST, L10n.t(R.string.invoke_no_inflow, "The swap has no inflow. Nothing was sent."));
         JSONArray pays = request.optJSONArray("pays") == null ? new JSONArray() : request.getJSONArray("pays");
         JSONObject transition = new JSONObject()
                 .put("program", program)
@@ -189,7 +191,7 @@ public final class Invoke {
         try {
             dry = core.dryRunInvoke(transition);
         } catch (Exception e) {
-            throw new Refusal(PROGRAM_REFUSED, "The program would not accept this swap, so nothing was sent: " + e.getMessage());
+            throw new Refusal(PROGRAM_REFUSED, L10n.t(R.string.invoke_program_refused, "The program would not accept this swap, so nothing was sent: %1$s", e.getLocalizedMessage()));
         }
         // Under a gas section (bundle_gas_limit set: chain 18 and later) the call is priced by the
         // gas it declares and every byte of its proof; without one, by tier alone.
@@ -207,7 +209,7 @@ public final class Invoke {
         if (pays.length() > 0) {
             JSONArray vault = rpc.programVault(program);
             if (vaultShortfall(inflow, pays, vault == null ? new JSONArray() : vault) != null) {
-                throw new Refusal(VAULT_SHORT, "The pool does not hold enough to pay this out. Nothing was sent.");
+                throw new Refusal(VAULT_SHORT, L10n.t(R.string.invoke_vault_short, "The pool does not hold enough to pay this out. Nothing was sent."));
             }
         }
         JSONArray owned = notes.scanned();
@@ -221,7 +223,7 @@ public final class Invoke {
                     .put("burn_a", burnsToken ? inflow.optString("amount", "0") : "0")
                     .put("fee", fee));
         } catch (Exception e) {
-            throw new Refusal(INSUFFICIENT_FUNDS, "Rand Wallet does not hold enough to cover this and its network fee: " + e.getMessage());
+            throw new Refusal(INSUFFICIENT_FUNDS, L10n.t(R.string.invoke_insufficient, "Rand Wallet does not hold enough to cover this and its network fee: %1$s", e.getLocalizedMessage()));
         }
         return new Quote(transition, dry, plan.optString("fee", fee), cells, limits, plan);
     }
@@ -301,7 +303,7 @@ public final class Invoke {
             hash = rpc.sendTransaction(proved.getString("tx_hex"));
         } catch (RpcException e) {
             if (isStaleRead(e.getMessage())) {
-                throw new Refusal(STALE_READ, "The pool changed while this was being proved. Nothing was sent.");
+                throw new Refusal(STALE_READ, L10n.t(R.string.invoke_stale_proving, "The pool changed while this was being proved. Nothing was sent."));
             }
             throw e;
         }
@@ -346,7 +348,7 @@ public final class Invoke {
 
     private static String live(RpcClient rpc, String program, String key) throws Exception {
         String v = rpc.programCell(program, key);
-        if (v == null) throw new Refusal(PROGRAMS_UNSUPPORTED, NO_PROGRAMS);
+        if (v == null) throw new Refusal(PROGRAMS_UNSUPPORTED, L10n.t(R.string.invoke_no_programs, NO_PROGRAMS));
         return v;
     }
 
@@ -360,7 +362,7 @@ public final class Invoke {
 
     private static String word8(Object v, String what) throws Refusal {
         if (!(v instanceof String) || !((String) v).matches("(0x)?[0-9a-fA-F]{64}")) {
-            throw new Refusal(BAD_REQUEST, "This swap cannot be read: " + what + " is not 64 hex characters. Nothing was sent.");
+            throw new Refusal(BAD_REQUEST, L10n.t(R.string.invoke_bad_word, "This swap cannot be read: %1$s is not 64 hex characters. Nothing was sent.", what));
         }
         return ((String) v).replaceFirst("^0x", "").toLowerCase(Locale.ROOT);
     }
@@ -372,7 +374,7 @@ public final class Invoke {
         if (in == null) return out;
         for (int i = 0; i < in.length(); i++) {
             JSONObject c = in.optJSONObject(i);
-            if (c == null) throw new Refusal(BAD_REQUEST, "This swap cannot be read: " + field + " is not a list of cells. Nothing was sent.");
+            if (c == null) throw new Refusal(BAD_REQUEST, L10n.t(R.string.invoke_bad_cells, "This swap cannot be read: %1$s is not a list of cells. Nothing was sent.", field));
             out.put(new JSONObject().put("key", word8(c.opt("key"), field + " key")).put("value", word8(c.opt("value"), field + " value")));
         }
         return out;

@@ -39,11 +39,11 @@ public class ActivityAdapter extends RecyclerView.Adapter<ActivityAdapter.Holder
     }
 
     /** A RAND amount as it always was ("1.5"); any other asset with its own decimals and symbol. */
-    private String amountText(ActivityItem it) {
+    private String amountText(Context c, ActivityItem it) {
         if (it.asset == 0) return Amounts.format(it.amount);
         SwapForm.Asset a = SwapForm.infoOf(assets, it.asset);
         try {
-            return SwapForm.formatUnits(new BigInteger(it.amount), a.decimals, a.decimals) + " " + a.symbol;
+            return c.getString(R.string.amount_with_symbol, SwapForm.formatUnits(new BigInteger(it.amount), a.decimals, a.decimals), a.symbol);
         } catch (NumberFormatException e) {
             return it.amount;
         }
@@ -71,10 +71,11 @@ public class ActivityAdapter extends RecyclerView.Adapter<ActivityAdapter.Holder
         if (it.swap) title = c.getString(R.string.swap_title);
         if (it.pending) title = c.getString(R.string.detail_pending);
         h.b.title.setText(title);
-        String sub = it.height > 0 ? c.getString(R.string.detail_height) + " " + it.height : c.getString(R.string.status_pending);
-        if (in && it.spent) sub += " · " + c.getString(R.string.detail_spent);
+        String sub = it.height > 0 ? c.getString(R.string.activity_block, String.valueOf(it.height)) : c.getString(R.string.status_pending);
+        if (in && it.spent) sub = c.getString(R.string.activity_subtitle_spent, sub, c.getString(R.string.detail_spent));
         h.b.subtitle.setText(sub);
-        h.b.amount.setText((in ? "+" : "−") + amountText(it));
+        h.b.amount.setText(c.getString(in ? R.string.amount_in : R.string.amount_out, amountText(c, it)));
+
         h.b.amount.setTextColor(ContextCompat.getColor(c, in ? R.color.positive : R.color.text));
         h.b.getRoot().setOnClickListener(v -> onClick.onClick(it));
     }

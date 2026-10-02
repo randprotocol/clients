@@ -18,6 +18,10 @@ android {
         targetSdk 36
         versionCode 7
         versionName '0.7.1'
+        // The app's languages (res/xml/locales_config.xml, LOCALIZATION.md): library resources in
+        // any other language are left out of the APK.
+        resourceConfigurations += ['en', 'ru', 'zh-rCN', 'zh-rHK', 'ko', 'in', 'ms', 'ja', 'ar', 'fa',
+                                   'es', 'pt-rBR', 'de', 'fr', 'it', 'pl']
         ndk {
             abiFilters 'arm64-v8a', 'x86_64'
         }

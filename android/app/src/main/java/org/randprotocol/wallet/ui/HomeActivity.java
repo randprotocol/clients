@@ -38,7 +38,8 @@ public class HomeActivity extends BaseActivity {
         action(b.actionContacts, R.drawable.ic_person, R.string.home_contacts, v -> startActivity(new Intent(this, ContactsActivity.class)));
         b.qr.setOnClickListener(v -> startActivity(new Intent(this, ReceiveActivity.class)));
         b.settings.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
-        b.addressChip.setOnClickListener(v -> copy("address", wallet().address(), getString(R.string.home_copied)));
+        b.addressChip.setOnClickListener(v -> copy(getString(R.string.clip_address), wallet().address(), getString(R.string.home_copied)));
+
         b.refresh.setOnRefreshListener(() -> wallet().scanAsync(null));
 
         wallet().snapshot().observe(this, s -> {

@@ -123,7 +123,8 @@ public class ContactsActivity extends BaseActivity {
     private void options(Contacts.Contact c) {
         String[] items = {getString(R.string.contacts_copy_address), getString(R.string.contacts_remove)};
         new AlertDialog.Builder(this).setTitle(Memo.display(c.name)).setItems(items, (d, which) -> {
-            if (which == 0) copy("address", c.address, getString(R.string.home_copied));
+            if (which == 0) copy(getString(R.string.clip_address), c.address, getString(R.string.home_copied));
+
             else confirmRemove(c);
         }).show();
     }

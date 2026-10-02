@@ -2,6 +2,8 @@ package org.randprotocol.wallet.ui;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.randprotocol.wallet.R;
+import org.randprotocol.wallet.util.L10n;
 import org.randprotocol.wallet.wallet.Amm;
 import org.randprotocol.wallet.wallet.Invoke;
 
@@ -27,6 +29,16 @@ public final class SwapForm {
 
     public static final String STALE = "The pool moved before your swap reached the chain, so nothing was sent. Here is a new quote.";
     public static final String BAD_AMOUNT = "Enter an amount like 1.5.";
+
+    /** {@link #STALE} in the language in force. */
+    public static String stale() {
+        return L10n.t(R.string.swap_stale, STALE);
+    }
+
+    /** A token the registry does not name: "asset N". */
+    static String unnamed(int index) {
+        return L10n.t(R.string.swap_asset_unnamed, "asset %1$d", index);
+    }
 
     /** One asset as the screen names it: its symbol, its decimals and this wallet's balance of it. */
     public static final class Asset {
@@ -58,7 +70,7 @@ public final class SwapForm {
                 int index = t.optInt("index", -1);
                 if (index <= 0) continue;
                 String sym = clean.apply(t.optString("symbol", "")).trim();
-                out.put(index, new Asset(index, sym.isEmpty() ? "asset " + index : sym, t.optInt("decimals", 9), balances.getOrDefault(index, BigInteger.ZERO)));
+                out.put(index, new Asset(index, sym.isEmpty() ? unnamed(index) : sym, t.optInt("decimals", 9), balances.getOrDefault(index, BigInteger.ZERO)));
             }
         }
         return out;
@@ -67,7 +79,7 @@ public final class SwapForm {
     public static Asset infoOf(Map<Integer, Asset> assets, int index) {
         Asset a = assets.get(index);
         if (a != null) return a;
-        return index == Amm.RAND_ASSET ? new Asset(0, "RAND", 9, BigInteger.ZERO) : new Asset(index, "asset " + index, 9, BigInteger.ZERO);
+        return index == Amm.RAND_ASSET ? new Asset(0, "RAND", 9, BigInteger.ZERO) : new Asset(index, unnamed(index), 9, BigInteger.ZERO);
     }
 
     /** {@code units} at {@code decimals}, at most {@code frac} fraction digits (rounded down), trailing zeros trimmed, thousands grouped. */
@@ -149,8 +161,8 @@ public final class SwapForm {
         String typed = amount == null ? "" : amount.trim();
         BigInteger units = typed.isEmpty() ? null : parseUnits(typed, s.decimals);
         String err = null;
-        if (!typed.isEmpty() && (units == null || units.signum() <= 0)) err = BAD_AMOUNT;
-        else if (units != null && units.compareTo(s.balance) > 0) err = "You have " + formatUnits(s.balance, 6, s.decimals) + " " + s.symbol + ".";
+        if (!typed.isEmpty() && (units == null || units.signum() <= 0)) err = L10n.t(R.string.swap_bad_amount, BAD_AMOUNT);
+        else if (units != null && units.compareTo(s.balance) > 0) err = L10n.t(R.string.swap_over_balance, "You have %1$s %2$s.", formatUnits(s.balance, 6, s.decimals), s.symbol);
         Amm.Swap quote = null;
         if (units != null && units.signum() > 0) {
             quote = Amm.buildSwap(route, units);
@@ -166,7 +178,7 @@ public final class SwapForm {
         Asset s = infoOf(assets, q.sell);
         Asset b = infoOf(assets, q.buy);
         BigInteger rate = Amm.spotRate(route, s.decimals);
-        return "1 " + s.symbol + " ≈ " + formatUnits(rate == null ? BigInteger.ZERO : rate, 6, b.decimals) + " " + b.symbol;
+        return L10n.t(R.string.swap_rate_line, "1 %1$s ≈ %2$s %3$s", s.symbol, formatUnits(rate == null ? BigInteger.ZERO : rate, 6, b.decimals), b.symbol);
     }
 
     /** {@code amount} of {@code index}, with its symbol. */
@@ -177,7 +189,8 @@ public final class SwapForm {
 
     /** The route through RAND, or null for a direct swap. */
     public static String via(Map<Integer, Asset> assets, Amm.Swap q) {
-        return q.hops.size() == 2 ? infoOf(assets, q.sell).symbol + " → RAND → " + infoOf(assets, q.buy).symbol : null;
+        return q.hops.size() == 2 ? L10n.t(R.string.swap_via, "%1$s → RAND → %2$s", infoOf(assets, q.sell).symbol, infoOf(assets, q.buy).symbol) : null;
+
     }
 
     /** What the failed step says, and whether it is a moved pool (re-read and quote again). */

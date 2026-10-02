@@ -56,7 +56,7 @@ public class DetailActivity extends BaseActivity {
             return;
         }
         b.kind.setText(R.string.detail_received);
-        b.amount.setText("+" + Amounts.format(n.amount) + " RAND");
+        b.amount.setText(randIn(Amounts.format(n.amount)));
         row(R.string.detail_from, n.from);
         row(R.string.detail_leaf, String.valueOf(n.index));
         row(R.string.detail_height, String.valueOf(n.height));
@@ -74,7 +74,7 @@ public class DetailActivity extends BaseActivity {
             return;
         }
         b.kind.setText(R.string.detail_sent);
-        b.amount.setText("−" + Amounts.format(found.amount) + " RAND");
+        b.amount.setText(randOut(Amounts.format(found.amount)));
         row(R.string.detail_to, found.toPk);
         row(R.string.detail_leaf, String.valueOf(found.index));
         row(R.string.detail_height, String.valueOf(found.height));
@@ -86,10 +86,10 @@ public class DetailActivity extends BaseActivity {
             return;
         }
         b.kind.setText(Submission.PENDING.equals(s.status) ? R.string.detail_pending : R.string.detail_sent);
-        b.amount.setText("−" + Amounts.format(s.amount) + " RAND");
+        b.amount.setText(randOut(Amounts.format(s.amount)));
         row(R.string.detail_to, s.to);
         row(R.string.sent_hash, s.hash);
-        row(R.string.review_fee, Amounts.format(s.fee) + " RAND");
+        row(R.string.review_fee, rand(Amounts.format(s.fee)));
         String status;
         if (Submission.COMMITTED.equals(s.status)) status = getString(R.string.status_committed, s.height);
         else if (Submission.EXPIRED.equals(s.status)) status = getString(R.string.status_expired);
@@ -101,7 +101,8 @@ public class DetailActivity extends BaseActivity {
             b.discloseNote.setVisibility(View.VISIBLE);
             b.disclose.setVisibility(View.VISIBLE);
             b.disclose.setOnClickListener(v -> {
-                copy("transaction key", s.txKey, getString(R.string.tx_key_copied));
+                copy(getString(R.string.clip_tx_key), s.txKey, getString(R.string.tx_key_copied));
+
                 open(EXPLORER + "/transactions/" + s.hash);
             });
         }

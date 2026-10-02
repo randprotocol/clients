@@ -1,5 +1,8 @@
 package org.randprotocol.wallet.ui;
 
+import org.randprotocol.wallet.R;
+import org.randprotocol.wallet.util.L10n;
+
 import java.nio.charset.StandardCharsets;
 
 /** The memo: at most 510 bytes of UTF-8 — bytes, not characters (spec 2026-09-26 §2.3). */
@@ -15,7 +18,13 @@ public final class Memo {
 
     /** "N/510 bytes". */
     public static String counter(String text) {
-        return byteCount(text) + "/" + MAX_BYTES + " bytes";
+        int n = byteCount(text);
+        return L10n.plural(R.plurals.memo_counter, n, "%1$d/%2$d bytes", "%1$d/%2$d bytes", n, MAX_BYTES);
+    }
+
+    /** {@link #NO_MEMO_NOTICE} in the language in force. */
+    public static String noMemoNotice() {
+        return L10n.t(R.string.send_no_memo_notice, NO_MEMO_NOTICE);
     }
 
     /** The one envelope size that carries a memo: fullnode's {@code EnvelopeFormat::for_chain}
@@ -95,6 +104,8 @@ public final class Memo {
     /** The refusal for a memo over the limit, or null. */
     public static String tooLong(String text) {
         int n = byteCount(text);
-        return n > MAX_BYTES ? "The memo is " + n + " bytes; the limit is " + MAX_BYTES + "." : null;
+        return n > MAX_BYTES ? L10n.plural(R.plurals.memo_too_long, n, "The memo is %1$d byte; the limit is %2$d.",
+                "The memo is %1$d bytes; the limit is %2$d.", n, MAX_BYTES) : null;
+
     }
 }

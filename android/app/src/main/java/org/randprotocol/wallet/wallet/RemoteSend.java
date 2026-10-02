@@ -2,7 +2,9 @@ package org.randprotocol.wallet.wallet;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.randprotocol.wallet.R;
 import org.randprotocol.wallet.rpc.RpcException;
+import org.randprotocol.wallet.util.L10n;
 
 import java.util.List;
 import java.util.Locale;
@@ -74,16 +76,21 @@ public final class RemoteSend {
     static String notReady(ProverCore core, ProverPairing m, ProverPairing.Probe answer) {
         String who = memberOf(m);
         if (!answer.ok()) {
-            return answer.reason.contains("different key") ? who + " answered with another key than the one this wallet pins" : who + " did not answer";
+            return answer.keyChanged
+                    ? L10n.t(R.string.pool_member_other_key, "%1$s answered with another key than the one this wallet pins", who)
+                    : L10n.t(R.string.pool_member_no_answer, "%1$s did not answer", who);
         }
         String fee = ProverClient.feeRefusal(answer.info.fee, core);
-        if (fee != null) return who + ": " + fee;
-        if (!answer.info.witnessKinds.contains("viewing_key")) return who + " does not take this wallet's jobs";
-        if (answer.info.max > 0 && answer.info.depth >= answer.info.max) return BUSY_MARK + who + " is busy";
+        if (fee != null) return L10n.t(R.string.pool_member_reason, "%1$s: %2$s", who, fee);
+        if (!answer.info.witnessKinds.contains("viewing_key")) return L10n.t(R.string.pool_member_no_jobs, "%1$s does not take this wallet's jobs", who);
+        if (answer.info.max > 0 && answer.info.depth >= answer.info.max) return BUSY_MARK + L10n.t(R.string.pool_member_busy, "%1$s is busy", who);
         return null;
     }
 
     private static final String BUSY_MARK = "\u0000busy:";
+
+    static final String SPEND_KEY_OWN_ONLY = "On this chain a proof needs the spend key, which goes only to a prover paired as your own. "
+            + "Pair your own prover in Settings, or send from the rand command-line wallet.";
 
     /** Every member busy, or none reachable: plainly, with the way out. */
     static ProverClient.Refusal poolUnavailable(String lead, String pool, List<String> whys) {
@@ -91,14 +98,15 @@ public final class RemoteSend {
         StringBuilder reasons = new StringBuilder();
         for (String w : whys) {
             if (!w.startsWith(BUSY_MARK)) allBusy = false;
-            if (reasons.length() > 0) reasons.append("; ");
+            if (reasons.length() > 0) reasons.append(L10n.t(R.string.list_separator, "; "));
             reasons.append(w.startsWith(BUSY_MARK) ? w.substring(BUSY_MARK.length()) : w);
         }
         if (allBusy) {
-            return new ProverClient.Refusal(lead + "The " + pool + " provers are all busy right now; try again in a minute, or pair your own prover in Settings.", true);
+            return new ProverClient.Refusal(lead + L10n.t(R.string.pool_all_busy,
+                    "The %1$s provers are all busy right now; try again in a minute, or pair your own prover in Settings.", pool), true);
         }
-        return new ProverClient.Refusal(lead + "The " + pool + " provers cannot be reached right now (" + reasons
-                + "). Try again later, or pair your own prover in Settings.");
+        return new ProverClient.Refusal(lead + L10n.t(R.string.pool_unreachable,
+                "The %1$s provers cannot be reached right now (%2$s). Try again later, or pair your own prover in Settings.", pool, reasons));
     }
 
     /**
@@ -132,19 +140,24 @@ public final class RemoteSend {
         if (display == null) return null;
         ProverSecret s = secret.get();
         if (s == null || s.token == null || s.token.isEmpty()) {
-            throw new ProverClient.Refusal("Your prover's pairing could not be opened. Pair the prover again in Settings.");
+            throw new ProverClient.Refusal(L10n.t(R.string.prover_pairing_unreadable, "Your prover's pairing could not be opened. Pair the prover again in Settings."));
         }
         ProverPairing p = new ProverPairing(display.name, s.url, s.kemEk, s.fingerprint, s.own);
-        String reason = "This device does not have the memory for this proof.";
         ProverPairing.Probe answer = probe.apply(p);
-        if (!answer.ok()) throw new ProverClient.Refusal(reason + " Your paired prover is not available: " + answer.reason + ".");
+        if (!answer.ok()) throw new ProverClient.Refusal(pairedUnavailable(answer.reason));
         String fee = ProverClient.feeRefusal(answer.info.fee, core);
-        if (fee != null) throw new ProverClient.Refusal(reason + " Your paired prover is not available: " + fee + ".");
+        if (fee != null) throw new ProverClient.Refusal(pairedUnavailable(fee));
         List<String> kinds = answer.info.witnessKinds;
         if (!(kinds.contains("viewing_key") || (s.own && kinds.contains("spend_key")))) {
-            throw new ProverClient.Refusal(reason + " Your paired prover is not available: it does not take this wallet's jobs.");
+            throw new ProverClient.Refusal(pairedUnavailable(L10n.t(R.string.prover_takes_no_jobs, "it does not take this wallet's jobs")));
         }
         return new Route(p, s.token);
+    }
+
+    /** "This device does not have the memory for this proof. Your paired prover is not available: WHY." */
+    private static String pairedUnavailable(String why) {
+        return L10n.t(R.string.prover_paired_unavailable,
+                "This device does not have the memory for this proof. Your paired prover is not available: %1$s.", why);
     }
 
     /**
@@ -155,12 +168,12 @@ public final class RemoteSend {
      */
     private static Route defaultRoute(ProverCore core, java.util.function.Function<ProverPairing, ProverPairing.Probe> probe,
                                       DefaultProver defaultProver) throws ProverClient.Refusal {
-        String lead = "This device does not have the memory for this proof. ";
+        String lead = L10n.t(R.string.prover_no_memory_lead, "This device does not have the memory for this proof. ");
         List<ProverPairing.Paired> members;
         try {
             members = defaultProver.get();
         } catch (Exception e) {
-            throw new ProverClient.Refusal(lead + (e.getMessage() == null ? "The built-in provers cannot be used." : e.getMessage()));
+            throw new ProverClient.Refusal(lead + (e.getMessage() == null ? L10n.t(R.string.prover_builtin_unusable, "The built-in provers cannot be used.") : e.getLocalizedMessage()));
         }
         String pool = poolNameOf(members);
         List<String> whys = new java.util.ArrayList<>();
@@ -211,8 +224,7 @@ public final class RemoteSend {
                                        JSONObject request, Route route, Integer maxProofBytes, RemoteProver.PhaseListener onPhase) throws Exception {
         JSONObject guests = guestsOf(core, request);
         if (!"viewing_key".equals(guests.optString("witness_kind", ""))) {
-            throw new ProverClient.Refusal("On this chain a proof needs the spend key, which goes only to a prover paired as your own. "
-                    + "Pair your own prover in Settings, or send from the rand command-line wallet.");
+            throw new ProverClient.Refusal(L10n.t(R.string.prover_spend_key_own_only, SPEND_KEY_OWN_ONLY));
         }
         List<String> whys = new java.util.ArrayList<>();
         for (ProverPairing.Paired m : route.members) {
@@ -221,10 +233,10 @@ public final class RemoteSend {
             try {
                 answer = new ProverPairing.Probe(prover.client().info(), null);
             } catch (ProverClient.ProverError e) {
-                answer = new ProverPairing.Probe(null, "did not answer");
+                answer = new ProverPairing.Probe(null, "did not answer", false);
             }
             if (answer.ok() && !ProverPairing.sameKey(core, answer.info, m.pairing.kemEk, m.pairing.fingerprint)) {
-                answer = new ProverPairing.Probe(null, "different key");
+                answer = new ProverPairing.Probe(null, "different key", true);
             }
             String why = notReady(core, m.pairing, answer);
             if (why != null) {
@@ -237,7 +249,7 @@ public final class RemoteSend {
             try {
                 job = prover.submit(s.hex);
             } catch (ProverClient.Refusal r) {
-                whys.add((r.busy ? BUSY_MARK : "") + memberOf(m.pairing) + ": " + r.getMessage());
+                whys.add((r.busy ? BUSY_MARK : "") + L10n.t(R.string.pool_member_reason, "%1$s: %2$s", memberOf(m.pairing), r.getMessage()));
                 continue;
             }
             return prover.poll(job, s.pending, core::finishProof, onPhase);
@@ -263,7 +275,8 @@ public final class RemoteSend {
                     .put("hc_bundle", hcBundle == null ? JSONObject.NULL : hcBundle)
                     .put("hc_auth", hcAuth == null ? JSONObject.NULL : hcAuth));
         } catch (Exception e) {
-            String why = e.getMessage() == null || e.getMessage().isEmpty() ? "This wallet cannot prove for this chain." : e.getMessage();
+            String why = e.getMessage() == null || e.getMessage().isEmpty()
+                    ? L10n.t(R.string.prover_chain_unsupported, "This wallet cannot prove for this chain.") : e.getLocalizedMessage();
             throw new ProverClient.Refusal(why);
         }
     }
@@ -291,7 +304,9 @@ public final class RemoteSend {
         String sealed = prepared.optString("sealed_hex", "");
         Object pending = prepared.opt("pending");
         if (sealed.isEmpty() || pending == null) {
-            throw new ProverClient.Refusal("The wallet could not seal this " + (invoke ? "swap" : "transfer") + " for the prover.");
+            throw new ProverClient.Refusal(invoke
+                    ? L10n.t(R.string.prover_seal_failed_swap, "The wallet could not seal this swap for the prover.")
+                    : L10n.t(R.string.prover_seal_failed_transfer, "The wallet could not seal this transfer for the prover."));
         }
         return new Sealed(sealed, pending);
     }
@@ -346,26 +361,26 @@ public final class RemoteSend {
         JSONObject guests = guestsOf(core, request);
         String wants = guests.optString("witness_kind", "");
         if ("spend_key".equals(wants) && !route.pairing.own) {
-            throw new ProverClient.Refusal("On this chain a proof needs the spend key, which goes only to a prover paired as your own. "
-                    + "Pair your own prover in Settings, or send from the rand command-line wallet.");
+            throw new ProverClient.Refusal(L10n.t(R.string.prover_spend_key_own_only, SPEND_KEY_OWN_ONLY));
         }
 
         ProverClient.Info info;
         try {
             info = prover.client().info();
         } catch (ProverClient.ProverError e) {
-            throw new ProverClient.Refusal("Your prover did not answer: " + e.getMessage());
+            throw new ProverClient.Refusal(L10n.t(R.string.prover_no_answer, "Your prover did not answer: %1$s", e.getMessage()));
         }
         if (!ProverPairing.sameKey(core, info, route.pairing.kemEk, route.pairing.fingerprint)) {
-            throw new ProverClient.Refusal("The prover at that address now has a different key. Pair it again in Settings.");
+            throw new ProverClient.Refusal(L10n.t(R.string.prover_key_changed_settings, "The prover at that address now has a different key. Pair it again in Settings."));
         }
         if (!info.witnessKinds.contains(wants)) {
             throw new ProverClient.Refusal("viewing_key".equals(wants)
-                    ? "Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another."
-                    : "Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the rand command-line wallet.");
+                    ? L10n.t(R.string.prover_no_viewing_jobs, "Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another.")
+                    : L10n.t(R.string.prover_no_spend_jobs, "Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the rand command-line wallet."));
         }
         if (ProverClient.feeRefusal(info.fee, core) != null) {
-            throw new ProverClient.Refusal(ProverClient.FEE_REFUSAL);
+            throw new ProverClient.Refusal(L10n.t(R.string.prover_fee_refusal, ProverClient.FEE_REFUSAL));
+
         }
 
         Sealed s = seal(core, kind, request, route.pairing, route.token, info.fee, maxProofBytes, guests, onPhase);

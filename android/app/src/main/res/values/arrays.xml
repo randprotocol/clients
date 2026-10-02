@@ -19,9 +19,48 @@
         <item>Light</item>
         <item>System</item>
     </string-array>
-    <string-array name="theme_values">
+    <string-array name="theme_values" translatable="false">
         <item>dark</item>
         <item>light</item>
         <item>system</item>
+    </string-array>
+    <!-- Settings › Language, after "System default": the BCP 47 tag AppCompat is given, and each
+         language by its own name (never translated), in the shared UI's order (ui/i18n.js LOCALES).
+         Must match res/xml/locales_config.xml. "in" is Indonesian (Android's legacy code for id). -->
+    <string-array name="language_tags" translatable="false">
+        <item>en</item>
+        <item>ru</item>
+        <item>zh-CN</item>
+        <item>zh-HK</item>
+        <item>ko</item>
+        <item>in</item>
+        <item>ms</item>
+        <item>ja</item>
+        <item>ar</item>
+        <item>fa</item>
+        <item>es</item>
+        <item>pt-BR</item>
+        <item>de</item>
+        <item>fr</item>
+        <item>it</item>
+        <item>pl</item>
+    </string-array>
+    <string-array name="language_names" translatable="false">
+        <item>English</item>
+        <item>Русский</item>
+        <item>中文（简体）</item>
+        <item>中文（繁體）</item>
+        <item>한국어</item>
+        <item>Bahasa Indonesia</item>
+        <item>Bahasa Melayu</item>
+        <item>日本語</item>
+        <item>العربية</item>
+        <item>فارسی</item>
+        <item>Español</item>
+        <item>Português (Brasil)</item>
+        <item>Deutsch</item>
+        <item>Français</item>
+        <item>Italiano</item>
+        <item>Polski</item>
     </string-array>
 </resources>

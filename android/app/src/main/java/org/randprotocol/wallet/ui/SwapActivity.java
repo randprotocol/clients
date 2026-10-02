@@ -161,7 +161,7 @@ public class SwapActivity extends BaseActivity {
                 cells = wallet().programCells(Amm.DURIAN_PROGRAM);
             } catch (Exception e) {
                 cells = null;
-                error = e.getMessage() == null ? "the node did not answer" : e.getMessage();
+                error = e.getMessage() == null ? getString(R.string.node_no_answer) : e.getLocalizedMessage();
             }
             JSONArray tokens;
             try {
@@ -221,7 +221,7 @@ public class SwapActivity extends BaseActivity {
         b.notice.setVisibility(notice == null ? View.GONE : View.VISIBLE);
         SwapForm.Asset s = SwapForm.infoOf(assets, sell);
         b.sell.setText(s.symbol);
-        b.buy.setText(buy == null ? "—" : SwapForm.infoOf(assets, buy).symbol);
+        b.buy.setText(buy == null ? getString(R.string.placeholder_dash) : SwapForm.infoOf(assets, buy).symbol);
         b.available.setText(getString(R.string.swap_available, SwapForm.formatUnits(s.balance, 6, s.decimals), s.symbol));
         b.flipper.setDisplayedChild(FORM);
         requote();
@@ -296,11 +296,11 @@ public class SwapActivity extends BaseActivity {
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
                 if (f instanceof Invoke.Refusal && SwapForm.isStale(((Invoke.Refusal) f).code)) {
-                    refreshAndForm(SwapForm.STALE);
+                    refreshAndForm(SwapForm.stale());
                     return;
                 }
                 if (f != null) {
-                    failed(f.getMessage() == null ? getString(R.string.swap_cannot_check) : f.getMessage());
+                    failed(f.getMessage() == null ? getString(R.string.swap_cannot_check) : f.getLocalizedMessage());
                     return;
                 }
                 // Balances moved with the scan the quote made.
@@ -326,7 +326,8 @@ public class SwapActivity extends BaseActivity {
 
     private void showNotice(boolean show) {
         TrustedProver pool = wallet().trustedProver();
-        b.rNotice.setText(show ? getString(R.string.prover_notice_title) + "\n\n" + getString(R.string.prover_notice_body, pool == null ? 0 : pool.members.size()) : "");
+        int n = pool == null ? 0 : pool.members.size();
+        b.rNotice.setText(show ? getString(R.string.prover_notice_title) + "\n\n" + getResources().getQuantityString(R.plurals.prover_notice_body, n, n) : "");
         b.rNotice.setVisibility(show ? View.VISIBLE : View.GONE);
         b.acknowledge.setVisibility(show ? View.VISIBLE : View.GONE);
         b.useOwn.setVisibility(show ? View.VISIBLE : View.GONE);
@@ -344,7 +345,7 @@ public class SwapActivity extends BaseActivity {
                 .putExtra(ProvingService.EXTRA_REQUEST, built.request.toString())
                 .putExtra(ProvingService.EXTRA_AMOUNT, built.amountIn.toString());
         ContextCompat.startForegroundService(this, i);
-        b.phase.setText(WalletService.SELECTING);
+        b.phase.setText(R.string.phase_selecting_notes);
         b.flipper.setDisplayedChild(RUNNING);
     }
 
@@ -371,7 +372,7 @@ public class SwapActivity extends BaseActivity {
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                 if (SwapForm.isStale(s.code)) {
                     SwapMonitor.reset();
-                    refreshAndForm(SwapForm.STALE);
+                    refreshAndForm(SwapForm.stale());
                 } else {
                     failed(s.message);
                 }
@@ -391,7 +392,8 @@ public class SwapActivity extends BaseActivity {
         b.resultDetails.setVisibility(View.VISIBLE);
         b.copyHash.setVisibility(View.VISIBLE);
         b.viewExplorer.setVisibility(View.VISIBLE);
-        b.copyHash.setOnClickListener(v -> copy("transaction hash", s.hash, getString(R.string.swap_hash_copied)));
+        b.copyHash.setOnClickListener(v -> copy(getString(R.string.clip_tx_hash), s.hash, getString(R.string.swap_hash_copied)));
+
         b.viewExplorer.setOnClickListener(v -> open(EXPLORER + "/transactions/" + s.hash));
         b.done.setText(R.string.sent_done);
         b.done.setOnClickListener(v -> {

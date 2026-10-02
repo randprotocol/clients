@@ -50,8 +50,8 @@ public class ReceiveActivity extends BaseActivity {
         } catch (CoreException e) {
             b.fingerprint.setText(R.string.contacts_fingerprint_unavailable);
         }
-        b.copy.setOnClickListener(v -> copy("address", address, getString(R.string.home_copied)));
-        b.copyLink.setOnClickListener(v -> copy("payment link", link, getString(R.string.receive_link_copied)));
+        b.copy.setOnClickListener(v -> copy(getString(R.string.clip_address), address, getString(R.string.home_copied)));
+        b.copyLink.setOnClickListener(v -> copy(getString(R.string.clip_payment_link), link, getString(R.string.receive_link_copied)));
         b.share.setOnClickListener(v -> {
             if (link.isEmpty()) return;
             Intent i = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, link);
@@ -106,7 +106,8 @@ public class ReceiveActivity extends BaseActivity {
             b.linkError.setText("");
         } catch (CoreException e) {
             if (link.isEmpty()) setLink("randpay:" + address);
-            b.linkError.setText(e.getMessage());
+            b.linkError.setText(e.getLocalizedMessage());
+
         }
     }
 

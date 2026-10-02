@@ -1,9 +1,11 @@
 package org.randprotocol.wallet.ui;
 
+import org.randprotocol.wallet.R;
 import org.randprotocol.wallet.core.Core;
 import org.randprotocol.wallet.core.CoreException;
 
 import org.json.JSONObject;
+import org.randprotocol.wallet.util.L10n;
 
 /** {@link SendDraft.CoreApi} over the real core: {@code parse_address}, {@code address_fingerprint}, {@code uri_parse}. */
 final class NativeCoreApi implements SendDraft.CoreApi {
@@ -17,10 +19,11 @@ final class NativeCoreApi implements SendDraft.CoreApi {
             JSONObject info = Core.parseAddress(address);
             if (info.optBoolean("valid", false)) return null;
             String e = info.optString("error", "");
-            return e.isEmpty() ? "That is not a rand1 address." : e;
+            return e.isEmpty() ? L10n.t(R.string.send_not_an_address, "That is not a rand1 address.") : CoreErrors.translate(e);
         } catch (CoreException e) {
-            return e.getMessage();
+            return e.getLocalizedMessage();
         }
+
     }
 
     @Override

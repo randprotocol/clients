@@ -3,6 +3,8 @@ package org.randprotocol.wallet.wallet;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.randprotocol.wallet.R;
+import org.randprotocol.wallet.util.L10n;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -115,23 +117,27 @@ public class ProverClient {
     public static String checkUrl(String text) throws Refusal {
         String value = text == null ? "" : text.trim();
         while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
-        if (value.isEmpty()) throw new Refusal("The pairing link has no prover address.");
+        if (value.isEmpty()) throw new Refusal(L10n.t(R.string.prover_link_no_address, "The pairing link has no prover address."));
         URI u;
         try {
             u = new URI(value);
         } catch (URISyntaxException e) {
-            throw new Refusal("The pairing link's prover address is not a URL.");
+            throw new Refusal(notAUrl());
         }
         String scheme = u.getScheme() == null ? null : u.getScheme().toLowerCase(java.util.Locale.ROOT);
-        if (scheme == null) throw new Refusal("The pairing link's prover address is not a URL.");
+        if (scheme == null) throw new Refusal(notAUrl());
         String host = u.getHost() == null ? "" : u.getHost().toLowerCase(java.util.Locale.ROOT);
         boolean web = scheme.equals("https") || scheme.equals("http");
-        if (web && host.isEmpty()) throw new Refusal("The pairing link's prover address is not a URL.");
+        if (web && host.isEmpty()) throw new Refusal(notAUrl());
         boolean local = host.equals("localhost") || host.equals("127.0.0.1") || host.equals("[::1]") || host.equals("::1");
         if (scheme.equals("https")) return value;
         if (scheme.equals("http") && local) return value;
-        if (scheme.equals("http")) throw new Refusal("Use https for a prover — plain http is only allowed for a prover on this machine.");
-        throw new Refusal("A prover address must be https://.");
+        if (scheme.equals("http")) throw new Refusal(L10n.t(R.string.prover_link_https, "Use https for a prover — plain http is only allowed for a prover on this machine."));
+        throw new Refusal(L10n.t(R.string.prover_link_https_only, "A prover address must be https://."));
+    }
+
+    private static String notAUrl() {
+        return L10n.t(R.string.prover_link_not_url, "The pairing link's prover address is not a URL.");
     }
 
     private final String url;
@@ -180,9 +186,9 @@ public class ProverClient {
             status = c.getResponseCode();
             text = readAll(status >= 400 ? c.getErrorStream() : c.getInputStream());
         } catch (SocketTimeoutException e) {
-            throw new ProverError("cannot reach the prover at " + url + ": timed out", null, null, "timeout");
+            throw new ProverError(L10n.t(R.string.prover_unreachable_timeout, "cannot reach the prover at %1$s: timed out", url), null, null, "timeout");
         } catch (IOException e) {
-            throw new ProverError("cannot reach the prover at " + url + ": " + e.getMessage(), null, null, "connect");
+            throw new ProverError(L10n.t(R.string.prover_unreachable, "cannot reach the prover at %1$s: %2$s", url, e.getMessage()), null, null, "connect");
         } finally {
             if (c != null) c.disconnect();
         }
@@ -191,7 +197,7 @@ public class ProverClient {
             r = new JSONObject(text);
         } catch (JSONException e) {
             boolean ok = status >= 200 && status < 300;
-            throw new ProverError("the prover at " + url + " did not answer with JSON-RPC (HTTP " + status + ")", null, null, ok ? "body" : "http");
+            throw new ProverError(L10n.t(R.string.prover_not_json_rpc, "the prover at %1$s did not answer with JSON-RPC (HTTP %2$s)", url, String.valueOf(status)), null, null, ok ? "body" : "http");
         }
         JSONObject err = r.optJSONObject("error");
         if (err != null) {
@@ -209,7 +215,7 @@ public class ProverClient {
     public String submit(String sealedHex) throws ProverError {
         Object r = call("prover_submit", new JSONArray().put(sealedHex));
         String job = r instanceof JSONObject ? ((JSONObject) r).optString("job", "") : "";
-        if (!JOB.matcher(job).matches()) throw new ProverError("the prover accepted the job but named no job id", null, null, "body");
+        if (!JOB.matcher(job).matches()) throw new ProverError(L10n.t(R.string.prover_no_job_id, "the prover accepted the job but named no job id"), null, null, "body");
         return job;
     }
 
@@ -241,12 +247,14 @@ public class ProverClient {
         String shown = "";
         if (amount.matches("[0-9]{1,20}")) {
             try {
-                shown = " of " + core.formatAmount(amount) + " RAND";
+                shown = core.formatAmount(amount);
             } catch (Exception e) {
                 shown = "";
             }
         }
-        return "it charges a fee" + shown + " per proof, which this version of the wallet does not pay";
+        return shown.isEmpty()
+                ? L10n.t(R.string.prover_fee_clause, "it charges a fee per proof, which this version of the wallet does not pay")
+                : L10n.t(R.string.prover_fee_clause_amount, "it charges a fee of %1$s RAND per proof, which this version of the wallet does not pay", shown);
     }
 
     /**
@@ -259,29 +267,37 @@ public class ProverClient {
         switch (code) {
             case BUSY: {
                 String n = "?";
+                int count = 2; // unknown: the "other" form
                 if (e.data != null && e.data.has("depth")) {
                     int d = e.data.optInt("depth", -1);
-                    if (d >= 0) n = String.valueOf(d);
+                    if (d >= 0) {
+                        n = String.valueOf(d);
+                        count = d;
+                    }
                 }
-                return new Refusal("The prover is full (" + n + " waiting). Try again in a few minutes.", true);
+                String full = "The prover is full (%1$s waiting). Try again in a few minutes.";
+                return new Refusal(L10n.plural(R.plurals.prover_full, count, full, full, n), true);
+
             }
             case UNPAIRED:
-                return new Refusal("This prover does not know this pairing. Pair it again in Settings.");
+                return new Refusal(L10n.t(R.string.prover_unpaired, "This prover does not know this pairing. Pair it again in Settings."));
             case WITNESS_KIND: {
                 String reason = "";
                 if (e.data != null && e.data.opt("reason") instanceof String) {
                     String r = e.data.optString("reason");
-                    reason = " (" + r.substring(0, Math.min(200, r.length())) + ")";
+                    reason = r.substring(0, Math.min(200, r.length()));
                 }
-                return new Refusal("This prover does not accept this kind of job" + reason + ". Pair another prover in Settings.");
+                return new Refusal(reason.isEmpty()
+                        ? L10n.t(R.string.prover_wrong_job_kind, "This prover does not accept this kind of job. Pair another prover in Settings.")
+                        : L10n.t(R.string.prover_wrong_job_kind_reason, "This prover does not accept this kind of job (%1$s). Pair another prover in Settings.", reason));
             }
             case FEE:
-                return new Refusal(FEE_REFUSAL);
+                return new Refusal(L10n.t(R.string.prover_fee_refusal, FEE_REFUSAL));
             case UNKNOWN_JOB:
-                return new Refusal("The prover no longer has this proof (it restarted or the job expired). Send again.");
+                return new Refusal(L10n.t(R.string.prover_job_gone, "The prover no longer has this proof (it restarted or the job expired). Send again."));
             default: {
                 String reason = e.data != null && e.data.opt("reason") instanceof String ? ": " + e.data.optString("reason") : "";
-                return new Refusal("The prover refused the job (" + e.getMessage() + reason + ").");
+                return new Refusal(L10n.t(R.string.prover_refused_job, "The prover refused the job (%1$s).", e.getMessage() + reason));
             }
         }
     }

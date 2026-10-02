@@ -13,6 +13,7 @@ import android.os.IBinder;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+import org.randprotocol.wallet.App;
 import org.randprotocol.wallet.R;
 import org.randprotocol.wallet.ui.SendActivity;
 import org.randprotocol.wallet.ui.SwapActivity;
@@ -51,7 +52,7 @@ public class ProvingService extends Service {
         boolean invoke = KIND_INVOKE.equals(intent.getStringExtra(EXTRA_KIND));
         if (worker != null) {
             // One proof at a time; a swap asked for meanwhile is told so, not dropped in silence.
-            if (invoke) SwapMonitor.post(SendState.idle().failed(null, "Another transaction is being proved. Try again when it is done."));
+            if (invoke) SwapMonitor.post(SendState.idle().failed(null, App.text(R.string.proving_busy)));
             return START_NOT_STICKY;
         }
         if (invoke) return startInvoke(intent);
@@ -60,7 +61,7 @@ public class ProvingService extends Service {
         BigInteger fee = new BigInteger(intent.getStringExtra(EXTRA_FEE));
         String memo = intent.getStringExtra(EXTRA_MEMO);
 
-        startInForeground(getString(R.string.proving_notification_title), getString(R.string.proving_notification_text));
+        startInForeground(App.text(R.string.proving_notification_title), App.text(R.string.proving_notification_text));
         worker = new Thread(() -> {
             try {
                 WalletService.get(this).send(to, amount, fee, memo == null ? "" : memo);
@@ -76,12 +77,12 @@ public class ProvingService extends Service {
     private int startInvoke(Intent intent) {
         String request = intent.getStringExtra(EXTRA_REQUEST);
         String amount = intent.getStringExtra(EXTRA_AMOUNT);
-        startInForeground(getString(R.string.swap_notification_title), getString(R.string.proving_notification_text), SwapActivity.class);
+        startInForeground(App.text(R.string.swap_notification_title), App.text(R.string.proving_notification_text), SwapActivity.class);
         worker = new Thread(() -> {
             try {
                 WalletService.get(this).invoke(new org.json.JSONObject(request), amount);
             } catch (org.json.JSONException e) {
-                SwapMonitor.post(SendState.idle().failed(Invoke.BAD_REQUEST, "This swap cannot be read. Nothing was sent."));
+                SwapMonitor.post(SendState.idle().failed(Invoke.BAD_REQUEST, App.text(R.string.swap_unreadable)));
             } finally {
                 stopForeground(STOP_FOREGROUND_REMOVE);
                 stopSelf();
@@ -97,7 +98,8 @@ public class ProvingService extends Service {
 
     private void startInForeground(String title, String text, Class<?> screen) {
         NotificationManager nm = getSystemService(NotificationManager.class);
-        NotificationChannel ch = new NotificationChannel(CHANNEL, getString(R.string.proving_channel), NotificationManager.IMPORTANCE_LOW);
+        NotificationChannel ch = new NotificationChannel(CHANNEL, App.text(R.string.proving_channel), NotificationManager.IMPORTANCE_LOW);
+
         nm.createNotificationChannel(ch);
         Intent open = new Intent(this, screen).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pi = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);

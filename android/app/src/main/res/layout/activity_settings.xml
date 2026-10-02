@@ -56,6 +56,10 @@
     <Spinner android:id="@+id/autolock" android:layout_width="match_parent" android:layout_height="48dp" />
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" style="@style/Text.Caption" android:text="@string/settings_theme" />
     <Spinner android:id="@+id/theme" android:layout_width="match_parent" android:layout_height="48dp" />
+    <!-- The app's language (AppCompatDelegate.setApplicationLocales): System default, then each language by its own name. -->
+    <TextView android:id="@+id/language_label" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" style="@style/Text.Caption" android:text="@string/settings_language" />
+    <Spinner android:id="@+id/language" android:layout_width="match_parent" android:layout_height="48dp" />
+
 
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/settings_wallet" />
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Body" android:text="@string/settings_rescan_body" />

@@ -1,6 +1,8 @@
 package org.randprotocol.wallet.wallet;
 
 import org.json.JSONObject;
+import org.randprotocol.wallet.R;
+import org.randprotocol.wallet.util.L10n;
 
 /**
  * One remote proof — the Java twin of {@code ui/engine/prover.js}'s {@code remoteProve}: submit
@@ -88,7 +90,7 @@ public final class RemoteProver {
                     continue;
                 }
                 ProverClient.Refusal r = ProverClient.refusal(e);
-                throw r != null ? r : new ProverClient.Refusal("Could not hand the proof to your prover: " + e.getMessage());
+                throw r != null ? r : new ProverClient.Refusal(L10n.t(R.string.prover_handover_failed, "Could not hand the proof to your prover: %1$s", e.getMessage()));
             }
         }
         return job;
@@ -113,7 +115,9 @@ public final class RemoteProver {
                 if (r != null) throw r;
                 if (clock.nowMs() - started >= maxWaitMs) {
                     cancel(job);
-                    throw new ProverClient.Refusal("Your prover has not answered for " + minutes + " minutes, so nothing was sent. Send again.");
+                    throw new ProverClient.Refusal(L10n.plural(R.plurals.prover_silent_minutes, (int) minutes,
+                            "Your prover has not answered for %1$d minute, so nothing was sent. Send again.",
+                            "Your prover has not answered for %1$d minutes, so nothing was sent. Send again.", minutes));
                 }
                 pause(job);
                 continue;
@@ -137,26 +141,29 @@ public final class RemoteProver {
                     break;
                 case "done": {
                     String reply = st.optString("reply", "");
-                    if (reply.isEmpty() || st.isNull("reply")) throw new ProverClient.Refusal("The prover finished but sent no proof.");
+                    if (reply.isEmpty() || st.isNull("reply")) throw new ProverClient.Refusal(L10n.t(R.string.prover_no_proof, "The prover finished but sent no proof."));
                     try {
                         return finisher.finish(pending, reply);
                     } catch (Exception e) {
-                        throw new ProverClient.Refusal("The prover's proof was refused by this wallet: " + e.getMessage());
+                        throw new ProverClient.Refusal(L10n.t(R.string.prover_proof_refused, "The prover's proof was refused by this wallet: %1$s", e.getLocalizedMessage()));
                     }
                 }
                 case "failed":
                 case "expired": {
                     String err = st.optString("error", "");
                     String why = err.isEmpty() || st.isNull("error") ? "" : ": " + err;
-                    throw new ProverClient.Refusal("The prover could not make this proof (" + state + why + ").");
+                    throw new ProverClient.Refusal(L10n.t(R.string.prover_could_not_prove, "The prover could not make this proof (%1$s).", state + why));
                 }
                 default:
-                    throw new ProverClient.Refusal("The prover answered with an unknown state ("
-                            + state.substring(0, Math.min(32, state.length())) + ").");
+                    throw new ProverClient.Refusal(L10n.t(R.string.prover_unknown_state, "The prover answered with an unknown state (%1$s).",
+                            state.substring(0, Math.min(32, state.length()))));
             }
             if (clock.nowMs() - started >= maxWaitMs) {
                 cancel(job);
-                throw new ProverClient.Refusal("Your prover has not finished after " + minutes + " minutes, so nothing was sent. Send again.");
+                throw new ProverClient.Refusal(L10n.plural(R.plurals.prover_unfinished_minutes, (int) minutes,
+                        "Your prover has not finished after %1$d minute, so nothing was sent. Send again.",
+                        "Your prover has not finished after %1$d minutes, so nothing was sent. Send again.", minutes));
+
             }
             pause(job);
         }

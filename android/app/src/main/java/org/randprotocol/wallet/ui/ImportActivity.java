@@ -28,7 +28,8 @@ public class ImportActivity extends BaseActivity {
                 startActivity(new Intent(this, HomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK));
                 finish();
             } catch (CoreException | IllegalStateException e) {
-                b.error.setText(e.getMessage());
+                b.error.setText(e.getLocalizedMessage());
+
             }
         });
     }

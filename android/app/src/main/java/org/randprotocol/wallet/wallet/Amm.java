@@ -3,6 +3,8 @@ package org.randprotocol.wallet.wallet;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.randprotocol.wallet.R;
+import org.randprotocol.wallet.util.L10n;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
@@ -324,9 +326,9 @@ public final class Amm {
     private static Object hop(Pool pool, boolean randIn, BigInteger amountIn) {
         BigInteger rIn = randIn ? pool.rr : pool.rt;
         BigInteger rOut = randIn ? pool.rt : pool.rr;
-        if (rIn.add(amountIn).compareTo(NOTE_BOUND) >= 0) return new Swap("over-bound", TOO_LARGE);
+        if (rIn.add(amountIn).compareTo(NOTE_BOUND) >= 0) return new Swap("over-bound", L10n.t(R.string.swap_too_large, TOO_LARGE));
         BigInteger out = poolSwapOut(pool.rr, pool.rt, randIn, amountIn);
-        if (out.signum() <= 0) return new Swap("dust", TOO_SMALL);
+        if (out.signum() <= 0) return new Swap("dust", L10n.t(R.string.swap_too_small, TOO_SMALL));
         BigInteger rr = randIn ? pool.rr.add(amountIn) : pool.rr.subtract(out);
         BigInteger rt = randIn ? pool.rt.subtract(out) : pool.rt.add(amountIn);
         return new Hop(pool, randIn, amountIn, out, swapFee(amountIn), priceImpactPpm(rIn, rOut, amountIn, out), rr, rt);
@@ -366,9 +368,10 @@ public final class Amm {
      * amount a decimal string, as {@code ui/lib/amm.js}'s {@code buildSwap} makes it.
      */
     public static Swap buildSwap(Route route, BigInteger dx, long[] rnd, String title) {
-        if (route == null) return new Swap("no-route", "There is no pool for that pair.");
-        if (dx == null || dx.signum() <= 0) return new Swap("no-amount", "Enter an amount.");
-        if (dx.compareTo(NOTE_BOUND) >= 0) return new Swap("over-bound", TOO_LARGE);
+        if (route == null) return new Swap("no-route", L10n.t(R.string.swap_no_route, "There is no pool for that pair."));
+        if (dx == null || dx.signum() <= 0) return new Swap("no-amount", L10n.t(R.string.swap_enter_amount, "Enter an amount."));
+        if (dx.compareTo(NOTE_BOUND) >= 0) return new Swap("over-bound", L10n.t(R.string.swap_too_large, TOO_LARGE));
+
         try {
             JSONArray inputs = new JSONArray().put(METHOD_SWAP).put(rnd[0]).put(rnd[1]).put(rnd[2]);
             JSONObject summary = new JSONObject().put("title", title == null ? "" : title);

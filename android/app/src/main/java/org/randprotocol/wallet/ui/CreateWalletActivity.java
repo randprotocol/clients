@@ -28,14 +28,15 @@ public class CreateWalletActivity extends BaseActivity {
         try {
             info = wallet().hasWallet() ? wallet().walletInfo() : wallet().createWallet();
         } catch (CoreException e) {
-            toast(getString(org.randprotocol.wallet.R.string.error_generic, e.getMessage()));
+            toast(getString(org.randprotocol.wallet.R.string.error_generic, e.getLocalizedMessage()));
             finish();
             return;
         }
         String spendKey = info.optString("spend_key");
         b.spendKey.setText(spendKey);
         b.address.setText(info.optString("address"));
-        b.copy.setOnClickListener(v -> copy("spend key", spendKey, getString(org.randprotocol.wallet.R.string.copied)));
+        b.copy.setOnClickListener(v -> copy(getString(org.randprotocol.wallet.R.string.clip_spend_key), spendKey, getString(org.randprotocol.wallet.R.string.copied)));
+
         b.saved.setOnCheckedChangeListener((cb, checked) -> b.next.setEnabled(checked));
         b.next.setOnClickListener(v -> {
             wallet().prefs().setBackedUp(true);

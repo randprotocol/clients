@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's languages, for the system's per-app language setting (API 33+). Keep in step with
+     the language_tags array (res/values/arrays.xml) and resourceConfigurations in app/build.gradle. -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="ru" />
+    <locale android:name="zh-CN" />
+    <locale android:name="zh-HK" />
+    <locale android:name="ko" />
+    <locale android:name="in" />
+    <locale android:name="ms" />
+    <locale android:name="ja" />
+    <locale android:name="ar" />
+    <locale android:name="fa" />
+    <locale android:name="es" />
+    <locale android:name="pt-BR" />
+    <locale android:name="de" />
+    <locale android:name="fr" />
+    <locale android:name="it" />
+    <locale android:name="pl" />
+</locale-config>

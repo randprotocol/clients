@@ -176,19 +176,28 @@
     <string name="settings_prover_warning">This prover will be able to read this wallet\'s whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.</string>
     <string name="settings_prover_forget">Forget this prover</string>
     <!-- The prover the build ships the address of (the core's version.trusted_prover; docs/prover.md §8). Shown only when the core names one; the warning above applies to it. -->
-    <string name="settings_prover_trusted_body">Or use the RandProtocol provers — %1$d machines run by the validators, each with its own key. They charge nothing. Each one that proves a send receives this wallet\'s viewing key, so it can read your whole history, past and future. None can spend.</string>
+    <plurals name="settings_prover_trusted_body">
+        <item quantity="one">Or use the RandProtocol provers — %1$d machine run by the validators, each with its own key. They charge nothing. Each one that proves a send receives this wallet\'s viewing key, so it can read your whole history, past and future. None can spend.</item>
+        <item quantity="other">Or use the RandProtocol provers — %1$d machines run by the validators, each with its own key. They charge nothing. Each one that proves a send receives this wallet\'s viewing key, so it can read your whole history, past and future. None can spend.</item>
+    </plurals>
     <string name="settings_prover_use_trusted">Use the RandProtocol provers</string>
     <string name="settings_prover_pool_none">None of the RandProtocol provers answers right now.</string>
     <!-- Wallet 0.6.8: the RandProtocol prover is the default where this device cannot prove. -->
     <string name="settings_prover_default">%1$s provers · where this device cannot prove</string>
-    <string name="settings_prover_default_note">The RandProtocol provers: %1$d machines run by the validators, each with its own key, used until you choose another. They charge nothing. Each one that proves a send receives this wallet\'s viewing key, so it can read your whole history, past and future. None can spend.</string>
+    <plurals name="settings_prover_default_note">
+        <item quantity="one">The RandProtocol provers: %1$d machine run by the validators, each with its own key, used until you choose another. They charge nothing. Each one that proves a send receives this wallet\'s viewing key, so it can read your whole history, past and future. None can spend.</item>
+        <item quantity="other">The RandProtocol provers: %1$d machines run by the validators, each with its own key, used until you choose another. They charge nothing. Each one that proves a send receives this wallet\'s viewing key, so it can read your whole history, past and future. None can spend.</item>
+    </plurals>
     <string name="settings_prover_use_none">Use no prover</string>
     <string name="settings_prover_using_default">Using the %1$s provers. Proofs this device cannot make go to one of them; each one that proves a send sees that wallet\'s viewing key. %2$s</string>
     <string name="settings_prover_none">No prover. Proofs are made on this device only; where it cannot make one, sending waits until you pair a prover or use the RandProtocol provers again.</string>
     <string name="settings_prover_forgotten_default">Forgotten. The prover\'s pairing is gone from this wallet. Proofs this device cannot make go to the %1$s provers again.</string>
     <string name="review_default_prover">This device does not have the memory for this proof, so one of the %1$s provers will make it. The one that does receives your viewing key and a salt inside a sealed job — it can read this wallet\'s whole history and cannot spend; this phone authorises the spend itself and checks the proof before anything is sent.</string>
     <string name="prover_notice_title">The RandProtocol provers can read your history</string>
-    <string name="prover_notice_body">This device cannot make the proof, so one of the RandProtocol provers (%1$d machines run by the validators; each one that proves a send sees that wallet\'s viewing key) makes it. The one that does receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.</string>
+    <plurals name="prover_notice_body">
+        <item quantity="one">This device cannot make the proof, so one of the RandProtocol provers (%1$d machine run by the validators; each one that proves a send sees that wallet\'s viewing key) makes it. The one that does receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.</item>
+        <item quantity="other">This device cannot make the proof, so one of the RandProtocol provers (%1$d machines run by the validators; each one that proves a send sees that wallet\'s viewing key) makes it. The one that does receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.</item>
+    </plurals>
     <string name="prover_notice_continue">I understand — continue</string>
     <string name="prover_notice_own">Use my own prover</string>
     <string name="settings_prover_paired_trusted">Paired — this prover can read your history. Proofs this device cannot make go to %1$s. Its fingerprint is %2$s. %3$s</string>
@@ -202,6 +211,8 @@
     <string name="settings_security">Security</string>
     <string name="settings_autolock">Auto-lock</string>
     <string name="settings_theme">Theme</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">System default</string>
     <string name="settings_about">About</string>
     <string name="settings_about_body">Rand Wallet %1$s · core %2$s · chain build %3$s\nExperimental testnet software. Not audited; not for real value.</string>
     <string name="copied">Copied</string>
@@ -255,4 +266,247 @@
     <string name="swap_cannot_check">The swap could not be checked.</string>
     <string name="swap_notification_title">Swapping</string>
     <string name="swap_pick">Choose an asset</string>
+
+    <!-- ===== Strings for code with no Context (util/L10n) and the core's errors (ui/CoreErrors) ===== -->
+    <!-- core -->
+    <string name="core_err_address">address: %1$s</string>
+    <string name="core_err_address_base58">shielded address is not base58</string>
+    <string name="core_err_address_length">shielded address decodes to %1$s bytes, expected %2$s</string>
+    <string name="core_err_address_prefix">shielded address must start with rand1</string>
+    <string name="core_err_amount_overflow">amount overflow</string>
+    <string name="core_err_amount_zero">amount must be greater than zero</string>
+    <string name="core_err_amounts_overflow">amounts overflow</string>
+    <string name="core_err_asset_notes_deposit">the notes of asset %1$s hold %2$s units, but the deposit is %3$s</string>
+    <string name="core_err_asset_notes_transfer">the notes of asset %1$s hold %2$s units, but the transfer is %3$s</string>
+    <string name="core_err_auth_guest">this chain\'s auth guest is %1$s; this wallet carries %2$s — refusing to prove a v3 bundle it cannot authorise; update the wallet</string>
+    <string name="core_err_bad_address">bad address: %1$s</string>
+    <string name="core_err_bad_amount">bad amount %1$s</string>
+    <string name="core_err_bad_asset">bad asset %1$s</string>
+    <string name="core_err_call_proof_too_big">the call proof is %1$s bytes, over this chain\'s %2$s-byte cap (max_proof_bytes); it would be refused, so nothing was built</string>
+    <string name="core_err_cells_ascending">cell keys must be strictly ascending</string>
+    <string name="core_err_chain_no_memo">chain %1$s carries no memo: its genesis sets no envelope size, whatever the node claims (send again with an empty memo)</string>
+    <string name="core_err_fee_floor">fee must be at least %1$s RAND (the bundle floor)</string>
+    <string name="core_err_gas_pin">this chain pins every bundle at %1$s gas, but this wallet\'s bundle guest declares %2$s; update the wallet</string>
+    <string name="core_err_inputs_short">inputs hold %1$s, but amount + fee is %2$s</string>
+    <string name="core_err_inputs_short_deposit">inputs hold %1$s, but fee + RAND deposit is %2$s</string>
+    <string name="core_err_insufficient_balance">insufficient balance: have %1$s, need %2$s</string>
+    <string name="core_err_key_file_no_spend_key">key file has no spend_key</string>
+    <string name="core_err_key_file_version">key file must be version 2</string>
+    <string name="core_err_link_no_query">the link has no ?url=…&amp;token=… part</string>
+    <string name="core_err_link_no_token">the link has no token</string>
+    <string name="core_err_link_no_url">the link has no url</string>
+    <string name="core_err_link_url_empty">the link\'s url is empty</string>
+    <string name="core_err_malformed_parameter">malformed parameter %1$s</string>
+    <string name="core_err_memo_too_long">memo is %1$s bytes, at most %2$s</string>
+    <string name="core_err_no_bundle_guest">this build does not carry the chain\'s bundle guest %1$s: update the wallet</string>
+    <string name="core_err_no_memo_chain">this chain carries no memo: its envelopes predate it (send again with an empty memo)</string>
+    <string name="core_err_no_rand_for_fee">a transfer pays its fee in RAND, and this wallet holds no spendable RAND: receive some RAND (on a testnet, `rand faucet`) and retry</string>
+    <string name="core_err_not_a_number">not a number</string>
+    <string name="core_err_not_key_file">not a key file: %1$s</string>
+    <string name="core_err_not_randpay">not a randpay: link</string>
+    <string name="core_err_not_randprover">not a randprover: link</string>
+    <string name="core_err_parameter_twice">parameter %1$s given twice</string>
+    <string name="core_err_payout_zero">a payout of zero creates nothing; the chain refuses it</string>
+    <string name="core_err_percent_encoding">bad percent-encoding</string>
+    <string name="core_err_program_refuses">the program does not accept this transition: %1$s</string>
+    <string name="core_err_proof_not_verify">the proof does not verify: %1$s</string>
+    <string name="core_err_prover_fee">this prover charges %1$s RAND per proof, and this version of the wallet does not pay a prover\'s fee: pair a prover that charges nothing, or prove on this device</string>
+    <string name="core_err_prover_fee_unreadable">the prover quotes a fee this wallet cannot read (%1$s); not sending it a job</string>
+    <string name="core_err_prover_key_base58">prover key is not base58: %1$s</string>
+    <string name="core_err_prover_key_length">prover key is %1$s bytes, expected %2$s</string>
+    <string name="core_err_prover_proof">the prover\'s proof: %1$s</string>
+    <string name="core_err_prover_proof_too_big">the prover\'s bundle proof is %1$s bytes, over this chain\'s %2$s-byte cap (max_proof_bytes); not using it</string>
+    <string name="core_err_prover_reply_hex">the prover\'s reply is not hex</string>
+    <string name="core_err_prover_reply_sealed">the prover\'s reply does not open: %1$s</string>
+    <string name="core_err_proving_auth_failed">proving the spend authorisation failed: %1$s</string>
+    <string name="core_err_proving_call_failed">proving the call failed: %1$s</string>
+    <string name="core_err_proving_failed">proving failed: %1$s</string>
+    <string name="core_err_rand_fee">the RAND fee: %1$s</string>
+    <string name="core_err_rand_held_pending">a transfer pays its fee in RAND, and this wallet holds no spendable RAND: %1$s RAND is held by a pending submission — rescan once it commits (or expires) and retry</string>
+    <string name="core_err_rand_notes_deposit">the RAND notes hold %1$s, but fee + RAND deposit is %2$s</string>
+    <string name="core_err_rand_notes_fee">the RAND notes hold %1$s, but the fee is %2$s</string>
+    <string name="core_err_recipient">recipient: %1$s</string>
+    <string name="core_err_spend_key_format">a spend key is 64 hex characters, or a wallet.key.json</string>
+    <string name="core_err_spend_key_hex">spend_key must be 64 hex characters</string>
+    <string name="core_err_spend_key_own_only">this chain\'s bundle witness carries the spend key; only a prover paired as your own (a link made with `rand-prover pair --own`) may receive it</string>
+    <string name="core_err_token_hex">token is not 64 hex digits: %1$s</string>
+    <string name="core_err_too_many_decimals">too many decimal places (max %1$s)</string>
+    <string name="core_err_two_notes">need more than two notes; the largest two hold %1$s — consolidate first by sending to your own address</string>
+    <string name="core_err_units_of_asset">%1$s units of asset %2$s</string>
+    <string name="core_err_unknown_parameter">unknown parameter %1$s</string>
+
+    <!-- error -->
+    <string name="error_no_wallet">no wallet</string>
+
+    <!-- invoke -->
+    <string name="invoke_bad_cells">This swap cannot be read: %1$s is not a list of cells. Nothing was sent.</string>
+    <string name="invoke_bad_word">This swap cannot be read: %1$s is not 64 hex characters. Nothing was sent.</string>
+    <string name="invoke_insufficient">Rand Wallet does not hold enough to cover this and its network fee: %1$s</string>
+    <string name="invoke_no_inflow">The swap has no inflow. Nothing was sent.</string>
+    <string name="invoke_no_program">There is no program %1$s… on this chain. Nothing was sent.</string>
+    <string name="invoke_no_programs">This chain does not run programs yet, so Rand Wallet cannot swap here. Nothing was sent.</string>
+    <string name="invoke_program_refused">The program would not accept this swap, so nothing was sent: %1$s</string>
+    <string name="invoke_stale_proving">The pool changed while this was being proved. Nothing was sent.</string>
+    <string name="invoke_stale_read">The pool changed since it was read. Nothing was sent.</string>
+    <string name="invoke_vault_short">The pool does not hold enough to pay this out. Nothing was sent.</string>
+
+    <!-- list -->
+    <string name="list_separator">; </string>
+
+    <!-- phase -->
+    <string name="phase_authorising">Authorising the spend on this device…</string>
+    <string name="phase_building_witness">Building the witness</string>
+    <string name="phase_committed">Committed</string>
+    <string name="phase_fetching_witnesses">Fetching witnesses</string>
+    <string name="phase_not_yet_committed">Submitted; not yet committed</string>
+    <string name="phase_proving_bundle">Proving the bundle</string>
+    <string name="phase_proving_on">Proving on %1$s…</string>
+    <string name="phase_proving_transfer">Proving your transfer</string>
+    <string name="phase_selecting_notes">Selecting notes</string>
+    <string name="phase_submitting">Submitting</string>
+    <string name="phase_submitting_node">Submitting to the node</string>
+    <string name="phase_syncing_notes">Syncing notes</string>
+    <string name="phase_waiting_commit">Submitted; waiting for the commit</string>
+    <string name="phase_waiting_position">Waiting at position %1$d on %2$s</string>
+
+    <!-- pool -->
+    <string name="pool_all_busy">The %1$s provers are all busy right now; try again in a minute, or pair your own prover in Settings.</string>
+    <string name="pool_member_busy">%1$s is busy</string>
+    <string name="pool_member_no_answer">%1$s did not answer</string>
+    <string name="pool_member_no_jobs">%1$s does not take this wallet\'s jobs</string>
+    <string name="pool_member_other_key">%1$s answered with another key than the one this wallet pins</string>
+    <string name="pool_member_reason">%1$s: %2$s</string>
+    <string name="pool_unreachable">The %1$s provers cannot be reached right now (%2$s). Try again later, or pair your own prover in Settings.</string>
+
+    <!-- prover -->
+    <string name="prover_at_no_answer">The prover at %1$s did not answer: %2$s</string>
+    <string name="prover_builtin_key_mismatch">None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.</string>
+    <string name="prover_builtin_unusable">The built-in provers cannot be used.</string>
+    <string name="prover_chain_unsupported">This wallet cannot prove for this chain.</string>
+    <string name="prover_could_not_prove">The prover could not make this proof (%1$s).</string>
+    <string name="prover_fee_clause">it charges a fee per proof, which this version of the wallet does not pay</string>
+    <string name="prover_fee_clause_amount">it charges a fee of %1$s RAND per proof, which this version of the wallet does not pay</string>
+    <string name="prover_fee_refusal">This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing in Settings, or send from the rand command-line wallet.</string>
+    <string name="prover_handover_failed">Could not hand the proof to your prover: %1$s</string>
+    <string name="prover_job_gone">The prover no longer has this proof (it restarted or the job expired). Send again.</string>
+    <string name="prover_key_changed_settings">The prover at that address now has a different key. Pair it again in Settings.</string>
+    <string name="prover_key_differs_from_link">The prover at that address has a different key from the one the link names. Do not pair it.</string>
+    <string name="prover_link_https">Use https for a prover — plain http is only allowed for a prover on this machine.</string>
+    <string name="prover_link_https_only">A prover address must be https://.</string>
+    <string name="prover_link_no_address">The pairing link has no prover address.</string>
+    <string name="prover_link_not_url">The pairing link\'s prover address is not a URL.</string>
+    <string name="prover_no_answer">Your prover did not answer: %1$s</string>
+    <string name="prover_no_job_id">the prover accepted the job but named no job id</string>
+    <string name="prover_no_memory_lead">This device does not have the memory for this proof. </string>
+    <string name="prover_no_proof">The prover finished but sent no proof.</string>
+    <string name="prover_no_spend_jobs">Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the rand command-line wallet.</string>
+    <string name="prover_no_viewing_jobs">Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another.</string>
+    <string name="prover_none_shipped">This build ships no prover to use.</string>
+    <string name="prover_not_json_rpc">the prover at %1$s did not answer with JSON-RPC (HTTP %2$s)</string>
+    <string name="prover_not_pairing_link">That is not a pairing link.</string>
+    <string name="prover_paired_unavailable">This device does not have the memory for this proof. Your paired prover is not available: %1$s.</string>
+    <string name="prover_pairing_unreadable">Your prover\'s pairing could not be opened. Pair the prover again in Settings.</string>
+    <string name="prover_pool_name">%1$s provers</string>
+    <string name="prover_probe_answering">Answering · %1$d in its queue.</string>
+    <string name="prover_probe_answering_of">Answering · %1$d of %2$d in its queue.</string>
+    <string name="prover_probe_key_changed">the prover at that address now has a different key; pair it again</string>
+    <string name="prover_probe_no_answer">the prover at %1$s did not answer (%2$s)</string>
+    <string name="prover_probe_no_reply">no reply</string>
+    <string name="prover_probe_not_answering">Not answering: %1$s.</string>
+    <string name="prover_proof_refused">The prover\'s proof was refused by this wallet: %1$s</string>
+    <string name="prover_refused_job">The prover refused the job (%1$s).</string>
+    <string name="prover_seal_failed_swap">The wallet could not seal this swap for the prover.</string>
+    <string name="prover_seal_failed_transfer">The wallet could not seal this transfer for the prover.</string>
+    <string name="prover_spend_key_own_only">On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the rand command-line wallet.</string>
+    <string name="prover_takes_no_jobs">it does not take this wallet\'s jobs</string>
+    <string name="prover_unknown_state">The prover answered with an unknown state (%1$s).</string>
+    <string name="prover_unpaired">This prover does not know this pairing. Pair it again in Settings.</string>
+    <string name="prover_unreachable">cannot reach the prover at %1$s: %2$s</string>
+    <string name="prover_unreachable_timeout">cannot reach the prover at %1$s: timed out</string>
+    <string name="prover_wrong_job_kind">This prover does not accept this kind of job. Pair another prover in Settings.</string>
+    <string name="prover_wrong_job_kind_reason">This prover does not accept this kind of job (%1$s). Pair another prover in Settings.</string>
+
+    <!-- refusal -->
+    <string name="refusal_default_notice_send">Before the first send through the RandProtocol prover, read what it can see: it gets this wallet\'s viewing key. Send again and read the notice, or pair your own prover in Settings.</string>
+    <string name="refusal_default_notice_swap">Before the first swap through the RandProtocol provers, read what they can see: they get this wallet\'s viewing key. Review the swap again and read the notice, or pair your own prover in Settings.</string>
+    <string name="refusal_no_programs_yet">This chain does not run programs yet.</string>
+    <string name="refusal_swap_memory">This phone does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead.</string>
+
+    <!-- send -->
+    <string name="send_confirm_line">to %1$s · %2$s %3$s</string>
+    <string name="send_confirm_line_named">to %1$s · %2$s · %3$s %4$s</string>
+    <string name="send_link_amount_conflict">The link asks for %1$s %2$s; you typed %3$s %2$s.</string>
+    <string name="send_link_memo_conflict">The link’s memo is \"%1$s\"; you typed \"%2$s\".</string>
+    <string name="send_link_other_asset">The link asks for an asset this wallet does not hold (%1$s).</string>
+    <string name="send_link_unreadable">That payment link could not be read: %1$s</string>
+    <string name="send_memo_line">memo \"%1$s\"</string>
+    <string name="send_no_memo_notice">This network doesn\'t carry memos; the memo will not be sent</string>
+    <string name="send_not_a_recipient">That is not a shielded address, a randpay: link, or a saved contact.</string>
+    <string name="send_not_an_address">That is not a rand1 address.</string>
+
+    <!-- swap -->
+    <string name="swap_asset_unnamed">asset %1$d</string>
+    <string name="swap_bad_amount">Enter an amount like 1.5.</string>
+    <string name="swap_enter_amount">Enter an amount.</string>
+    <string name="swap_no_route">There is no pool for that pair.</string>
+    <string name="swap_over_balance">You have %1$s %2$s.</string>
+    <string name="swap_rate_line">1 %1$s ≈ %2$s %3$s</string>
+    <string name="swap_stale">The pool moved before your swap reached the chain, so nothing was sent. Here is a new quote.</string>
+    <string name="swap_too_large">That amount is more than the pool can hold.</string>
+    <string name="swap_too_small">That amount is too small: it would buy nothing.</string>
+    <string name="swap_via">%1$s → RAND → %2$s</string>
+
+    <!-- plurals -->
+    <plurals name="memo_counter">
+        <item quantity="one">%1$d/%2$d bytes</item>
+        <item quantity="other">%1$d/%2$d bytes</item>
+    </plurals>
+    <plurals name="memo_too_long">
+        <item quantity="one">The memo is %1$d byte; the limit is %2$d.</item>
+        <item quantity="other">The memo is %1$d bytes; the limit is %2$d.</item>
+    </plurals>
+    <plurals name="prover_full">
+        <item quantity="one">The prover is full (%1$s waiting). Try again in a few minutes.</item>
+        <item quantity="other">The prover is full (%1$s waiting). Try again in a few minutes.</item>
+    </plurals>
+    <plurals name="prover_silent_minutes">
+        <item quantity="one">Your prover has not answered for %1$d minute, so nothing was sent. Send again.</item>
+        <item quantity="other">Your prover has not answered for %1$d minutes, so nothing was sent. Send again.</item>
+    </plurals>
+    <plurals name="prover_unfinished_minutes">
+        <item quantity="one">Your prover has not finished after %1$d minute, so nothing was sent. Send again.</item>
+        <item quantity="other">Your prover has not finished after %1$d minutes, so nothing was sent. Send again.</item>
+    </plurals>
+
+    <!-- Clipboard labels (ClipData): what was copied, shown by the system's clipboard UI. -->
+    <string name="clip_address">address</string>
+    <string name="clip_spend_key">spend key</string>
+    <string name="clip_viewing_key">viewing key</string>
+    <string name="clip_tx_key">transaction key</string>
+    <string name="clip_tx_hash">transaction hash</string>
+    <string name="clip_payment_link">payment link</string>
+
+    <!-- Amounts: %1$s is the number, already formatted (ASCII digits); %2$s the symbol (RAND, zUSD …). -->
+    <string name="amount_with_symbol">%1$s %2$s</string>
+    <!-- An incoming / outgoing amount; %1$s is the amount with its symbol. U+2212 is the minus sign. -->
+    <string name="amount_in">+%1$s</string>
+    <string name="amount_out">−%1$s</string>
+    <!-- The contact book's refusals (store/Contacts.java). -->
+    <string name="contacts_name_rule">a contact name is 1-64 characters and cannot start with rand1 or randpay:</string>
+    <string name="contacts_needs_address">a contact needs an address</string>
+    <string name="contacts_name_exists">a contact named %1$s exists</string>
+    <string name="contacts_address_saved_as">this address is already saved as %1$s</string>
+    <string name="contacts_no_such">no contact named %1$s</string>
+    <string name="contacts_save_failed">could not save contacts</string>
+    <string name="contacts_save_failed_detail">could not save contacts: %1$s</string>
+    <string name="amount_zero" translatable="false">0</string>
+    <string name="placeholder_dash" translatable="false">—</string>
+    <!-- The activity row: the block height, and "Block 12 · Spent". -->
+    <string name="activity_block">Block %1$s</string>
+    <string name="activity_subtitle_spent">%1$s · %2$s</string>
+    <string name="node_no_answer">the node did not answer</string>
+    <string name="proving_busy">Another transaction is being proved. Try again when it is done.</string>
+    <string name="swap_unreadable">This swap cannot be read. Nothing was sent.</string>
+    <!-- A prover pool member's answer: "%1$s" its name, "%2$s" what it said. -->
+    <string name="settings_prover_member_line">%1$s: %2$s</string>
 </resources>

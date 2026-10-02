@@ -18,6 +18,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:localeConfig="@xml/locales_config"
         android:networkSecurityConfig="@xml/network_security_config"
         android:theme="@style/Theme.RandWallet">
 
@@ -59,5 +60,16 @@
             android:name=".wallet.ProvingService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Settings › Language below API 33: AppCompat stores the app's language itself and
+             applies it at start (from API 33 the platform's per-app language does). -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
     </application>
 </manifest>

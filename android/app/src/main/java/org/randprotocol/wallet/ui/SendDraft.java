@@ -2,8 +2,10 @@ package org.randprotocol.wallet.ui;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.randprotocol.wallet.R;
 import org.randprotocol.wallet.store.Contacts;
 import org.randprotocol.wallet.util.Amounts;
+import org.randprotocol.wallet.util.L10n;
 
 import java.math.BigInteger;
 import java.util.Locale;
@@ -135,18 +137,18 @@ public final class SendDraft {
     public static Conflicts conflicts(PaymentLink link, String typedAmount, String typedMemo) {
         Conflicts out = new Conflicts();
         if (!linkIsRand(link.asset)) {
-            out.to = "The link asks for an asset this wallet does not hold (" + link.asset + ").";
+            out.to = L10n.t(R.string.send_link_other_asset, "The link asks for an asset this wallet does not hold (%1$s).", link.asset);
         }
         String typed = typedAmount == null ? "" : typedAmount.trim();
         if (out.to == null && link.amount != null && !typed.isEmpty()) {
             BigInteger a = Amounts.parse(typed), b = Amounts.parse(link.amount);
             if (a == null || b == null || !a.equals(b)) {
-                out.amount = "The link asks for " + link.amount + " " + SYMBOL + "; you typed " + typed + " " + SYMBOL + ".";
+                out.amount = L10n.t(R.string.send_link_amount_conflict, "The link asks for %1$s %2$s; you typed %3$s %2$s.", link.amount, SYMBOL, typed);
             }
         }
         String memo = typedMemo == null ? "" : typedMemo;
         if (link.memo != null && !link.memo.isEmpty() && !memo.isEmpty() && !memo.equals(link.memo)) {
-            out.memo = "The link’s memo is \"" + Memo.display(link.memo) + "\"; you typed \"" + Memo.display(memo) + "\".";
+            out.memo = L10n.t(R.string.send_link_memo_conflict, "The link’s memo is \"%1$s\"; you typed \"%2$s\".", Memo.display(link.memo), Memo.display(memo));
         }
         return out;
     }
@@ -186,15 +188,21 @@ public final class SendDraft {
     public static String confirmationLine(String name, String fingerprint, String amount, String symbol) {
         // A contact name is user-entered (and may end in a space): shown through the memo rule,
         // the separator included, so the line never carries a control character or two spaces.
-        String who = name != null ? Memo.display(name + " · ") : "";
-        String fp = fingerprint != null ? "fingerprint " + fingerprint : "fingerprint unavailable";
-        return "to " + who + fp + " · " + amount + " " + symbol;
+        String fp = fingerprint != null
+                ? L10n.t(R.string.contacts_fingerprint, "fingerprint %1$s", fingerprint)
+                : L10n.t(R.string.contacts_fingerprint_unavailable, "fingerprint unavailable");
+        if (name == null) return L10n.t(R.string.send_confirm_line, "to %1$s · %2$s %3$s", fp, amount, symbol);
+        // The name with its separator through the display rule (a trailing space collapses into
+        // it), then the separator off again: the format puts it back.
+        String who = Memo.display(name + " · ");
+        if (who.endsWith(" · ")) who = who.substring(0, who.length() - 3);
+        return L10n.t(R.string.send_confirm_line_named, "to %1$s · %2$s · %3$s %4$s", who, fp, amount, symbol);
     }
 
     /** The memo's own row on the confirmation: {@code memo "<text>"}, with every control and bidi
      *  character shown as U+FFFD ({@link Memo#display}), so it is one line that reads as a memo. */
     public static String memoLine(String memo) {
-        return "memo \"" + Memo.display(memo) + "\"";
+        return L10n.t(R.string.send_memo_line, "memo \"%1$s\"", Memo.display(memo));
     }
 
     /**
@@ -214,7 +222,7 @@ public final class SendDraft {
                 try {
                     link = core.uriParse(s);
                 } catch (Exception e) {
-                    throw new RecipientException("That payment link could not be read: " + e.getMessage());
+                    throw new RecipientException(L10n.t(R.string.send_link_unreadable, "That payment link could not be read: %1$s", e.getLocalizedMessage()));
                 }
                 return new Resolved(link.address, contacts.nameOf(link.address), link.fingerprint, link);
             }
@@ -223,7 +231,7 @@ public final class SendDraft {
                 // exactly as entered (the CLI, iOS and the shared UI alike — final review 2).
                 String typed = text == null ? "" : text;
                 String addr = contacts.addressOf(typed);
-                if (addr == null) throw new RecipientException(NOT_A_RECIPIENT);
+                if (addr == null) throw new RecipientException(L10n.t(R.string.send_not_a_recipient, NOT_A_RECIPIENT));
                 return new Resolved(addr, typed, fingerprint(core, addr), null);
             }
         }
@@ -233,7 +241,8 @@ public final class SendDraft {
         try {
             return core.fingerprint(address);
         } catch (Exception e) {
-            throw new RecipientException(e.getMessage());
+            throw new RecipientException(e.getLocalizedMessage());
+
         }
     }
 

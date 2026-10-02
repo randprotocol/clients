@@ -91,7 +91,7 @@ public class SendActivity extends BaseActivity {
         }
         b = ActivitySendBinding.inflate(getLayoutInflater());
         setContentView(b.getRoot());
-        b.fee.setText(Amounts.format(fee) + " RAND");
+        b.fee.setText(rand(Amounts.format(fee)));
 
         // A scanned code goes through the same resolution as a pasted one.
         scanner = registerForActivityResult(new ScanContract(), result -> {
@@ -127,7 +127,7 @@ public class SendActivity extends BaseActivity {
         });
         b.copyKey.setOnClickListener(v -> {
             SendState s = SendMonitor.current();
-            if (s.txKey != null) copy("transaction key", s.txKey, getString(R.string.tx_key_copied));
+            if (s.txKey != null) copy(getString(R.string.clip_tx_key), s.txKey, getString(R.string.tx_key_copied));
         });
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
@@ -249,7 +249,7 @@ public class SendActivity extends BaseActivity {
             // sanitises the same name on the review step below).
             String who = resolved.name != null ? Memo.display(resolved.name + " · ") : "";
             String kind = resolved.link != null ? getString(R.string.send_payment_link) : "";
-            b.recipientInfo.setText(kind + who + "fingerprint " + resolved.fingerprint);
+            b.recipientInfo.setText(kind + who + getString(R.string.contacts_fingerprint, resolved.fingerprint));
             b.recipientInfo.setVisibility(View.VISIBLE);
         } else {
             b.recipientInfo.setVisibility(View.GONE);
@@ -268,7 +268,7 @@ public class SendActivity extends BaseActivity {
         b.memoGroup.setVisibility(memoSupported ? View.VISIBLE : View.GONE);
         boolean blocked = SendDraft.memoBlocksContinue(memoSupported, memo);
         b.memoNoticeGroup.setVisibility(blocked ? View.VISIBLE : View.GONE);
-        b.memoNotice.setText(Memo.NO_MEMO_NOTICE);
+        b.memoNotice.setText(Memo.noMemoNotice());
         b.memoCounter.setText(Memo.counter(memo));
         b.memoCounter.setTextColor(getColor(Memo.tooLong(memo) == null ? R.color.text_mute : R.color.negative));
         show(b.memoError, Memo.tooLong(memo) != null ? Memo.tooLong(memo) : c.memo);
@@ -361,13 +361,13 @@ public class SendActivity extends BaseActivity {
             b.reviewError.setText("");
             b.confirm.setEnabled(true);
         } catch (Exception e) {
-            b.reviewError.setText(e.getMessage());
+            b.reviewError.setText(e.getLocalizedMessage());
             b.confirm.setEnabled(false);
         }
-        b.rAmount.setText(Amounts.format(amount) + " RAND");
+        b.rAmount.setText(rand(Amounts.format(amount)));
         b.rTo.setText(Amounts.shortAddress(to));
-        b.rFee.setText(Amounts.format(fee) + " RAND");
-        b.rTotal.setText(Amounts.format(amount.add(fee)) + " RAND");
+        b.rFee.setText(rand(Amounts.format(fee)));
+        b.rTotal.setText(rand(Amounts.format(amount.add(fee))));
         b.rConfirm.setText(SendDraft.confirmationLine(resolved.name, resolved.fingerprint, Amounts.format(amount), SendDraft.SYMBOL));
         b.rMemo.setText(SendDraft.memoLine(memoToSend));
         showMemoryWarning();
@@ -411,7 +411,8 @@ public class SendActivity extends BaseActivity {
         if (!WalletService.deviceCanProve(this) && wallet().usesDefaultProver() && !wallet().defaultNoticeRead()) {
             new AlertDialog.Builder(this)
                     .setTitle(R.string.prover_notice_title)
-                    .setMessage(getString(R.string.prover_notice_body, poolSize()))
+                    .setMessage(getResources().getQuantityString(R.plurals.prover_notice_body, poolSize(), poolSize()))
+
                     .setPositiveButton(R.string.prover_notice_continue, (d, w) -> {
                         wallet().acknowledgeDefaultProver();
                         startSend();
@@ -461,7 +462,7 @@ public class SendActivity extends BaseActivity {
                 resetDoneButton();
                 b.resultIcon.setImageResource(R.drawable.ic_check);
                 b.resultTitle.setText(R.string.sent_title);
-                b.resultAmount.setText("−" + Amounts.format(s.amount) + " RAND");
+                b.resultAmount.setText(randOut(Amounts.format(s.amount)));
                 b.resultMessage.setText(s.message);
                 b.resultHash.setText(s.hash);
                 b.resultDetails.setVisibility(View.VISIBLE);

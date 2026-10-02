@@ -2,6 +2,8 @@ package org.randprotocol.wallet.wallet;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.randprotocol.wallet.R;
+import org.randprotocol.wallet.util.L10n;
 
 import java.net.URI;
 import java.util.Locale;
@@ -109,10 +111,17 @@ public final class ProverPairing {
     public static final class Probe {
         public final ProverClient.Info info;
         public final String reason;
+        /** The prover answered, with another key than the pairing's (the reason's words are the user's language). */
+        public final boolean keyChanged;
 
         Probe(ProverClient.Info info, String reason) {
+            this(info, reason, reason != null && reason.contains("different key"));
+        }
+
+        Probe(ProverClient.Info info, String reason, boolean keyChanged) {
             this.info = info;
             this.reason = reason;
+            this.keyChanged = keyChanged;
         }
 
         public boolean ok() {
@@ -122,11 +131,13 @@ public final class ProverPairing {
         /** The one status line Settings shows under the pairing. */
         public String line() {
             if (info != null) {
-                return "Answering · " + info.depth + (info.max > 0 ? " of " + info.max : "") + " in its queue.";
+                return info.max > 0
+                        ? L10n.t(R.string.prover_probe_answering_of, "Answering · %1$d of %2$d in its queue.", info.depth, info.max)
+                        : L10n.t(R.string.prover_probe_answering, "Answering · %1$d in its queue.", info.depth);
             }
-            String w = reason == null ? "no reply" : reason;
+            String w = reason == null ? L10n.t(R.string.prover_probe_no_reply, "no reply") : reason;
             if (w.endsWith(".")) w = w.substring(0, w.length() - 1);
-            return "Not answering: " + w + ".";
+            return L10n.t(R.string.prover_probe_not_answering, "Not answering: %1$s.", w);
         }
     }
 
@@ -160,7 +171,7 @@ public final class ProverPairing {
      */
     public static java.util.List<Paired> builtInPool(ProverCore core) throws Exception {
         TrustedProver t = core.trustedProver();
-        if (t == null) throw new ProverClient.Refusal("This build ships no prover to use.");
+        if (t == null) throw new ProverClient.Refusal(L10n.t(R.string.prover_none_shipped, "This build ships no prover to use."));
         java.util.List<Paired> out = new java.util.ArrayList<>();
         for (TrustedProver.Member m : t.members) {
             try {
@@ -176,7 +187,8 @@ public final class ProverPairing {
             }
         }
         if (out.isEmpty()) {
-            throw new ProverClient.Refusal("None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.");
+            throw new ProverClient.Refusal(L10n.t(R.string.prover_builtin_key_mismatch,
+                    "None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them."));
         }
         return out;
     }
@@ -193,10 +205,11 @@ public final class ProverPairing {
         try {
             info = new ProverClient(url, transport).info();
         } catch (ProverClient.ProverError e) {
-            throw new ProverClient.Refusal("The prover at " + url + " did not answer: " + e.getMessage());
+            throw new ProverClient.Refusal(L10n.t(R.string.prover_at_no_answer, "The prover at %1$s did not answer: %2$s", url, e.getMessage()));
         }
         if (!sameKey(core, info, kemEk, fp)) {
-            throw new ProverClient.Refusal("The prover at that address has a different key from the one the link names. Do not pair it.");
+            throw new ProverClient.Refusal(L10n.t(R.string.prover_key_differs_from_link,
+                    "The prover at that address has a different key from the one the link names. Do not pair it."));
         }
         String label = name == null || name.trim().isEmpty() ? nameOf(url) : name.trim();
         if (label.length() > 64) label = label.substring(0, 64);
@@ -208,10 +221,10 @@ public final class ProverPairing {
         try {
             info = new ProverClient(pairing.url, transport).info();
         } catch (Exception e) {
-            return new Probe(null, "the prover at " + pairing.url + " did not answer (" + e.getMessage() + ")");
+            return new Probe(null, L10n.t(R.string.prover_probe_no_answer, "the prover at %1$s did not answer (%2$s)", pairing.url, e.getMessage()), false);
         }
         if (!sameKey(core, info, pairing.kemEk, pairing.fingerprint)) {
-            return new Probe(null, "the prover at that address now has a different key; pair it again");
+            return new Probe(null, L10n.t(R.string.prover_probe_key_changed, "the prover at that address now has a different key; pair it again"), true);
         }
         return new Probe(info, null);
     }
@@ -228,7 +241,7 @@ public final class ProverPairing {
     private static JSONObject parse(ProverCore core, String link) throws Exception {
         JSONObject p = core.parseProverLink(link == null ? "" : link.trim());
         if (!p.has("kem_ek") || !p.has("url") || !p.has("token") || !p.has("fingerprint")) {
-            throw new ProverClient.Refusal("That is not a pairing link.");
+            throw new ProverClient.Refusal(L10n.t(R.string.prover_not_pairing_link, "That is not a pairing link."));
         }
         return p;
     }
