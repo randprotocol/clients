@@ -1,0 +1,22 @@
+{
+  "appName": {
+    "message": "Rand Wallet",
+    "description": "The extension's name, as the browser's extension list and the store show it. 'Rand Wallet' is the product's name: keep it as it is unless your language transliterates product names."
+  },
+  "appShortName": {
+    "message": "Rand Wallet",
+    "description": "A short form of the name (at most 12 characters), used where the full name would not fit. Normally the same as appName."
+  },
+  "appDescription": {
+    "message": "Rand Protocol のプライベートウォレット。シールドされた RAND とトークン、プライベートな支払い、ブリッジ出金、dapp の承認に対応します。",
+    "description": "One sentence under the name in the extension list and the store. At most 132 characters. 'Rand Protocol' and 'RAND' (the coin) stay as they are."
+  },
+  "actionTitle": {
+    "message": "Rand Wallet",
+    "description": "The tooltip on the toolbar button that opens the wallet's popup."
+  },
+  "sidebarTitle": {
+    "message": "Rand Wallet",
+    "description": "Firefox only: the title of the wallet's entry in the sidebar menu and at the top of the sidebar."
+  }
+}
