@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="autolock_labels">
+        <item>1 دقیقه</item>
+        <item>5 دقیقه</item>
+        <item>15 دقیقه</item>
+        <item>1 ساعت</item>
+        <item>هرگز</item>
+    </string-array>
+    <string-array name="theme_labels">
+        <item>تیره</item>
+        <item>روشن</item>
+        <item>سیستم</item>
+    </string-array>
+</resources>

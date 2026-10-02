@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="autolock_labels">
+        <item>1 minit</item>
+        <item>5 minit</item>
+        <item>15 minit</item>
+        <item>1 jam</item>
+        <item>Tidak sekali-kali</item>
+    </string-array>
+    <string-array name="theme_labels">
+        <item>Gelap</item>
+        <item>Cerah</item>
+        <item>Sistem</item>
+    </string-array>
+</resources>

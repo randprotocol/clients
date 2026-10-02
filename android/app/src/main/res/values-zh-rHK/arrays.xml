@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="autolock_labels">
+        <item>1 分鐘</item>
+        <item>5 分鐘</item>
+        <item>15 分鐘</item>
+        <item>1 小時</item>
+        <item>永不</item>
+    </string-array>
+    <string-array name="theme_labels">
+        <item>深色</item>
+        <item>淺色</item>
+        <item>跟隨系統</item>
+    </string-array>
+</resources>
