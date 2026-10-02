@@ -44,6 +44,7 @@
 // out of the failover rotation entirely, so a healthy `rpc3` is preferred over a misconfigured
 // `rpc2` without the user ever being shown a refusal.
 import { typed } from '../lib/rpc-methods.js';
+import { t } from '../i18n.js';
 
 export class RpcError extends Error {
   /**
@@ -90,7 +91,7 @@ const SUBMITS = new Set(SUBMIT_METHODS);
 
 /** The shape ui/ recognises as "this was cancelled", not "the node failed" (see ui/backend.js). */
 function abortError() {
-  const err = new Error('The operation was aborted.');
+  const err = new Error(t('The operation was aborted.'));
   err.name = 'AbortError';
   return err;
 }
@@ -242,13 +243,13 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
 
   /** One POST to ONE url. Never falls over to another: this is the only place bytes are sent. */
   async function requestOnce(url, method, params = [], { signal } = {}) {
-    if (!isAllowedRpcMethod(method)) throw new RpcError(`${method} is not allowed from this wallet`, -32601);
+    if (!isAllowedRpcMethod(method)) throw new RpcError(t('{method} is not allowed from this wallet', { method }), -32601);
     if (signal && signal.aborted) throw abortError();
     const ctl = new AbortController();
     const onAbort = () => ctl.abort();
     if (signal) signal.addEventListener('abort', onAbort, { once: true });
     let timedOut = false;
-    const t = setTimeout(() => { timedOut = true; ctl.abort(); }, timeoutMs);
+    const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, timeoutMs);
     let body;
     try {
       // The timer and the caller's cancel cover the WHOLE exchange, body read included: a node
@@ -261,7 +262,7 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
         signal: ctl.signal,
       });
       if (!res.ok) {
-        const err = new RpcError(`${url} answered HTTP ${res.status}`, -1, 'http');
+        const err = new RpcError(t('{url} answered HTTP {status}', { url, status: res.status }), -1, 'http');
         err.status = res.status;
         if (res.status === 429) {
           const after = Number(res.headers && typeof res.headers.get === 'function' ? res.headers.get('retry-after') : NaN);
@@ -275,7 +276,7 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
         if (timedOut || e?.name === 'AbortError') throw e; // the outer catch classifies these
         // A proxy's HTML error page, or a truncated reply. The node has not identified itself
         // and has not answered, so this is a transport failure (-1), not a refusal.
-        throw new RpcError(`${url} did not answer with JSON-RPC`, -1, 'body');
+        throw new RpcError(t('{url} did not answer with JSON-RPC', { url }), -1, 'body');
       }
     } catch (e) {
       if (e instanceof RpcError) throw e;
@@ -284,12 +285,12 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
       // connection was refused before a byte left" — both surface as an AbortError from `fetch`.
       // The submission rule below turns on exactly that distinction.
       const out = timedOut || e?.name === 'AbortError';
-      throw new RpcError(`cannot reach ${url}: ${out ? 'timed out' : e?.message || e}`, -1, out ? 'timeout' : 'connect');
+      throw new RpcError(t('cannot reach {url}: {reason}', { url, reason: out ? t('timed out') : e?.message || e }), -1, out ? 'timeout' : 'connect');
     } finally {
-      clearTimeout(t);
+      clearTimeout(timer);
       if (signal) signal.removeEventListener('abort', onAbort);
     }
-    if (!body || typeof body !== 'object') throw new RpcError(`${url} did not answer with JSON-RPC`, -1, 'body');
+    if (!body || typeof body !== 'object') throw new RpcError(t('{url} did not answer with JSON-RPC', { url }), -1, 'body');
     if (body.error) throw new RpcError(body.error.message || 'rpc error', body.error.code);
     return body.result;
   }
@@ -355,22 +356,22 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
     if (expected.chainId) {
       const said = await ask('rand_chainId');
       if (said === undefined || said === null || said === '') {
-        note(url, answered ? 'mute' : 'down', answered ? 'would not name its chain' : 'did not answer');
+        note(url, answered ? 'mute' : 'down', answered ? t('would not name its chain') : t('did not answer'));
         return answered ? 'mute' : 'down';
       }
       if (String(said) !== expected.chainId) {
-        note(url, 'wrong', `is on chain ${said}, not ${expected.chainId}`);
+        note(url, 'wrong', t('is on chain {chain}, not {expected}', { chain: said, expected: expected.chainId }));
         return 'wrong';
       }
     }
     if (expected.genesis) {
       const said = await ask('rand_getGenesisHash');
       if (typeof said !== 'string' || !said) {
-        note(url, answered ? 'mute' : 'down', answered ? 'would not name its genesis' : 'did not answer');
+        note(url, answered ? 'mute' : 'down', answered ? t('would not name its genesis') : t('did not answer'));
         return answered ? 'mute' : 'down';
       }
       if (said !== expected.genesis) {
-        note(url, 'wrong', 'has a different genesis hash');
+        note(url, 'wrong', t('has a different genesis hash'));
         return 'wrong';
       }
     }
@@ -431,7 +432,7 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
           note(url, 'down', err.message);
           if (skipped.length > 0) {
             const also = skipped.map((s) => `${s.url} (${s.reason})`).join(', ');
-            err.message = `${err.message}; also tried ${also}`;
+            err.message = `${err.message}; ${t('also tried {endpoints}', { endpoints: also })}`;
             err.tried = skipped;
           }
         }
@@ -472,7 +473,7 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
   async function failover(method, params = [], options) {
     // Before any endpoint is touched, including by a probe: a method this wallet may not put on
     // the wire is a caller's mistake, and it must not cost a round trip to say so.
-    if (!isAllowedRpcMethod(method)) throw new RpcError(`${method} is not allowed from this wallet`, -32601);
+    if (!isAllowedRpcMethod(method)) throw new RpcError(t('{method} is not allowed from this wallet', { method }), -32601);
     let last = null;
     let lastUrl = null;
     for (const url of order()) {
@@ -499,11 +500,11 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
     const named = skippedNotes(null).filter((s) => s.url !== lastUrl).map((s) => `${s.url} (${s.reason})`).join(', ');
     forgetTransientFailures();
     if (last) {
-      if (named) { last.message = `${last.message}; also tried ${named}`; }
+      if (named) { last.message = `${last.message}; ${t('also tried {endpoints}', { endpoints: named })}`; }
       throw last;
     }
     throw new RpcError(
-      `no endpoint could answer ${method}${named ? `; tried ${named}` : ''}`,
+      named ? t('no endpoint could answer {method}; tried {endpoints}', { method, endpoints: named }) : t('no endpoint could answer {method}', { method }),
       -1,
       'connect',
     );

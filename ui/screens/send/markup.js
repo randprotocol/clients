@@ -248,11 +248,14 @@ export function proverDeclinedMarkup() {
 }
 
 /** The RandProtocol prover is the way to prove here, and it did not answer: plainly, and the way out. */
-export function proverUnreachableMarkup(reason) {
+export function proverUnreachableMarkup(reason, busy) {
+  // The engine flags a busy pool (`busy: true`); the reason itself is translated, so matching its
+  // words only works in English and is the fallback for an answer that carries no flag.
+  const isBusy = typeof busy === 'boolean' ? busy : /all busy/.test(String(reason || ''));
   return h`
     <div class="banner warn" data-role="prover-unreachable">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">${/all busy/.test(String(reason || '')) ? t('The RandProtocol provers are busy') : t('The RandProtocol provers cannot be reached')}</span>${reason || t('They did not answer.')}</span>
+      <span><span class="banner-title">${isBusy ? t('The RandProtocol provers are busy') : t('The RandProtocol provers cannot be reached')}</span>${reason || t('They did not answer.')}</span>
     </div>
     <button class="btn block" type="button" data-go="settings" data-role="use-own-prover">${t('Pair your own prover in Settings')}</button>`;
 }
@@ -286,7 +289,7 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
   const footer = canProve.ok && canProve.notice
     ? raw(proverNoticeMarkup(canProve.provers))
     : !canProve.ok && canProve.unreachable
-      ? raw(proverUnreachableMarkup(canProve.reason))
+      ? raw(proverUnreachableMarkup(canProve.reason, canProve.busy))
       : canProve.ok
     ? raw(h`
       ${gate}

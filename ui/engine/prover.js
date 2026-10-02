@@ -22,6 +22,8 @@
 // `prover_fingerprint`): no base58 and no blake3 are re-implemented here.
 
 import { urlRule } from '../lib/url-rule.js';
+import { t } from '../i18n.js';
+import { translateCoreError } from './core-errors.js';
 
 /** The session-storage key the one pending remote proof lives under (see `remoteProve`). */
 export const PENDING_PROOF_KEY = 'pendingProof';
@@ -75,7 +77,7 @@ function definite(message, extra = {}) {
 }
 
 function abortError() {
-  const err = new Error('The operation was aborted.');
+  const err = new Error(t('The operation was aborted.'));
   err.name = 'AbortError';
   return err;
 }
@@ -89,10 +91,10 @@ function abortError() {
 export function checkProverUrl(text) {
   const r = urlRule(text);
   if (r.url) return { url: r.url };
-  if (r.empty) return { error: 'The pairing link has no prover address.' };
-  if (r.problem === 'not-url') return { error: 'The pairing link\'s prover address is not a URL.' };
-  if (r.problem === 'plain-http') return { error: 'Use https for a prover — plain http is only allowed for a prover on this machine.' };
-  return { error: 'A prover address must be https://.' };
+  if (r.empty) return { error: t('The pairing link has no prover address.') };
+  if (r.problem === 'not-url') return { error: t('The pairing link\'s prover address is not a URL.') };
+  if (r.problem === 'plain-http') return { error: t('Use https for a prover — plain http is only allowed for a prover on this machine.') };
+  return { error: t('A prover address must be https://.') };
 }
 
 /**
@@ -129,18 +131,18 @@ export function makeProverClient({ fetch: fetchImpl, url, timeoutMs = DEFAULT_TI
         body = await res.json();
       } catch (e) {
         if (timedOut || e?.name === 'AbortError') throw e;
-        throw new ProverError(`the prover at ${target} did not answer with JSON-RPC (HTTP ${res.status})`, { failure: res.ok ? 'body' : 'http' });
+        throw new ProverError(t('the prover at {url} did not answer with JSON-RPC (HTTP {status})', { url: target, status: res.status }), { failure: res.ok ? 'body' : 'http' });
       }
     } catch (e) {
       if (e instanceof ProverError) throw e;
       if (signal && signal.aborted) throw abortError();
       const out = timedOut || e?.name === 'AbortError';
-      throw new ProverError(`cannot reach the prover at ${target}: ${out ? 'timed out' : e?.message || e}`, { failure: out ? 'timeout' : 'connect' });
+      throw new ProverError(t('cannot reach the prover at {url}: {reason}', { url: target, reason: out ? t('timed out') : e?.message || e }), { failure: out ? 'timeout' : 'connect' });
     } finally {
       clearTimeout(timer);
       if (signal) signal.removeEventListener('abort', onAbort);
     }
-    if (!body || typeof body !== 'object') throw new ProverError(`the prover at ${target} did not answer with JSON-RPC`, { failure: 'body' });
+    if (!body || typeof body !== 'object') throw new ProverError(t('the prover at {url} did not answer with JSON-RPC', { url: target }), { failure: 'body' });
     if (body.error) {
       const e = body.error;
       throw new ProverError(String(e.message || 'prover error'), { code: e.code, data: e.data });
@@ -155,7 +157,7 @@ export function makeProverClient({ fetch: fetchImpl, url, timeoutMs = DEFAULT_TI
       const r = await call('prover_submit', [String(sealedHex)], options);
       const job = r && r.job;
       if (typeof job !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(job)) {
-        throw new ProverError('the prover accepted the job but named no job id', { failure: 'body' });
+        throw new ProverError(t('the prover accepted the job but named no job id'), { failure: 'body' });
       }
       return job;
     },
@@ -173,28 +175,32 @@ export function proverRefusal(err) {
   if (err.code === PROVER_BUSY) {
     const depth = Number(err.data && err.data.depth);
     const n = Number.isSafeInteger(depth) && depth >= 0 ? depth : '?';
-    return definite(`The prover is full (${n} waiting). Try again in a few minutes.`, { busy: true });
+    return definite(t('The prover is full ({n} waiting). Try again in a few minutes.', { n }), { busy: true });
   }
   if (err.code === PROVER_UNPAIRED) {
-    return definite('This prover does not know this pairing. Pair it again in Settings.', { unpaired: true });
+    return definite(t('This prover does not know this pairing. Pair it again in Settings.'), { unpaired: true });
   }
   if (err.code === PROVER_WITNESS_KIND) {
-    const reason = err.data && typeof err.data.reason === 'string' ? ` (${err.data.reason.slice(0, 200)})` : '';
-    return definite(`This prover does not accept this kind of job${reason}. Pair another prover in Settings, or send from the desktop app.`);
+    const reason = err.data && typeof err.data.reason === 'string' ? err.data.reason.slice(0, 200) : '';
+    return definite(reason
+      ? t('This prover does not accept this kind of job ({reason}). Pair another prover in Settings, or send from the desktop app.', { reason })
+      : t('This prover does not accept this kind of job. Pair another prover in Settings, or send from the desktop app.'));
   }
   if (err.code === PROVER_FEE) {
-    return definite('This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the desktop app.');
+    return definite(t('This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the desktop app.'));
   }
   if (err.code === PROVER_UNKNOWN_JOB) {
-    return definite('The prover no longer has this proof (it restarted or the job expired). Send again.');
+    return definite(t('The prover no longer has this proof (it restarted or the job expired). Send again.'));
   }
-  const reason = err.data && typeof err.data.reason === 'string' ? `: ${err.data.reason}` : '';
-  return definite(`The prover refused the job (${err.message}${reason}).`);
+  const reason = err.data && typeof err.data.reason === 'string' ? err.data.reason : '';
+  return definite(reason
+    ? t('The prover refused the job ({error}: {reason}).', { error: err.message, reason })
+    : t('The prover refused the job ({error}).', { error: err.message }));
 }
 
 /** `info()`, checked just enough to use: `{ok: true, queue, witnessKinds, fee, hcBundles, kemFingerprint, kemEk}`. */
 export function readInfo(info) {
-  if (!info || typeof info !== 'object') throw new ProverError('the prover\'s info is not an object', { failure: 'body' });
+  if (!info || typeof info !== 'object') throw new ProverError(t('the prover\'s info is not an object'), { failure: 'body' });
   const q = info.queue && typeof info.queue === 'object' ? info.queue : {};
   const num = (v) => (Number.isSafeInteger(Number(v)) && Number(v) >= 0 ? Number(v) : 0);
   return {
@@ -264,20 +270,20 @@ async function claimRecord(storage, job, locks) {
   if (verdict === 'unmarked') {
     // The record is left where it was, so Resume can try again. Not definite: this window could
     // not tell whether another one is about to submit it.
-    const err = new Error('Could not claim the proof; check Activity before sending again.');
+    const err = new Error(t('Could not claim the proof; check Activity before sending again.'));
     err.definite = false;
     err.claimFailed = true;
     throw err;
   }
   if (verdict === 'taken') {
-    const err = new Error('This proof was already submitted from another window. Check Activity before sending again.');
+    const err = new Error(t('This proof was already submitted from another window. Check Activity before sending again.'));
     err.definite = false;
     err.alreadySubmitted = true;
     throw err;
   }
   // Nobody claimed it: the record went with a lock, a cancel from another window, or a newer
   // record in its place while the prover worked, and nothing was submitted by anyone.
-  const err = new Error('The pending proof was cleared (the wallet locked, or it was cancelled elsewhere), so nothing was sent. Send again.');
+  const err = new Error(t('The pending proof was cleared (the wallet locked, or it was cancelled elsewhere), so nothing was sent. Send again.'));
   err.definite = true;
   err.pendingLost = true;
   throw err;
@@ -314,7 +320,7 @@ export async function startRemoteProof({
   sleep = defaultSleep, submitTries = SUBMIT_TRIES, submitBackoff = SUBMIT_BACKOFF_MS,
 }) {
   if (!prepared || typeof prepared.sealed_hex !== 'string' || !prepared.pending) {
-    throw definite('The wallet could not seal this transfer for the prover.');
+    throw definite(t('The wallet could not seal this transfer for the prover.'));
   }
   let job;
   for (let attempt = 1; ; attempt += 1) {
@@ -335,7 +341,7 @@ export async function startRemoteProof({
       // Nothing reached the node, whatever the prover said or did not say.
       const refusal = proverRefusal(err);
       if (refusal !== err) throw refusal;
-      throw definite(`Could not hand the proof to the prover: ${err && err.message}`);
+      throw definite(t('Could not hand the proof to the prover: {reason}', { reason: err && err.message }));
     }
   }
   const record = { job, pending: prepared.pending, url: client.url, startedAt: now(), ...meta };
@@ -371,10 +377,10 @@ export async function pollRemoteProof({
   const minutes = (ms) => Math.round(ms / 60000);
   const outOfTime = (silent) => definite(
     silent
-      ? `Your prover has not answered for ${minutes(bound())} minutes. Resume later, or cancel.`
+      ? t('Your prover has not answered for {n} minutes. Resume later, or cancel.', { n: minutes(bound()) })
       : stage === 'proving'
-        ? `Your prover has not finished after ${minutes(maxWait)} minutes of proving. Resume later, or cancel.`
-        : `Your prover has not started this proof after ${minutes(maxQueueWait)} minutes in its queue. Resume later, or cancel.`,
+        ? t('Your prover has not finished after {n} minutes of proving. Resume later, or cancel.', { n: minutes(maxWait) })
+        : t('Your prover has not started this proof after {n} minutes in its queue. Resume later, or cancel.', { n: minutes(maxQueueWait) }),
     { proverSilent: true },
   );
   // `announced` is the detail the caller already reported, so it is not reported twice.
@@ -416,22 +422,24 @@ export async function pollRemoteProof({
       if (stage !== 'proving') { stage = 'proving'; started = now(); }
       say({ prover: name });
     } else if (state === 'done') {
-      if (typeof st.reply !== 'string' || !st.reply) throw await giveUp(definite('The prover finished but sent no proof.'));
+      if (typeof st.reply !== 'string' || !st.reply) throw await giveUp(definite(t('The prover finished but sent no proof.')));
       let res;
       try {
         res = await core.call('finish_proof', { pending: record.pending, reply_hex: st.reply });
       } catch (err) {
         // A reply for another transaction, an oversized proof, one that does not verify: the core
         // refused, and none of it goes near the node.
-        throw await giveUp(definite(`The prover's proof was refused by this wallet: ${err && err.message}`, { badProof: true }));
+        throw await giveUp(definite(t('The prover\'s proof was refused by this wallet: {reason}', { reason: translateCoreError(err && err.message) }), { badProof: true }));
       }
       await claimRecord(storage, job, locks);
       return res;
     } else if (state === 'failed' || state === 'expired') {
-      const why = typeof st.error === 'string' && st.error ? `: ${st.error}` : '';
-      throw await giveUp(definite(`The prover could not make this proof (${state}${why}).`));
+      const why = typeof st.error === 'string' && st.error ? st.error : '';
+      throw await giveUp(definite(why
+        ? t('The prover could not make this proof ({state}: {reason}).', { state, reason: why })
+        : t('The prover could not make this proof ({state}).', { state })));
     } else {
-      throw await giveUp(definite(`The prover answered with an unknown state (${String(state).slice(0, 32)}).`));
+      throw await giveUp(definite(t('The prover answered with an unknown state ({state}).', { state: String(state).slice(0, 32) })));
     }
     if (now() - started >= bound()) throw outOfTime(false);
     try { await sleep(poll, signal); } catch (e) { await cancel(); throw e; }

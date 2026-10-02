@@ -18,6 +18,8 @@
 // never contains more than a short excerpt of the payload: an error string ends up in a banner, a
 // log and possibly a bug report, and a node controls every byte of what it sent.
 
+import { t } from '../i18n.js';
+
 export class NodeReplyError extends Error {
   constructor(message) {
     super(message);
@@ -46,7 +48,7 @@ function fail(method, what, value) {
 /** A safe non-negative integer, accepted as a number only. */
 export function intField(method, what, value, { max = Number.MAX_SAFE_INTEGER } = {}) {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > max) {
-    fail(method, `${what} is not a non-negative integer`, value);
+    fail(method, t('{field} is not a non-negative integer', { field: what }), value);
   }
   return value;
 }
@@ -54,7 +56,7 @@ export function intField(method, what, value, { max = Number.MAX_SAFE_INTEGER } 
 /** Hex of an exact length (a commitment, a nullifier, a root: 64 characters). */
 export function hexField(method, what, value, length) {
   if (typeof value !== 'string' || value.length !== length || !/^[0-9a-fA-F]*$/.test(value)) {
-    fail(method, `${what} is not ${length} hex characters`, value);
+    fail(method, t('{field} is not {n} hex characters', { field: what, n: length }), value);
   }
   return value;
 }
@@ -84,7 +86,7 @@ export const MAX_PAGE_CHARS = 8_000_000;
 /** Hex of an unknown length (an envelope field), bounded so a reply cannot be a memory attack. */
 export function hexBlob(method, what, value, { max = 65536 } = {}) {
   if (typeof value !== 'string' || value.length > max || !/^[0-9a-fA-F]*$/.test(value)) {
-    fail(method, `${what} is not hex of at most ${max} characters`, value);
+    fail(method, t('{field} is not hex of at most {max} characters', { field: what, max }), value);
   }
   return value;
 }
@@ -93,7 +95,7 @@ export function hexBlob(method, what, value, { max = 65536 } = {}) {
 export function unitsField(method, what, value) {
   const text = typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? String(value) : value;
   if (typeof text !== 'string' || !/^[0-9]{1,30}$/.test(text)) {
-    fail(method, `${what} is not a decimal amount`, value);
+    fail(method, t('{field} is not a decimal amount', { field: what }), value);
   }
   return text;
 }
@@ -101,19 +103,19 @@ export function unitsField(method, what, value) {
 /** A transaction hash: 32 bytes of hex, with or without the `0x` this chain writes them with. */
 export function hashField(method, what, value) {
   if (typeof value !== 'string' || !/^(0x)?[0-9a-fA-F]{64}$/.test(value)) {
-    fail(method, `${what} is not a transaction hash`, value);
+    fail(method, t('{field} is not a transaction hash', { field: what }), value);
   }
   return value;
 }
 
 function objectReply(method, value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) fail(method, 'the reply is not an object', value);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail(method, t('the reply is not an object'), value);
   return value;
 }
 
 function arrayReply(method, value, maxLength) {
-  if (!Array.isArray(value)) fail(method, 'the reply is not an array', value);
-  if (value.length > maxLength) fail(method, `the reply has ${value.length} rows, more than the ${maxLength} asked for`);
+  if (!Array.isArray(value)) fail(method, t('the reply is not an array'), value);
+  if (value.length > maxLength) fail(method, t('the reply has {n} rows, more than the {max} asked for', { n: value.length, max: maxLength }));
   return value;
 }
 
@@ -136,7 +138,7 @@ export function checkTreeInfo(reply) {
 /** `rand_getCommitments` → the page of leaves, exactly as `scan_page` takes them. */
 export function checkCommitments(reply, { from, limit, leafCount } = {}) {
   const m = 'rand_getCommitments';
-  if (!Number.isSafeInteger(from) || from < 0) throw new NodeReplyError(`${m}: called without the index it was asked from`);
+  if (!Number.isSafeInteger(from) || from < 0) throw new NodeReplyError(`${m}: ${t('called without the index it was asked from')}`);
   const rows = arrayReply(m, reply, limit);
   // A page must be an answer to the REQUEST, not just well-formed rows. `notes_from(from, limit)`
   // iterates the leaf column family forward from `from`, and leaf indexes are dense, so an honest
@@ -145,31 +147,31 @@ export function checkCommitments(reply, { from, limit, leafCount } = {}) {
   // never be trial-decrypted — received notes silently missing, with nothing to show for it.
   if (rows.length > 0) {
     const first = rows[0] && rows[0].index;
-    if (first !== from) fail(m, `the page starts at leaf ${excerpt(first)}, not the ${from} it was asked for`);
+    if (first !== from) fail(m, t('the page starts at leaf {leaf}, not the {from} it was asked for', { leaf: excerpt(first), from }));
   }
   let pageChars = 0;
   rows.forEach((row, i) => {
-    if (!row || typeof row !== 'object') fail(m, `row ${i} is not an object`, row);
+    if (!row || typeof row !== 'object') fail(m, t('row {i} is not an object', { i }), row);
     intField(m, `row ${i} index`, row.index);
     intField(m, `row ${i} height`, row.height);
     hexField(m, `row ${i} cm`, row.cm, 64);
     const env = row.envelope;
-    if (!env || typeof env !== 'object') fail(m, `row ${i} envelope is not an object`, env);
+    if (!env || typeof env !== 'object') fail(m, t('row {i} envelope is not an object', { i }), env);
     let envChars = 0;
     for (const part of ['kem_ct', 'to_receiver', 'to_sender', 'body']) {
       hexBlob(m, `row ${i} envelope.${part}`, env[part], { max: ENVELOPE_LIMITS[part] });
       envChars += env[part].length;
     }
-    if (envChars > ENVELOPE_LIMITS.total) fail(m, `row ${i} envelope is ${envChars} characters, over the chain's own limit`);
+    if (envChars > ENVELOPE_LIMITS.total) fail(m, t('row {i} envelope is {n} characters, over the chain\'s own limit', { i, n: envChars }));
     pageChars += envChars;
-    if (pageChars > MAX_PAGE_CHARS) fail(m, `the page is over ${MAX_PAGE_CHARS} characters of envelope`);
+    if (pageChars > MAX_PAGE_CHARS) fail(m, t('the page is over {max} characters of envelope', { max: MAX_PAGE_CHARS }));
     if (i > 0 && row.index !== rows[i - 1].index + 1) {
-      fail(m, `row ${i} is leaf ${row.index}, not ${rows[i - 1].index + 1} — the page has a gap`);
+      fail(m, t('row {i} is leaf {leaf}, not {expected} — the page has a gap', { i, leaf: row.index, expected: rows[i - 1].index + 1 }));
     }
     // The tree cannot serve a leaf it has not grown. `leafCount` is `rand_getTreeInfo.next_index`
     // read in the same scan; where the node did not serve it, this check is simply skipped.
     if (Number.isSafeInteger(leafCount) && row.index >= leafCount) {
-      fail(m, `row ${i} is leaf ${row.index}, past the ${leafCount} leaves the tree reports`);
+      fail(m, t('row {i} is leaf {leaf}, past the {n} leaves the tree reports', { i, leaf: row.index, n: leafCount }));
     }
   });
   return rows;
@@ -178,7 +180,7 @@ export function checkCommitments(reply, { from, limit, leafCount } = {}) {
 /** `rand_getNullifiers` → `[{height, nullifier}]`. The row this file exists for. */
 export function checkNullifiers(reply, { from, limit, tip } = {}) {
   const m = 'rand_getNullifiers';
-  if (!Number.isSafeInteger(from) || from < 0) throw new NodeReplyError(`${m}: called without the height it was asked from`);
+  if (!Number.isSafeInteger(from) || from < 0) throw new NodeReplyError(`${m}: ${t('called without the height it was asked from')}`);
   const rows = arrayReply(m, reply, limit);
   // `nullifiers_from(from, limit)` collects every row with `height >= from`, sorts, and truncates
   // to `limit` — so an honest reply is a PREFIX of the ordered set: non-decreasing in height, none
@@ -186,15 +188,15 @@ export function checkNullifiers(reply, { from, limit, tip } = {}) {
   // knowable (see the cursor rule in wallet.js); without it a node can hand back one page of rows
   // all claiming `tip - 1` and skip everything in between.
   rows.forEach((row, i) => {
-    if (!row || typeof row !== 'object') fail(m, `row ${i} is not an object`, row);
+    if (!row || typeof row !== 'object') fail(m, t('row {i} is not an object', { i }), row);
     intField(m, `row ${i} height`, row.height);
     hexField(m, `row ${i} nullifier`, row.nullifier, 64);
-    if (row.height < from) fail(m, `row ${i} is at height ${row.height}, below the ${from} it was asked from`);
+    if (row.height < from) fail(m, t('row {i} is at height {height}, below the {from} it was asked from', { i, height: row.height, from }));
     if (Number.isSafeInteger(tip) && row.height > tip) {
-      fail(m, `row ${i} is at height ${row.height}, above the tip ${tip} this node reported`);
+      fail(m, t('row {i} is at height {height}, above the tip {tip} this node reported', { i, height: row.height, tip }));
     }
     if (i > 0 && row.height < rows[i - 1].height) {
-      fail(m, `row ${i} is at height ${row.height}, below row ${i - 1}'s ${rows[i - 1].height} — the page is not sorted`);
+      fail(m, t('row {i} is at height {height}, below row {prev}\'s {prevHeight} — the page is not sorted', { i, height: row.height, prev: i - 1, prevHeight: rows[i - 1].height }));
     }
   });
   return rows;
@@ -213,7 +215,7 @@ export function checkWitness(reply, { depth = 32 } = {}) {
   if (reply === null || reply === undefined) return null;
   const w = objectReply(m, reply);
   hexField(m, 'root', w.root, 64);
-  if (!Array.isArray(w.path) || w.path.length !== depth) fail(m, `path is not ${depth} levels`, w.path && w.path.length);
+  if (!Array.isArray(w.path) || w.path.length !== depth) fail(m, t('path is not {n} levels', { n: depth }), w.path && w.path.length);
   w.path.forEach((level, i) => hexField(m, `path[${i}]`, level, 64));
   return w;
 }
@@ -259,7 +261,7 @@ export function checkAssets(reply, { max = 4096 } = {}) {
   const m = 'rand_getAssets';
   const rows = arrayReply(m, reply, max);
   rows.forEach((row, i) => {
-    if (!row || typeof row !== 'object') fail(m, `row ${i} is not an object`, row);
+    if (!row || typeof row !== 'object') fail(m, t('row {i} is not an object', { i }), row);
     intField(m, `row ${i} index`, row.index);
     backingFields(m, `row ${i}`, row);
     // `chain` is a **bridge chain id**, the same thing `checkBridgeState` bounds its derived
@@ -307,16 +309,16 @@ export function checkTokens(reply, { max = MAX_TOKEN_PAGE, from } = {}) {
   const r = objectReply(m, reply);
   const rows = arrayReply(m, r.tokens === undefined || r.tokens === null ? [] : r.tokens, max);
   const tokens = rows.map((row, i) => {
-    if (!row || typeof row !== 'object') fail(m, `row ${i} is not an object`, row);
+    if (!row || typeof row !== 'object') fail(m, t('row {i} is not an object', { i }), row);
     // Index 0 is RAND and is never listed (the node's own docs say so). A row claiming it is a
     // node lying about the native token, and it would collide with `assets.list()`'s own entry.
     const index = intField(m, `row ${i} index`, row.index);
-    if (index < 1) fail(m, `row ${i} index is 0, which is RAND and is never in the registry`);
+    if (index < 1) fail(m, t('row {i} index is 0, which is RAND and is never in the registry', { i }));
     if (Number.isSafeInteger(from) && index < from) {
-      fail(m, `row ${i} is token ${index}, below the ${from} it was asked from`);
+      fail(m, t('row {i} is token {token}, below the {from} it was asked from', { i, token: index, from }));
     }
     if (i > 0 && index <= rows[i - 1].index) {
-      fail(m, `row ${i} is token ${index}, not above row ${i - 1}'s ${rows[i - 1].index} — the page is not ascending`);
+      fail(m, t('row {i} is token {token}, not above row {prev}\'s {prevToken} — the page is not ascending', { i, token: index, prev: i - 1, prevToken: rows[i - 1].index }));
     }
     hexField(m, `row ${i} id`, row.id, 64);
     // A token's own decimals on Rand: the chain stores 0..=9 (`ledger::tokens`), and a bridged
@@ -325,11 +327,11 @@ export function checkTokens(reply, { max = MAX_TOKEN_PAGE, from } = {}) {
     unitsField(m, `row ${i} total_supply`, row.total_supply);
     const text = (what, value, required) => {
       if (value === undefined || value === null) {
-        if (required) fail(m, `row ${i} ${what} is missing`);
+        if (required) fail(m, t('row {i} {field} is missing', { i, field: what }));
         return undefined;
       }
       if (typeof value !== 'string' || value.length > MAX_TOKEN_TEXT) {
-        fail(m, `row ${i} ${what} is not text of at most ${MAX_TOKEN_TEXT} characters`, value);
+        fail(m, t('row {i} {field} is not text of at most {max} characters', { i, field: what, max: MAX_TOKEN_TEXT }), value);
       }
       return value;
     };
@@ -337,9 +339,9 @@ export function checkTokens(reply, { max = MAX_TOKEN_PAGE, from } = {}) {
       ? row.authority
       : {};
     const raw = Array.isArray(authority.backings) ? authority.backings : [];
-    if (raw.length > max) fail(m, `row ${i} has ${raw.length} backings`);
+    if (raw.length > max) fail(m, t('row {i} has {n} backings', { i, n: raw.length }));
     const backings = raw.map((b, j) => {
-      if (!b || typeof b !== 'object') fail(m, `row ${i} backing ${j} is not an object`, b);
+      if (!b || typeof b !== 'object') fail(m, t('row {i} backing {j} is not an object', { i, j }), b);
       // The same bound `checkAssets` puts on a registry row's chain: a `u16` `to_chain`.
       intField(m, `row ${i} backing ${j} chain`, b.chain, { max: 0xffff });
       hexField(m, `row ${i} backing ${j} token`, b.token, 64);
@@ -421,13 +423,13 @@ export function checkBlockHeader(reply) {
 export function checkBlockHeaders(reply, { from, to } = {}) {
   const m = 'rand_getBlocks';
   if (!Number.isSafeInteger(from) || from < 0 || !Number.isSafeInteger(to) || to < from) {
-    throw new NodeReplyError(`${m}: called without the range it was asked for`);
+    throw new NodeReplyError(`${m}: ${t('called without the range it was asked for')}`);
   }
   const rows = arrayReply(m, reply, to - from + 1);
   return rows.map((row, i) => {
-    if (!row || typeof row !== 'object' || Array.isArray(row)) fail(m, `header ${i} is not an object`, row);
+    if (!row || typeof row !== 'object' || Array.isArray(row)) fail(m, t('header {i} is not an object', { i }), row);
     const height = intField(m, `header ${i} height`, row.height);
-    if (height !== from + i) fail(m, `header ${i} is block ${height}, not the ${from + i} the range calls for`);
+    if (height !== from + i) fail(m, t('header {i} is block {height}, not the {expected} the range calls for', { i, height, expected: from + i }));
     return { height, tx_count: intField(m, `header ${i} tx_count`, row.tx_count) };
   });
 }
@@ -441,10 +443,10 @@ export function checkBlockHeaders(reply, { from, to } = {}) {
  */
 export function checkGenesisHash(reply) {
   const m = 'rand_getGenesisHash';
-  if (typeof reply !== 'string') fail(m, 'the reply is not a string', reply);
+  if (typeof reply !== 'string') fail(m, t('the reply is not a string'), reply);
   const value = reply.trim().replace(/^0x/i, '');
   if (value.length < 32 || value.length > 128 || !/^[0-9a-fA-F]+$/.test(value)) {
-    fail(m, 'the genesis hash is not hex of a plausible length', reply);
+    fail(m, t('the genesis hash is not hex of a plausible length'), reply);
   }
   return value.toLowerCase();
 }
@@ -457,9 +459,9 @@ export function checkGenesisHash(reply) {
 export function checkBlockActions(reply, { maxTransactions = 4096, maxActionChars = 8192 } = {}) {
   const m = 'rand_getBlockByHeight';
   if (reply === null || reply === undefined) return [];
-  if (typeof reply !== 'object' || Array.isArray(reply)) fail(m, 'the reply is not an object', reply);
+  if (typeof reply !== 'object' || Array.isArray(reply)) fail(m, t('the reply is not an object'), reply);
   const list = Array.isArray(reply.transactions) ? reply.transactions : [];
-  if (list.length > maxTransactions) fail(m, `the block has ${list.length} transactions`);
+  if (list.length > maxTransactions) fail(m, t('the block has {n} transactions', { n: list.length }));
   const actions = [];
   for (const tx of list) {
     if (!tx || typeof tx !== 'object') continue;
@@ -469,7 +471,7 @@ export function checkBlockActions(reply, { maxTransactions = 4096, maxActionChar
     let encoded;
     try { encoded = JSON.stringify(action); } catch { continue; } // a cycle, or something unserialisable
     if (typeof encoded !== 'string' || encoded.length > maxActionChars) {
-      fail(m, `an action is ${encoded ? encoded.length : '?'} characters, more than ${maxActionChars}`);
+      fail(m, t('an action is {n} characters, more than {max}', { n: encoded ? encoded.length : '?', max: maxActionChars }));
     }
     // Re-parsed, so what reaches the core is a plain object with no prototype tricks or getters.
     actions.push(JSON.parse(encoded));
@@ -498,31 +500,31 @@ export function checkTransaction(reply) {
  */
 export function checkLimits(reply) {
   const m = 'rand_getLimits';
-  if (!reply || typeof reply !== 'object' || Array.isArray(reply)) fail(m, 'not an object', reply);
+  if (!reply || typeof reply !== 'object' || Array.isArray(reply)) fail(m, t('not an object'), reply);
   const v = reply.envelope_bytes;
   const envelopeBytes = v === undefined || v === null
     ? null
-    : intField(m, 'envelope_bytes', v, { max: 1 << 20 }) || fail(m, 'envelope_bytes is zero', v);
+    : intField(m, 'envelope_bytes', v, { max: 1 << 20 }) || fail(m, t('{field} is zero', { field: 'envelope_bytes' }), v);
   // The chain's proof-size cap, which a remote prover's proof is held to (`finish_proof`). Absent
   // means the core's own vendored `MAX_PROOF_BYTES` — never "unbounded".
   const p = reply.max_proof_bytes;
   const maxProofBytes = p === undefined || p === null
     ? null
-    : intField(m, 'max_proof_bytes', p, { max: 1 << 30 }) || fail(m, 'max_proof_bytes is zero', p);
+    : intField(m, 'max_proof_bytes', p, { max: 1 << 30 }) || fail(m, t('{field} is zero', { field: 'max_proof_bytes' }), p);
   // Constraint set 8 (chain 18, spec 2026-09-28 §4.3): the gas every bundle proof must declare on
   // a chain with a `gas` section. `null` (and a reply without the key) is a chain without one. The
   // core refuses a value other than its own guest's ceiling before building anything.
   const g = reply.bundle_gas_limit;
   const bundleGasLimit = g === undefined || g === null
     ? null
-    : intField(m, 'bundle_gas_limit', g, { max: Number.MAX_SAFE_INTEGER }) || fail(m, 'bundle_gas_limit is zero', g);
+    : intField(m, 'bundle_gas_limit', g, { max: Number.MAX_SAFE_INTEGER }) || fail(m, t('{field} is zero', { field: 'bundle_gas_limit' }), g);
   // RPL-2 (fullnode v0.6.8): `{cell_fee, max_reads, max_writes, max_payouts}` on a chain whose
   // genesis carries a `program_state` section, `null` (or no key, an older node) on one without —
   // where every invoke is refused, so the wallet says so before anything is built.
   const ps = reply.program_state;
   let programState = null;
   if (ps !== undefined && ps !== null) {
-    if (typeof ps !== 'object' || Array.isArray(ps)) fail(m, 'program_state is not an object', ps);
+    if (typeof ps !== 'object' || Array.isArray(ps)) fail(m, t('{field} is not an object', { field: 'program_state' }), ps);
     programState = {
       cellFee: unitsField(m, 'program_state.cell_fee', ps.cell_fee),
       maxReads: intField(m, 'program_state.max_reads', ps.max_reads, { max: 1024 }),
@@ -547,7 +549,7 @@ export function checkLimits(reply) {
 const MAX_PROGRAM_WORDS = 1 << 20;
 const WORD8_RE = /^(0x)?[0-9a-fA-F]{64}$/;
 const word8 = (method, what, value) => {
-  if (typeof value !== 'string' || !WORD8_RE.test(value)) fail(method, `${what} is not 64 hex characters`, value);
+  if (typeof value !== 'string' || !WORD8_RE.test(value)) fail(method, t('{field} is not {n} hex characters', { field: what, n: 64 }), value);
   return value.replace(/^0x/, '').toLowerCase();
 };
 
@@ -572,7 +574,7 @@ export function checkProgramPublic(reply) {
   const m = 'rand_getProgramPublic';
   if (reply === null) return null;
   const hex = hexBlob(m, 'the public input', reply, { max: 8 * MAX_PROGRAM_WORDS });
-  if (hex.length % 8 !== 0) fail(m, 'the public input is not whole words', hex.length);
+  if (hex.length % 8 !== 0) fail(m, t('the public input is not whole words'), hex.length);
   return hex.toLowerCase();
 }
 
@@ -582,7 +584,7 @@ export function checkProgramCell(reply, key) {
   if (sectionOff(reply)) return null;
   const r = objectReply(m, reply);
   const got = word8(m, 'key', r.key);
-  if (key !== undefined && got !== String(key).replace(/^0x/, '').toLowerCase()) fail(m, 'the reply is for another key', got);
+  if (key !== undefined && got !== String(key).replace(/^0x/, '').toLowerCase()) fail(m, t('the reply is for another key'), got);
   return word8(m, 'value', r.value);
 }
 
@@ -609,7 +611,7 @@ export function checkProgramVault(reply) {
   return rows.map((row) => {
     const r = objectReply(m, row);
     const asset = intField(m, 'asset', r.asset, { max: 0xffffffff });
-    if (asset <= last) fail(m, 'the vault is not in ascending asset order', asset);
+    if (asset <= last) fail(m, t('the vault is not in ascending asset order'), asset);
     last = asset;
     return { asset, amount: unitsField(m, 'amount', r.amount) };
   });
@@ -672,8 +674,8 @@ export function checkBridgeState(reply) {
   let fees = null;
   const f = state.fees;
   if (f !== undefined && f !== null) {
-    if (typeof f !== 'object' || Array.isArray(f)) fail(m, 'fees is not an object', f);
-    if (typeof f.recipient !== 'string' || f.recipient.length > 8192 || !/^rand1[0-9A-Za-z]+$/.test(f.recipient)) fail(m, 'fees.recipient is not an address', f.recipient);
+    if (typeof f !== 'object' || Array.isArray(f)) fail(m, t('{field} is not an object', { field: 'fees' }), f);
+    if (typeof f.recipient !== 'string' || f.recipient.length > 8192 || !/^rand1[0-9A-Za-z]+$/.test(f.recipient)) fail(m, t('{field} is not an address', { field: 'fees.recipient' }), f.recipient);
     fees = {
       mintBps: intField(m, 'fees.mint_bps', f.mint_bps, { max: 10000 }),
       burnBps: intField(m, 'fees.burn_bps', f.burn_bps, { max: 10000 }),

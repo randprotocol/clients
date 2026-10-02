@@ -13,11 +13,14 @@
 //      anything left the device, unknown once it may have reached the node.
 //   4. `rand:invokeResult` — `{tx}` or `{code, message}` — exactly once.
 //
-// The text here is the user's: what the window shows under "Not sent", and the `message` beside
-// the error code the site is answered with (the code is the contract; the message is for the same
-// person, in the wallet's language). It is written in English and translated through `t`, which
-// the window passes in from ui/i18n.js — this file imports nothing, so it stays loadable under
-// plain Node for its test, where `t` defaults to English with its `{holes}` filled.
+// The text here is shown twice: in the window under "Not sent", in the wallet's language, and as
+// the `message` beside the error code the site is answered with, in English (the code is the
+// contract; a dapp's logs and its own UI expect the provider's English, as provider-host.js,
+// content.js and inpage.js answer). Each of this file's refusals is therefore an Error whose
+// `message` is translated through `t` and whose `siteMessage` is the same sentence untranslated
+// (`refusal` below). `t` is passed in from ui/i18n.js by the window — this file imports nothing,
+// so it stays loadable under plain Node for its test, where `t` defaults to English with its
+// `{holes}` filled.
 
 /** `t` when none is given: English, holes filled (ui/i18n.js's `fill`). */
 const plain = (s, vars) => (vars ? String(s).replace(/\{(\w+)\}/g, (hole, name) => (name in vars ? String(vars[name]) : hole)) : String(s));
@@ -49,6 +52,15 @@ export function proverNotice(n, t = plain) {
 /** What the site sees for an error with no code of its own. */
 const FALLBACK_CODE = 'UNKNOWN';
 
+// This file's own sentences, each a function of `t` so the window can show it translated and the
+// site be answered with it in English (`text(plain)`).
+const NOT_OPENED = (t) => t('This window was not opened by a site.');
+const NO_LONGER_WAITING = (t) => t('That request is no longer waiting.');
+const NO_PROGRAMS = (t) => t('This Rand Wallet cannot run programs.');
+const CANNOT_SEND_HERE = (t) => t('Rand Wallet cannot send this here.');
+const NOT_APPROVED = (t) => t('The request was not approved in Rand Wallet.');
+const NOT_COMPLETED = (t) => t('Rand Wallet could not complete the request.');
+
 /**
  * `makeInvokeFlow({id, send, backend, onChange, t})` → `{state, start, acknowledge, approve, reject}`.
  *
@@ -64,11 +76,19 @@ const FALLBACK_CODE = 'UNKNOWN';
  */
 export function makeInvokeFlow({ id, send, backend, onChange = () => {}, t = plain }) {
   const state = { step: 'loading', origin: '', quote: null, phase: null, detail: null, tx: null, error: null };
+  const codeOf = (err) => (err && typeof err.code === 'string' && /^[A-Z_]{2,32}$/.test(err.code) ? err.code : FALLBACK_CODE);
+  /** What the window shows: the error's own message, translated when it is one of this file's. */
   const errorOf = (err) => {
-    const code = err && typeof err.code === 'string' && /^[A-Z_]{2,32}$/.test(err.code) ? err.code : FALLBACK_CODE;
-    const message = (err && err.message) || t('Rand Wallet could not complete the request.');
-    return { code, message: String(message).slice(0, 300) };
+    const message = (err && err.message) || NOT_COMPLETED(t);
+    return { code: codeOf(err), message: String(message).slice(0, 300) };
   };
+  /** What the site is answered with: the same, in English. */
+  const siteErrorOf = (err) => {
+    const message = (err && (err.siteMessage || err.message)) || NOT_COMPLETED(plain);
+    return { code: codeOf(err), message: String(message).slice(0, 300) };
+  };
+  /** One of this file's refusals: `text(t)` for the window, `text(plain)` for the site. */
+  const refusal = (text, code) => Object.assign(new Error(text(t)), { code, siteMessage: text(plain) });
   let request = null;
   let answered = false;
   const set = (patch) => { Object.assign(state, patch); onChange(state); };
@@ -79,13 +99,12 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {}, t = pla
     try { await send({ type: 'rand:invokeResult', id, ...body }); } catch { /* the window closing answers too */ }
   }
   async function refuse(err) {
-    const error = errorOf(err);
-    set({ step: 'failed', error });
-    await answer({ ok: false, error });
+    set({ step: 'failed', error: errorOf(err) });
+    await answer({ ok: false, error: siteErrorOf(err) });
   }
 
   async function start() {
-    if (!id) { await refuse(Object.assign(new Error(t('This window was not opened by a site.')), { code: 'GONE' })); return; }
+    if (!id) { await refuse(refusal(NOT_OPENED, 'GONE')); return; }
     let parked;
     try {
       parked = await send({ type: 'rand:invokeRequest', id });
@@ -96,16 +115,19 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {}, t = pla
     if (!parked || !parked.ok) {
       // The request is gone (answered, or the background restarted): there is nobody to tell.
       answered = true;
-      set({ step: 'failed', error: (parked && parked.error) || { code: 'GONE', message: t('That request is no longer waiting.') } });
+      set({ step: 'failed', error: (parked && parked.error) || { code: 'GONE', message: NO_LONGER_WAITING(t) } });
       return;
     }
     request = parked.result.request;
     set({ origin: String(parked.result.origin || '') });
     const program = backend && backend.program;
-    if (!program) { await refuse(Object.assign(new Error(t('This Rand Wallet cannot run programs.')), { code: 'UNSUPPORTED' })); return; }
+    if (!program) { await refuse(refusal(NO_PROGRAMS, 'UNSUPPORTED')); return; }
     try {
       const can = await program.canInvoke();
-      if (!can || !can.ok) throw Object.assign(new Error((can && can.reason) || t('Rand Wallet cannot send this here.')), { code: (can && can.code) || 'PROVER_UNAVAILABLE' });
+      if (!can || !can.ok) {
+        const code = (can && can.code) || 'PROVER_UNAVAILABLE';
+        throw can && can.reason ? Object.assign(new Error(can.reason), { code }) : refusal(CANNOT_SEND_HERE, code);
+      }
       const quote = await program.quote(request);
       // The RandProtocol prover's one-time notice, when it is still to be read: the window shows it
       // in Approve's place, and `acknowledge` (from its own click) reads it.
@@ -130,7 +152,7 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {}, t = pla
         let granted = false;
         try { granted = (await consent) === true; } catch { granted = false; }
         if (!granted) {
-          await refuse(Object.assign(new Error(consentDeclined(t)), { code: 'PROVER_UNAVAILABLE' }));
+          await refuse(refusal(consentDeclined, 'PROVER_UNAVAILABLE'));
           return;
         }
       }
@@ -166,7 +188,7 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {}, t = pla
 
   async function reject() {
     if (state.step !== 'review' && state.step !== 'loading') return;
-    await refuse(Object.assign(new Error(t('The request was not approved in Rand Wallet.')), { code: 'USER_REJECTED' }));
+    await refuse(refusal(NOT_APPROVED, 'USER_REJECTED'));
   }
 
   return { state, start, acknowledge, approve, reject };

@@ -32,6 +32,7 @@
 // `backend-shared.js`, unchanged and shared byte for byte with the browser shells.
 import { makeSharedBackend, UNLOCKED_SESSION_KEY, unlockDelayMs } from './backend-shared.js';
 import { executeTransfer, executeBurn } from './execute.js';
+import { t } from '../i18n.js';
 
 export { UNLOCKED_SESSION_KEY, unlockDelayMs };
 
@@ -53,9 +54,9 @@ function saidGiB(gib) {
 
 export function cannotProveReason(gib) {
   if (!Number.isFinite(gib) || gib <= 0) {
-    return 'Proving needs about 6.2 GB of free memory, and this computer did not report how much it has.';
+    return t('Proving needs about 6.2 GB of free memory, and this computer did not report how much it has.');
   }
-  return `Proving needs about 6.2 GB of free memory; this computer reports ${saidGiB(gib)} GB.`;
+  return t('Proving needs about 6.2 GB of free memory; this computer reports {gib} GB.', { gib: saidGiB(gib) });
 }
 
 function makeCanProve(systemMemoryGiB) {

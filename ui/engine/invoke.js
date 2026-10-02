@@ -16,6 +16,8 @@
  *  limits (`rand_getLimits.program_state`) are even asked: a page cannot make the wallet hold
  *  megabytes of its JSON. The chain's caps (8 reads, 8 writes, 4 payouts on the devnet) are far
  *  below these and are applied by the core. */
+import { t } from '../i18n.js';
+
 export const INVOKE_LIMITS = Object.freeze({ inputs: 4096, cells: 64, payouts: 16, title: 120, summaryRows: 16 });
 
 const WORD8_RE = /^(0x)?[0-9a-fA-F]{64}$/;
@@ -30,38 +32,38 @@ export function invokeError(code, message, { definite = true } = {}) {
   return err;
 }
 
-const bad = (what) => invokeError('BAD_REQUEST', `The site sent an invoke this wallet cannot read: ${what}.`);
+const bad = (what) => invokeError('BAD_REQUEST', t('The site sent an invoke this wallet cannot read: {reason}.', { reason: what }));
 
 function word8(value, what) {
-  if (typeof value !== 'string' || !WORD8_RE.test(value)) throw bad(`${what} is not 64 hex characters`);
+  if (typeof value !== 'string' || !WORD8_RE.test(value)) throw bad(t('{field} is not {n} hex characters', { field: what, n: 64 }));
   return value.replace(/^0x/, '').toLowerCase();
 }
 
 function u32(value, what) {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 0xffffffff) throw bad(`${what} is not a 32-bit word`);
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 0xffffffff) throw bad(t('{field} is not a 32-bit word', { field: what }));
   return value;
 }
 
 function units(value, what) {
   const text = typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? String(value) : value;
-  if (typeof text !== 'string' || !UNITS_RE.test(text)) throw bad(`${what} is not a decimal amount`);
+  if (typeof text !== 'string' || !UNITS_RE.test(text)) throw bad(t('{field} is not a decimal amount', { field: what }));
   return text.replace(/^0+(?=\d)/, '');
 }
 
 function list(value, what, max) {
   if (value === undefined || value === null) return [];
-  if (!Array.isArray(value)) throw bad(`${what} is not a list`);
-  if (value.length > max) throw bad(`${what} has ${value.length} entries, more than ${max}`);
+  if (!Array.isArray(value)) throw bad(t('{field} is not a list', { field: what }));
+  if (value.length > max) throw bad(t('{field} has {n} entries, more than {max}', { field: what, n: value.length, max }));
   return value;
 }
 
 const cells = (value, what) => list(value, what, INVOKE_LIMITS.cells).map((c, i) => {
-  if (!c || typeof c !== 'object') throw bad(`${what}[${i}] is not a cell`);
+  if (!c || typeof c !== 'object') throw bad(t('{field} is not a cell', { field: `${what}[${i}]` }));
   return { key: word8(c.key, `${what}[${i}].key`), value: word8(c.value, `${what}[${i}].value`) };
 });
 
 const amounts = (value, what, max) => list(value, what, max).map((p, i) => {
-  if (!p || typeof p !== 'object') throw bad(`${what}[${i}] is not an amount`);
+  if (!p || typeof p !== 'object') throw bad(t('{field} is not an amount', { field: `${what}[${i}]` }));
   return { asset: u32(p.asset, `${what}[${i}].asset`), amount: units(p.amount, `${what}[${i}].amount`) };
 });
 
@@ -79,10 +81,10 @@ function text(value, max) {
  * by `dry_run_invoke` with the chain's own words; only what this file needs to read is held here.
  */
 export function normalizeInvokeRequest(raw) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw bad('the request is not an object');
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw bad(t('the request is not an object'));
   const inflowRaw = raw.inflow && typeof raw.inflow === 'object' ? raw.inflow : {};
   const kind = inflowRaw.kind === undefined ? 'none' : inflowRaw.kind;
-  if (kind !== 'none' && kind !== 'deposit' && kind !== 'burn') throw bad('inflow.kind is not none, deposit or burn');
+  if (kind !== 'none' && kind !== 'deposit' && kind !== 'burn') throw bad(t('{field} is not none, deposit or burn', { field: 'inflow.kind' }));
   const summary = raw.summary && typeof raw.summary === 'object' ? raw.summary : {};
   return {
     program: word8(raw.program, 'program'),

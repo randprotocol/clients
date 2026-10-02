@@ -52,6 +52,13 @@ const EXACT = new Map([
     () => t('this chain carries no memo: its envelopes predate it (send again with an empty memo)')],
   // ---- the prover's reply (`finish_proof`) ----
   ['the prover\'s reply is not hex', () => t('the prover\'s reply is not hex')],
+  // ---- a paired prover that is not the owner's own (`NOT_OWN`), and what one learns
+  //      (`PROVER_HISTORY_WARNING`, `version`'s `prover_history_warning`, shown before pairing) ----
+  ['this chain\'s bundle witness carries the spend key; only a prover paired as your own (a link made with `rand-prover pair --own`) may receive it',
+    () => t('this chain\'s bundle witness carries the spend key; only a prover paired as your own (a link made with `rand-prover pair --own`) may receive it')],
+  ['This prover will be able to read this wallet\'s whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.',
+    () => t('This prover will be able to read this wallet\'s whole history — every payment received and sent, before and after today. '
+      + 'It cannot spend. To keep your history private, run your own.')],
   // ---- a pairing link (`parse_prover_link`) ----
   ['not a randprover: link', () => t('not a randprover: link')],
   ['the link has no ?url=…&token=… part', () => t('the link has no ?url=…&token=… part')],

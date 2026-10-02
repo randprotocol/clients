@@ -33,7 +33,7 @@ import { mount } from './app.js';
 import { fakeBackend, unlockedBackend } from './test/fake-backend.mjs';
 // The real wasm shells' own sentence, so `?canProve=0` previews exactly what they ship — never a
 // harness-local paraphrase that can drift from it.
-import { CANNOT_PROVE_REASON } from './engine/backend-wasm.js';
+import { cannotProveText } from './engine/backend-wasm.js';
 
 const params = new URLSearchParams(location.search);
 const mode = ['popup', 'sidebar'].includes(params.get('mode')) ? params.get('mode') : 'app';
@@ -130,7 +130,7 @@ async function init() {
   if (canProve !== null) {
     backend.send.canProve = canProve === '1'
       ? async () => ({ ok: true })
-      : async () => ({ ok: false, reason: CANNOT_PROVE_REASON });
+      : async () => ({ ok: false, reason: cannotProveText() });
   }
   if (assetsMode === 'one') {
     const [rand] = await backend.assets.list();

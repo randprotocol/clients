@@ -38,6 +38,7 @@
 // scanning, the note store, assets, fee estimates, the faucet — is real.
 import { makeSharedBackend, UNLOCKED_SESSION_KEY, unlockDelayMs } from './backend-shared.js';
 import { executeTransfer, executeBurn } from './execute.js';
+import { t } from '../i18n.js';
 
 export { UNLOCKED_SESSION_KEY, unlockDelayMs };
 
@@ -51,8 +52,12 @@ export { UNLOCKED_SESSION_KEY, unlockDelayMs };
 export const CANNOT_PROVE_REASON = 'This browser cannot make a transfer proof (it needs about 6.2 GB). '
   + 'Pair a prover in Settings, or send from the desktop app.';
 
+/** `CANNOT_PROVE_REASON` in the user's language (the constant stays English for its importers). */
+export const cannotProveText = () => t('This browser cannot make a transfer proof (it needs about 6.2 GB). '
+  + 'Pair a prover in Settings, or send from the desktop app.');
+
 async function canProve() {
-  return { ok: false, reason: CANNOT_PROVE_REASON };
+  return { ok: false, reason: cannotProveText() };
 }
 
 /**
@@ -64,7 +69,7 @@ async function executeSend(ctx) {
   // Delegated proving: the bundle proof is made by the paired prover, not in this browser (which
   // makes only the auth proof, in the core), so the rest of the transfer is the desktop app's.
   if (ctx && ctx.via === 'prover') return executeTransfer(ctx);
-  const err = new Error((ctx && ctx.reason) || CANNOT_PROVE_REASON);
+  const err = new Error((ctx && ctx.reason) || cannotProveText());
   err.definite = true;
   throw err;
 }
@@ -75,7 +80,7 @@ async function executeSend(ctx) {
  */
 async function executeWithdraw(ctx) {
   if (ctx && ctx.via === 'prover') return executeBurn(ctx);
-  const err = new Error((ctx && ctx.reason) || CANNOT_PROVE_REASON);
+  const err = new Error((ctx && ctx.reason) || cannotProveText());
   err.definite = true;
   throw err;
 }

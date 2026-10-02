@@ -91,6 +91,8 @@ import {
 } from './prover.js';
 import { runPhased } from './execute.js';
 import { normalizeInvokeRequest, invokeEffects, invokeError } from './invoke.js';
+import { translateCoreError } from './core-errors.js';
+import { t } from '../i18n.js';
 
 /**
  * The one key under `storage.session` — the unlocked wallet session, and the only place the
@@ -182,11 +184,17 @@ export const BRIDGE_DISABLED_TEXT = 'This chain has no bridge, so there is nothi
  *  chain's — this one is refused before the core is ever asked. */
 export const RAND_NOT_BRIDGED_TEXT = 'RAND is not a bridged asset, so it cannot be withdrawn.';
 
+/** `BRIDGE_DISABLED_TEXT` in the user's language (the constant stays English for its importers). */
+export const bridgeDisabledText = () => t('This chain has no bridge, so there is nothing to withdraw to.');
+
+/** `RAND_NOT_BRIDGED_TEXT` in the user's language. */
+export const randNotBridgedText = () => t('RAND is not a bridged asset, so it cannot be withdrawn.');
+
 /** A chain sentence, dressed for a banner: the core writes lower-case fragments, the UI shows
  *  whole sentences. The words are the chain's; only the first letter and the full stop are ours. */
 function sentence(text) {
   const s = String(text || '').trim();
-  if (!s) return 'The chain refused this withdrawal.';
+  if (!s) return t('The chain refused this withdrawal.');
   return `${s[0].toUpperCase()}${s.slice(1)}${/[.!?]$/.test(s) ? '' : '.'}`;
 }
 
@@ -269,7 +277,7 @@ function defaultChannel() {
 }
 
 function lockedError() {
-  return new Error('the wallet is locked');
+  return new Error(t('the wallet is locked'));
 }
 
 /** A note as ui/ reads it (see ui/backend.js), from the core's OwnedNote. */
@@ -569,8 +577,8 @@ export function makeSharedBackend({
   /** RPC URLs that have reported this wallet as ahead of them, for the emphasis flag. */
   const behindUrls = new Set();
 
-  const WRONG_CHAIN_REFUSAL = 'This node is on a different chain — switch node or rescan.';
-  const UNVERIFIED_REFUSAL = 'Could not verify this node\'s chain — check your connection and try again.';
+  const wrongChainRefusal = () => t('This node is on a different chain — switch node or rescan.');
+  const unverifiedRefusal = () => t('Could not verify this node\'s chain — check your connection and try again.');
 
   function refusal(message, extra = {}) {
     const err = new Error(message);
@@ -618,7 +626,7 @@ export function makeSharedBackend({
     const url = client.url;
     const known = verdictFor(url);
     if (known && known.state === 'wrong') {
-      throw refusal(WRONG_CHAIN_REFUSAL, { definite: true, wrongChain: known.wrongChain });
+      throw refusal(wrongChainRefusal(), { definite: true, wrongChain: known.wrongChain });
     }
     if (known && known.state === 'ok') return { client, url, identity: known.identity };
     // 'anonymous' is remembered for the UI, never as a pass: it re-checks every time.
@@ -628,9 +636,9 @@ export function makeSharedBackend({
       identity = await engine.chainIdentity(client);
     } catch (err) {
       if (err && err.name === 'AbortError') throw err;
-      throw refusal(UNVERIFIED_REFUSAL, { retryable: true });
+      throw refusal(unverifiedRefusal(), { retryable: true });
     }
-    if (!identity.reachable) throw refusal(UNVERIFIED_REFUSAL, { retryable: true });
+    if (!identity.reachable) throw refusal(unverifiedRefusal(), { retryable: true });
     const st = await loadNotes();
     const settings = await getSettings();
     const verdict = engine.chainVerdict(st, identity, settings.chainId);
@@ -641,11 +649,11 @@ export function makeSharedBackend({
     if (verdict.kind === 'identityUnknown') {
       // Not "wrong", but certainly not proven: a node that will not name its chain cannot be the
       // one this wallet acts on.
-      throw refusal(UNVERIFIED_REFUSAL, { retryable: true, identityUnknown: true });
+      throw refusal(unverifiedRefusal(), { retryable: true, identityUnknown: true });
     }
     const detail = { expected: verdict.expected, got: verdict.got };
     recordVerdict(url, 'wrong', detail);
-    throw refusal(WRONG_CHAIN_REFUSAL, { definite: true, wrongChain: detail });
+    throw refusal(wrongChainRefusal(), { definite: true, wrongChain: detail });
   }
 
   // ------------------------------------------------------------------------------- the node ----
@@ -853,7 +861,7 @@ export function makeSharedBackend({
 
   function enqueueAttempt(work) {
     if (pendingAttempts >= MAX_PENDING_ATTEMPTS) {
-      return Promise.reject(new Error('too many attempts in progress'));
+      return Promise.reject(new Error(t('too many attempts in progress')));
     }
     pendingAttempts += 1;
     // `then(work, work)` so one attempt's failure never strands the queue behind it.
@@ -919,7 +927,7 @@ export function makeSharedBackend({
   function openVault(password) {
     return enqueueAttempt(async () => {
       const vault = await storage.get(K.vault);
-      if (!vault) throw new Error('no wallet on this device');
+      if (!vault) throw new Error(t('no wallet on this device'));
       checkVault(vault); // VaultVersionError / VaultDamagedError — not an attempt
       const rec = await failureRecord();
       await sleep(unlockDelayMs(rec.count));
@@ -957,7 +965,7 @@ export function makeSharedBackend({
 
   function requirePassword(password) {
     if (typeof password !== 'string' || password.length < MIN_PASSWORD_LEN) {
-      throw new Error(`password must be at least ${MIN_PASSWORD_LEN} characters`);
+      throw new Error(t('password must be at least {n} characters', { n: MIN_PASSWORD_LEN }));
     }
   }
 
@@ -979,14 +987,14 @@ export function makeSharedBackend({
 
     async create(password) {
       requirePassword(password);
-      if (await wallet.exists()) throw new Error('a wallet already exists on this device');
+      if (await wallet.exists()) throw new Error(t('a wallet already exists on this device'));
       const info = await c.keygen();
       return createFrom(info, password);
     },
 
     async import(secret, password) {
       requirePassword(password);
-      if (await wallet.exists()) throw new Error('a wallet already exists on this device');
+      if (await wallet.exists()) throw new Error(t('a wallet already exists on this device'));
       const info = await c.importKey(String(secret || '').trim());
       return createFrom(info, password);
     },
@@ -1017,7 +1025,7 @@ export function makeSharedBackend({
 
     async info() {
       const w = await storage.get(K.wallet);
-      if (!w) throw new Error('no wallet on this device');
+      if (!w) throw new Error(t('no wallet on this device'));
       return { address: w.address, pk: w.pk };
     },
 
@@ -1026,7 +1034,7 @@ export function makeSharedBackend({
       // The core says `error`; the contract's screens read `reason`.
       return answer && answer.valid
         ? { valid: true, pk: answer.pk }
-        : { valid: false, reason: (answer && answer.error) || 'not a shielded address' };
+        : { valid: false, reason: answer && answer.error ? translateCoreError(answer.error) : t('not a shielded address') };
     },
 
     async viewingKey() {
@@ -1272,7 +1280,7 @@ export function makeSharedBackend({
         second = await run();
       });
       if (second) return second;
-      const err = new Error('Another tab is syncing — try again in a moment.');
+      const err = new Error(t('Another tab is syncing — try again in a moment.'));
       err.retryable = true;
       throw err;
     },
@@ -1557,7 +1565,9 @@ export function makeSharedBackend({
    */
   async function historyWarning() {
     const k = await constants();
-    return String(k.prover_history_warning || 'This prover will be able to read this wallet\'s whole history. It cannot spend.');
+    return k.prover_history_warning
+      ? translateCoreError(String(k.prover_history_warning))
+      : t('This prover will be able to read this wallet\'s whole history. It cannot spend.');
   }
 
   /** `prover_info.fee` as a sentence when it is a fee, `null` when the prover charges nothing. */
@@ -1566,22 +1576,24 @@ export function makeSharedBackend({
     const amount = fee && typeof fee === 'object' && typeof fee.amount === 'string' ? fee.amount : '';
     if (/^0+$/.test(amount)) return null;
     let shown = '';
-    if (/^[0-9]{1,20}$/.test(amount)) { try { shown = ` of ${await c.formatAmount(amount)} RAND`; } catch { shown = ''; } }
-    return `it charges a fee${shown} per proof, which this version of the wallet does not pay`;
+    if (/^[0-9]{1,20}$/.test(amount)) { try { shown = await c.formatAmount(amount); } catch { shown = ''; } }
+    return shown
+      ? t('it charges a fee of {fee} RAND per proof, which this version of the wallet does not pay', { fee: shown })
+      : t('it charges a fee per proof, which this version of the wallet does not pay');
   }
 
   async function probeAt(p) {
     if (!p || typeof p.url !== 'string' || !p.url || (p.mode !== undefined && p.mode !== 'remote')) {
-      return { ok: false, reason: 'No prover is paired.' };
+      return { ok: false, reason: t('No prover is paired.') };
     }
     let info;
     try {
       info = readInfo(await proverClientFor(p.url).info());
     } catch (err) {
-      return { ok: false, reason: `the prover at ${p.url} did not answer (${(err && err.message) || err})` };
+      return { ok: false, reason: t('the prover at {url} did not answer ({reason})', { url: p.url, reason: (err && err.message) || err }) };
     }
     if (!(await sameProverKey(info, String(p.kemEk || '').toLowerCase(), p.fingerprint))) {
-      return { ok: false, reason: 'the prover at that address now has a different key; pair it again' };
+      return { ok: false, reason: t('the prover at that address now has a different key; pair it again') };
     }
     return { ok: true, queue: info.queue, witnessKinds: info.witnessKinds, fee: info.fee, hcBundles: info.hcBundles };
   }
@@ -1597,7 +1609,7 @@ export function makeSharedBackend({
   async function poolPairings() {
     const fail = (message) => { const err = new Error(message); err.definite = true; return err; };
     const pool = await builtInPool();
-    if (!pool) throw fail('This build ships no prover to use.');
+    if (!pool) throw fail(t('This build ships no prover to use.'));
     const out = [];
     for (const m of pool.members) {
       let parsed;
@@ -1611,7 +1623,7 @@ export function makeSharedBackend({
         fingerprint: String(parsed.fingerprint), own: false, name: `${pool.name} (${m.name})`, member: m.name, pool: pool.name,
       });
     }
-    if (out.length === 0) throw fail('None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.');
+    if (out.length === 0) throw fail(t('None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.'));
     return memberOrder(out);
   }
 
@@ -1637,13 +1649,13 @@ export function makeSharedBackend({
       info = readInfo(await proverClientFor(m.url).info(signal ? { signal } : undefined));
     } catch (err) {
       if (err && err.name === 'AbortError') throw err;
-      return { ok: false, reason: `${m.member} did not answer` };
+      return { ok: false, reason: t('{member} did not answer', { member: m.member }) };
     }
-    if (!(await sameProverKey(info, m.kemEk, m.fingerprint))) return { ok: false, reason: `${m.member} answered with another key than the one this wallet pins` };
+    if (!(await sameProverKey(info, m.kemEk, m.fingerprint))) return { ok: false, reason: t('{member} answered with another key than the one this wallet pins', { member: m.member }) };
     const fee = await feeRefusal(info.fee);
     if (fee) return { ok: false, reason: `${m.member}: ${fee}` };
-    if (!info.witnessKinds.includes('viewing_key')) return { ok: false, reason: `${m.member} does not take this wallet's jobs` };
-    if (info.queue && info.queue.max > 0 && info.queue.depth >= info.queue.max) return { ok: false, busy: true, reason: `${m.member} is busy` };
+    if (!info.witnessKinds.includes('viewing_key')) return { ok: false, reason: t('{member} does not take this wallet\'s jobs', { member: m.member }) };
+    if (info.queue && info.queue.max > 0 && info.queue.depth >= info.queue.max) return { ok: false, busy: true, reason: t('{member} is busy', { member: m.member }) };
     return { ok: true, info };
   }
 
@@ -1651,8 +1663,10 @@ export function makeSharedBackend({
   function poolUnavailable(poolName, results, lead = '') {
     const allBusy = results.length > 0 && results.every((r) => r.busy);
     const err = new Error(allBusy
-      ? `${lead}The ${poolName} provers are all busy right now; try again in a minute, or pair your own prover in Settings.`
-      : `${lead}The ${poolName} provers cannot be reached right now (${results.map((r) => r.reason).join('; ')}). Try again later, or pair your own prover in Settings.`);
+      ? lead + t('The {pool} provers are all busy right now; try again in a minute, or pair your own prover in Settings.', { pool: poolName })
+      : lead + t('The {pool} provers cannot be reached right now ({reasons}). Try again later, or pair your own prover in Settings.', {
+        pool: poolName, reasons: results.map((r) => r.reason).join('; '),
+      }));
     err.definite = true;
     if (allBusy) err.busy = true; else err.unreachable = true;
     return err;
@@ -1691,11 +1705,11 @@ export function makeSharedBackend({
       try {
         info = readInfo(await proverClientFor(checked.url).info());
       } catch (err) {
-        throw new Error(`The prover at ${checked.url} did not answer: ${(err && err.message) || err}`);
+        throw new Error(t('The prover at {url} did not answer: {reason}', { url: checked.url, reason: (err && err.message) || err }));
       }
       const kemEk = String(parsed.kem_ek).toLowerCase();
       if (!(await sameProverKey(info, kemEk, parsed.fingerprint))) {
-        throw new Error('The prover at that address has a different key from the one the link names. Do not pair it.');
+        throw new Error(t('The prover at that address has a different key from the one the link names. Do not pair it.'));
       }
       // Everything that decides where a witness goes — and whether it may ever be a spend-key
       // one (`own`) — is sealed under the password together; `settings.prover` below is what a
@@ -1771,7 +1785,7 @@ export function makeSharedBackend({
     /** The user read the notice: remembered for this wallet (its `pk`), until a wipe. */
     async acknowledgeDefault() {
       const w = await storage.get(K.wallet);
-      if (!w || typeof w.pk !== 'string' || !w.pk) throw new Error('no wallet on this device');
+      if (!w || typeof w.pk !== 'string' || !w.pk) throw new Error(t('no wallet on this device'));
       await storage.set(K.proverNotice, { pk: w.pk });
     },
 
@@ -1827,9 +1841,10 @@ export function makeSharedBackend({
     const kinds = probe.ok ? probe.witnessKinds : [];
     const why = !probe.ok ? probe.reason
       : (await feeRefusal(probe.fee))
-        || (kinds.includes('viewing_key') || (p.own === true && kinds.includes('spend_key')) ? null : 'it does not take this wallet\'s jobs');
+        || (kinds.includes('viewing_key') || (p.own === true && kinds.includes('spend_key')) ? null : t('it does not take this wallet\'s jobs'));
     if (why) {
-      return { answer: { ok: false, reason: `${(device && device.reason) || 'This device cannot prove.'} Your paired prover is not available: ${why}.` } };
+      const unavailable = t('Your paired prover is not available: {reason}.', { reason: why });
+      return { answer: { ok: false, reason: `${(device && device.reason) || t('This device cannot prove.')} ${unavailable}` } };
     }
     return { answer: { ok: true, via: 'prover' }, route: p };
   }
@@ -1885,7 +1900,8 @@ export function makeSharedBackend({
 
   /** The refusal of a send through the default prover before its one-time notice was read. */
   function noticeFirst() {
-    const err = new Error('Before the first send through the RandProtocol provers, read what they can see: the one that proves it gets this wallet\'s viewing key. Continue on the send screen, or pair your own prover in Settings.');
+    const err = new Error(t('Before the first send through the RandProtocol provers, read what they can see: the one that proves it gets this wallet\'s viewing key. '
+      + 'Continue on the send screen, or pair your own prover in Settings.'));
     err.definite = true;
     err.needsNotice = true;
     return err;
@@ -1908,7 +1924,7 @@ export function makeSharedBackend({
     if (route.mode === 'default') return poolProveHook(route);
     const pairing = pairingOf(session.prover);
     if (!pairing) {
-      const err = new Error('Your prover\'s pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.');
+      const err = new Error(t('Your prover\'s pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.'));
       err.definite = true;
       throw err;
     }
@@ -1921,12 +1937,12 @@ export function makeSharedBackend({
       let guests;
       try {
         guests = await c.chainGuests({ hc_bundle: hcBundle ?? null, hc_auth: hcAuth ?? null });
-      } catch (err) { throw refuse((err && err.message) || 'This wallet cannot prove for this chain.'); }
+      } catch (err) { throw refuse((err && err.message) || t('This wallet cannot prove for this chain.')); }
       const wants = guests.witness_kind;
       // A spend-key witness goes to a prover paired as the user's own and to no other. The core
       // refuses it too; this says so before the prover is even asked.
       if (wants === 'spend_key' && own !== true) {
-        throw refuse('On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the desktop app.');
+        throw refuse(t('On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the desktop app.'));
       }
       // The prover as it is NOW: still the key this wallet paired, taking this kind of job, and
       // charging nothing. Its fee is its own to change at any time, so it is read here, at the one
@@ -1937,15 +1953,15 @@ export function makeSharedBackend({
         info = readInfo(await proverClient.info({ signal }));
       } catch (err) {
         if (err && err.name === 'AbortError') throw err;
-        throw refuse(`Your prover did not answer: ${(err && err.message) || err}`);
+        throw refuse(t('Your prover did not answer: {reason}', { reason: (err && err.message) || err }));
       }
       if (!(await sameProverKey(info, String(kemEk).toLowerCase(), fingerprint))) {
-        throw refuse('The prover at that address now has a different key. Pair it again in Settings.');
+        throw refuse(t('The prover at that address now has a different key. Pair it again in Settings.'));
       }
       if (!info.witnessKinds.includes(wants)) {
         throw refuse(wants === 'viewing_key'
-          ? 'Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another.'
-          : 'Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the desktop app.');
+          ? t('Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another.')
+          : t('Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the desktop app.'));
       }
       const params = {
         ...request,
@@ -1982,9 +1998,9 @@ export function makeSharedBackend({
       let guests;
       try {
         guests = await c.chainGuests({ hc_bundle: hcBundle ?? null, hc_auth: hcAuth ?? null });
-      } catch (err) { throw refuse((err && err.message) || 'This wallet cannot prove for this chain.'); }
+      } catch (err) { throw refuse((err && err.message) || t('This wallet cannot prove for this chain.')); }
       if (guests.witness_kind !== 'viewing_key') {
-        throw refuse('On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the desktop app.');
+        throw refuse(t('On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the desktop app.'));
       }
       const results = [];
       for (const m of route.members) {
@@ -2019,11 +2035,11 @@ export function makeSharedBackend({
     };
   }
 
-  const PENDING_REFUSAL = 'A proof is still pending — resume or cancel it.';
+  const pendingRefusal = () => t('A proof is still pending — resume or cancel it.');
 
   async function refuseWhilePending() {
     if (await pendingProof(storage)) {
-      const err = new Error(PENDING_REFUSAL);
+      const err = new Error(pendingRefusal());
       err.definite = true;
       err.pending = true;
       throw err;
@@ -2058,7 +2074,7 @@ export function makeSharedBackend({
       try {
         const rec = await pendingProof(storage);
         if (!rec) {
-          const err = new Error('No proof is pending.');
+          const err = new Error(t('No proof is pending.'));
           err.definite = true;
           throw err;
         }
@@ -2220,7 +2236,7 @@ export function makeSharedBackend({
       await requireUnlocked();
       const { client } = await requireVerifiedChain();
       const w = await storage.get(K.wallet);
-      if (!w || !w.address) throw new Error('no wallet on this device');
+      if (!w || !w.address) throw new Error(t('no wallet on this device'));
       const hash = checkSubmitted('rand_mint', await client.mint(w.address));
       const st = await loadNotes();
       const k = await constants();
@@ -2276,12 +2292,12 @@ export function makeSharedBackend({
    */
   async function screenBurn(req = {}, verified) {
     const asset = Number(req.asset);
-    if (!Number.isInteger(asset) || asset < 1) throw definite(RAND_NOT_BRIDGED_TEXT);
+    if (!Number.isInteger(asset) || asset < 1) throw definite(randNotBridgedText());
     const amount = toUnits(req.amount);
     const relayerFee = toUnits(req.relayerFee ?? '0');
-    if (amount <= 0n) throw definite('A withdrawal of zero moves nothing.');
+    if (amount <= 0n) throw definite(t('A withdrawal of zero moves nothing.'));
     // The chain's own rule (`relayer_fee <= amount`), and the one the user is most likely to trip.
-    if (relayerFee > amount) throw definite('The relayer fee is more than the amount being withdrawn.');
+    if (relayerFee > amount) throw definite(t('The relayer fee is more than the amount being withdrawn.'));
     const toChain = Number(req.toChain);
     const token = String(req.token || '');
     const gate = verified || (await requireVerifiedChain());
@@ -2298,7 +2314,7 @@ export function makeSharedBackend({
       bridgeFee = toUnits(q.fee);
       release = toUnits(q.release);
     }
-    if (relayerFee > release) throw definite('The relayer fee is more than what the bridge would release after its fee.');
+    if (relayerFee > release) throw definite(t('The relayer fee is more than what the bridge would release after its fee.'));
     const possible = await burnIsPossible(c, state, asset, toChain, token, amount, relayerFee);
     if (!possible.ok) throw definite(possible.reason);
     return { ...gate, state, asset, amount, relayerFee, toChain, token, bridgeFee, release };
@@ -2342,15 +2358,15 @@ export function makeSharedBackend({
     async canWithdraw() {
       const prove = (await proveRoute()).answer;
       if (!prove || !prove.ok) {
-        return { ok: false, reason: (prove && prove.reason) || 'Proving is not available here.' };
+        return { ok: false, reason: (prove && prove.reason) || t('Proving is not available here.') };
       }
       let state;
       try {
         ({ state } = await bridgeStateFull());
       } catch (err) {
-        return { ok: false, reason: (err && err.message) || 'The bridge could not be asked.' };
+        return { ok: false, reason: (err && err.message) || t('The bridge could not be asked.') };
       }
-      if (!state.enabled) return { ok: false, reason: BRIDGE_DISABLED_TEXT };
+      if (!state.enabled) return { ok: false, reason: bridgeDisabledText() };
       // `via` exactly as `canProve` reports it: a burn through a paired prover is proved there,
       // and the withdraw screen says so the way the send screen does.
       return prove.via
@@ -2449,12 +2465,12 @@ export function makeSharedBackend({
     async canInvoke() {
       const prove = (await proveRoute()).answer;
       if (!prove || !prove.ok) {
-        return { ok: false, code: 'PROVER_UNAVAILABLE', reason: (prove && prove.reason) || 'Proving is not available here.' };
+        return { ok: false, code: 'PROVER_UNAVAILABLE', reason: (prove && prove.reason) || t('Proving is not available here.') };
       }
       const { client } = await requireVerifiedChain();
       const limits = checkLimits(await client.getLimits());
       if (!limits.programState) {
-        return { ok: false, code: 'PROGRAMS_UNSUPPORTED', reason: 'This chain does not run programs yet.' };
+        return { ok: false, code: 'PROGRAMS_UNSUPPORTED', reason: t('This chain does not run programs yet.') };
       }
       // The RandProtocol prover's one-time notice (and Firefox's consent) comes before the first
       // invoke through it too: the window shows it in Approve's place.
@@ -2469,7 +2485,7 @@ export function makeSharedBackend({
      */
     async cells(id) {
       const program = String(id || '').replace(/^0x/, '').toLowerCase();
-      if (!/^[0-9a-f]{64}$/.test(program)) throw invokeError('BAD_REQUEST', 'That is not a program id.');
+      if (!/^[0-9a-f]{64}$/.test(program)) throw invokeError('BAD_REQUEST', t('That is not a program id.'));
       const { client } = await requireVerifiedChain();
       const out = [];
       let after = null;
@@ -2561,7 +2577,7 @@ export function makeSharedBackend({
   const passkey = pk && {
     async available() { try { return !!(await pk.available()); } catch { return false; } },
     async enabled() { return !!(await storage.get(K.passkey)); },
-    label() { return (typeof pk.label === 'function' && pk.label()) || 'a passkey'; },
+    label() { return (typeof pk.label === 'function' && pk.label()) || t('a passkey'); },
     async enable(password) {
       const key = await openVault(password);
       if (!key) throw new Error('wrong password');
@@ -2573,18 +2589,18 @@ export function makeSharedBackend({
     },
     async recoverPassword() {
       const rec = await storage.get(K.passkey);
-      if (!rec) throw Object.assign(new Error('Touch ID is not set up for this wallet.'), { code: 'PASSKEY_FAILED' });
+      if (!rec) throw Object.assign(new Error(t('Touch ID is not set up for this wallet.')), { code: 'PASSKEY_FAILED' });
       let prf;
       try {
         prf = await pk.prf({ credentialId: rec.credentialId, salt: rec.salt });
       } catch (err) {
         const cancelled = err && (err.name === 'NotAllowedError' || err.name === 'AbortError');
-        throw Object.assign(new Error(cancelled ? 'Unlock was cancelled.' : `The passkey did not answer: ${(err && err.message) || err}`), { code: cancelled ? 'CANCELLED' : 'PASSKEY_FAILED' });
+        throw Object.assign(new Error(cancelled ? t('Unlock was cancelled.') : t('The passkey did not answer: {reason}', { reason: (err && err.message) || err })), { code: cancelled ? 'CANCELLED' : 'PASSKEY_FAILED' });
       }
       try {
         return await openWithPasskey(prf, rec);
       } catch (err) {
-        throw Object.assign(new Error((err && err.message) || 'The passkey did not open this wallet.'), { code: 'PASSKEY_FAILED' });
+        throw Object.assign(new Error((err && err.message) || t('The passkey did not open this wallet.')), { code: 'PASSKEY_FAILED' });
       }
     },
     async disable() { await storage.remove(K.passkey); },
@@ -2593,7 +2609,7 @@ export function makeSharedBackend({
   const rpc = {
     /** The raw escape hatch — but only into this chain's own namespaces. */
     async call(method, params = []) {
-      if (!isAllowedRpcMethod(method)) throw new Error(`${method} is not allowed from this wallet`);
+      if (!isAllowedRpcMethod(method)) throw new Error(t('{method} is not allowed from this wallet', { method }));
       const client = await rpcClient();
       return client.rpc(method, Array.isArray(params) ? params : [params]);
     },
@@ -2608,7 +2624,7 @@ export function makeSharedBackend({
      */
     async probe(url) {
       const [u] = rpcUrlList(url);
-      if (!u || !/^https?:\/\//i.test(u)) throw new Error('That is not an http(s) URL.');
+      if (!u || !/^https?:\/\//i.test(u)) throw new Error(t('That is not an http(s) URL.'));
       const client = makeRpc([u], { fetch: fetchImpl });
       const [chainId, status] = await Promise.all([client.chainId(), client.status()]);
       // Numbers about the chain are carried as TEXT wherever the node sent them that way, for the
@@ -2671,7 +2687,7 @@ export function makeSharedBackend({
     async add(name, addr) {
       const text = String(addr || '').trim();
       const parsed = await c.parseAddress(text);
-      if (!parsed || !parsed.valid) throw new Error((parsed && parsed.error) || 'not a shielded address');
+      if (!parsed || !parsed.valid) throw new Error(parsed && parsed.error ? translateCoreError(parsed.error) : t('not a shielded address'));
       return addContact(storage, name, text);
     },
     async remove(name) { await removeContact(storage, name); },

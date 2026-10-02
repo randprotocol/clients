@@ -10,7 +10,7 @@
 // (`t('a long ' + 'sentence')`). A `t()` whose first argument is anything else is reported and
 // refused, because a key the extractor cannot see is a key no translator will ever see.
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const UI = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -155,12 +155,15 @@ export function extractFromSource(raw) {
 
 /**
  * `{ keys: Map<key, [file:line…]>, bad: [{file, line, text}] }` over every shipped source under
- * `roots` (one root, or a list; ROOTS by default). Locations are repo-relative.
+ * `roots` (one root, or a list; ROOTS by default). Locations are repo-relative. ui/ alone means the
+ * wallet's strings, which is ROOTS: en.js is one dictionary for every shell, so a caller that names
+ * ui/ (ui/test/i18n.test.mjs) is held to the same key set as this script writes.
  */
 export function extractAll(roots = ROOTS) {
   const keys = new Map();
   const bad = [];
-  const files = (Array.isArray(roots) ? roots : [roots]).flatMap((root) => sourceFiles(root));
+  const list = Array.isArray(roots) ? roots : resolve(roots) === resolve(UI) ? ROOTS : [roots];
+  const files = list.flatMap((root) => sourceFiles(root));
   for (const file of files) {
     const src = readFileSync(file, 'utf8');
     const rel = relative(REPO, file);
