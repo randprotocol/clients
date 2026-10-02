@@ -113,6 +113,12 @@ function networkMarkup(settings) {
 // the wallet's viewing key, never its spend key. The core's own sentence (`version`'s
 // `prover_history_warning`; web/wallet's integration test holds the two equal), shown before a
 // pairing is saved, as part of the form, above the password — not a dismissible notice.
+// The English sentences stay exported as constants (web/wallet's core integration test holds
+// PROVER_WARNING equal to the core's `prover_history_warning`); the screen shows the functions.
+export const PROVER_WARNING = 'This prover will be able to read this wallet\'s whole history — every payment '
+  + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.';
+export const PROVER_DEFAULT_NOTE = 'Each one that proves a send receives this wallet\'s viewing key, so it can read your whole history, past and future. None can spend.';
+export const PROVER_NOT_OWN_NOTE = 'Not marked as your own: it can read this wallet\'s whole history. It cannot spend.';
 export const proverWarning = () => t('This prover will be able to read this wallet\'s whole history — every payment '
   + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.');
 /** What the RandProtocol prover (the default) sees, in one line, wherever it is offered or in use. */
@@ -1155,7 +1161,7 @@ registerScreen('settings', {
       const reveal = wireSecretReveal(slot, {
         getSecret,
         copy: (secret) => ctx.backend.platform.copy(secret),
-        onCopied: () => { if (live()) ctx.toast('Copied', { kind: 'positive' }); },
+        onCopied: () => { if (live()) ctx.toast(t('Copied'), { kind: 'positive' }); },
         dropOnHide: true,
         // Not just "null the variable": the panel goes too, so what is on screen is the password
         // gate rather than three buttons that would quietly do nothing.
@@ -1259,7 +1265,7 @@ registerScreen('settings', {
       for (const mask of body.querySelectorAll('[data-role="mask"]')) mask.textContent = '';
       if (proverLinkInput) proverLinkInput.value = '';
       if (proverPasswordInput) proverPasswordInput.value = '';
-      offSaveNetwork(); offTest(); offRescan(); offTheme(); offAutoLock(); offPasskey();
+      offSaveNetwork(); offTest(); offRescan(); offTheme(); offLocale(); offAutoLock(); offPasskey();
       offSaveProver(); offScanProver(); offForgetProver(); offUseNone(); offUseTrusted();
       if (hostLinkText) hostLinkText.textContent = ''; // the pairing token leaves with the screen
       hostLink = '';

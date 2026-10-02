@@ -13,7 +13,7 @@ import { h, raw } from '../../lib/dom.js';
 import { icons } from '../../lib/icons.js';
 import { formatUnits, shortAddress, elapsed } from '../../lib/format.js';
 import { avatarMarkup, listMarkup } from '../../lib/rows.js';
-import { UNLISTED_TEXT, canSendAsset, feeDecimals, feeSymbol } from '../../lib/assets.js';
+import { unlistedText, canSendAsset, feeDecimals, feeSymbol } from '../../lib/assets.js';
 import { phaseLabel, provingBanner, CANCELLABLE, unknownNotice, unknownConfirm, MEMO_MAX_BYTES, noMemoNotice, proveCost } from './state.js';
 import { t } from '../../i18n.js';
 
@@ -49,7 +49,7 @@ function assetRowMarkup(asset) {
   const hintId = `send-unlisted-hint-${asset.index}`;
   const off = sendable ? '' : raw(h` aria-disabled="true" aria-describedby="${hintId}"`);
   const rplChip = asset.index >= 1 ? raw(h`<span class="chip xs">RPL</span>`) : '';
-  const hint = sendable ? '' : raw(h`<p class="caption" id="${hintId}">${UNLISTED_TEXT}</p>`);
+  const hint = sendable ? '' : raw(h`<p class="caption" id="${hintId}">${unlistedText()}</p>`);
   return h`
     <li>
       <button class="row" type="button" data-asset="${asset.index}"${off}>
@@ -82,7 +82,7 @@ export function unsendableMarkup(asset, { hasRand = true } = {}) {
     <h2 class="title" data-role="step-title" tabindex="-1">${asset ? t('{symbol} cannot be sent', { symbol: asset.symbol }) : t('This asset cannot be sent')}</h2>
     <div class="banner warn">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">${asset ? t('Not in the token registry') : t('Not in this wallet')}</span>${asset ? UNLISTED_TEXT : t('This wallet holds no such asset.')}</span>
+      <span><span class="banner-title">${asset ? t('Not in the token registry') : t('Not in this wallet')}</span>${asset ? unlistedText() : t('This wallet holds no such asset.')}</span>
     </div>
     ${alternative}
     <button class="btn btn-ghost block" type="button" data-go="home">${t('Back to home')}</button>`;
@@ -235,8 +235,8 @@ export function proverNoticeMarkup(n) {
  */
 export const proverConsentDeclined = () => t('Firefox did not allow this wallet to send your viewing key to the RandProtocol provers, '
   + 'so this browser has no prover to make the proof. Nothing was sent. Pair your own prover in Settings.');
-/** The old name of `proverConsentDeclined`, kept so a screen still importing it (swap) links; it is the function. */
-export { proverConsentDeclined as PROVER_CONSENT_DECLINED };
+/** The same sentence in English, the old export, kept unchanged for a screen still importing it (swap). */
+export const PROVER_CONSENT_DECLINED = 'Firefox did not allow this wallet to send your viewing key to the RandProtocol provers, so this browser has no prover to make the proof. Nothing was sent. Pair your own prover in Settings.';
 
 export function proverDeclinedMarkup() {
   return h`

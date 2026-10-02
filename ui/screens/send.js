@@ -47,7 +47,7 @@ import {
   noMemoNoticeMarkup, contactPickerMarkup, scanSheetMarkup, proverDeclinedMarkup, proverConsentDeclined,
 } from './send/markup.js';
 import { t } from '../i18n.js';
-import { canScanQr, scanQr, NO_CAMERA_TEXT } from '../lib/scan-qr.js';
+import { canScanQr, scanQr, noCameraText } from '../lib/scan-qr.js';
 import { displayMemo } from '../lib/memo.js';
 import './send/sent.js'; // registers `#sent`
 
@@ -693,7 +693,7 @@ registerScreen('send', {
         text = typeof platform.scanQr === 'function' ? await platform.scanQr() : await browserScan();
       } catch (err) {
         if (!live() || (err && err.name === 'AbortError')) return;
-        showFormBanner((err && err.message) || NO_CAMERA_TEXT);
+        showFormBanner((err && err.message) || noCameraText());
         return;
       }
       const input = stepEl.querySelector('textarea[name=to]');

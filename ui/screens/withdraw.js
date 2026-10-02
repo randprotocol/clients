@@ -32,7 +32,7 @@ import { registerScreen } from '../app.js';
 import { parseUnits, formatUnits, shortHex, elapsed } from '../lib/format.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink, TX_HASH_RE } from '../lib/explorer.js';
-import { UNLISTED_TEXT, isUnlisted, backingsOf, feeDecimals, feeSymbol } from '../lib/assets.js';
+import { unlistedText, isUnlisted, backingsOf, feeDecimals, feeSymbol } from '../lib/assets.js';
 import { plainUnits, proveCost, provingLabel, phaseLabel, recordPhase, provingBanner } from './send/state.js';
 import { proverNoticeMarkup, proverUnreachableMarkup, proverDeclinedMarkup } from './send/markup.js';
 
@@ -65,6 +65,9 @@ export const PHASE_LABELS = Object.freeze({
 const CANCELLABLE = ['selecting', 'witness', 'proving'];
 const AFTER_BROADCAST = ['submitting', 'confirming'];
 
+// The English sentence stays exported; the screen shows the function, in the language in force.
+export const LEAVES_POOL_WARNING = 'This leaves the shielded pool. The destination address and '
+  + 'amount become public on the other chain.';
 export const leavesPoolWarning = () => t('This leaves the shielded pool. The destination address and '
   + 'amount become public on the other chain.');
 
@@ -560,7 +563,7 @@ registerScreen('withdraw', {
     // whole address/amount/review walk: its decimals are this wallet's guess, so nothing the user
     // could type about it means what they meant (task 4.5's M6).
     if (isUnlisted(asset)) {
-      endOfTheRoad(cannotMarkup(t('{symbol} cannot be withdrawn', { symbol: asset.symbol }), UNLISTED_TEXT));
+      endOfTheRoad(cannotMarkup(t('{symbol} cannot be withdrawn', { symbol: asset.symbol }), unlistedText()));
       return;
     }
 

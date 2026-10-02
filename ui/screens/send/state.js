@@ -12,9 +12,11 @@ import { t } from '../../i18n.js';
 // Every sentence here is a function (or built inside one), read at each render: the language can
 // change while the wallet is up, so nothing is translated at import.
 /** What `'proving'` says when this device makes the proof. */
+export const DEVICE_PROVING_LABEL = 'Proving the bundle';
 export const deviceProvingLabel = () => t('Proving the bundle');
 
 /** What `'proving'` says while this device makes the auth proof, before a prover has the job. */
+export const AUTHORISING_LABEL = 'Authorising the spend on this device…';
 export const authorisingLabel = () => t('Authorising the spend on this device…');
 
 /**
@@ -83,6 +85,11 @@ export const CANCELLABLE = ['selecting', 'witness', 'proving'];
 // thing it must not do is invite the user to send it again.
 export const AFTER_BROADCAST = ['submitting', 'confirming'];
 export const ADDRESS_DEBOUNCE_MS = 150;
+// The English exports are kept for any importer that still reads the old names; screens use the
+// functions, which follow the language.
+export const SELF_SEND_QUESTION = 'Send to yourself? This consolidates your notes.';
+export const UNKNOWN_NOTICE = 'Your last transfer’s outcome is unknown — check Activity first.';
+export const UNKNOWN_CONFIRM = 'I checked — it did not go through';
 export const selfSendQuestion = () => t('Send to yourself? This consolidates your notes.');
 export const unknownNotice = () => t('Your last transfer’s outcome is unknown — check Activity first.');
 export const unknownConfirm = () => t('I checked — it did not go through');
@@ -92,6 +99,8 @@ export const unknownConfirm = () => t('I checked — it did not go through');
 // counter reads `TextEncoder`'s length — and a chain that declares no envelope size carries none.
 export const MEMO_MAX_BYTES = 510;
 export { MEMO_ENVELOPE_BYTES, memoSupportedFor } from '../../lib/memo.js';
+export const NO_MEMO_NOTICE = "This network doesn't carry memos; the memo will not be sent";
+export const NOT_A_RECIPIENT = 'That is not a shielded address, a randpay: link, or a saved contact.';
 export const noMemoNotice = () => t("This network doesn't carry memos; the memo will not be sent");
 export const notARecipient = () => t('That is not a shielded address, a randpay: link, or a saved contact.');
 

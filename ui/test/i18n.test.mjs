@@ -121,6 +121,13 @@ const ALLOWED = new Set([
   // The receive screen's data: the `randpay:` link's scheme, and the fake wallet's address
   // fingerprint (fakeFingerprint of the fake address, Crockford digits split into "DPE5-S6JD-…").
   'randpay', 'DPE', 'JD', 'DEEX',
+  // Settings → Prover: the `randprover:` link's scheme (the pairing field's placeholder), and the
+  // fake prover pool's member fingerprints (Crockford digits, "6DYD-YDEN-6XYX-YDY5" and the like).
+  'randprover', 'DYD', 'YDEN', 'XYX', 'YDY', 'FD', 'ZD', 'GHWN', 'SMN', 'HC',
+  // Settings → Appearance → Language: each language listed under its own name (LOCALES[].name in
+  // ui/i18n.js), never translated, so a reader who cannot read the one in force can find theirs.
+  // The walk's words are ASCII runs, so Español, Français and Português arrive split at the accent.
+  'English', 'Bahasa', 'Indonesia', 'Melayu', 'Espa', 'ol', 'Portugu', 'Deutsch', 'Fran', 'ais', 'Italiano', 'Polski',
 ]);
 
 const SCREENS = [
@@ -158,7 +165,7 @@ function unmarked(root) {
     if (leaks.length) out.push(`${where}: "${rest.trim().slice(0, 80)}"`);
   };
   const walk = (node) => {
-    if (node.nodeType === 3) { consider(node.nodeValue, `text in <${node.parentNode?.localName}>`); return; }
+    if (node.nodeType === 3) { consider(node.nodeValue, `text in <${node.parentNode?.localName}>`); return; } // a root that is text
     if (node.nodeType !== 1) return;
     if (node.localName === 'script' || node.localName === 'style') return;
     for (const attr of ['aria-label', 'placeholder', 'title', 'alt', 'aria-description']) {
@@ -168,7 +175,16 @@ function unmarked(root) {
     if (node.localName === 'input' && /^(submit|button)$/.test(node.getAttribute('type') || '') && node.getAttribute('value')) {
       consider(node.getAttribute('value'), 'value on <input>');
     }
-    for (const child of node.childNodes) walk(child);
+    // Neighbouring text nodes are one run: linkedom splits text at an entity (`&#39;`), so a
+    // translated sentence with an apostrophe would otherwise read as two unmarked halves.
+    let run = '';
+    const flush = () => { if (run) consider(run, `text in <${node.localName}>`); run = ''; };
+    for (const child of node.childNodes) {
+      if (child.nodeType === 3) { run += child.nodeValue; continue; }
+      flush();
+      walk(child);
+    }
+    flush();
   };
   walk(root);
   return out;

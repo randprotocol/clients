@@ -20,7 +20,7 @@ import { formatUnits, parseUnits, shortHex } from '../lib/format.js';
 import { explorerLink } from '../lib/explorer.js';
 import { recordDuration } from '../lib/progress.js';
 import { DURIAN_PROGRAM, DURIAN_URL, FEE_BPS, RAND_ASSET, buildSwap, findRoute, poolsOf, spotRate, tradeable } from '../lib/amm.js';
-import { progressRing, proverNoticeMarkup, proverDeclinedMarkup, PROVER_CONSENT_DECLINED } from './send/markup.js';
+import { progressRing, proverNoticeMarkup, proverDeclinedMarkup, proverConsentDeclined } from './send/markup.js';
 import { phaseLabel } from './send/state.js';
 
 /** The swap in flight, or the last one's outcome until it is seen: `{startedMs, kind, phase,
@@ -319,7 +319,7 @@ registerScreen('swap', {
             void notice;
             showReview(built, q, rest);
           } catch (err) {
-            if (live()) stepEl.insertAdjacentHTML('beforeend', h`<p class="caption error">${(err && err.message) || PROVER_CONSENT_DECLINED}</p>`);
+            if (live()) stepEl.insertAdjacentHTML('beforeend', h`<p class="caption error">${(err && err.message) || proverConsentDeclined()}</p>`);
           } finally {
             acknowledging = false;
           }

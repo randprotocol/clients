@@ -30,6 +30,8 @@ import { memoSupportedFor } from '../lib/memo.js';
 // the link is longer than a level-M QR code holds (version 40: 2 331 bytes). A function, read when
 // shown: the language can change while the screen is up.
 export const qrTooLongNotice = () => t('This link is too long for a QR code; share or copy it instead.');
+/** The English sentence, kept for anything still importing the old name; screens use `qrTooLongNotice()`. */
+export const QR_TOO_LONG = 'This link is too long for a QR code; share or copy it instead.';
 
 export const MEMO_MAX_BYTES = 510;
 const REBUILD_DEBOUNCE_MS = 150;
