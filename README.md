@@ -40,7 +40,7 @@ Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
 Every release is on [GitHub Releases](https://github.com/randprotocol/clients/releases/latest),
 and https://randprotocol.org/clients links the same files with their checksums. `<v>` below is
-the version, `0.7.1` today.
+the version, `0.7.2` today.
 
 | you have | download | then |
 |---|---|---|
@@ -73,7 +73,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing     # macOS
 sha256sum -c SHA256SUMS --ignore-missing         # Linux
 ```
 ```powershell
-Get-FileHash .\rand-wallet-0.7.1-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
+Get-FileHash .\rand-wallet-0.7.2-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
 ```
 
 A matching sum says the file is the one that was published. It does not say the file was built
@@ -195,7 +195,7 @@ The first build of any client compiles the prover and takes several minutes.
 ```bash
 git clone --recurse-submodules https://github.com/randprotocol/clients.git
 cd clients
-git checkout v0.7.1 && git submodule update --init   # a release, rather than main
+git checkout v0.7.2 && git submodule update --init   # a release, rather than main
 ```
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
@@ -329,6 +329,23 @@ scripts/release/ the release build: build-desktop.sh, build-local.sh, source-tar
 docs/store/      what each store upload needs: listing text, review notes, privacy answers
 PRIVACY.md       the privacy policy the store listings link to
 ```
+
+## Languages
+
+Every client speaks English, Russian, Mandarin (Simplified Chinese), Cantonese (Traditional Chinese,
+Hong Kong), Korean, Indonesian, Malay, Japanese, Arabic, Persian, Spanish, Portuguese, German,
+French, Italian and Polish, and lays out right to left for Arabic and Persian. Where the strings
+live, and how to add a language:
+
+| client | strings | guide |
+|---|---|---|
+| extension, web, desktop (the shared `ui/`) | `ui/locales/<code>.js`, generated `en.js` | [`ui/locales/README.md`](ui/locales/README.md) |
+| extension name and description | `extension/shared/_locales/<dir>/messages.json` | [`extension/shared/_locales/README.md`](extension/shared/_locales/README.md) |
+| Android | `android/app/src/main/res/values-<lang>/` | [`android/LOCALIZATION.md`](android/LOCALIZATION.md) |
+| iOS | `ios/RandWallet/Localizable.xcstrings`, `InfoPlist.xcstrings` | [`ios/LOCALIZATION.md`](ios/LOCALIZATION.md) |
+
+Amounts are written with ASCII digits and a decimal point in every language, so what the wallet
+shows can be pasted back into a field or a command line.
 
 ## Status
 
