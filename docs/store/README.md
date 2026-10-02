@@ -111,7 +111,8 @@ Rand is a fully shielded chain: there are no public accounts and no public balan
 WHAT IT DOES
 • Create a wallet, or import a spend key or a wallet.key.json from another Rand Wallet
 • Receive: your rand1… address as text and as a QR code
-• Send RAND and listed RPL tokens: review the payment, then the proof is made on your iPhone
+• Send RAND and listed RPL tokens: review the payment; the small authorisation proof is made on your iPhone and the large one on the iPhone itself or by a prover
+• Swap RAND and tokens through the durian.market pools, a program on the Rand chain: the wallet quotes the exact amount from the pool, you review it, and it proves and sends the swap itself
 • Scan an address or a randpay: payment link with the camera
 • Activity: every note you received and every payment you sent
 • Disclose only what you choose: copy your viewing key to open your own history on randscan.org, or one payment's transaction key to show exactly that payment
@@ -120,12 +121,13 @@ YOUR KEYS STAY WITH YOU
 • The spend key never leaves the device Keychain and is never synced
 • Face ID or Touch ID unlocks the wallet, with your passcode as the fallback
 • No account, no sign-up, no analytics, no advertising, no tracking
-• The app talks only to the RPC node you choose in Settings
+• The app talks only to the RPC node you choose in Settings and to the prover that makes your proofs
 
 GOOD TO KNOW
-• Making a proof takes a minute or two and needs an iPhone with about 8 GB of memory. On other iPhones everything else works, and you can send by pairing a prover that you run yourself (Settings → Prover).
+• An iPhone with about 8 GB of memory makes the whole proof itself. Other iPhones send through the RandProtocol provers by default (machines run by the network's validators, no fee): the one that proves a payment learns your viewing key, so it can read your history, and it can never spend. The app tells you before your first send, and Settings → Prover lets you use your own prover instead.
+• A payment or a swap takes a few minutes to prove; keep the app open.
 • There is no recovery service. Save your spend key when the wallet shows it to you; nobody can restore it for you.
-• Rand Wallet does not buy, sell or exchange anything and holds no funds on your behalf.
+• Rand Wallet sells nothing, charges no fee and holds no funds on your behalf. A swap is a trade with the durian.market pool program on the chain; the wallet is not a party to it.
 
 Testnet software: not audited, not for real value. Test RAND has no monetary value.
 
@@ -135,12 +137,18 @@ Open source under GPL-3.0: github.com/randprotocol/clients
 **What's New in This Version**
 
 ```
-First TestFlight build. Built for Rand testnet chain 19.
+Swap: trade RAND and tokens through the durian.market pools from the wallet. Built for Rand testnet chain 20.
 ```
 
 ### App Privacy ("nutrition label")
 
-- **Data collection: "No, we do not collect data from this app."** That is the whole form.
+- **Data collection — from 0.6.8, declare "Financial Info → Other Financial Info"**, *not linked
+  to the user*, *not used for tracking*, purpose **App Functionality**. On an iPhone without 8 GB
+  the default prover is the RandProtocol provers, run by the project's validators, and each
+  proving job carries the wallet's viewing key (its whole payment history, not the power to
+  spend). Apple's rules exempt only data processed on the device or not transmitted, so this is
+  the honest answer even though nothing is kept beyond the job — the same call the Chrome
+  listing made in 0.6.8 (§3). "No data collected" was right up to 0.6.7.
 - Privacy policy URL: `https://randprotocol.org/clients/privacy`.
 - The bundled privacy manifest (`PrivacyInfo.xcprivacy`) agrees: no tracking, no collected data,
   two required-reason APIs (UserDefaults `CA92.1`, file timestamps `C617.1`).
@@ -173,7 +181,8 @@ leave France out of the first release's territories.
 1. Create a new wallet and save the spend key it shows you.
 2. Import the funded test wallet from the invitation email (Welcome → I already have a wallet), or ask us for test RAND to your own address.
 3. Receive: show your address as a QR code. Scan it from a second device's Send screen.
-4. Send 1 RAND to another Rand Wallet address. On an iPhone with 8 GB of memory the proof takes a minute or two; keep the app open. On other iPhones the review screen explains why this device cannot make the proof.
+4. Send 1 RAND to another Rand Wallet address. The proof takes a few minutes; keep the app open. On an iPhone with less than 8 GB of memory the app first asks you to read what the RandProtocol provers see.
+4b. Swap 0.2 RAND for DUR from the home screen's Swap button; the DUR appears in your activity once the swap is in a block.
 5. Activity → a payment → Disclose this payment: copy the transaction key and open it on randscan.org.
 6. Lock the phone, reopen the app: Face ID should be required.
 ```
@@ -185,15 +194,17 @@ Rand Wallet is a non-custodial ("self-custody") wallet for the Rand Protocol TES
 
 NO LOGIN: there is no account. Tap "Create a new wallet" to begin.
 
-TO GET FUNDS FOR TESTING: a funded test wallet is provided for review. On the Welcome screen choose "I already have a wallet" and paste this key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE>. (The Faucet button asks the node for test RAND; the public node does not hand it out to anonymous callers, so that button reports a refusal there. It is for nodes that run an open faucet.)
+TO GET FUNDS FOR TESTING: a funded test wallet is provided for review. On the Welcome screen choose "I already have a wallet" and paste this key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE>. (The "Get test RAND from the faucet" button under Activity asks the node for test RAND; the public node does not hand it out to anonymous callers, so that button reports a refusal there. It is for nodes that run an open faucet.)
 
-WHAT THE APP DOES NOT DO: it does not buy, sell, exchange or swap anything; it has no in-app purchases; it holds no user funds (keys are generated and stored only on the device, in the Keychain); it does not run an ICO or sell tokens; it offers no reward for any task.
+SWAP: the Swap button trades test RAND for test tokens through the durian.market pools, an open-source program on the Rand testnet chain. The wallet reads the pool from the chain, shows the exact amount, and on the user's confirmation proves and sends the trade itself. The developer is not a party to the trade, takes no fee, and runs no order book; the tokens have no monetary value.
+
+WHAT THE APP DOES NOT DO: it has no in-app purchases; it holds no user funds (keys are generated and stored only on the device, in the Keychain); it does not run an ICO or sell tokens; it offers no reward for any task.
 
 THE ON-DEVICE COMPUTATION IS NOT MINING. When the user confirms a payment, the app computes one zero-knowledge proof that authorises that single payment. It runs once per payment, only after the user taps Confirm, takes one to two minutes, and earns nothing. There is no background computation.
 
-DEVICE MEMORY: the proof needs about 8 GB of device memory. On devices with less, the review screen says so and the payment is not started; creating a wallet, receiving, activity and key disclosure all work on every device. To test a send, use a device with 8 GB of memory (for example iPhone 15 Pro or later).
+PROVING: a device with about 8 GB of memory proves a payment itself. On other devices the large proof is made by the RandProtocol provers (servers run by the network's validators); the app asks the user once before the first such send, because those servers receive the wallet's viewing key for the job (never the spend key). Sends and swaps work on any recent iPhone this way.
 
-NETWORK: the app connects only to the JSON-RPC node shown in Settings (default https://rpc.randprotocol.org). It collects no data and contains no analytics or advertising SDKs.
+NETWORK: the app connects only to the JSON-RPC node shown in Settings (default https://rpc.randprotocol.org) and to the prover that makes a proof (by default the RandProtocol provers under https://prover.randprotocol.org). It contains no analytics or advertising SDKs.
 
 CAMERA is used only to scan an address or payment-link QR code. FACE ID is used only to unlock the wallet.
 
@@ -231,9 +242,19 @@ Suggested captions, if you add text to the frames:
   answers with the node's refusal. A reviewer reads a feature that errors as an incomplete app.
   Either open the faucet for the review period, or point the app at an endpoint that serves it;
   the notes explain it, but an explanation is weaker than a button that works.
-- **Guideline 2.1 — the reviewer cannot finish a send.** On a review device with less than 8 GB
-  the send stops at the review screen by design. The notes say which devices can; if a reviewer
-  still insists, stand up your own `rand-prover` and give them its pairing link in the notes.
+- **Guideline 2.1 — the reviewer cannot finish a send.** Since 0.6.8 any recent iPhone sends
+  through the RandProtocol provers, so this is no longer a device question; it is a question of
+  the provers being up during the review. Check `https://prover.randprotocol.org/.well-known/rand-prover-pool.json`
+  and a real send the day you submit.
+- **Guideline 3.1.5(iii) — exchanges. DECIDE BEFORE SUBMITTING 0.7.1 OR LATER.** "Apps may
+  facilitate transactions or transmissions of cryptocurrency on an approved exchange, provided
+  they are offered only in countries or regions where the app has appropriate licensing." Swap
+  trades through an on-chain pool program (durian.market), not through a company's exchange, and
+  only testnet tokens with no value; wallets with built-in swaps through decentralised protocols
+  are on the store today. Recommended: keep Swap, describe it exactly as the notes above do
+  (the developer is not a party, takes no fee, no order book), and keep the build on TestFlight.
+  If a reviewer still objects, the fallback is a build without the Swap button for the stores
+  (the screen is `UI/SwapView.swift`, reached only from `HomeView`), not a change of wording.
 - **Guideline 5.1.1 — privacy policy.** The URL must load, and must be the wallet's own policy.
 - **Territories.** A wallet must be lawful wherever it is offered (3.1.5). Leave out China
   mainland, and any territory where you have not checked, in Pricing and Availability.
@@ -276,7 +297,8 @@ Rand is a fully shielded chain: there are no public accounts and no public balan
 WHAT IT DOES
 • Create a wallet, or import a spend key or a wallet.key.json from another Rand Wallet
 • Receive: your rand1… address as text and as a QR code
-• Send RAND and listed RPL tokens: review the payment, then the proof is made on your phone
+• Send RAND and listed RPL tokens: review the payment; the small authorisation proof is made on your phone and the large one on the phone itself or by a prover
+• Swap RAND and tokens through the durian.market pools, a program on the Rand chain: the wallet quotes the exact amount from the pool, you review it, and it proves and sends the swap itself
 • Scan an address or a randpay: payment link with the camera
 • Activity: every note you received and every payment you sent
 • Disclose only what you choose: copy your viewing key to open your own history on randscan.org, or one payment's transaction key to show exactly that payment
@@ -285,12 +307,13 @@ YOUR KEYS STAY WITH YOU
 • The spend key is stored encrypted on the device and is never backed up or synced
 • Fingerprint or face unlock, with your screen lock as the fallback
 • No account, no sign-up, no analytics, no advertising, no tracking
-• The app talks only to the RPC node you choose in Settings, and only over HTTPS
+• The app talks only to the RPC node you choose in Settings and to the prover that makes your proofs, and only over HTTPS
 
 GOOD TO KNOW
-• Making a proof takes a few minutes and needs a phone with about 8 GB of memory. A notification shows while it runs. On other phones everything else works, and you can send by pairing a prover that you run yourself (Settings → Prover).
+• A phone with about 8 GB of memory makes the whole proof itself. Other phones send through the RandProtocol provers by default (machines run by the network's validators, no fee): the one that proves a payment learns your viewing key, so it can read your history, and it can never spend. The app tells you before your first send, and Settings → Prover lets you use your own prover instead.
+• A payment or a swap takes a few minutes to prove; a notification shows while it runs. A swap needs about 1.5 GB of memory on the phone.
 • There is no recovery service. Save your spend key when the wallet shows it to you; nobody can restore it for you.
-• Rand Wallet does not buy, sell or exchange anything and holds no funds on your behalf.
+• Rand Wallet sells nothing, charges no fee and holds no funds on your behalf. A swap is a trade with the durian.market pool program on the chain; the wallet is not a party to it.
 
 Testnet software: not audited, not for real value. Test RAND has no monetary value.
 
@@ -300,7 +323,7 @@ Open source under GPL-3.0: github.com/randprotocol/clients
 **Release notes (500)**
 
 ```
-First testing release. Built for Rand testnet chain 19.
+Swap: trade RAND and tokens through the durian.market pools from the wallet. Built for Rand testnet chain 20.
 ```
 
 ### App content declarations
@@ -310,24 +333,29 @@ First testing release. Built for Rand testnet chain 19.
 | Privacy policy | `https://randprotocol.org/clients/privacy` |
 | App access | All functionality is available without special access (no login) |
 | Ads | No, the app does not contain ads |
-| Content rating (IARC) | Category: Utility / Productivity. Answer No to every content question. The app does not let users exchange real money or purchase digital goods. |
+| Content rating (IARC) | Category: Utility / Productivity. Answer No to every content question. The app does not let users exchange real money or purchase digital goods (Swap trades testnet tokens with no monetary value). |
 | Target audience | 18 and over only |
 | News app | No |
 | Data safety | see below |
 | Government app | No |
-| Financial features | **Cryptocurrency software wallet (non-custodial).** Nothing else: no exchange, no custodial wallet, no loans, no trading, no banking. |
+| Financial features | **Cryptocurrency software wallet (non-custodial).** No custodial wallet, no loans, no banking. **Decide for 0.7.1+:** Swap trades through an on-chain pool program (see "What can get it rejected" below) — recommended answer stays *software wallet* only, with Swap described in the review notes. |
 | Health | None |
 
 **Data safety**
 
-- Does your app collect or share any of the required user data types? **No.**
+- Does your app collect or share any of the required user data types? **From 0.6.8: Yes —
+  Financial info → Other financial info**, *collected*, *not shared*, processed **ephemerally**,
+  required (not optional) on a phone that cannot prove, purpose **App functionality**. On such a
+  phone the default prover is the RandProtocol provers, run by the project's validators, and
+  each job carries the wallet's viewing key (its payment history, not the power to spend). Play
+  lets ephemeral processing be left out of "collected"; declaring it anyway matches the Chrome
+  listing (§3) and the privacy policy. Up to 0.6.7 the answer was No.
 - Is all of the user data collected by your app encrypted in transit? Not asked once the answer
   above is No. (For the record: release builds refuse cleartext HTTP.)
 - Do you provide a way for users to request that their data is deleted? Not asked; there is no
   account and no server-side data.
 
-The answer is No because the form's own definition of "collect" is transmitting data off the
-device to the developer or a third party: the wallet's keys, notes and settings never leave the
+Everything else stays off the form: the spend key, the notes and the settings never leave the
 device, and a transaction submitted to the chain carries no personal data.
 
 **Permissions the console may ask about**
@@ -345,7 +373,7 @@ device, and a transaction submitted to the chain carries no personal data.
 - Type: **Data sync**. Task: *Other* →
 
   ```
-  When the user confirms a payment, the app builds the transaction, computes the proof that authorises it and uploads it to the network. This takes a few minutes and must not be interrupted: if the app is suspended the payment is lost and the user must start again. The service starts only when the user taps Confirm, shows an ongoing notification with progress, and stops as soon as the transaction is submitted.
+  When the user confirms a payment or a swap, the app builds the transaction, computes the proof that authorises it and uploads it to the network. This takes a few minutes and must not be interrupted: if the app is suspended the payment is lost and the user must start again. The service starts only when the user taps Confirm, shows an ongoing notification with progress, and stops as soon as the transaction is submitted.
   ```
 - Video: record Send → Review → Confirm → the notification appearing → switching to another app
   → returning to "Sent". Thirty seconds is enough; upload it unlisted and paste the link.
@@ -368,6 +396,12 @@ Captions as in §1. Do not put "No. 1", prices, or store badges in any graphic.
 - **Financial features declaration missing or wrong.** Every app must complete it. Declare the
   non-custodial software wallet and nothing else. Do not describe the app anywhere as an
   exchange, as "earning", or as an investment.
+- **Swap (0.7.1+). DECIDE BEFORE SUBMITTING.** Play treats crypto *exchanges* as a licensed
+  financial service; a non-custodial wallet whose swap goes to an on-chain pool program, on
+  testnet tokens with no value, is the ordinary software-wallet case. Recommended: keep Swap and
+  say what it is in the review notes (an on-chain program; the developer is not a party, takes no
+  fee, runs no order book), and stay in a testing track. The fallback, if a reviewer objects, is
+  a store build without the Swap action (`ui/SwapActivity`, reached only from `HomeActivity`).
 - **Foreground service type.** `dataSync` is the closest declared type for "compute, then
   upload", and reviewers do refuse declarations they find unconvincing. If this one is refused,
   the fix is in code, not in the form: change `ProvingService` to the `specialUse` type with a
@@ -414,7 +448,8 @@ WHAT IT DOES
 • Create a wallet, or import a spend key or a wallet.key.json
 • Receive: your rand1… address as text and as a QR code
 • Send RAND and listed RPL tokens: the extension builds the payment, a prover makes the proof (the RandProtocol prover by default, or your own), the extension checks the proof and submits it
-• Connect to randbridge.org: the bridge sees your address only after you approve it
+• Swap RAND and tokens through the durian.market pools, a program on the Rand chain: the extension quotes the exact amount from the pool, you review it, and it proves and sends the swap itself
+• Connect to randbridge.org and durian.market: a site sees your address only after you approve it, and every transaction it asks for is shown to you before anything is sent
 • Activity: every note you received and every payment you sent
 • Disclose only what you choose: copy your viewing key to open your own history on randscan.org, or one payment's transaction key to show exactly that payment
 • Password-encrypted key storage, auto-lock, dark and light themes
@@ -435,7 +470,7 @@ Open source under GPL-3.0: github.com/randprotocol/clients
 **Single purpose**
 
 ```
-Rand Wallet manages a wallet for the Rand Protocol chain: it holds the user's key, shows the balance and activity, and builds and submits transfers.
+Rand Wallet manages a wallet for the Rand Protocol chain: it holds the user's key, shows the balance and activity, and builds and submits the user's transfers and swaps.
 ```
 
 **Permission justifications** — one box each, paste as written
@@ -447,6 +482,8 @@ Rand Wallet manages a wallet for the Rand Protocol chain: it holds the user's ke
 | `sidePanel` | `Lets the user open the wallet in Chrome's side panel instead of the popup.` |
 | `scripting` | `When the extension is installed or updated, re-injects its own bundled content script into randbridge.org tabs that are already open, so the bridge page can find the wallet without a reload. It injects only files packaged in the extension, and only into the hosts listed in the manifest.` |
 | Host permissions: `rpc.randprotocol.org`, `rpc1`–`rpc3.randprotocol.org` | `The default JSON-RPC endpoints of the Rand chain. The wallet reads chain data from one of them and submits the user's transactions to it; the others are failover.` |
+| Host permissions: `prover.randprotocol.org` | `The RandProtocol provers, the default prover: a proving job for a payment the user confirmed is sent there, encrypted to one prover's key. The user is told what it can see before the first send, and can choose another prover or none in Settings.` |
+| Host permissions: `durian.market`, `www.durian.market` | `The durian.market exchange site of the Rand chain. The extension exposes the same provider there (window.rand) so the user can connect and approve a swap the site asks for; the extension shows the swap and proves it only on the user's approval.` |
 | Host permissions: `randbridge.org` | `The Rand bridge web app. The extension exposes a provider object there (window.rand) so the user can connect their wallet to the bridge. The site learns the wallet address only after the user approves the connection.` |
 | Content scripts on `localhost` / `127.0.0.1` | `The same provider on a locally served copy of the bridge app, for people who run it themselves. No data is read from these pages.` |
 | Optional host permissions (`https://*/*`, `http://localhost/*`, `http://127.0.0.1/*`) | `Requested at run time, for one origin, only when the user types their own RPC node URL in Settings or pairs their own prover. Nothing is requested until the user does that.` |
@@ -468,7 +505,7 @@ viewing key and a one-time salt, encrypted to the prover: enough to read the wal
 transaction history, not to spend (the spend key never leaves the device). In 0.6.7 a job went
 only to a prover the user chose and pasted the link of, so nothing reached the developer. In 0.6.8
 the default prover is the RandProtocol prover, run by the project's validators, so by default the
-developer receives what reveals the user's payment history. 0.6.9 changes nothing here: the
+developer receives what reveals the user's payment history. 0.6.9 and 0.7.x change nothing here: the
 default is still the validators' machines (now each with its own key), and the box stays ticked. Declare it, say what it is used for
 (making the payment's proof, nothing else; not sold, not shared, not kept beyond the job), and keep
 the description and the privacy policy saying so: the extension tells the user before the first
@@ -485,7 +522,7 @@ send, and Settings → Prover lets them choose their own prover or none.
 ### Test instructions (the dashboard's "Test instructions" tab)
 
 ```
-No login is needed. Click the toolbar icon → "Create a new wallet" → choose a password → save the spend key shown. To test with funds, choose "I already have a wallet" instead and paste the review wallet's key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE> (the Faucet button is refused by the public node; it is for nodes that run an open faucet). Receive shows the address and QR code. Sending needs a prover the user runs themselves (the Rand Wallet desktop app, Settings → "Prove for my other devices"); without one the Send screen explains this and stops before any proof. To see the bridge connection, open https://randbridge.org and choose Connect → Rand Wallet.
+No login is needed. Click the toolbar icon → "Create a new wallet" → choose a password → save the spend key shown. To test with funds, choose "I already have a wallet" instead and paste the review wallet's key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE> (the "Get test RAND from the faucet" button, shown while Activity is empty, is refused by the public node; it is for nodes that run an open faucet). Receive shows the address and QR code. Sending works out of the box: the RandProtocol provers make the large proof, after a one-time notice about what they see (Settings → Prover chooses another). Swap is on the home screen: 0.2 RAND for DUR takes a few minutes. To see a site connection, open https://randbridge.org and choose Connect → Rand Wallet.
 ```
 
 ### What can get it rejected
@@ -541,17 +578,17 @@ BUILD. The source archive is the whole repository at the release tag with its on
 
 No bundler, minifier or transpiler is used. Every .js file in the add-on is a source file from extension/shared/ or ui/, byte for byte. The only generated files are core/rand_wallet.js and core/rand_wallet_bg.wasm (wasm-bindgen output).
 
-TESTING. No account is needed. Click the toolbar button → "Create a new wallet" → set a password → save the spend key. To test with funds, choose "I already have a wallet" and paste the review wallet's key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE> (the Faucet button is refused by the public node; it is for nodes that run an open faucet). Sending needs a prover the user runs themselves (the Rand Wallet desktop app); without one the Send screen explains this and stops.
+TESTING. No account is needed. Click the toolbar button → "Create a new wallet" → set a password → save the spend key. To test with funds, choose "I already have a wallet" and paste the review wallet's key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE> (the "Get test RAND from the faucet" button, shown while Activity is empty, is refused by the public node; it is for nodes that run an open faucet). Sending works out of the box through the RandProtocol provers, after a one-time notice (Firefox also asks its data-collection consent then). Swap is on the home screen.
 
 NETWORK. JSON-RPC POSTs to the node URL in Settings (default https://rpc.randprotocol.org; rpc1–rpc3.randprotocol.org are failover hosts). When the user sends, a proving job goes to the prover: by default one of the RandProtocol provers under https://prover.randprotocol.org (machines run by the project's validators, each with its own key pinned in the extension; the user is told before the first send), or the prover the user chose in Settings → Prover. A proving job contains the wallet's viewing key and a one-time salt, encrypted to that prover (enough to read the wallet's history, not to spend; the spend key never leaves the device, which makes the authorisation proof itself). No analytics, no telemetry, no remote code.
 
-CONTENT SCRIPTS run only on randbridge.org (and localhost, for a locally served bridge) and expose a provider object, window.rand. A page learns the wallet address only after the user approves that site.
+CONTENT SCRIPTS run only on randbridge.org and durian.market (and localhost, for a locally served copy) and expose a provider object, window.rand. A page learns the wallet address only after the user approves that site, and a transaction a page asks for (window.rand.invoke) is shown in the wallet's own window and sent only on the user's approval.
 
 'wasm-unsafe-eval' in the CSP is required to instantiate the bundled WebAssembly module.
 
 LINT. web-ext lint reports UNSAFE_VAR_ASSIGNMENT warnings in ui/screens/*.js: a screen renders itself as a template string into innerHTML. Every interpolated value passes through the `h` tagged template in ui/lib/dom.js, which escapes it; the only unescaped values are raw(…) literals written in this repository. Nothing from the network or from storage is inserted unescaped.
 
-DATA. data_collection_permissions.required is ["none"] in the manifest.
+DATA. data_collection_permissions is {"required": ["none"], "optional": ["financialAndPaymentInfo"]} in the manifest: nothing is collected unless the user, at the first send through the RandProtocol provers, grants the optional financialAndPaymentInfo permission Firefox asks for in that click (the proving job carries the viewing key). Declined, nothing is sent and the user is pointed to their own prover.
 ```
 
 ### Screenshots
