@@ -16,6 +16,10 @@ and is the complete list; `ui/test/i18n.test.mjs` holds every other file to exac
 | ja | 日本語 | ja | ltr |
 | ar | العربية | ar | rtl |
 | fa | فارسی | fa | rtl |
+| ur | اردو | ur | rtl |
+| ps | پښتو | ps | rtl |
+| hi | हिन्दी | hi | ltr |
+| ta | தமிழ் | ta | ltr |
 | es | Español (neutral, Latin American where it matters) | es | ltr |
 | pt | Português (Brazilian where it matters) | pt | ltr |
 | de | Deutsch | de | ltr |
@@ -52,5 +56,6 @@ export default {
 - Register: the wallet speaks plainly, in full sentences, without exclamation marks and without
   marketing. Buttons are short imperatives. Errors say what happened and what to do.
 - Script: Simplified characters for `zh`, Traditional (Hong Kong usage and vocabulary) for
-  `zh-hk`; Arabic and Persian in their own scripts; Japanese with the usual katakana for loan
+  `zh-hk`; Arabic and Persian in their own scripts; Urdu (Nastaliq-style Urdu alphabet) and
+  Pashto in their own Arabic-derived scripts; Hindi in Devanagari; Tamil in Tamil script; Japanese with the usual katakana for loan
   words; Korean without honorific overreach.

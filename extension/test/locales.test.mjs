@@ -51,7 +51,7 @@ test('en/messages.json: each key has a message and a note for the translator', (
 
 test('the language table is ui/i18n.js LOCALES, one _locales directory each, and the README agrees', () => {
   const codes = LOCALES.map((l) => l.code);
-  assert.deepEqual(Object.keys(LOCALE_DIRS), codes, 'LOCALE_DIRS is not the sixteen codes in their order');
+  assert.deepEqual(Object.keys(LOCALE_DIRS), codes, 'LOCALE_DIRS is not the twenty codes in their order');
   const dirs = Object.values(LOCALE_DIRS);
   assert.equal(new Set(dirs).size, dirs.length, 'two codes share a directory');
   for (const dir of dirs) assert.match(dir, /^[a-z]{2}(_[A-Z]{2})?$/, `${dir} is not a store locale code`);

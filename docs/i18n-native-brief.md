@@ -48,6 +48,10 @@ Folder / code table:
 | ja | values-ja | ja |
 | ar | values-ar | ar |
 | fa | values-fa | fa |
+| ur | values-ur | ur |
+| ps | values-ps | ps |
+| hi | values-hi | hi |
+| ta | values-ta | ta |
 | es | values-es | es |
 | pt | values-pt-rBR | pt-BR |
 | de | values-de | de |

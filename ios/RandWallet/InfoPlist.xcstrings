@@ -100,6 +100,30 @@
             "state" : "translated",
             "value" : "Rand Wallet"
           }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
         }
       }
     },
@@ -215,6 +239,30 @@
             "state" : "translated",
             "value" : "Rand Wallet 會使用相機掃描收款人地址或付款連結的 QR 碼。"
           }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet प्राप्तकर्ता के पते या भुगतान लिंक का QR कोड स्कैन करने के लिए कैमरे का उपयोग करता है।"
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet کمره کاروي ترڅو د ترلاسه کوونکي د پتې یا د تادیې لینک QR کوډ سکین کړي."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பெறுநரின் முகவரி அல்லது கட்டண இணைப்பின் QR குறியீட்டை ஸ்கேன் செய்ய Rand Wallet கேமராவைப் பயன்படுத்துகிறது."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet وصول کنندہ کے پتے یا ادائیگی لنک کا QR کوڈ اسکین کرنے کے لیے کیمرا استعمال کرتا ہے۔"
+          }
         }
       }
     },
@@ -316,6 +364,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rand Wallet 會使用 Face ID 解鎖你的錢包。"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet आपका वॉलेट अनलॉक करने के लिए Face ID का उपयोग करता है।"
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet ستاسو د والټ د خلاصولو لپاره Face ID کاروي."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "உங்கள் வாலட்டைத் திறக்க Rand Wallet Face ID-ஐப் பயன்படுத்துகிறது."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet آپ کا والیٹ ان لاک کرنے کے لیے Face ID استعمال کرتا ہے۔"
           }
         }
       }

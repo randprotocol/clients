@@ -12,7 +12,7 @@ import { join } from 'node:path';
  */
 export const LOCALE_DIRS = Object.freeze({
   en: 'en', ru: 'ru', zh: 'zh_CN', 'zh-hk': 'zh_HK', ko: 'ko', id: 'id', ms: 'ms', ja: 'ja',
-  ar: 'ar', fa: 'fa', es: 'es', pt: 'pt_BR', de: 'de', fr: 'fr', it: 'it', pl: 'pl',
+  ar: 'ar', fa: 'fa', ur: 'ur', ps: 'ps', hi: 'hi', ta: 'ta', es: 'es', pt: 'pt_BR', de: 'de', fr: 'fr', it: 'it', pl: 'pl',
 });
 
 /** The stores' limits on two of the strings. */

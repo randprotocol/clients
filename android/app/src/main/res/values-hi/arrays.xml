@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="autolock_labels">
+        <item>1 मिनट</item>
+        <item>5 मिनट</item>
+        <item>15 मिनट</item>
+        <item>1 घंटा</item>
+        <item>कभी नहीं</item>
+    </string-array>
+    <string-array name="theme_labels">
+        <item>डार्क</item>
+        <item>लाइट</item>
+        <item>सिस्टम</item>
+    </string-array>
+</resources>

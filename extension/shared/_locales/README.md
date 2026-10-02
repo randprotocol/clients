@@ -32,6 +32,10 @@ of the Chrome Web Store, with an underscore before a region. This is the mapping
 | `ja` | `ja` | 日本語 |
 | `ar` | `ar` | العربية |
 | `fa` | `fa` | فارسی |
+| `ur` | `ur` | اردو |
+| `ps` | `ps` | پښتو |
+| `hi` | `hi` | हिन्दी |
+| `ta` | `ta` | தமிழ் |
 | `es` | `es` | Español |
 | `pt` | `pt_BR` | Português — the store has no plain `pt`; `pt_BR` is the one it lists first |
 | `de` | `de` | Deutsch |

@@ -1,6 +1,6 @@
 # Localizing Rand Wallet for iOS
 
-The app ships in English (the source language) and is prepared for fifteen more. English is
+The app ships in English (the source language) and is prepared for nineteen more. English is
 complete; the other languages are filled in by translators in the string catalogs below.
 
 ## Where the strings live
@@ -57,6 +57,10 @@ The development region is `en` (`CFBundleDevelopmentRegion` in `Info.plist`,
 | `ja` | Japanese |
 | `ar` | Arabic (right to left) |
 | `fa` | Persian (right to left) |
+| `ur` | Urdu (right to left) |
+| `ps` | Pashto (right to left) |
+| `hi` | Hindi |
+| `ta` | Tamil |
 | `es` | Spanish |
 | `pt-BR` | Portuguese (Brazil) |
 | `de` | German |
@@ -88,7 +92,7 @@ xcodegen has no key for `knownRegions`, so `project.yml` runs `scripts/known-reg
 5. **Security wording.** Sentences about the spend key, the viewing key and what a prover can see
    are deliberate: translate them exactly, without softening ("cannot spend", "whole history").
 6. Dates and times are formatted by the system (`.formatted()`), so they need no translation.
-7. Right-to-left languages (`ar`, `fa`): SwiftUI mirrors the layout. Addresses, amounts and
+7. Right-to-left languages (`ar`, `fa`, `ur`, `ps`): SwiftUI mirrors the layout. Addresses, amounts and
    hashes remain left to right.
 
 ## Errors from the Rust core

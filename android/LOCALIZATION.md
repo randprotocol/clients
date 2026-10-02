@@ -21,6 +21,10 @@ Order and native names follow the shared UI (`../ui/i18n.js`, `LOCALES`).
 | 日本語               | `values-ja`      | `ja`    |
 | العربية             | `values-ar`      | `ar` (right-to-left) |
 | فارسی               | `values-fa`      | `fa` (right-to-left) |
+| اردو                | `values-ur`      | `ur` (right-to-left) |
+| پښتو                | `values-ps`      | `ps` (right-to-left) |
+| हिन्दी               | `values-hi`      | `hi`    |
+| தமிழ்               | `values-ta`      | `ta`    |
 | Español             | `values-es`      | `es`    |
 | Português (Brasil)  | `values-pt-rBR`  | `pt-BR` |
 | Deutsch             | `values-de`      | `de`    |
@@ -36,7 +40,7 @@ Settings: "System default" first, then each language in its own name).
 The Language row calls `AppCompatDelegate.setApplicationLocales`. From API 33 the platform keeps
 the choice; below it AppCompat stores it (`AppLocalesMetadataHolderService` with
 `autoStoreLocales` in the manifest). The app declares `android:supportsRtl="true"` and its
-layouts use `start`/`end`, so Arabic and Persian mirror.
+layouts use `start`/`end`, so Arabic, Persian, Urdu and Pashto mirror.
 
 ## Translator rules
 

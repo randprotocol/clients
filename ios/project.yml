@@ -5,9 +5,9 @@ options:
   bundleIdPrefix: org.randprotocol
   # English is the source language of Localizable.xcstrings / InfoPlist.xcstrings (ios/LOCALIZATION.md).
   developmentLanguage: en
-  # knownRegions: English plus the fifteen languages translators fill in. xcodegen has no key for
+  # knownRegions: English plus the nineteen languages translators fill in. xcodegen has no key for
   # it, so the list is written into the generated project after each `xcodegen generate`.
-  postGenCommand: scripts/known-regions.sh en ru zh-Hans zh-Hant-HK ko id ms ja ar fa es pt-BR de fr it pl
+  postGenCommand: scripts/known-regions.sh en ru zh-Hans zh-Hant-HK ko id ms ja ar fa ur ps hi ta es pt-BR de fr it pl
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true

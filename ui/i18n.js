@@ -13,7 +13,7 @@
  * `code` is the setting's value and the dictionary's file name; `tag` is the BCP 47 tag for
  * `<html lang>`, `Intl` and `toLocaleString`; `name` is the language's own name, which is how the
  * picker lists it (a reader who cannot read the current language can still find their own).
- * The same sixteen as randprotocol.org, in the same order.
+ * The same twenty as randprotocol.org, in the same order.
  */
 export const LOCALES = Object.freeze([
   { code: 'en', tag: 'en', name: 'English', dir: 'ltr' },
@@ -26,6 +26,10 @@ export const LOCALES = Object.freeze([
   { code: 'ja', tag: 'ja', name: '日本語', dir: 'ltr' },
   { code: 'ar', tag: 'ar', name: 'العربية', dir: 'rtl' },
   { code: 'fa', tag: 'fa', name: 'فارسی', dir: 'rtl' },
+  { code: 'ur', tag: 'ur', name: 'اردو', dir: 'rtl' },
+  { code: 'ps', tag: 'ps', name: 'پښتو', dir: 'rtl' },
+  { code: 'hi', tag: 'hi', name: 'हिन्दी', dir: 'ltr' },
+  { code: 'ta', tag: 'ta', name: 'தமிழ்', dir: 'ltr' },
   { code: 'es', tag: 'es', name: 'Español', dir: 'ltr' },
   { code: 'pt', tag: 'pt', name: 'Português', dir: 'ltr' },
   { code: 'de', tag: 'de', name: 'Deutsch', dir: 'ltr' },
