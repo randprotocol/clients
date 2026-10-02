@@ -33,14 +33,14 @@ rsync -a ui/ "$OUT/ui/" \
   --exclude 'package-lock.json' \
   --exclude '.DS_Store'
 
-cp web/wallet/index.html web/wallet/main.js web/wallet/idb.js web/wallet/worker.js "$OUT/"
+cp web/wallet/index.html web/wallet/main.js web/wallet/idb.js web/wallet/worker.js web/wallet/deep-link.js "$OUT/"
 cp extension/shared/core/rand_wallet.js extension/shared/core/rand_wallet_bg.wasm "$OUT/core/"
 
 # A build with any of these in it is a build that would leak a test fixture or a 404 to the page.
 for unwanted in ui/test ui/scripts ui/node_modules ui/gallery.html ui/dev.html ui/package.json; do
   if [ -e "$OUT/$unwanted" ]; then echo "build.sh: $unwanted should not be in dist/" >&2; exit 1; fi
 done
-for needed in index.html main.js idb.js worker.js ui/app.js ui/backend.js ui/tokens.css ui/base.css \
+for needed in index.html main.js idb.js worker.js deep-link.js ui/app.js ui/backend.js ui/tokens.css ui/base.css \
               ui/components.css ui/engine/backend-wasm.js ui/fonts/Inter-Variable.woff2 \
               ui/fonts/DepartureMono-Regular.woff2 ui/lib/entropy.js ui/i18n.js ui/locales/en.js ui/locales/ar.js \
               core/rand_wallet.js core/rand_wallet_bg.wasm; do
