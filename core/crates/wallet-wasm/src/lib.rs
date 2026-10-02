@@ -4,6 +4,10 @@
 
 use wasm_bindgen::prelude::*;
 
+// The Web Worker pool rayon runs on: `await initThreadPool(n)` once, before the first proof.
+#[cfg(feature = "threads")]
+pub use wasm_bindgen_rayon::init_thread_pool;
+
 #[wasm_bindgen(start)]
 pub fn start() {
     console_error_panic_hook::set_once();

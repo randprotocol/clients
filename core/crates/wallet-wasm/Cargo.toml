@@ -14,3 +14,13 @@ wallet-core = { workspace = true }
 wasm-bindgen = "0.2"
 # A panic inside the prover otherwise surfaces as a bare `unreachable`; this prints the message.
 console_error_panic_hook = "0.1"
+# Off by default. `threads` turns on Plonky3's own `parallel` (rayon) for the whole build and
+# exports wasm-bindgen-rayon's `initThreadPool`: the proofs a browser makes itself then run on a
+# pool of Web Workers. It needs a nightly toolchain, std rebuilt with atomics and a
+# cross-origin-isolated page (SharedArrayBuffer): core/scripts/build-wasm-threads.sh.
+p3-maybe-rayon = { version = "=0.7.0", features = ["parallel"], optional = true }
+wasm-bindgen-rayon = { version = "1", optional = true }
+
+[features]
+threads = ["dep:p3-maybe-rayon", "dep:wasm-bindgen-rayon"]
+
