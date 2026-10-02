@@ -44,7 +44,7 @@ struct Wordmark: View {
     var color: Color = Theme.textStrong
 
     var body: some View {
-        Text("rand")
+        Text(verbatim: "rand")
             .font(Typeface.display(size))
             .foregroundColor(color)
             .lineLimit(1)

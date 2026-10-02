@@ -1,0 +1,55 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "comment" : "The app's name under its icon on the Home Screen.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        }
+      }
+    },
+    "CFBundleName" : {
+      "comment" : "Bundle name (the product name, $(PRODUCT_NAME)); not shown to users. Leave as is.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RandWallet"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "NSCameraUsageDescription" : {
+      "comment" : "Shown by iOS when the app first asks for the camera (scanning QR codes).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet uses the camera to scan a recipient's address or payment-link QR code."
+          }
+        }
+      }
+    },
+    "NSFaceIDUsageDescription" : {
+      "comment" : "Shown by iOS when the app first asks to use Face ID (unlocking the wallet).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet uses Face ID to unlock your wallet."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

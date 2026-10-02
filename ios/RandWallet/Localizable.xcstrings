@@ -1,0 +1,4329 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    " of %@ RAND" : {
+      "comment" : "Appended to a prover's fee, after the amount it charges. Leading space is part of the string.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " of %@ RAND"
+          }
+        }
+      }
+    },
+    " of %lld" : {
+      "comment" : "Appended to a prover's queue depth (\"position 3 of 10\"). Leading space is part of the string.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " of %lld"
+          }
+        }
+      }
+    },
+    "%@ RAND" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ RAND"
+          }
+        }
+      }
+    },
+    "%@ RAND pending" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ RAND pending"
+          }
+        }
+      }
+    },
+    "%@ Your paired prover is not available: %@." : {
+      "comment" : "First %@ is a preceding sentence (may be empty); second is the reason.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ Your paired prover is not available: %2$@."
+          }
+        }
+      }
+    },
+    "%@ answered with another key than the one this wallet pins" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ answered with another key than the one this wallet pins"
+          }
+        }
+      }
+    },
+    "%@ did not answer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ did not answer"
+          }
+        }
+      }
+    },
+    "%@ does not take this wallet's jobs" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ does not take this wallet's jobs"
+          }
+        }
+      }
+    },
+    "%@ is busy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is busy"
+          }
+        }
+      }
+    },
+    "%@ provers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ provers"
+          }
+        }
+      }
+    },
+    "%@ provers · where this device cannot prove" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ provers · where this device cannot prove"
+          }
+        }
+      }
+    },
+    "%@The %@ provers are all busy right now; try again in a minute, or pair your own prover in Settings." : {
+      "comment" : "First %@ is a preceding sentence ending in a space, or empty; second is the pool name (RandProtocol).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@The %2$@ provers are all busy right now; try again in a minute, or pair your own prover in Settings."
+          }
+        }
+      }
+    },
+    "%@The %@ provers cannot be reached right now (%@). Try again later, or pair your own prover in Settings." : {
+      "comment" : "First %@ is a preceding sentence ending in a space, or empty; second is the pool name; third the reasons.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@The %2$@ provers cannot be reached right now (%3$@). Try again later, or pair your own prover in Settings."
+          }
+        }
+      }
+    },
+    "%lld machines" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld machines"
+          }
+        }
+      }
+    },
+    "%lld/%lld bytes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld/%2$lld bytes"
+          }
+        }
+      }
+    },
+    "+%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "0.0" : {
+      "comment" : "Amount placeholder. Keep ASCII digits and the dot.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "0.0"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "1 %@ ≈ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 %1$@ ≈ %2$@"
+          }
+        }
+      }
+    },
+    "1 hour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 hour"
+          }
+        }
+      }
+    },
+    "1 minute" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 minute"
+          }
+        }
+      }
+    },
+    "15 minutes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "15 minutes"
+          }
+        }
+      }
+    },
+    "5 minutes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5 minutes"
+          }
+        }
+      }
+    },
+    "A prover address must be https://." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A prover address must be https://."
+          }
+        }
+      }
+    },
+    "A prover sees your history" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A prover sees your history"
+          }
+        }
+      }
+    },
+    "A shielded wallet for RAND.\nYour balance and payments are private; the chain sees only proofs." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A shielded wallet for RAND.\nYour balance and payments are private; the chain sees only proofs."
+          }
+        }
+      }
+    },
+    "A transfer is proved on this phone, which takes a minute or two. Keep the app open while it runs." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A transfer is proved on this phone, which takes a minute or two. Keep the app open while it runs."
+          }
+        }
+      }
+    },
+    "About" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About"
+          }
+        }
+      }
+    },
+    "About a minute or two on this device. Keep the app open." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About a minute or two on this device. Keep the app open."
+          }
+        }
+      }
+    },
+    "Accepted by the node; not yet seen in a block. It will show in Activity once committed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accepted by the node; not yet seen in a block. It will show in Activity once committed."
+          }
+        }
+      }
+    },
+    "Activity" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activity"
+          }
+        }
+      }
+    },
+    "Add contact" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add contact"
+          }
+        }
+      }
+    },
+    "Address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Address"
+          }
+        }
+      }
+    },
+    "Amount" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amount"
+          }
+        }
+      }
+    },
+    "Amount — the payer decides" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amount — the payer decides"
+          }
+        }
+      }
+    },
+    "Answering · %lld%@ in its queue." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Answering · %1$lld%2$@ in its queue."
+          }
+        }
+      }
+    },
+    "Anyone can pay this address. It reveals nothing about what you hold." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anyone can pay this address. It reveals nothing about what you hold."
+          }
+        }
+      }
+    },
+    "App" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App"
+          }
+        }
+      }
+    },
+    "Appearance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appearance"
+          }
+        }
+      }
+    },
+    "Asking the faucet for 100 RAND…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asking the faucet for 100 RAND…"
+          }
+        }
+      }
+    },
+    "Asking the prover…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asking the prover…"
+          }
+        }
+      }
+    },
+    "Asset" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset"
+          }
+        }
+      }
+    },
+    "Authorising the spend on this device…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authorising the spend on this device…"
+          }
+        }
+      }
+    },
+    "Auto-lock" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto-lock"
+          }
+        }
+      }
+    },
+    "Available %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Available %@"
+          }
+        }
+      }
+    },
+    "Available %@ RAND" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Available %@ RAND"
+          }
+        }
+      }
+    },
+    "Back" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back"
+          }
+        }
+      }
+    },
+    "Back to home" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to home"
+          }
+        }
+      }
+    },
+    "Back up your spend key in Settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back up your spend key in Settings."
+          }
+        }
+      }
+    },
+    "Backup" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup"
+          }
+        }
+      }
+    },
+    "Balance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balance"
+          }
+        }
+      }
+    },
+    "Before the first send through the RandProtocol prover, read what it can see: it gets this wallet's viewing key. Send again and read the notice, or pair your own prover in Settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Before the first send through the RandProtocol prover, read what it can see: it gets this wallet's viewing key. Send again and read the notice, or pair your own prover in Settings."
+          }
+        }
+      }
+    },
+    "Before the first swap through the RandProtocol provers, read what they can see: the one that proves it gets this wallet's viewing key. Review the swap again and read the notice, or pair your own prover in Settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Before the first swap through the RandProtocol provers, read what they can see: the one that proves it gets this wallet's viewing key. Review the swap again and read the notice, or pair your own prover in Settings."
+          }
+        }
+      }
+    },
+    "Block" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block"
+          }
+        }
+      }
+    },
+    "Block %llu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block %llu"
+          }
+        }
+      }
+    },
+    "Cancel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "Chain %llu, height %lld, %lld peers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chain %1$llu, height %2$lld, %3$lld peers"
+          }
+        }
+      }
+    },
+    "Chain build" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chain build"
+          }
+        }
+      }
+    },
+    "Chain id" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chain id"
+          }
+        }
+      }
+    },
+    "Checking the swap…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking the swap…"
+          }
+        }
+      }
+    },
+    "Choosing notes…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choosing notes…"
+          }
+        }
+      }
+    },
+    "Clear memo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear memo"
+          }
+        }
+      }
+    },
+    "Close" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        }
+      }
+    },
+    "Commitment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commitment"
+          }
+        }
+      }
+    },
+    "Committed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Committed"
+          }
+        }
+      }
+    },
+    "Committed in block %llu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Committed in block %llu"
+          }
+        }
+      }
+    },
+    "Confirm and prove" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm and prove"
+          }
+        }
+      }
+    },
+    "Connected to chain %llu at height %lld (%lld peers) — but Settings says chain %llu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected to chain %1$llu at height %2$lld (%3$lld peers) — but Settings says chain %4$llu"
+          }
+        }
+      }
+    },
+    "Contacts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contacts"
+          }
+        }
+      }
+    },
+    "Copied" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copied"
+          }
+        }
+      }
+    },
+    "Copy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        }
+      }
+    },
+    "Copy address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy address"
+          }
+        }
+      }
+    },
+    "Copy link" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy link"
+          }
+        }
+      }
+    },
+    "Copy spend key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy spend key"
+          }
+        }
+      }
+    },
+    "Copy the transaction key and paste it on the transaction's RandScan page to show exactly this payment — its amount and recipient — to whoever you hand the key to." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy the transaction key and paste it on the transaction's RandScan page to show exactly this payment — its amount and recipient — to whoever you hand the key to."
+          }
+        }
+      }
+    },
+    "Core" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Core"
+          }
+        }
+      }
+    },
+    "Could not hand the proof to your prover: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not hand the proof to your prover: %@"
+          }
+        }
+      }
+    },
+    "Could not send" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not send"
+          }
+        }
+      }
+    },
+    "Could not unlock. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not unlock. Try again."
+          }
+        }
+      }
+    },
+    "Create a new wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create a new wallet"
+          }
+        }
+      }
+    },
+    "Dark" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark"
+          }
+        }
+      }
+    },
+    "Disclose this payment" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disclose this payment"
+          }
+        }
+      }
+    },
+    "Done" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "Each one that proves a send receives this wallet's viewing key, so it can read your whole history, past and future. None can spend." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each one that proves a send receives this wallet's viewing key, so it can read your whole history, past and future. None can spend."
+          }
+        }
+      }
+    },
+    "Edit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit"
+          }
+        }
+      }
+    },
+    "Encrypted with the payment: only the recipient, you and anyone either of you shows it to can read it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encrypted with the payment: only the recipient, you and anyone either of you shows it to can read it."
+          }
+        }
+      }
+    },
+    "Enter an amount like 1.5." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter an amount like 1.5."
+          }
+        }
+      }
+    },
+    "Enter an amount." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter an amount."
+          }
+        }
+      }
+    },
+    "Enter the amount as a number, for example 1.25." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the amount as a number, for example 1.25."
+          }
+        }
+      }
+    },
+    "Export key file (wallet.key.json)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export key file (wallet.key.json)"
+          }
+        }
+      }
+    },
+    "Faucet mint %@ submitted. It appears once committed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faucet mint %@ submitted. It appears once committed."
+          }
+        }
+      }
+    },
+    "Fee" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fee"
+          }
+        }
+      }
+    },
+    "Fee %@ RAND" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fee %@ RAND"
+          }
+        }
+      }
+    },
+    "Fee floor" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fee floor"
+          }
+        }
+      }
+    },
+    "Fetching witnesses…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetching witnesses…"
+          }
+        }
+      }
+    },
+    "Fingerprint" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fingerprint"
+          }
+        }
+      }
+    },
+    "Forget this prover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forget this prover"
+          }
+        }
+      }
+    },
+    "Forget this wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forget this wallet"
+          }
+        }
+      }
+    },
+    "Forget this wallet on this phone? Without your spend key backup the funds are gone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forget this wallet on this phone? Without your spend key backup the funds are gone."
+          }
+        }
+      }
+    },
+    "Forget wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forget wallet"
+          }
+        }
+      }
+    },
+    "Forgetting it goes back to the RandProtocol provers." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forgetting it goes back to the RandProtocol provers."
+          }
+        }
+      }
+    },
+    "Forgotten" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Forgotten"
+          }
+        }
+      }
+    },
+    "From (pk)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From (pk)"
+          }
+        }
+      }
+    },
+    "Get test RAND from the faucet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get test RAND from the faucet"
+          }
+        }
+      }
+    },
+    "Held by a pending send" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Held by a pending send"
+          }
+        }
+      }
+    },
+    "I already have a wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I already have a wallet"
+          }
+        }
+      }
+    },
+    "I have saved my spend key somewhere safe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I have saved my spend key somewhere safe"
+          }
+        }
+      }
+    },
+    "I understand — continue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I understand — continue"
+          }
+        }
+      }
+    },
+    "Immediately" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immediately"
+          }
+        }
+      }
+    },
+    "Import" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import"
+          }
+        }
+      }
+    },
+    "Import a wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import a wallet"
+          }
+        }
+      }
+    },
+    "Keep the app open. Closing it before it says submitted stops the swap, and nothing is lost." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep the app open. Closing it before it says submitted stops the swap, and nothing is lost."
+          }
+        }
+      }
+    },
+    "Leaf" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leaf"
+          }
+        }
+      }
+    },
+    "Leaf #%llu · block %llu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leaf #%1$llu · block %2$llu"
+          }
+        }
+      }
+    },
+    "Light" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Light"
+          }
+        }
+      }
+    },
+    "Lock now" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lock now"
+          }
+        }
+      }
+    },
+    "Locked" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locked"
+          }
+        }
+      }
+    },
+    "Maintenance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintenance"
+          }
+        }
+      }
+    },
+    "Max" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Max"
+          }
+        }
+      }
+    },
+    "Max %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Max %@"
+          }
+        }
+      }
+    },
+    "Memo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Memo"
+          }
+        }
+      }
+    },
+    "My own prover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "My own prover"
+          }
+        }
+      }
+    },
+    "Name" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        }
+      }
+    },
+    "Network" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network"
+          }
+        }
+      }
+    },
+    "Network fee" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network fee"
+          }
+        }
+      }
+    },
+    "Never share this. Anyone who has it controls your funds." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Never share this. Anyone who has it controls your funds."
+          }
+        }
+      }
+    },
+    "New contact" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New contact"
+          }
+        }
+      }
+    },
+    "New wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New wallet"
+          }
+        }
+      }
+    },
+    "No activity yet. Transactions you send or receive will appear here." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No activity yet. Transactions you send or receive will appear here."
+          }
+        }
+      }
+    },
+    "No camera available" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No camera available"
+          }
+        }
+      }
+    },
+    "No contacts yet. A contact's name can be typed in Send's To field instead of the address." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No contacts yet. A contact's name can be typed in Send's To field instead of the address."
+          }
+        }
+      }
+    },
+    "No contacts yet. Add one from Contacts on the home screen." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No contacts yet. Add one from Contacts on the home screen."
+          }
+        }
+      }
+    },
+    "No prover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No prover"
+          }
+        }
+      }
+    },
+    "None of the RandProtocol provers answers right now." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None of the RandProtocol provers answers right now."
+          }
+        }
+      }
+    },
+    "None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them."
+          }
+        }
+      }
+    },
+    "Not a rand1 address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not a rand1 address"
+          }
+        }
+      }
+    },
+    "Not answering: %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not answering: %@."
+          }
+        }
+      }
+    },
+    "Not committed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not committed"
+          }
+        }
+      }
+    },
+    "Not committed (notes released)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not committed (notes released)"
+          }
+        }
+      }
+    },
+    "Not marked as your own: it can read this wallet's whole history. It cannot spend." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not marked as your own: it can read this wallet's whole history. It cannot spend."
+          }
+        }
+      }
+    },
+    "Not paired" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not paired"
+          }
+        }
+      }
+    },
+    "Not swapped" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not swapped"
+          }
+        }
+      }
+    },
+    "Note time" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note time"
+          }
+        }
+      }
+    },
+    "Nothing was sent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing was sent"
+          }
+        }
+      }
+    },
+    "On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the rand command-line wallet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the rand command-line wallet."
+          }
+        }
+      }
+    },
+    "One of the RandProtocol provers makes the large proof; this device makes the small ones. It takes a few minutes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One of the RandProtocol provers makes the large proof; this device makes the small ones. It takes a few minutes."
+          }
+        }
+      }
+    },
+    "Open My history on RandScan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open My history on RandScan"
+          }
+        }
+      }
+    },
+    "Open durian.market" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open durian.market"
+          }
+        }
+      }
+    },
+    "Open my wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open my wallet"
+          }
+        }
+      }
+    },
+    "Open transaction on RandScan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open transaction on RandScan"
+          }
+        }
+      }
+    },
+    "Optional" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optional"
+          }
+        }
+      }
+    },
+    "Optional: ask for an amount the payer’s wallet fills in for them." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optional: ask for an amount the payer’s wallet fills in for them."
+          }
+        }
+      }
+    },
+    "Optional: ask for an amount, and add a note the payer’s wallet fills in for them." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optional: ask for an amount, and add a note the payer’s wallet fills in for them."
+          }
+        }
+      }
+    },
+    "Or use the RandProtocol provers — %lld machines run by the validators, each with its own key. They charge nothing. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Or use the RandProtocol provers — %1$lld machines run by the validators, each with its own key. They charge nothing. %2$@"
+          }
+        }
+      }
+    },
+    "Paid" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paid"
+          }
+        }
+      }
+    },
+    "Pair your own prover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pair your own prover"
+          }
+        }
+      }
+    },
+    "Paired" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paired"
+          }
+        }
+      }
+    },
+    "Paired prover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paired prover"
+          }
+        }
+      }
+    },
+    "Pairing link: the randprover: link your prover shows. It carries a secret — paste it here and nowhere else. A prover must be reached over https (plain http only on this device)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pairing link: the randprover: link your prover shows. It carries a secret — paste it here and nowhere else. A prover must be reached over https (plain http only on this device)."
+          }
+        }
+      }
+    },
+    "Pairing…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pairing…"
+          }
+        }
+      }
+    },
+    "Paste" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste"
+          }
+        }
+      }
+    },
+    "Paste the randprover: link your prover shows." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste the randprover: link your prover shows."
+          }
+        }
+      }
+    },
+    "Paste the viewing key on randscan.org/viewing to see every note you received or sent, in your browser. It cannot spend. Anyone you give it to sees your whole history." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste the viewing key on randscan.org/viewing to see every note you received or sent, in your browser. It cannot spend. Anyone you give it to sees your whole history."
+          }
+        }
+      }
+    },
+    "Paste your 64-character spend key, or the contents of a wallet.key.json from the rand command-line wallet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste your 64-character spend key, or the contents of a wallet.key.json from the rand command-line wallet."
+          }
+        }
+      }
+    },
+    "Payment link" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Payment link"
+          }
+        }
+      }
+    },
+    "Payment link · " : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Payment link · "
+          }
+        }
+      }
+    },
+    "Pending" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pending"
+          }
+        }
+      }
+    },
+    "Point the camera at a Rand Wallet address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point the camera at a Rand Wallet address"
+          }
+        }
+      }
+    },
+    "Point the camera at your prover's pairing QR code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point the camera at your prover's pairing QR code"
+          }
+        }
+      }
+    },
+    "Pool fee" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pool fee"
+          }
+        }
+      }
+    },
+    "Price impact" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Price impact"
+          }
+        }
+      }
+    },
+    "Priced by the durian.market pools on this chain (%@%% pool fee). The swap is a transaction this wallet proves and sends itself." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Priced by the durian.market pools on this chain (%@%% pool fee). The swap is a transaction this wallet proves and sends itself."
+          }
+        }
+      }
+    },
+    "Program" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Program"
+          }
+        }
+      }
+    },
+    "Proofs are made by" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proofs are made by"
+          }
+        }
+      }
+    },
+    "Proofs are made on this device again. The prover's pairing is gone from this wallet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proofs are made on this device again. The prover's pairing is gone from this wallet."
+          }
+        }
+      }
+    },
+    "Proofs are made on this device only; where it cannot make one, sending waits until you pair a prover or use the RandProtocol provers again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proofs are made on this device only; where it cannot make one, sending waits until you pair a prover or use the RandProtocol provers again."
+          }
+        }
+      }
+    },
+    "Proofs this device cannot make go to %@.%@ Its fingerprint is %@ — check that your prover shows the same." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proofs this device cannot make go to %1$@.%2$@ Its fingerprint is %3$@ — check that your prover shows the same."
+          }
+        }
+      }
+    },
+    "Proofs this device cannot make go to one of them; each one that proves a send sees that wallet's viewing key. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proofs this device cannot make go to one of them; each one that proves a send sees that wallet's viewing key. %@"
+          }
+        }
+      }
+    },
+    "Proved in %lld s · tier %lld · %lld KB proof" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proved in %1$lld s · tier %2$lld · %3$lld KB proof"
+          }
+        }
+      }
+    },
+    "Prover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prover"
+          }
+        }
+      }
+    },
+    "Proving on %@…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proving on %@…"
+          }
+        }
+      }
+    },
+    "Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo."
+          }
+        }
+      }
+    },
+    "Proving your swap on this device…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proving your swap on this device…"
+          }
+        }
+      }
+    },
+    "Proving your transfer…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proving your transfer…"
+          }
+        }
+      }
+    },
+    "QR code of your payment link" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR code of your payment link"
+          }
+        }
+      }
+    },
+    "RAND" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RAND"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "RPC URL" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPC URL"
+          }
+        }
+      }
+    },
+    "Rand Protocol" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Protocol"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "Rand Wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "Rand Wallet does not hold enough to cover this and its network fee: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet does not hold enough to cover this and its network fee: %@"
+          }
+        }
+      }
+    },
+    "Rate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rate"
+          }
+        }
+      }
+    },
+    "Receive" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Receive"
+          }
+        }
+      }
+    },
+    "Received" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Received"
+          }
+        }
+      }
+    },
+    "Received (spent)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Received (spent)"
+          }
+        }
+      }
+    },
+    "Rescan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rescan"
+          }
+        }
+      }
+    },
+    "Rescan from the first leaf" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rescan from the first leaf"
+          }
+        }
+      }
+    },
+    "Rescan the whole tree? Your notes are rebuilt from the chain; nothing is lost." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rescan the whole tree? Your notes are rebuilt from the chain; nothing is lost."
+          }
+        }
+      }
+    },
+    "Reveal your secret key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reveal your secret key"
+          }
+        }
+      }
+    },
+    "Review" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review"
+          }
+        }
+      }
+    },
+    "Route" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Route"
+          }
+        }
+      }
+    },
+    "Save" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "Save and test connection" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save and test connection"
+          }
+        }
+      }
+    },
+    "Save contact" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save contact"
+          }
+        }
+      }
+    },
+    "Scan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan"
+          }
+        }
+      }
+    },
+    "Scan QR code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan QR code"
+          }
+        }
+      }
+    },
+    "Security" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Security"
+          }
+        }
+      }
+    },
+    "Send" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send"
+          }
+        }
+      }
+    },
+    "Sending" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending"
+          }
+        }
+      }
+    },
+    "Sent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sent"
+          }
+        }
+      }
+    },
+    "Set a valid RPC URL in Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set a valid RPC URL in Settings"
+          }
+        }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        }
+      }
+    },
+    "Share payment link" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share payment link"
+          }
+        }
+      }
+    },
+    "Show spend key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show spend key"
+          }
+        }
+      }
+    },
+    "Spend key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spend key"
+          }
+        }
+      }
+    },
+    "Spent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spent"
+          }
+        }
+      }
+    },
+    "Status" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status"
+          }
+        }
+      }
+    },
+    "Submitted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submitted"
+          }
+        }
+      }
+    },
+    "Submitted %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submitted %@"
+          }
+        }
+      }
+    },
+    "Submitting…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submitting…"
+          }
+        }
+      }
+    },
+    "Swap" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swap"
+          }
+        }
+      }
+    },
+    "Swap submitted" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swap submitted"
+          }
+        }
+      }
+    },
+    "Swap the two assets" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swap the two assets"
+          }
+        }
+      }
+    },
+    "Swapped" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swapped"
+          }
+        }
+      }
+    },
+    "Swapping" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swapping"
+          }
+        }
+      }
+    },
+    "Synced %@ ago" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synced %@ ago"
+          }
+        }
+      }
+    },
+    "Syncing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncing"
+          }
+        }
+      }
+    },
+    "Syncing…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncing…"
+          }
+        }
+      }
+    },
+    "System" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System"
+          }
+        }
+      }
+    },
+    "Testing…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testing…"
+          }
+        }
+      }
+    },
+    "That amount is more than the pool can hold." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That amount is more than the pool can hold."
+          }
+        }
+      }
+    },
+    "That amount is too small: it would buy nothing." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That amount is too small: it would buy nothing."
+          }
+        }
+      }
+    },
+    "That is not a pairing link." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That is not a pairing link."
+          }
+        }
+      }
+    },
+    "That is not a shielded address or a randpay: link." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That is not a shielded address or a randpay: link."
+          }
+        }
+      }
+    },
+    "That is not a shielded address, a randpay: link, or a saved contact." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That is not a shielded address, a randpay: link, or a saved contact."
+          }
+        }
+      }
+    },
+    "That payment link could not be read: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That payment link could not be read: %@"
+          }
+        }
+      }
+    },
+    "The RandProtocol provers can read your history" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The RandProtocol provers can read your history"
+          }
+        }
+      }
+    },
+    "The RandProtocol provers: %lld machines run by the validators, each with its own key, used until you choose another. They charge nothing. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The RandProtocol provers: %1$lld machines run by the validators, each with its own key, used until you choose another. They charge nothing. %2$@"
+          }
+        }
+      }
+    },
+    "The amount you receive is exact: if the pool moves before the swap lands, nothing is sent and you get a new quote. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The amount you receive is exact: if the pool moves before the swap lands, nothing is sent and you get a new quote. %@"
+          }
+        }
+      }
+    },
+    "The link asks for %@ %@; you typed %@ %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The link asks for %1$@ %2$@; you typed %3$@ %4$@."
+          }
+        }
+      }
+    },
+    "The link asks for an asset this wallet does not hold (%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The link asks for an asset this wallet does not hold (%@)."
+          }
+        }
+      }
+    },
+    "The link’s memo is \"%@\"; you typed \"%@\"." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The link’s memo is \"%1$@\"; you typed \"%2$@\"."
+          }
+        }
+      }
+    },
+    "The memo is %lld bytes; the limit is %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The memo is %1$lld bytes; the limit is %2$lld."
+          }
+        }
+      }
+    },
+    "The pairing link has no prover address." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pairing link has no prover address."
+          }
+        }
+      }
+    },
+    "The pairing link's prover address is not a URL." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pairing link's prover address is not a URL."
+          }
+        }
+      }
+    },
+    "The pool changed since this page read it. Nothing was sent; the site can quote again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pool changed since this page read it. Nothing was sent; the site can quote again."
+          }
+        }
+      }
+    },
+    "The pool changed while this was being proved. Nothing was sent; the site can quote again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pool changed while this was being proved. Nothing was sent; the site can quote again."
+          }
+        }
+      }
+    },
+    "The pool does not hold enough to pay this out. Nothing was sent; the site can quote again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pool does not hold enough to pay this out. Nothing was sent; the site can quote again."
+          }
+        }
+      }
+    },
+    "The pool moved before your swap reached the chain, so nothing was sent. Here is a new quote." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pool moved before your swap reached the chain, so nothing was sent. Here is a new quote."
+          }
+        }
+      }
+    },
+    "The pools could not be read: %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pools could not be read: %@."
+          }
+        }
+      }
+    },
+    "The program would not accept this request, so nothing was sent: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The program would not accept this request, so nothing was sent: %@"
+          }
+        }
+      }
+    },
+    "The prover answered with an unknown state (%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover answered with an unknown state (%@)."
+          }
+        }
+      }
+    },
+    "The prover at %@ did not answer: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover at %1$@ did not answer: %2$@"
+          }
+        }
+      }
+    },
+    "The prover at that address has a different key from the one the link names. Do not pair it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover at that address has a different key from the one the link names. Do not pair it."
+          }
+        }
+      }
+    },
+    "The prover at that address now has a different key. Pair it again in Settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover at that address now has a different key. Pair it again in Settings."
+          }
+        }
+      }
+    },
+    "The prover could not make this proof (%@%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover could not make this proof (%1$@%2$@)."
+          }
+        }
+      }
+    },
+    "The prover finished but sent no proof." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover finished but sent no proof."
+          }
+        }
+      }
+    },
+    "The prover is full (%@ waiting). Try again in a few minutes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover is full (%@ waiting). Try again in a few minutes."
+          }
+        }
+      }
+    },
+    "The prover no longer has this proof (it restarted or the job expired). Send again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover no longer has this proof (it restarted or the job expired). Send again."
+          }
+        }
+      }
+    },
+    "The prover refused the job (%@%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover refused the job (%1$@%2$@)."
+          }
+        }
+      }
+    },
+    "The prover's pairing is gone from this wallet. Proofs this device cannot make go to the %@ provers again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover's pairing is gone from this wallet. Proofs this device cannot make go to the %@ provers again."
+          }
+        }
+      }
+    },
+    "The prover's proof was refused by this wallet: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prover's proof was refused by this wallet: %@"
+          }
+        }
+      }
+    },
+    "The sender's pk identifies who paid you to anyone holding your viewing key, and nobody else." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sender's pk identifies who paid you to anyone holding your viewing key, and nobody else."
+          }
+        }
+      }
+    },
+    "The spend authorisation is proved here, from your spend key, before the job goes to %@. About ten seconds. Keep the app open." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The spend authorisation is proved here, from your spend key, before the job goes to %@. About ten seconds. Keep the app open."
+          }
+        }
+      }
+    },
+    "The spend key is the wallet. Anyone who sees it can spend your RAND. The key file is what the rand command-line wallet reads." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The spend key is the wallet. Anyone who sees it can spend your RAND. The key file is what the rand command-line wallet reads."
+          }
+        }
+      }
+    },
+    "The swap could not be checked." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The swap could not be checked."
+          }
+        }
+      }
+    },
+    "The swap did not go through." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The swap did not go through."
+          }
+        }
+      }
+    },
+    "The transaction key opens exactly this payment on RandScan — the amount and the recipient — and nothing else you ever did." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The transaction key opens exactly this payment on RandScan — the amount and the recipient — and nothing else you ever did."
+          }
+        }
+      }
+    },
+    "Theme" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Theme"
+          }
+        }
+      }
+    },
+    "There is no pool for that pair." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is no pool for that pair."
+          }
+        }
+      }
+    },
+    "There is no program %@… on this chain. Nothing was sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is no program %@… on this chain. Nothing was sent."
+          }
+        }
+      }
+    },
+    "This 64-character spend key is the only copy of your wallet. Anyone who has it can spend your RAND; anyone who loses it loses the wallet. Write it down and keep it offline." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This 64-character spend key is the only copy of your wallet. Anyone who has it can spend your RAND; anyone who loses it loses the wallet. Write it down and keep it offline."
+          }
+        }
+      }
+    },
+    "This build ships no prover to use." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This build ships no prover to use."
+          }
+        }
+      }
+    },
+    "This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent."
+          }
+        }
+      }
+    },
+    "This chain does not run programs yet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This chain does not run programs yet."
+          }
+        }
+      }
+    },
+    "This chain does not run programs, so there is nothing to swap through." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This chain does not run programs, so there is nothing to swap through."
+          }
+        }
+      }
+    },
+    "This device" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device"
+          }
+        }
+      }
+    },
+    "This device cannot make the proof, so one of %@ makes it. The one that does receives this wallet's viewing key, so it can read your whole history — every payment received and sent, past and future. It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device cannot make the proof, so one of %@ makes it. The one that does receives this wallet's viewing key, so it can read your whole history — every payment received and sent, past and future. It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead."
+          }
+        }
+      }
+    },
+    "This device does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead."
+          }
+        }
+      }
+    },
+    "This device does not have the memory for this proof, and no prover is set up. Pair a prover in Settings › Prover." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device does not have the memory for this proof, and no prover is set up. Pair a prover in Settings › Prover."
+          }
+        }
+      }
+    },
+    "This device does not have the memory for this proof, so one of the %@ provers will make it. The one that does receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device does not have the memory for this proof, so one of the %@ provers will make it. The one that does receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent."
+          }
+        }
+      }
+    },
+    "This device does not have the memory for this proof, so your prover, %@, will make it. It receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device does not have the memory for this proof, so your prover, %@, will make it. It receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent."
+          }
+        }
+      }
+    },
+    "This device does not have the memory for this proof." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device does not have the memory for this proof."
+          }
+        }
+      }
+    },
+    "This device does not have the memory for this proof. " : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device does not have the memory for this proof. "
+          }
+        }
+      }
+    },
+    "This device proves the swap. It takes a few minutes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device proves the swap. It takes a few minutes."
+          }
+        }
+      }
+    },
+    "This link is too long for a QR code; share or copy it instead." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This link is too long for a QR code; share or copy it instead."
+          }
+        }
+      }
+    },
+    "This network doesn't carry memos; the memo will not be sent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This network doesn't carry memos; the memo will not be sent"
+          }
+        }
+      }
+    },
+    "This payment was made with your key from another device, so its transaction key is not stored here. Your viewing key opens it on RandScan." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This payment was made with your key from another device, so its transaction key is not stored here. Your viewing key opens it on RandScan."
+          }
+        }
+      }
+    },
+    "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This proof needs about %1$@ GB of memory and this device has %2$@ GB. iOS will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export."
+          }
+        }
+      }
+    },
+    "This prover charges a fee, which this version of the wallet does not pay (%@). Pair a prover that charges nothing, or send from the rand command-line wallet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This prover charges a fee, which this version of the wallet does not pay (%@). Pair a prover that charges nothing, or send from the rand command-line wallet."
+          }
+        }
+      }
+    },
+    "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet."
+          }
+        }
+      }
+    },
+    "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet."
+          }
+        }
+      }
+    },
+    "This prover does not know this pairing. Pair it again in Settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This prover does not know this pairing. Pair it again in Settings."
+          }
+        }
+      }
+    },
+    "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own."
+          }
+        }
+      }
+    },
+    "This wallet cannot prove for this chain." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This wallet cannot prove for this chain."
+          }
+        }
+      }
+    },
+    "To" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To"
+          }
+        }
+      }
+    },
+    "To (pk)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To (pk)"
+          }
+        }
+      }
+    },
+    "Total" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total"
+          }
+        }
+      }
+    },
+    "Transaction" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transaction"
+          }
+        }
+      }
+    },
+    "Transaction %@ is in the mempool." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transaction %@ is in the mempool."
+          }
+        }
+      }
+    },
+    "Transaction key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transaction key"
+          }
+        }
+      }
+    },
+    "Try again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again"
+          }
+        }
+      }
+    },
+    "Unlock with %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock with %@"
+          }
+        }
+      }
+    },
+    "Unlock your wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock your wallet"
+          }
+        }
+      }
+    },
+    "Unspent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unspent"
+          }
+        }
+      }
+    },
+    "Use https for a prover — plain http is only allowed for a prover on this machine." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use https for a prover — plain http is only allowed for a prover on this machine."
+          }
+        }
+      }
+    },
+    "Use my own prover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use my own prover"
+          }
+        }
+      }
+    },
+    "Use no prover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use no prover"
+          }
+        }
+      }
+    },
+    "Use the RandProtocol provers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the RandProtocol provers"
+          }
+        }
+      }
+    },
+    "Using the %@ provers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Using the %@ provers"
+          }
+        }
+      }
+    },
+    "View note on RandScan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View note on RandScan"
+          }
+        }
+      }
+    },
+    "View on RandScan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View on RandScan"
+          }
+        }
+      }
+    },
+    "Viewing key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Viewing key"
+          }
+        }
+      }
+    },
+    "Waiting at position %lld on %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting at position %1$lld on %2$@"
+          }
+        }
+      }
+    },
+    "Waiting for the block…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for the block…"
+          }
+        }
+      }
+    },
+    "What the pool pays you arrives as a note your wallet finds on its next sync." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What the pool pays you arrives as a note your wallet finds on its next sync."
+          }
+        }
+      }
+    },
+    "Where this device cannot make a proof, pair a prover — rand-prover on a machine of yours, or one somebody else runs, reachable from this phone over https. It receives your viewing key and a salt, never your spend key: it can read this wallet's whole history and cannot spend." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Where this device cannot make a proof, pair a prover — rand-prover on a machine of yours, or one somebody else runs, reachable from this phone over https. It receives your viewing key and a salt, never your spend key: it can read this wallet's whole history and cannot spend."
+          }
+        }
+      }
+    },
+    "Whoever pays you sees this fingerprint on their confirmation; if it does not match, it is not your address." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whoever pays you sees this fingerprint on their confirmation; if it does not match, it is not your address."
+          }
+        }
+      }
+    },
+    "Working…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working…"
+          }
+        }
+      }
+    },
+    "You have %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You have %@."
+          }
+        }
+      }
+    },
+    "You pay" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You pay"
+          }
+        }
+      }
+    },
+    "You receive" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You receive"
+          }
+        }
+      }
+    },
+    "Your address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your address"
+          }
+        }
+      }
+    },
+    "Your paired prover makes the large proof; this device makes the small ones. It takes a few minutes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your paired prover makes the large proof; this device makes the small ones. It takes a few minutes."
+          }
+        }
+      }
+    },
+    "Your prover did not answer: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your prover did not answer: %@"
+          }
+        }
+      }
+    },
+    "Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the rand command-line wallet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the rand command-line wallet."
+          }
+        }
+      }
+    },
+    "Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another."
+          }
+        }
+      }
+    },
+    "Your prover has not answered for %lld minutes, so nothing was sent. Send again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your prover has not answered for %lld minutes, so nothing was sent. Send again."
+          }
+        }
+      }
+    },
+    "Your prover has not finished after %lld minutes, so nothing was sent. Send again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your prover has not finished after %lld minutes, so nothing was sent. Send again."
+          }
+        }
+      }
+    },
+    "Your prover makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your prover makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent."
+          }
+        }
+      }
+    },
+    "Your prover's pairing could not be opened. Pair the prover again in Settings." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your prover's pairing could not be opened. Pair the prover again in Settings."
+          }
+        }
+      }
+    },
+    "Your secret key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your secret key"
+          }
+        }
+      }
+    },
+    "a contact name is 1-64 characters and cannot start with rand1 or randpay:" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a contact name is 1-64 characters and cannot start with rand1 or randpay:"
+          }
+        }
+      }
+    },
+    "a contact named %@ exists" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a contact named %@ exists"
+          }
+        }
+      }
+    },
+    "a contact needs an address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a contact needs an address"
+          }
+        }
+      }
+    },
+    "a spend key is 64 hex characters, or a wallet.key.json" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "a spend key is 64 hex characters, or a wallet.key.json"
+          }
+        }
+      }
+    },
+    "address: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "address: %@"
+          }
+        }
+      }
+    },
+    "alice" : {
+      "comment" : "Placeholder for a contact's name: any short first name in your language.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "alice"
+          }
+        }
+      }
+    },
+    "amount must be greater than zero" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "amount must be greater than zero"
+          }
+        }
+      }
+    },
+    "amount overflow" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "amount overflow"
+          }
+        }
+      }
+    },
+    "amounts overflow" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "amounts overflow"
+          }
+        }
+      }
+    },
+    "asset %u" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "asset %u"
+          }
+        }
+      }
+    },
+    "bad address: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bad address: %@"
+          }
+        }
+      }
+    },
+    "bad amount %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bad amount %@"
+          }
+        }
+      }
+    },
+    "bad asset %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bad asset %@"
+          }
+        }
+      }
+    },
+    "bad percent-encoding" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bad percent-encoding"
+          }
+        }
+      }
+    },
+    "cannot reach the prover at %@: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot reach the prover at %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "cannot reach the prover at %@: timed out" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot reach the prover at %@: timed out"
+          }
+        }
+      }
+    },
+    "chain %@ carries no memo: its genesis sets no envelope size, whatever the node claims (send again with an empty memo)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chain %@ carries no memo: its genesis sets no envelope size, whatever the node claims (send again with an empty memo)"
+          }
+        }
+      }
+    },
+    "durian.market has no pools on this chain yet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "durian.market has no pools on this chain yet."
+          }
+        }
+      }
+    },
+    "faucet returned no transaction hash" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "faucet returned no transaction hash"
+          }
+        }
+      }
+    },
+    "fee %@ is below the bundle floor %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fee %1$@ is below the bundle floor %2$@"
+          }
+        }
+      }
+    },
+    "fee must be at least %@ RAND (the bundle floor)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fee must be at least %@ RAND (the bundle floor)"
+          }
+        }
+      }
+    },
+    "fingerprint %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fingerprint %@"
+          }
+        }
+      }
+    },
+    "fingerprint unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fingerprint unavailable"
+          }
+        }
+      }
+    },
+    "inputs hold %@, but amount + fee is %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inputs hold %1$@, but amount + fee is %2$@"
+          }
+        }
+      }
+    },
+    "insufficient balance: have %@, need %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "insufficient balance: have %1$@, need %2$@"
+          }
+        }
+      }
+    },
+    "internal error: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "internal error: %@"
+          }
+        }
+      }
+    },
+    "invalid address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "invalid address"
+          }
+        }
+      }
+    },
+    "it charges a fee%@ per proof, which this version of the wallet does not pay" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "it charges a fee%@ per proof, which this version of the wallet does not pay"
+          }
+        }
+      }
+    },
+    "it does not take this wallet's jobs" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "it does not take this wallet's jobs"
+          }
+        }
+      }
+    },
+    "key file has no spend_key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "key file has no spend_key"
+          }
+        }
+      }
+    },
+    "key file must be version 2" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "key file must be version 2"
+          }
+        }
+      }
+    },
+    "keychain error %d" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "keychain error %d"
+          }
+        }
+      }
+    },
+    "machines" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "machines"
+          }
+        }
+      }
+    },
+    "memo \"%@\"" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "memo \"%@\""
+          }
+        }
+      }
+    },
+    "memo is %@ bytes, at most %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "memo is %1$@ bytes, at most %2$@"
+          }
+        }
+      }
+    },
+    "need more than two notes; the largest two hold %@ — consolidate first by sending to your own address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "need more than two notes; the largest two hold %@ — consolidate first by sending to your own address"
+          }
+        }
+      }
+    },
+    "no contact named %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no contact named %@"
+          }
+        }
+      }
+    },
+    "no leaf at index %llu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no leaf at index %llu"
+          }
+        }
+      }
+    },
+    "node answered HTTP %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "node answered HTTP %lld"
+          }
+        }
+      }
+    },
+    "node reply is not JSON" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "node reply is not JSON"
+          }
+        }
+      }
+    },
+    "node returned no transaction hash" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "node returned no transaction hash"
+          }
+        }
+      }
+    },
+    "not a key file: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not a key file: %@"
+          }
+        }
+      }
+    },
+    "not a number" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not a number"
+          }
+        }
+      }
+    },
+    "not a randpay: link" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not a randpay: link"
+          }
+        }
+      }
+    },
+    "not a randprover: link" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not a randprover: link"
+          }
+        }
+      }
+    },
+    "parameter %@ given twice" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "parameter %@ given twice"
+          }
+        }
+      }
+    },
+    "passcode" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "passcode"
+          }
+        }
+      }
+    },
+    "prover error" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "prover error"
+          }
+        }
+      }
+    },
+    "prover key is %@ bytes, expected %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "prover key is %1$@ bytes, expected %2$@"
+          }
+        }
+      }
+    },
+    "prover key is not base58: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "prover key is not base58: %@"
+          }
+        }
+      }
+    },
+    "proving failed: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "proving failed: %@"
+          }
+        }
+      }
+    },
+    "proving the call failed: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "proving the call failed: %@"
+          }
+        }
+      }
+    },
+    "proving the spend authorisation failed: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "proving the spend authorisation failed: %@"
+          }
+        }
+      }
+    },
+    "rand1… or randpay: link" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rand1… or randpay: link"
+          }
+        }
+      }
+    },
+    "rand1…, randpay: link or contact" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rand1…, randpay: link or contact"
+          }
+        }
+      }
+    },
+    "randprover:…" : {
+      "comment" : "Placeholder for a prover pairing link; the scheme stays as is.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "randprover:…"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "rpc error" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rpc error"
+          }
+        }
+      }
+    },
+    "shielded address decodes to %@ bytes, expected %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "shielded address decodes to %1$@ bytes, expected %2$@"
+          }
+        }
+      }
+    },
+    "shielded address is not base58" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "shielded address is not base58"
+          }
+        }
+      }
+    },
+    "shielded address must start with rand1" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "shielded address must start with rand1"
+          }
+        }
+      }
+    },
+    "spend key must be 64 hex characters" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "spend key must be 64 hex characters"
+          }
+        }
+      }
+    },
+    "spend_key must be 64 hex characters" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "spend_key must be 64 hex characters"
+          }
+        }
+      }
+    },
+    "the RAND notes hold %@, but the fee is %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the RAND notes hold %1$@, but the fee is %2$@"
+          }
+        }
+      }
+    },
+    "the RandProtocol provers (%@ run by the validators; each one that proves a send sees that wallet's viewing key)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the RandProtocol provers (%@ run by the validators; each one that proves a send sees that wallet's viewing key)"
+          }
+        }
+      }
+    },
+    "the chosen RAND notes do not cover the fee" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the chosen RAND notes do not cover the fee"
+          }
+        }
+      }
+    },
+    "the chosen notes do not cover the amount and the burn" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the chosen notes do not cover the amount and the burn"
+          }
+        }
+      }
+    },
+    "the core did not name the payment's transaction key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the core did not name the payment's transaction key"
+          }
+        }
+      }
+    },
+    "the link has no ?url=…&token=… part" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the link has no ?url=…&token=… part"
+          }
+        }
+      }
+    },
+    "the link has no token" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the link has no token"
+          }
+        }
+      }
+    },
+    "the link has no url" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the link has no url"
+          }
+        }
+      }
+    },
+    "the link's url is empty" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the link's url is empty"
+          }
+        }
+      }
+    },
+    "the node served code (%@ words) and a public input (%@ words) that do not hash to program %@; not proving against them" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the node served code (%1$@ words) and a public input (%2$@ words) that do not hash to program %3$@; not proving against them"
+          }
+        }
+      }
+    },
+    "the program does not accept this transition: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the program does not accept this transition: %@"
+          }
+        }
+      }
+    },
+    "the proof does not verify: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the proof does not verify: %@"
+          }
+        }
+      }
+    },
+    "the prover accepted the job but named no job id" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the prover accepted the job but named no job id"
+          }
+        }
+      }
+    },
+    "the prover at %@ did not answer (%@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the prover at %1$@ did not answer (%2$@)"
+          }
+        }
+      }
+    },
+    "the prover at %@ did not answer with JSON-RPC (HTTP %lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the prover at %1$@ did not answer with JSON-RPC (HTTP %2$lld)"
+          }
+        }
+      }
+    },
+    "the prover at that address now has a different key; pair it again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the prover at that address now has a different key; pair it again"
+          }
+        }
+      }
+    },
+    "the prover's bundle proof is %@ bytes, over this chain's %@-byte cap (max_proof_bytes); not using it" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the prover's bundle proof is %1$@ bytes, over this chain's %2$@-byte cap (max_proof_bytes); not using it"
+          }
+        }
+      }
+    },
+    "the prover's info is not an object" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the prover's info is not an object"
+          }
+        }
+      }
+    },
+    "the prover's reply does not open: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the prover's reply does not open: %@"
+          }
+        }
+      }
+    },
+    "the prover's status is not an object" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the prover's status is not an object"
+          }
+        }
+      }
+    },
+    "the transfer request did not encode" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the transfer request did not encode"
+          }
+        }
+      }
+    },
+    "the tree moved while fetching witnesses; try again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the tree moved while fetching witnesses; try again"
+          }
+        }
+      }
+    },
+    "this address is already saved as %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this address is already saved as %@"
+          }
+        }
+      }
+    },
+    "this build does not carry the chain's bundle guest %@: update the wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this build does not carry the chain's bundle guest %@: update the wallet"
+          }
+        }
+      }
+    },
+    "this chain carries no memo: its envelopes predate it (send again with an empty memo)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this chain carries no memo: its envelopes predate it (send again with an empty memo)"
+          }
+        }
+      }
+    },
+    "this chain names an auth guest but a v1/v2 bundle guest (%@); the node is misconfigured or lying — refusing to prove" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this chain names an auth guest but a v1/v2 bundle guest (%@); the node is misconfigured or lying — refusing to prove"
+          }
+        }
+      }
+    },
+    "this chain pins every bundle at %@ gas, but this wallet's bundle guest declares %@; update the wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this chain pins every bundle at %1$@ gas, but this wallet's bundle guest declares %2$@; update the wallet"
+          }
+        }
+      }
+    },
+    "this chain's auth guest is %@; this wallet carries %@ — refusing to prove a v3 bundle it cannot authorise; update the wallet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this chain's auth guest is %1$@; this wallet carries %2$@ — refusing to prove a v3 bundle it cannot authorise; update the wallet"
+          }
+        }
+      }
+    },
+    "this chain's bundle guest is v3 (split authorisation) but the node names no auth guest (rand_status has no hc_auth); this wallet carries %@ — refusing to prove a bundle it cannot authorise" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this chain's bundle guest is v3 (split authorisation) but the node names no auth guest (rand_status has no hc_auth); this wallet carries %@ — refusing to prove a bundle it cannot authorise"
+          }
+        }
+      }
+    },
+    "this chain's bundle witness carries the spend key; only a prover paired as your own (a link made with `rand-prover pair --own`) may receive it" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this chain's bundle witness carries the spend key; only a prover paired as your own (a link made with `rand-prover pair --own`) may receive it"
+          }
+        }
+      }
+    },
+    "this prover charges %@ RAND per proof, and this version of the wallet does not pay a prover's fee: pair a prover that charges nothing, or prove on this device" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "this prover charges %@ RAND per proof, and this version of the wallet does not pay a prover's fee: pair a prover that charges nothing, or prove on this device"
+          }
+        }
+      }
+    },
+    "to %@%@ · %@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "to %1$@%2$@ · %3$@ %4$@"
+          }
+        }
+      }
+    },
+    "token is not 64 hex digits: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "token is not 64 hex digits: %@"
+          }
+        }
+      }
+    },
+    "too many decimal places (max 9)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "too many decimal places (max 9)"
+          }
+        }
+      }
+    },
+    "unavailable" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unavailable"
+          }
+        }
+      }
+    },
+    "unknown parameter %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown parameter %@"
+          }
+        }
+      }
+    },
+    "wallet is locked" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wallet is locked"
+          }
+        }
+      }
+    },
+    "−%@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "−%1$@ %2$@"
+          }
+        }
+      }
+    },
+    "−%@ RAND" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "−%@ RAND"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

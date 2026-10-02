@@ -3,6 +3,11 @@
 name: RandWallet
 options:
   bundleIdPrefix: org.randprotocol
+  # English is the source language of Localizable.xcstrings / InfoPlist.xcstrings (ios/LOCALIZATION.md).
+  developmentLanguage: en
+  # knownRegions: English plus the fifteen languages translators fill in. xcodegen has no key for
+  # it, so the list is written into the generated project after each `xcodegen generate`.
+  postGenCommand: scripts/known-regions.sh en ru zh-Hans zh-Hant-HK ko id ms ja ar fa es pt-BR de fr it pl
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -17,6 +22,11 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: "YES"
     SWIFT_STRICT_CONCURRENCY: minimal
+    # String catalogs: the compiler records every String(localized:) / LocalizedStringKey literal so
+    # `xcodebuild -exportLocalizations` and Xcode's catalog sync see them (ios/LOCALIZATION.md).
+    LOCALIZATION_PREFERS_STRING_CATALOGS: "YES"
+    SWIFT_EMIT_LOC_STRINGS: "YES"
+    LOCALIZED_STRING_SWIFTUI_SUPPORT: "YES"
 targets:
   RandWallet:
     type: application
