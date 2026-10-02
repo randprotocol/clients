@@ -10,6 +10,96 @@
             "state" : "translated",
             "value" : "Rand Wallet"
           }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet"
+          }
         }
       }
     },
@@ -35,6 +125,96 @@
             "state" : "translated",
             "value" : "Rand Wallet uses the camera to scan a recipient's address or payment-link QR code."
           }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستخدم Rand Wallet الكاميرا لمسح رمز QR لعنوان المستلم أو لرابط الدفع."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet verwendet die Kamera, um den QR-Code der Adresse oder des Zahlungslinks eines Empfängers zu scannen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet usa la cámara para escanear el código QR de la dirección o del enlace de pago de un destinatario."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet برای اسکن کد QR نشانی گیرنده یا لینک پرداخت از دوربین استفاده می‌کند."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet utilise la caméra pour scanner l'adresse d'un destinataire ou le code QR d'un lien de paiement."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet menggunakan kamera untuk memindai kode QR alamat penerima atau tautan pembayaran."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet usa la fotocamera per scansionare l'indirizzo di un destinatario o il codice QR di un link di pagamento."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet は、受取人のアドレスや支払いリンクの QR コードをスキャンするためにカメラを使用します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet은 받는 사람의 주소나 결제 링크 QR 코드를 스캔하기 위해 카메라를 사용합니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet menggunakan kamera untuk mengimbas kod QR alamat atau pautan pembayaran penerima."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet używa aparatu do skanowania adresu odbiorcy lub kodu QR linku płatności."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Rand Wallet usa a câmera para escanear o QR code do endereço ou do link de pagamento de um destinatário."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet использует камеру, чтобы сканировать QR-код адреса получателя или платёжной ссылки."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet 使用摄像头扫描收款人的地址或收款链接二维码。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet 會使用相機掃描收款人地址或付款連結的 QR 碼。"
+          }
         }
       }
     },
@@ -46,6 +226,96 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rand Wallet uses Face ID to unlock your wallet."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستخدم Rand Wallet ميزة Face ID لفتح قفل محفظتك."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet verwendet Face ID, um deine Wallet zu entsperren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet usa Face ID para desbloquear tu billetera."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet برای باز کردن قفل کیف پول شما از Face ID استفاده می‌کند."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet utilise Face ID pour déverrouiller votre portefeuille."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet menggunakan Face ID untuk membuka kunci dompet Anda."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet usa Face ID per sbloccare il tuo portafoglio."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet は、ウォレットのロックを解除するために Face ID を使用します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet은 지갑 잠금을 해제하기 위해 Face ID를 사용합니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet menggunakan Face ID untuk membuka kunci dompet anda."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet używa Face ID do odblokowania twojego portfela."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Rand Wallet usa o Face ID para desbloquear sua carteira."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet использует Face ID, чтобы разблокировать ваш кошелёк."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet 使用面容 ID 解锁你的钱包。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rand Wallet 會使用 Face ID 解鎖你的錢包。"
           }
         }
       }
