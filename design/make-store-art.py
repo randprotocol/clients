@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""The two promotional graphics the stores require beside the icon, from the same drawing:
+"""The three promotional graphics the stores require beside the icon, from the same drawing:
 
     design/out/play-feature-1024x500.png     Google Play's feature graphic
     design/out/chrome-promo-440x280.png      the Chrome Web Store's small promo tile
+    design/out/chrome-marquee-1400x560.png   the Chrome Web Store's marquee promo tile
 
 Each is the mark and the name on ink, over an ordered-dither field that thickens towards the far
 corner — the entropy field of ui/lib/entropy.js reduced to a gradient, so it is the same on every
@@ -69,3 +70,4 @@ if __name__ == "__main__":
     out = os.path.join(HERE, "out")
     art(1024, 500, 12, 138, 64, 26, 84, os.path.join(out, "play-feature-1024x500.png"))
     art(440, 280, 7, 69, 30, 14, 34, os.path.join(out, "chrome-promo-440x280.png"))
+    art(1400, 560, 14, 190, 88, 36, 120, os.path.join(out, "chrome-marquee-1400x560.png"))

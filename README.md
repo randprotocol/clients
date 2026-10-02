@@ -327,7 +327,8 @@ linux/ macosx/ windows/   per-OS packaging notes pointing at desktop/
 scripts/release/ the release build: build-desktop.sh, build-local.sh, source-tarball.sh,
                  checksums.sh — run by .github/workflows/release.yml, by the Jenkinsfile, and by hand
 docs/store/      what each store upload needs: listing text, review notes, privacy answers
-PRIVACY.md       the privacy policy the store listings link to
+PRIVACY.md       the privacy policy the store listings link to (randprotocol.org/clients/privacy)
+TERMS.md         the terms of service they link to (randprotocol.org/clients/terms)
 ```
 
 ## Languages
