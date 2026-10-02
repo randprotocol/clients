@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="autolock_labels">
+        <item>1 minuta</item>
+        <item>5 minut</item>
+        <item>15 minut</item>
+        <item>1 godzina</item>
+        <item>Nigdy</item>
+    </string-array>
+    <string-array name="theme_labels">
+        <item>Ciemny</item>
+        <item>Jasny</item>
+        <item>Systemowy</item>
+    </string-array>
+</resources>
