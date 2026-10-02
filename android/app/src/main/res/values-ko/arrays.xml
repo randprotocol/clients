@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="autolock_labels">
+        <item>1분</item>
+        <item>5분</item>
+        <item>15분</item>
+        <item>1시간</item>
+        <item>안 함</item>
+    </string-array>
+    <string-array name="theme_labels">
+        <item>다크</item>
+        <item>라이트</item>
+        <item>시스템</item>
+    </string-array>
+</resources>
