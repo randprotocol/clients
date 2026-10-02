@@ -23,9 +23,9 @@ struct ActivityDetailView: View {
 
     private var title: String {
         switch item {
-        case .received: return "Received"
-        case .sent(let s) where s.isInvoke: return "Swap"
-        case .sent, .sentRow: return "Sent"
+        case .received: return String(localized: "Received")
+        case .sent(let s) where s.isInvoke: return String(localized: "Swap")
+        case .sent, .sentRow: return String(localized: "Sent")
         }
     }
 
@@ -35,7 +35,7 @@ struct ActivityDetailView: View {
                 .font(.balance).foregroundColor(Theme.positive).lineLimit(1).minimumScaleFactor(0.5)
             Card {
                 VStack(alignment: .leading, spacing: 12) {
-                    row("Status", n.spent ? "Spent" : (n.pending != nil ? "Held by a pending send" : "Unspent"))
+                    row("Status", n.spent ? String(localized: "Spent") : (n.pending != nil ? String(localized: "Held by a pending send") : String(localized: "Unspent")))
                     row("Leaf", "#\(n.index)")
                     row("Block", "\(n.height)")
                     row("Note time", "\(n.time)")
@@ -67,12 +67,12 @@ struct ActivityDetailView: View {
             }
             Card {
                 VStack(alignment: .leading, spacing: 12) {
-                    row("Status", s.status == .pending ? "Pending" : (s.status == .failed ? "Not committed (notes released)" : "Committed"))
+                    row("Status", Self.status(s))
                     if let h = s.height { row("Block", "\(h)") }
                     ForEach(Array((s.payouts ?? []).enumerated()), id: \.offset) { _, p in
                         row("You receive", "\(Amount.format(UInt64(p.amount) ?? 0, decimals: wallet.tokenName(p.asset).decimals)) \(wallet.tokenName(p.asset).symbol)")
                     }
-                    row("Network fee", "\(Amount.format(s.fee)) RAND")
+                    row("Network fee", String(localized: "\(Amount.format(s.fee)) RAND"))
                     row("Submitted", s.submittedAt.formatted(date: .abbreviated, time: .shortened))
                     CopyRow(label: "Program", value: s.to)
                     CopyRow(label: "Transaction", value: s.hash)
@@ -87,9 +87,9 @@ struct ActivityDetailView: View {
             Text("−\(Amount.format(s.units)) RAND").font(.balance).foregroundColor(Theme.text)
             Card {
                 VStack(alignment: .leading, spacing: 12) {
-                    row("Status", s.status == .pending ? "Pending" : (s.status == .failed ? "Not committed (notes released)" : "Committed"))
+                    row("Status", Self.status(s))
                     if let h = s.height { row("Block", "\(h)") }
-                    row("Fee", "\(Amount.format(s.fee)) RAND")
+                    row("Fee", String(localized: "\(Amount.format(s.fee)) RAND"))
                     row("Submitted", s.submittedAt.formatted(date: .abbreviated, time: .shortened))
                     CopyRow(label: "To", value: s.to)
                     CopyRow(label: "Transaction", value: s.hash)
@@ -122,7 +122,16 @@ struct ActivityDetailView: View {
         }
     }
 
-    private func row(_ k: String, _ v: String) -> some View {
+    private static func status(_ s: Submission) -> String {
+        switch s.status {
+        case .pending: return String(localized: "Pending")
+        case .failed: return String(localized: "Not committed (notes released)")
+        default: return String(localized: "Committed")
+        }
+    }
+
+    /// `k` is a key in the catalog; `v` is data, or a sentence already localised.
+    private func row(_ k: LocalizedStringKey, _ v: String) -> some View {
         HStack {
             Text(k).font(.body15).foregroundColor(Theme.textSoft)
             Spacer()

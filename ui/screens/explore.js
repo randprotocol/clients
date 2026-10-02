@@ -16,6 +16,7 @@
 // Each card fetches independently (`Promise.allSettled`, per home.js/asset.js's own-container
 // convention) so a rejected call renders inside its own card without breaking the others.
 import { h, raw, on } from '../lib/dom.js';
+import { t, formatInteger } from '../i18n.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits, shortHex } from '../lib/format.js';
@@ -42,24 +43,24 @@ function skeletonCardMarkup() {
 
 function shellMarkup() {
   return h`
-    <h1 class="sr-only">Explore</h1>
-    <div class="topbar"><span class="topbar-title">Explore</span></div>
-    <h2 class="section-title">Network</h2>
+    <h1 class="sr-only">${t('Explore')}</h1>
+    <div class="topbar"><span class="topbar-title">${t('Explore')}</span></div>
+    <h2 class="section-title">${t('Network')}</h2>
     <div class="card" data-role="network">${skeletonCardMarkup()}</div>
-    <h2 class="section-title">Assets</h2>
+    <h2 class="section-title">${t('Assets')}</h2>
     <div class="card flush" data-role="assets">${skeletonCardMarkup()}</div>
-    <h2 class="section-title">Bridge</h2>
+    <h2 class="section-title">${t('Bridge')}</h2>
     <div class="card" data-role="bridge">${skeletonCardMarkup()}</div>
-    <h2 class="section-title">Lookup</h2>
+    <h2 class="section-title">${t('Lookup')}</h2>
     <div class="card" data-role="lookup">
       <form data-role="lookup-form" novalidate>
         <div class="field">
-          <label class="label" for="explore-lookup">Transaction, block or height</label>
-          <input id="explore-lookup" name="q" type="text" autocomplete="off" spellcheck="false" placeholder="64 hex characters, or a block height" aria-describedby="explore-lookup-hint">
-          <span class="hint" id="explore-lookup-hint">A transaction hash is tried first; if nothing is found, the same hash is tried as a block. All digits looks up a block by height.</span>
+          <label class="label" for="explore-lookup">${t('Transaction, block or height')}</label>
+          <input id="explore-lookup" name="q" type="text" autocomplete="off" spellcheck="false" placeholder="${t('64 hex characters, or a block height')}" aria-describedby="explore-lookup-hint">
+          <span class="hint" id="explore-lookup-hint">${t('A transaction hash is tried first; if nothing is found, the same hash is tried as a block. All digits looks up a block by height.')}</span>
           <span class="error" id="explore-lookup-error"></span>
         </div>
-        <button class="btn btn-primary block" type="submit">Look up</button>
+        <button class="btn btn-primary block" type="submit">${t('Look up')}</button>
       </form>
       <div data-role="lookup-result"></div>
     </div>`;
@@ -67,7 +68,7 @@ function shellMarkup() {
 
 /** A card-level failure: every method a card asked for came back rejected. */
 function cardErrorMarkup(title, err) {
-  return h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">${title}</span>${err && err.message ? err.message : 'Something went wrong.'}</span></div>`;
+  return h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">${title}</span>${err && err.message ? err.message : t('Something went wrong.')}</span></div>`;
 }
 
 /** One labelled row that reads fine whether its own call succeeded or not — a card is never
@@ -78,45 +79,45 @@ function fieldRow(label, result, render) {
   return h`<div class="kv"><span class="k">${label}</span><span class="v">${value}</span></div>`;
 }
 
+// Labels are functions, read at each render: the language can change while the screen is up.
 const NETWORK_LABELS = {
-  status: 'Status',
-  getHead: 'Height',
-  getEpoch: 'Epoch',
-  getValidators: 'Validators',
-  getPeers: 'Peers',
-  getSupply: 'Total supply',
+  status: () => t('Status'),
+  getHead: () => t('Height'),
+  getEpoch: () => t('Epoch'),
+  getValidators: () => t('Validators'),
+  getPeers: () => t('Peers'),
+  getSupply: () => t('Total supply'),
 };
-
-function pluralise(n, word) { return `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`; }
 
 /** How one network field's value is shown, keyed by the RPC method it came from — see the module
  *  banner: the *set* of fields fetched is metadata-driven, this is just how each known one reads.
  *  A future network-tagged method this table does not yet know renders its raw JSON rather than
- *  being silently dropped. */
+ *  being silently dropped. A count is one key per form (`{count}` is the number as the language
+ *  groups it; `n` chooses the plural form), never an English "s" glued on. */
 function renderNetworkField(name, value) {
-  if (name === 'status') return value && typeof value.syncing === 'boolean' ? (value.syncing ? 'Syncing' : 'Synced') : String(value);
-  if (name === 'getHead') return value && typeof value.height === 'number' ? value.height.toLocaleString('en-US') : '—';
-  if (name === 'getEpoch') return value && typeof value.epoch === 'number' ? value.epoch.toLocaleString('en-US') : '—';
-  if (name === 'getValidators') return Array.isArray(value) ? pluralise(value.length, 'validator') : '—';
-  if (name === 'getPeers') return Array.isArray(value) ? pluralise(value.length, 'peer') : '—';
+  if (name === 'status') return value && typeof value.syncing === 'boolean' ? (value.syncing ? t('Syncing') : t('Synced')) : String(value);
+  if (name === 'getHead') return value && typeof value.height === 'number' ? formatInteger(value.height) : '—';
+  if (name === 'getEpoch') return value && typeof value.epoch === 'number' ? formatInteger(value.epoch) : '—';
+  if (name === 'getValidators') return Array.isArray(value) ? (value.length === 1 ? t('{count} validator', { count: formatInteger(value.length), n: value.length }) : t('{count} validators', { count: formatInteger(value.length), n: value.length })) : '—';
+  if (name === 'getPeers') return Array.isArray(value) ? (value.length === 1 ? t('{count} peer', { count: formatInteger(value.length), n: value.length }) : t('{count} peers', { count: formatInteger(value.length), n: value.length })) : '—';
   if (name === 'getSupply') return value ? `${formatUnits(value.total_supply ?? '0', 6, 9)} RAND` : '—';
   return JSON.stringify(value);
 }
 
 function networkMarkup(names, results) {
   if (names.length > 0 && names.every((n) => !results[n].ok)) {
-    return cardErrorMarkup('Could not reach the node', results[names[0]].error);
+    return cardErrorMarkup(t('Could not reach the node'), results[names[0]].error);
   }
-  return names.map((name) => fieldRow(NETWORK_LABELS[name] || name, results[name], (v) => renderNetworkField(name, v))).join('');
+  return names.map((name) => fieldRow(NETWORK_LABELS[name] ? NETWORK_LABELS[name]() : name, results[name], (v) => renderNetworkField(name, v))).join('');
 }
 
 function assetsMarkup(names, results) {
   const r = results.getAssets;
-  if (!r) return h`<div class="empty"><span class="empty-title">No asset registry here</span></div>`;
-  if (!r.ok) return cardErrorMarkup('Could not load the asset registry', r.error);
+  if (!r) return h`<div class="empty"><span class="empty-title">${t('No asset registry here')}</span></div>`;
+  if (!r.ok) return cardErrorMarkup(t('Could not load the asset registry'), r.error);
   const rows = Array.isArray(r.value) ? r.value : [];
   if (rows.length === 0) {
-    return h`<div class="empty"><span class="empty-title">No registry assets</span><span>This chain's bridge has not registered any yet.</span></div>`;
+    return h`<div class="empty"><span class="empty-title">${t('No registry assets')}</span><span>${t('This chain’s bridge has not registered any yet.')}</span></div>`;
   }
   // `listMarkup` returns a `raw()`-wrapped value (safe to interpolate into another `h` template),
   // not a plain string — every card renderer here returns a plain string straight to `innerHTML`,
@@ -126,7 +127,7 @@ function assetsMarkup(names, results) {
       <div class="row">
         <span class="row-main">
           <span class="row-title"><span class="truncate">RPL#${a.index}</span><span class="chip xs">RPL</span></span>
-          <span class="row-sub">Chain ${a.chain}</span>
+          <span class="row-sub">${t('Chain {id}', { id: a.chain })}</span>
         </span>
         <span class="row-end mono">${shortHex(a.token)}</span>
       </div>
@@ -135,16 +136,16 @@ function assetsMarkup(names, results) {
 
 function bridgeMarkup(names, results) {
   const r = results.getBridgeState;
-  if (!r) return h`<div class="empty"><span class="empty-title">No bridge here</span></div>`;
-  if (!r.ok) return cardErrorMarkup('Could not load the bridge', r.error);
+  if (!r) return h`<div class="empty"><span class="empty-title">${t('No bridge here')}</span></div>`;
+  if (!r.ok) return cardErrorMarkup(t('Could not load the bridge'), r.error);
   const state = r.value || {};
   const chainCount = state.emitters && typeof state.emitters === 'object' ? Object.keys(state.emitters).length : 0;
-  const enabledRow = h`<div class="kv"><span class="k">Enabled</span><span class="v">${state.enabled ? 'Yes' : 'No'}</span></div>`;
+  const enabledRow = h`<div class="kv"><span class="k">${t('Enabled')}</span><span class="v">${state.enabled ? t('Yes') : t('No')}</span></div>`;
   if (!state.enabled) return enabledRow;
   return enabledRow + h`
-    <div class="kv"><span class="k">Guardian set</span><span class="v">${state.guardian_set_index ?? '—'}</span></div>
-    <div class="kv"><span class="k">Burn sequence</span><span class="v">${state.burn_sequence ?? '—'}</span></div>
-    <div class="kv"><span class="k">Chains known</span><span class="v">${chainCount}</span></div>`;
+    <div class="kv"><span class="k">${t('Guardian set')}</span><span class="v">${state.guardian_set_index ?? '—'}</span></div>
+    <div class="kv"><span class="k">${t('Burn sequence')}</span><span class="v">${state.burn_sequence ?? '—'}</span></div>
+    <div class="kv"><span class="k">${t('Chains known')}</span><span class="v">${chainCount}</span></div>`;
 }
 
 // ------------------------------------------------------------------------------ the JSON tree ----
@@ -191,13 +192,13 @@ function lookupResultMarkup(title, value) {
   return h`
     <div class="card-head">
       <h3>${title}</h3>
-      <button class="btn-icon" type="button" data-role="copy-result" aria-label="Copy as JSON">${raw(icons.copy())}</button>
+      <button class="btn-icon" type="button" data-role="copy-result" aria-label="${t('Copy as JSON')}">${raw(icons.copy())}</button>
     </div>
     ${raw(jsonTreeMarkup(value))}`;
 }
 
 function notFoundMarkup() {
-  return h`<div class="empty"><span class="empty-title">Nothing found</span><span>No transaction or block matches that.</span></div>`;
+  return h`<div class="empty"><span class="empty-title">${t('Nothing found')}</span><span>${t('No transaction or block matches that.')}</span></div>`;
 }
 
 // ===================================================================================== screen ====
@@ -265,8 +266,8 @@ registerScreen('explore', {
       else if (raw0 !== '' && DIGITS_RE.test(raw0)) kind = 'height';
       else {
         setLookupError(raw0 === ''
-          ? 'Enter a transaction hash, block hash or block height.'
-          : 'That is neither 64 hex characters (a hash) nor a block height (digits only).');
+          ? t('Enter a transaction hash, block hash or block height.')
+          : t('That is neither 64 hex characters (a hash) nor a block height (digits only).'));
         return;
       }
       setLookupError(null);
@@ -277,14 +278,14 @@ registerScreen('explore', {
         let value, title;
         if (kind === 'hash') {
           value = await rpc.getTransaction(hex);
-          title = 'Transaction';
+          title = t('Transaction');
           if (value === null || value === undefined) {
             value = await rpc.getBlockByHash(hex);
-            title = 'Block';
+            title = t('Block');
           }
         } else {
           value = await rpc.getBlockByHeight(Number(raw0));
-          title = 'Block';
+          title = t('Block');
         }
         if (!ctx.isCurrent()) return;
         if (value === null || value === undefined) {
@@ -297,7 +298,7 @@ registerScreen('explore', {
       } catch (err) {
         if (!ctx.isCurrent()) return;
         lastResult = null;
-        el.lookupResult.innerHTML = cardErrorMarkup('The lookup failed', err);
+        el.lookupResult.innerHTML = cardErrorMarkup(t('The lookup failed'), err);
       } finally {
         if (ctx.isCurrent()) submitBtn.disabled = false;
       }
@@ -308,7 +309,7 @@ registerScreen('explore', {
       if (lastResult === null) return;
       await ctx.backend.platform.copy(JSON.stringify(lastResult, null, 2));
       if (!ctx.isCurrent()) return;
-      ctx.toast('Copied as JSON', { kind: 'positive' });
+      ctx.toast(t('Copied as JSON'), { kind: 'positive' });
     });
 
     return () => { offLookup(); offCopy(); };

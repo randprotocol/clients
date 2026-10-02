@@ -23,6 +23,7 @@ import { assetRowMarkup, activityRowMarkup, listMarkup, fillRowMemos } from '../
 import { wrongChainBannerMarkup, behindBannerMarkup, identityUnknownBannerMarkup, canRescan, confirmRescan } from '../lib/chain-banner.js';
 import { wireSelection } from '../lib/panes.js';
 import { brandMarkup, paintField } from '../lib/entropy.js';
+import { t } from '../i18n.js';
 
 // Veiling the balance is a per-device convenience for a screen someone else can see, not a wallet
 // setting: it lives in localStorage and changes nothing the backend knows. A class on <html> so
@@ -38,18 +39,19 @@ function applyVeil(on) {
   document.documentElement.classList.toggle('veiled', on);
 }
 
+// Labels are read at render (`() => t('…')`), so the row follows the language in force.
 const ACTIONS = [
-  { go: 'receive', icon: 'arrowDownLeft', label: 'Receive' },
-  { go: 'send', icon: 'arrowUpRight', label: 'Send' },
-  { go: 'swap', icon: 'swap', label: 'Swap' },
-  { go: 'explore/bridge', icon: 'bridge', label: 'Bridge' },
+  { go: 'receive', icon: 'arrowDownLeft', label: () => t('Receive') },
+  { go: 'send', icon: 'arrowUpRight', label: () => t('Send') },
+  { go: 'swap', icon: 'swap', label: () => t('Swap') },
+  { go: 'explore/bridge', icon: 'bridge', label: () => t('Bridge') },
 ];
 
 function actionsMarkup() {
   return raw(h`<div class="actions">${raw(ACTIONS.map((a) => h`
     <button class="btn-round${a.go === 'send' ? ' primary' : ''}" type="button" data-go="${a.go}">
       <span class="ic">${raw(icons[a.icon]())}</span>
-      <span class="cap">${a.label}</span>
+      <span class="cap">${a.label()}</span>
     </button>`).join(''))}</div>`);
 }
 
@@ -71,9 +73,9 @@ function emptyActivityMarkup() {
     <div class="card">
       <div class="empty">
         <span class="avatar lg">${raw(icons.activity())}</span>
-        <span class="empty-title">No activity yet</span>
-        <span>Transactions you send or receive will appear here.</span>
-        <button class="btn sm" type="button" data-go="faucet">Get test RAND from the faucet</button>
+        <span class="empty-title">${t('No activity yet')}</span>
+        <span>${t('Transactions you send or receive will appear here.')}</span>
+        <button class="btn sm" type="button" data-go="faucet">${t('Get test RAND from the faucet')}</button>
       </div>
     </div>`;
 }
@@ -84,34 +86,34 @@ function shellMarkup(ctx) {
   // The popup's way into the browser's side panel, where the same wallet stays open beside the
   // page. Only a popup offers it, and only on a shell that has a side panel to open.
   const toSidebar = ctx && ctx.mode === 'popup' && typeof ctx.backend.platform.openSidebar === 'function'
-    ? h`<button class="btn-icon" type="button" data-action="open-sidebar" aria-label="Open in side panel" title="Open in side panel">${raw(icons.sidebar())}</button>`
+    ? h`<button class="btn-icon" type="button" data-action="open-sidebar" aria-label="${t('Open in side panel')}" title="${t('Open in side panel')}">${raw(icons.sidebar())}</button>`
     : '';
   return h`
-    <h1 class="sr-only">Home</h1>
+    <h1 class="sr-only">${t('Home')}</h1>
     <div class="topbar">
       ${raw(brandMarkup())}
       <span class="grow"></span>
       <span data-role="address-slot"></span>
       ${raw(toSidebar)}
     </div>
-    <section class="hero" aria-label="Balance">
+    <section class="hero" aria-label="${t('Balance')}">
       <canvas class="field" aria-hidden="true"></canvas>
       <span class="amount" data-role="hero-amount"><span class="skeleton line lg"></span></span>
       <span class="sub" data-role="hero-sub" hidden></span>
-      <div data-role="progress-slot"><div class="progress" data-role="progress" role="progressbar" aria-label="Syncing" data-indeterminate="true" hidden><span class="progress-bar"></span></div></div>
+      <div data-role="progress-slot"><div class="progress" data-role="progress" role="progressbar" aria-label="${t('Syncing')}" data-indeterminate="true" hidden><span class="progress-bar"></span></div></div>
       <div class="hero-foot">
         <span class="dot" data-role="sync-dot"></span>
         <span data-role="sync-text"></span>
         <span class="grow"></span>
-        <button class="btn-icon" type="button" data-action="veil" aria-pressed="false" aria-label="Hide balances">${raw(icons.eye())}</button>
-        <button class="btn-icon" type="button" data-action="sync" aria-label="Sync now">${raw(icons.refresh())}</button>
+        <button class="btn-icon" type="button" data-action="veil" aria-pressed="false" aria-label="${t('Hide balances')}">${raw(icons.eye())}</button>
+        <button class="btn-icon" type="button" data-action="sync" aria-label="${t('Sync now')}">${raw(icons.refresh())}</button>
       </div>
     </section>
     ${actionsMarkup()}
     <div data-role="banner-slot"></div>
-    <h2 class="section-title">Assets</h2>
+    <h2 class="section-title">${t('Assets')}</h2>
     <div class="card flush" data-role="assets">${listMarkup(skeletonRows(2))}</div>
-    <h2 class="section-title">Activity</h2>
+    <h2 class="section-title">${t('Activity')}</h2>
     <div data-role="activity"><div class="card flush">${listMarkup(skeletonRows(2))}</div></div>`;
 }
 
@@ -206,7 +208,7 @@ registerScreen('home', {
       el.addressSlot.innerHTML = address
         // Short form (the gallery's `rand1q9x…7k2m`): the topbar also carries the brand, and a
         // 360 px popup has no room for more. The full address lives on the Receive screen.
-        ? h`<button class="chip action" type="button" data-role="copy-address" aria-label="Copy address"><span class="mono">${shortAddress(address, 8, 4)}</span>${raw(icons.copy())}</button>`
+        ? h`<button class="chip action" type="button" data-role="copy-address" aria-label="${t('Copy address')}"><span class="mono">${shortAddress(address, 8, 4)}</span>${raw(icons.copy())}</button>`
         : '';
     }
 
@@ -216,7 +218,7 @@ registerScreen('home', {
       el.amount.innerHTML = h`<span class="fig">${formatUnits(totalInRand(assets), 6, decimals)}</span><span class="unit">RAND</span>`;
       const pending = rand && rand.pending && rand.pending !== '0';
       if (pending) {
-        el.sub.textContent = `+${formatUnits(rand.pending, 6, decimals)} RAND pending`;
+        el.sub.textContent = t('+{amount} RAND pending', { amount: formatUnits(rand.pending, 6, decimals) });
         el.sub.removeAttribute('hidden');
       } else {
         el.sub.textContent = '';
@@ -226,8 +228,8 @@ registerScreen('home', {
 
     function paintSyncLine() {
       el.syncText.textContent = scanning
-        ? 'Syncing…'
-        : (sync && sync.lastSyncMs ? `Synced ${timeAgo(sync.lastSyncMs)}` : 'Not synced yet');
+        ? t('Syncing…')
+        : (sync && sync.lastSyncMs ? t('Synced {when}', { when: timeAgo(sync.lastSyncMs) }) : t('Not synced yet'));
       el.dot.classList.toggle('busy', scanning);
     }
 
@@ -296,9 +298,9 @@ registerScreen('home', {
       el.banner.innerHTML = h`
         <div class="banner negative">
           <span class="ic">${raw(icons.warning())}</span>
-          <span><span class="banner-title">Could not reach the node</span>${message} <a href="#settings" data-go="settings">Check settings</a></span>
+          <span><span class="banner-title">${t('Could not reach the node')}</span>${message} <a href="#settings" data-go="settings">${t('Check settings')}</a></span>
           <span class="grow"></span>
-          <button class="btn sm" type="button" data-action="sync">Retry</button>
+          <button class="btn sm" type="button" data-action="sync">${t('Retry')}</button>
         </div>`;
     }
 
@@ -309,7 +311,7 @@ registerScreen('home', {
       el.banner.innerHTML = h`
         <div class="banner">
           <span class="ic">${raw(icons.info())}</span>
-          <span><span class="banner-title">Rescanning from the start after a storage problem</span>Your notes are safe on chain; this sync will take longer than usual.</span>
+          <span><span class="banner-title">${t('Rescanning from the start after a storage problem')}</span>${t('Your notes are safe on chain; this sync will take longer than usual.')}</span>
         </div>`;
     }
 
@@ -328,7 +330,7 @@ registerScreen('home', {
       el.banner.innerHTML = h`
         <div class="banner">
           <span class="ic">${raw(icons.info())}</span>
-          <span><span class="banner-title">Another tab is syncing</span>This tab is showing what it has so far, and will refresh when that finishes.</span>
+          <span><span class="banner-title">${t('Another tab is syncing')}</span>${t('This tab is showing what it has so far, and will refresh when that finishes.')}</span>
         </div>`;
     }
 
@@ -379,7 +381,7 @@ registerScreen('home', {
           // An abort means the wallet session ended under us (lock/wipe/unlock/teardown). That is
           // not a node failure and must not be reported as one.
           if (isAbortError(err)) return;
-          showBanner((err && err.message) || 'The node could not be reached.');
+          showBanner((err && err.message) || t('The node could not be reached.'));
         },
       );
     }
@@ -403,7 +405,7 @@ registerScreen('home', {
       } catch (err) {
         if (!live()) return;
         if (isAbortError(err)) return;
-        showBanner((err && err.message) || 'Something went wrong.');
+        showBanner((err && err.message) || t('Something went wrong.'));
         return;
       }
       if (!live()) return;
@@ -459,7 +461,7 @@ registerScreen('home', {
       evt.preventDefault();
       // Called straight from the click: a browser opens a side panel only inside a user gesture.
       Promise.resolve(ctx.backend.platform.openSidebar()).catch(() => {
-        if (live()) ctx.toast('The side panel could not be opened.', { kind: 'negative' });
+        if (live()) ctx.toast(t('The side panel could not be opened.'), { kind: 'negative' });
       });
     });
     const offCopy = on(root, '[data-role="copy-address"]', 'click', async (evt) => {
@@ -467,7 +469,7 @@ registerScreen('home', {
       if (!address) return;
       await ctx.backend.platform.copy(address);
       if (!live()) return;
-      ctx.toast('Address copied', { kind: 'positive' });
+      ctx.toast(t('Address copied'), { kind: 'positive' });
     });
 
     // Another tab finished a scan, or reset the store. Refresh from what it wrote rather than

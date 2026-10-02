@@ -35,17 +35,18 @@ import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink } from '../lib/explorer.js';
 import { nativeAsset, isUnlisted, feeDecimals, feeSymbol } from '../lib/assets.js';
 import {
-  phaseLabel, provingBanner, CANCELLABLE, ADDRESS_DEBOUNCE_MS, SELF_SEND_QUESTION,
+  phaseLabel, provingBanner, CANCELLABLE, ADDRESS_DEBOUNCE_MS, selfSendQuestion,
   explainProvingError, outcomeOf, safeHash, draftFor, currentSend, startSend, resumeSend, resumableFailure,
   unknownOutcome, plainUnits, checkAmount,
-  MEMO_MAX_BYTES, NOT_A_RECIPIENT, utf8Length, recipientKind, confirmationLine, memoLine,
+  MEMO_MAX_BYTES, notARecipient, utf8Length, recipientKind, confirmationLine, memoLine,
   memoSupportedFor,
 } from './send/state.js';
 import {
   shellMarkup, assetStepMarkup, unsendableMarkup, noRandMarkup, detailsStepMarkup,
   reviewStepMarkup, provingStepMarkup, failedStepMarkup, unknownOutcomeStepMarkup,
-  noMemoNoticeMarkup, contactPickerMarkup, scanSheetMarkup, proverDeclinedMarkup, PROVER_CONSENT_DECLINED,
+  noMemoNoticeMarkup, contactPickerMarkup, scanSheetMarkup, proverDeclinedMarkup, proverConsentDeclined,
 } from './send/markup.js';
+import { t } from '../i18n.js';
 import { canScanQr, scanQr, NO_CAMERA_TEXT } from '../lib/scan-qr.js';
 import { displayMemo } from '../lib/memo.js';
 import './send/sent.js'; // registers `#sent`
@@ -66,7 +67,7 @@ registerScreen('send', {
     let ownAddress = '';
     let settings = {};
     let cached = {};
-    let canProve = { ok: false, reason: 'Proving is not available here.' };
+    let canProve = { ok: false, reason: t('Proving is not available here.') };
     // Whether this chain carries a memo: only when its limits report the one envelope size that
     // has a memo field, 1860 bytes (spec 2026-09-26 §2.4; fullnode's `EnvelopeFormat::for_chain`).
     // Any other size, a chain that reports none, a node that cannot say, and a backend without
@@ -97,7 +98,7 @@ registerScreen('send', {
     } catch (err) {
       if (!live()) return;
       root.querySelector('[data-role="step"]').innerHTML = h`
-        <div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Could not start a send</span>${(err && err.message) || 'Something went wrong.'}</span></div>`;
+        <div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">${t('Could not start a send')}</span>${(err && err.message) || t('Something went wrong.')}</span></div>`;
       return;
     }
     if (!live()) return;
@@ -208,7 +209,7 @@ registerScreen('send', {
 
     function paintIndicator() {
       const i = steps.indexOf(step);
-      indicatorEl.textContent = i === -1 ? '' : `Step ${i + 1} of ${steps.length}`;
+      indicatorEl.textContent = i === -1 ? '' : t('Step {step} of {total}', { step: i + 1, total: steps.length });
     }
 
     function stopScreenTicker() {
@@ -255,13 +256,13 @@ registerScreen('send', {
 
     function paintMemoCount() {
       const counter = stepEl.querySelector('[data-role="memo-count"]');
-      if (counter) counter.textContent = `${utf8Length(draft.memo)}/${MEMO_MAX_BYTES} bytes`;
+      if (counter) counter.textContent = t('{used}/{max} bytes', { used: utf8Length(draft.memo), max: MEMO_MAX_BYTES });
     }
 
     function paintLinkHint() {
       const hint = stepEl.querySelector('[data-role="to-link"]');
       if (!hint) return;
-      hint.textContent = draft.link ? `Payment link · fingerprint ${draft.link.fingerprint}` : '';
+      hint.textContent = draft.link ? t('Payment link · fingerprint {fingerprint}', { fingerprint: draft.link.fingerprint }) : '';
     }
 
     /** A memo this chain cannot carry (a link brought one): the notice, and the way to drop it. */
@@ -327,17 +328,17 @@ registerScreen('send', {
       if (!link) return out;
       if (link.asset !== null || link.amount !== null) {
         const wanted = linkAsset(link.asset);
-        if (!wanted) out.to = `The link asks for an asset this wallet does not hold (${link.asset}).`;
-        else if (wanted.index !== asset.index) out.to = `The link asks for ${wanted.symbol}; you are sending ${asset.symbol}.`;
+        if (!wanted) out.to = t('The link asks for an asset this wallet does not hold ({asset}).', { asset: link.asset });
+        else if (wanted.index !== asset.index) out.to = t('The link asks for {wanted}; you are sending {symbol}.', { wanted: wanted.symbol, symbol: asset.symbol });
       }
       const typed = String((field('amount') && field('amount').value) || '').trim();
       if (!out.to && link.amount !== null && typed) {
         let same = false;
         try { same = parseUnits(typed, asset.decimals) === parseUnits(link.amount, asset.decimals); } catch { same = false; }
-        if (!same) out.amount = `The link asks for ${link.amount} ${asset.symbol}; you typed ${typed} ${asset.symbol}.`;
+        if (!same) out.amount = t('The link asks for {linked} {symbol}; you typed {typed} {symbol}.', { linked: link.amount, typed, symbol: asset.symbol });
       }
       if (link.memo !== null && link.memo !== '' && draft.memo && draft.memo !== link.memo) {
-        out.memo = `The link’s memo is "${displayMemo(link.memo)}"; you typed "${displayMemo(draft.memo)}".`;
+        out.memo = t('The link’s memo is "{linked}"; you typed "{typed}".', { linked: displayMemo(link.memo), typed: displayMemo(draft.memo) });
       }
       return out;
     }
@@ -400,13 +401,13 @@ registerScreen('send', {
 
     async function parseLinkOrExplain(input, text) {
       if (!formats) {
-        setFieldError(input, 'Payment links cannot be read in this app; paste the address instead.');
+        setFieldError(input, t('Payment links cannot be read in this app; paste the address instead.'));
         return null;
       }
       try {
         return await formats.parseLink(text);
       } catch (err) {
-        if (live()) setFieldError(input, (err && err.message) || 'That payment link could not be read.');
+        if (live()) setFieldError(input, (err && err.message) || t('That payment link could not be read.'));
         return null;
       }
     }
@@ -427,7 +428,7 @@ registerScreen('send', {
      */
     async function resolveRecipient(input) {
       const text = input.value.trim();
-      if (!text) { setFieldError(input, 'Enter the address you are sending to.'); return null; }
+      if (!text) { setFieldError(input, t('Enter the address you are sending to.')); return null; }
       const kind = recipientKind(text);
       let address;
       let name = null;
@@ -451,7 +452,7 @@ registerScreen('send', {
           ? await Promise.resolve(book.addressOf(typed)).catch(() => null)
           : null;
         if (!live()) return null;
-        if (!address) { setFieldError(input, NOT_A_RECIPIENT); return null; }
+        if (!address) { setFieldError(input, notARecipient()); return null; }
         name = typed;
       }
       if (!live()) return null;
@@ -559,7 +560,7 @@ registerScreen('send', {
         const wanted = !!store.controller && CANCELLABLE.includes(store.phase) && !store.cancelling;
         const has = !!actions.querySelector('[data-role="cancel"]');
         if (wanted !== has) {
-          actions.innerHTML = wanted ? h`<button class="btn block" type="button" data-role="cancel">Cancel</button>` : '';
+          actions.innerHTML = wanted ? h`<button class="btn block" type="button" data-role="cancel">${t('Cancel')}</button>` : '';
         }
       }
     }
@@ -593,7 +594,7 @@ registerScreen('send', {
         // URL on that basis; Activity is where the truth is.
         ctx.state.send = null;
         ctx.state.sendDraft = null;
-        ctx.toast('The transfer was submitted, but the node did not return a usable hash.', { kind: 'negative' });
+        ctx.toast(t('The transfer was submitted, but the node did not return a usable hash.'), { kind: 'negative' });
         ctx.go('#activity');
         return;
       }
@@ -622,7 +623,9 @@ registerScreen('send', {
       stepEl.insertAdjacentHTML('beforebegin', h`
         <div class="banner warn" data-role="pending-elsewhere">
           <span class="ic">${raw(icons.warning())}</span>
-          <span><span class="banner-title">A withdrawal is still being proved</span>Its proof is pending on ${String(pendingJob.name || 'your prover')}. Open Withdraw to let it finish or cancel it; a new transfer waits until then.</span>
+          <span><span class="banner-title">${t('A withdrawal is still being proved')}</span>${pendingJob.name
+            ? t('Its proof is pending on {name}. Open Withdraw to let it finish or cancel it; a new transfer waits until then.', { name: String(pendingJob.name) })
+            : t('Its proof is pending on your prover. Open Withdraw to let it finish or cancel it; a new transfer waits until then.')}</span>
         </div>`);
     }
     if (running) {
@@ -753,7 +756,7 @@ registerScreen('send', {
     async function validateAddress(input, { silent = false } = {}) {
       const value = input.value.trim();
       if (!value) {
-        if (!silent) setFieldError(input, 'Enter the address you are sending to.');
+        if (!silent) setFieldError(input, t('Enter the address you are sending to.'));
         return null;
       }
       let parsed;
@@ -761,12 +764,12 @@ registerScreen('send', {
         parsed = await ctx.backend.wallet.parseAddress(value);
       } catch (err) {
         if (!live()) return null;
-        setFieldError(input, (err && err.message) || 'That address could not be checked.');
+        setFieldError(input, (err && err.message) || t('That address could not be checked.'));
         return null;
       }
       if (!live()) return null;
       if (!parsed || !parsed.valid) {
-        setFieldError(input, (parsed && parsed.reason) || 'That is not a valid address.');
+        setFieldError(input, (parsed && parsed.reason) || t('That is not a valid address.'));
         return null;
       }
       setFieldError(input, null);
@@ -826,7 +829,7 @@ registerScreen('send', {
         }
       } catch (err) {
         if (!live()) return;
-        showFormBanner((err && err.message) || 'The fee could not be worked out.');
+        showFormBanner((err && err.message) || t('The fee could not be worked out.'));
         return;
       }
       if (!live()) return;
@@ -838,10 +841,10 @@ registerScreen('send', {
         // fee is RAND whatever is being sent, so it is denominated in RAND at the RAND row's own
         // decimals.
         if (balance <= 0n) {
-          setFieldError(amountInput, `You hold no ${asset.symbol}.`);
+          setFieldError(amountInput, t('You hold no {symbol}.', { symbol: asset.symbol }));
           return;
         }
-        setFieldError(amountInput, `Your balance doesn’t cover the network fee (${formatUnits(fee, 9, feeDecimals(assets))} ${feeSymbol(assets)}).`);
+        setFieldError(amountInput, t('Your balance doesn’t cover the network fee ({fee} {symbol}).', { fee: formatUnits(fee, 9, feeDecimals(assets)), symbol: feeSymbol(assets) }));
         return;
       }
       amountInput.value = plainUnits(max, asset.decimals);
@@ -860,7 +863,7 @@ registerScreen('send', {
       const shown = !box.hasAttribute('hidden');
       if (shown) box.setAttribute('hidden', ''); else box.removeAttribute('hidden');
       btn.setAttribute('aria-expanded', String(!shown));
-      btn.setAttribute('aria-label', shown ? 'Show the full address' : 'Hide the full address');
+      btn.setAttribute('aria-label', shown ? t('Show the full address') : t('Hide the full address'));
     });
 
     const offEdit = on(root, '[data-role="edit"]', 'click', (evt) => {
@@ -901,11 +904,11 @@ registerScreen('send', {
 
     function confirmSelfSend() {
       const dialog = ctx.sheet(h`
-        <h3 class="sheet-title">That is your own address</h3>
-        <p class="sheet-sub">${SELF_SEND_QUESTION}</p>
+        <h3 class="sheet-title">${t('That is your own address')}</h3>
+        <p class="sheet-sub">${selfSendQuestion()}</p>
         <div class="sheet-foot">
-          <button class="btn" type="button" data-role="cancel">Change it</button>
-          <button class="btn btn-primary" type="button" data-role="confirm">Send to myself</button>
+          <button class="btn" type="button" data-role="cancel">${t('Change it')}</button>
+          <button class="btn btn-primary" type="button" data-role="confirm">${t('Send to myself')}</button>
         </div>`);
       on(dialog, '[data-role="cancel"]', 'click', () => ctx.closeSheet());
       on(dialog, '[data-role="confirm"]', 'click', () => {
@@ -951,7 +954,7 @@ registerScreen('send', {
       // The memo: bytes, as the chain counts them, and only where the chain carries one.
       const memoBytes = utf8Length(draft.memo);
       if (memoBytes > MEMO_MAX_BYTES) {
-        const message = `The memo is ${memoBytes} bytes; the limit is ${MEMO_MAX_BYTES}.`;
+        const message = t('The memo is {n} bytes; the limit is {max}.', { n: memoBytes, max: MEMO_MAX_BYTES });
         if (memoInput) setFieldError(memoInput, message); else showFormBanner(message);
         return;
       }
@@ -972,7 +975,7 @@ registerScreen('send', {
         if (!live()) return;
         // A "this needs three notes" message is written for the user and tells them to consolidate
         // first, so it is shown exactly as the backend wrote it (escaped, like all such text).
-        showFormBanner((err && err.message) || 'This transfer could not be prepared.');
+        showFormBanner((err && err.message) || t('This transfer could not be prepared.'));
         return;
       }
       if (!live()) return;
@@ -1035,7 +1038,7 @@ registerScreen('send', {
         if (!granted) {
           // Declined: no prover here — nothing remembered, the way out is the user's own prover.
           acknowledging = false;
-          canProve = { ok: false, reason: PROVER_CONSENT_DECLINED };
+          canProve = { ok: false, reason: proverConsentDeclined() };
           const box = stepEl.querySelector('[data-role="prover-notice"]');
           const foot = box && box.parentElement;
           if (foot) {
@@ -1051,7 +1054,7 @@ registerScreen('send', {
         acknowledging = false;
         if (!live()) return;
         const box = stepEl.querySelector('[data-role="prover-notice"]');
-        if (box) box.insertAdjacentHTML('afterend', h`<p class="caption error">${(err && err.message) || 'Could not record that.'}</p>`);
+        if (box) box.insertAdjacentHTML('afterend', h`<p class="caption error">${(err && err.message) || t('Could not record that.')}</p>`);
         return;
       }
       acknowledging = false;

@@ -14,18 +14,26 @@
 //
 // Nothing here is a secret at rest: the credential id and the PRF salt are stored by the engine;
 // the PRF output exists only between the prompt and the engine sealing or opening with it.
+//
+// `label()` and the two refusals reach the lock screen ("Unlock with …"), so they go through `t`,
+// passed in by lib/platform.js from ui/i18n.js: this file imports nothing, so ui/test/passkey.test.mjs
+// loads it under plain Node, where `t` defaults to English with its `{holes}` filled.
+
+/** `t` when none is given: English, holes filled (ui/i18n.js's `fill`). */
+const plain = (s, vars) => (vars ? String(s).replace(/\{(\w+)\}/g, (hole, name) => (name in vars ? String(vars[name]) : hole)) : String(s));
 
 const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const unb64u = (s) => Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 const random = (n) => crypto.getRandomValues(new Uint8Array(n));
 
-export function makePasskey(ext, { nav = globalThis.navigator, PKC = globalThis.PublicKeyCredential, loc = globalThis.location } = {}) {
+export function makePasskey(ext, { nav = globalThis.navigator, PKC = globalThis.PublicKeyCredential, loc = globalThis.location, t = plain } = {}) {
   const rpId = ext && ext.runtime && ext.runtime.id;
   const isChromeExtension = !!loc && loc.protocol === 'chrome-extension:';
   if (!rpId || !isChromeExtension || !PKC || !nav || !nav.credentials) return null;
 
   const platformName = String((nav.userAgentData && nav.userAgentData.platform) || nav.platform || '');
-  const label = () => (/mac/i.test(platformName) ? 'Touch ID' : /win/i.test(platformName) ? 'Windows Hello' : 'your device’s screen lock');
+  // Touch ID and Windows Hello are the authenticators' names and stay as they are in every language.
+  const label = () => (/mac/i.test(platformName) ? 'Touch ID' : /win/i.test(platformName) ? 'Windows Hello' : t('your device’s screen lock'));
 
   async function available() {
     if (typeof PKC.isUserVerifyingPlatformAuthenticatorAvailable !== 'function') return false;
@@ -54,7 +62,7 @@ export function makePasskey(ext, { nav = globalThis.navigator, PKC = globalThis.
     });
     const out = cred && cred.getClientExtensionResults && cred.getClientExtensionResults().prf;
     const first = out && out.results && out.results.first;
-    if (!first) throw new Error('this passkey does not support the PRF extension');
+    if (!first) throw new Error(t('This passkey does not support the PRF extension.'));
     return new Uint8Array(first);
   }
 
@@ -72,7 +80,7 @@ export function makePasskey(ext, { nav = globalThis.navigator, PKC = globalThis.
       },
     });
     const ext = cred && cred.getClientExtensionResults ? cred.getClientExtensionResults() : {};
-    if (!ext.prf || ext.prf.enabled === false) throw new Error(`${label()} here cannot derive a key (no PRF support), so it cannot unlock the wallet`);
+    if (!ext.prf || ext.prf.enabled === false) throw new Error(t('{label} here cannot derive a key (no PRF support), so it cannot unlock the wallet.', { label: label() }));
     const made = { credentialId: b64u(cred.rawId), salt: b64u(salt) };
     // Some authenticators answer the PRF at creation; the rest are asked once more (a second
     // fingerprint) by the engine through `prf()`.

@@ -4,6 +4,7 @@
 // the point of the whole shell. Everything the user sees is `ui/`, and it does not learn that it
 // is running in a Tauri window any more than it learns it is running in a browser tab.
 import { mount } from './ui/app.js';
+import { t, setLocale, resolveLocale } from './ui/i18n.js';
 import { makeBackend } from './backend-tauri.js';
 
 function fatal(message) {
@@ -11,7 +12,7 @@ function fatal(message) {
   box.className = 'banner negative';
   const title = document.createElement('span');
   title.className = 'banner-title';
-  title.textContent = 'Rand Wallet could not start';
+  title.textContent = t('Rand Wallet could not start');
   const detail = document.createElement('span');
   detail.textContent = message; // textContent, never innerHTML: this may quote an error
   const wrap = document.createElement('span');
@@ -42,6 +43,9 @@ function wireDeepLinks(app) {
 }
 
 async function boot() {
+  // The device's language, for anything said before the wallet's own setting is read: mount()
+  // applies the setting itself. A dictionary that fails to load leaves English.
+  await setLocale(resolveLocale(undefined, navigator.languages)).catch(() => {});
   const backend = await makeBackend();
 
   // Warms the constants the backend reads from the core (chain id, token symbol, decimals), and
@@ -50,7 +54,7 @@ async function boot() {
   try {
     await backend.settings.get();
   } catch (err) {
-    fatal(`The wallet core did not answer: ${(err && err.message) || err}`);
+    fatal(t('The wallet core did not answer: {reason}', { reason: (err && err.message) || String(err) }));
     return;
   }
 

@@ -5,6 +5,7 @@
 #   dist/firefox/ui/       the shared UI and engine (ui/, minus its tooling)
 #   dist/firefox/core/     rand_wallet.js + rand_wallet_bg.wasm
 #   dist/firefox/manifest.json
+#   dist/firefox/_locales/   the manifest's strings per language (WebExtension i18n)
 #
 # `dist/firefox` is the extension's ROOT: every import in it has to resolve inside this directory.
 # Copying only extension/shared/ used to leave four re-export shims importing `../../../ui/…`,
@@ -16,7 +17,10 @@ cd "$(dirname "$0")/.."
 [ -f extension/shared/core/rand_wallet_bg.wasm ] || core/scripts/build-wasm.sh
 VER=$(python3 -c "import json;print(json.load(open('firefox/manifest.json'))['version'])")
 rm -rf dist/firefox && mkdir -p dist/firefox/ui
-rsync -a --exclude '.DS_Store' extension/shared/ dist/firefox/
+# extension/shared/ whole — including _locales/ (the manifest's own strings, one directory per
+# language; extension/shared/_locales/README.md maps the wallet's codes to the directory names)
+# minus that README, which is for translators rather than for the browser.
+rsync -a --exclude '.DS_Store' --exclude '_locales/README.md' extension/shared/ dist/firefox/
 # ui/, without anything that is tooling rather than the app: the test suite, the token generator,
 # the dev harness, the component gallery, and npm's own files.
 rsync -a --exclude '.DS_Store' \

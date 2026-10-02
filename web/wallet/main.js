@@ -11,6 +11,7 @@
 // prover the bundle's. Everything else is real — real keys, a real address, a real scan of a real
 // node's commitment tree, a real note store.
 import { mount } from './ui/app.js';
+import { t, setLocale, resolveLocale } from './ui/i18n.js';
 import { makeWasmBackend } from './ui/engine/backend-wasm.js';
 import { idbStorage } from './idb.js';
 import { registerRandpayHandler, normalizeDeepLinkHash } from './deep-link.js';
@@ -86,7 +87,7 @@ function fatal(message) {
   box.className = 'banner negative';
   const title = document.createElement('span');
   title.className = 'banner-title';
-  title.textContent = 'Rand Wallet could not start';
+  title.textContent = t('Rand Wallet could not start');
   const detail = document.createElement('span');
   detail.textContent = message; // textContent, never innerHTML: this may quote an error
   const wrap = document.createElement('span');
@@ -109,6 +110,9 @@ function applyDeepLinkNormalization() {
 }
 
 async function boot() {
+  // The device's language, for anything said before the wallet's own setting is read: mount()
+  // applies the setting itself. A dictionary that fails to load leaves English.
+  await setLocale(resolveLocale(undefined, navigator.languages)).catch(() => {});
   registerRandpayHandler();
   applyDeepLinkNormalization();
   window.addEventListener('hashchange', applyDeepLinkNormalization);
@@ -122,7 +126,7 @@ async function boot() {
     const constants = await core.call('version');
     version = String(constants.version || '');
   } catch (err) {
-    fatal(`The wallet core did not load: ${(err && err.message) || err}. Run web/wallet/build.sh and reload.`);
+    fatal(t('The wallet core did not load: {reason}. Run web/wallet/build.sh and reload.', { reason: (err && err.message) || String(err) }));
     return;
   }
 

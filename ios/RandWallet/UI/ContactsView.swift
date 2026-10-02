@@ -21,7 +21,7 @@ struct ContactsView: View {
                         // A saved name is hostile text exactly as a memo is (final review, finding
                         // — this screen showed it raw): the same display rule every memo view uses.
                         Text(Memo.display(c.name)).font(.ui(16, .semibold)).foregroundColor(Theme.text)
-                        Text("fingerprint \((try? RandCore.addressFingerprint(c.address)) ?? "unavailable")")
+                        Text("fingerprint \((try? RandCore.addressFingerprint(c.address)) ?? String(localized: "unavailable"))")
                             .font(.monoSmall).foregroundColor(Theme.textSoft)
                         Text(c.address.shortened(head: 14, tail: 8)).font(.monoSmall).foregroundColor(Theme.textMute)
                     }
@@ -95,7 +95,7 @@ struct AddContactView: View {
 
     private func save() {
         guard let addr = resolvedAddress else {
-            error = "That is not a shielded address or a randpay: link."
+            error = String(localized: "That is not a shielded address or a randpay: link.")
             return
         }
         do {

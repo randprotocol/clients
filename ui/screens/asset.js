@@ -6,16 +6,17 @@
 // the user typed about it would mean what they meant, and Send renders disabled with the shared
 // explanation. Receive is available for every asset.
 import { h, raw } from '../lib/dom.js';
+import { t } from '../i18n.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits } from '../lib/format.js';
 import { avatarMarkup, activityRowMarkup, listMarkup, fillRowMemos } from '../lib/rows.js';
 import { detailTopbar, wireSelection } from '../lib/panes.js';
-import { UNLISTED_TEXT, canSendAsset, canWithdrawAsset } from '../lib/assets.js';
+import { unlistedText, canSendAsset, canWithdrawAsset } from '../lib/assets.js';
 
 function skeletonMarkup(ctx) {
   return h`
-    ${raw(detailTopbar(ctx, 'Asset', 'home'))}
+    ${raw(detailTopbar(ctx, t('Asset'), 'home'))}
     <div class="skeleton hero"></div>`;
 }
 
@@ -33,13 +34,13 @@ function withdrawMarkup(withdraw, index) {
   if (!withdraw) return { button: '', hint: '' };
   if (withdraw.ok) {
     return {
-      button: raw(h`<button class="btn-round" type="button" data-go="withdraw/${index}"><span class="ic">${raw(icons.bridge())}</span><span class="cap">Withdraw</span></button>`),
+      button: raw(h`<button class="btn-round" type="button" data-go="withdraw/${index}"><span class="ic">${raw(icons.bridge())}</span><span class="cap">${t('Withdraw')}</span></button>`),
       hint: '',
     };
   }
   return {
     button: '',
-    hint: raw(h`<p class="caption" id="${WITHDRAW_HINT_ID}" data-role="withdraw-hint">${withdraw.reason || 'Withdrawals are not available here.'}</p>`),
+    hint: raw(h`<p class="caption" id="${WITHDRAW_HINT_ID}" data-role="withdraw-hint">${withdraw.reason || t('Withdrawals are not available here.')}</p>`),
   };
 }
 
@@ -49,13 +50,13 @@ function actionsMarkup(asset, withdraw = null) {
   // the reason it is off (the hint below, tied on with aria-describedby) would never be announced
   // to the one user who most needs it. It carries no `data-go`, so a click does nothing.
   const sendBtn = raw(canSend
-    ? h`<button class="btn-round" type="button" data-go="send/${asset.index}"><span class="ic">${raw(icons.arrowUpRight())}</span><span class="cap">Send</span></button>`
-    : h`<button class="btn-round" type="button" aria-disabled="true" aria-describedby="${HINT_ID}"><span class="ic">${raw(icons.arrowUpRight())}</span><span class="cap">Send</span></button>`);
-  const hint = raw(canSend ? '' : h`<p class="caption" id="${HINT_ID}" data-role="send-hint">${UNLISTED_TEXT}</p>`);
+    ? h`<button class="btn-round" type="button" data-go="send/${asset.index}"><span class="ic">${raw(icons.arrowUpRight())}</span><span class="cap">${t('Send')}</span></button>`
+    : h`<button class="btn-round" type="button" aria-disabled="true" aria-describedby="${HINT_ID}"><span class="ic">${raw(icons.arrowUpRight())}</span><span class="cap">${t('Send')}</span></button>`);
+  const hint = raw(canSend ? '' : h`<p class="caption" id="${HINT_ID}" data-role="send-hint">${unlistedText()}</p>`);
   const w = withdrawMarkup(withdraw, asset.index);
   return raw(h`
     <div class="actions">
-      <button class="btn-round" type="button" data-go="receive"><span class="ic">${raw(icons.arrowDownLeft())}</span><span class="cap">Receive</span></button>
+      <button class="btn-round" type="button" data-go="receive"><span class="ic">${raw(icons.arrowDownLeft())}</span><span class="cap">${t('Receive')}</span></button>
       ${sendBtn}
       ${w.button}
     </div>
@@ -66,10 +67,10 @@ function actionsMarkup(asset, withdraw = null) {
 function bodyMarkup(ctx, { asset, activity, assetsByIndex, withdraw }) {
   const rplChip = raw(asset.index >= 1 ? h`<span class="chip xs">RPL</span>` : '');
   const pending = raw(asset.pending && asset.pending !== '0'
-    ? h`<span class="sub">+${formatUnits(asset.pending, 6, asset.decimals)} ${asset.symbol} pending</span>`
+    ? h`<span class="sub">${t('+{amount} {symbol} pending', { amount: formatUnits(asset.pending, 6, asset.decimals), symbol: asset.symbol })}</span>`
     : '');
   const activitySection = raw(activity.length === 0
-    ? h`<div class="card"><div class="empty"><span class="empty-title">No activity yet</span><span>Transfers in this asset will appear here.</span></div></div>`
+    ? h`<div class="card"><div class="empty"><span class="empty-title">${t('No activity yet')}</span><span>${t('Transfers in this asset will appear here.')}</span></div></div>`
     : h`<div class="card flush">${listMarkup(activity.map((item) => activityRowMarkup(item, assetsByIndex)))}</div>`);
   return h`
     ${raw(detailTopbar(ctx, asset.symbol, 'home'))}
@@ -79,7 +80,7 @@ function bodyMarkup(ctx, { asset, activity, assetsByIndex, withdraw }) {
       ${pending}
     </div>
     ${actionsMarkup(asset, withdraw)}
-    <h2 class="section-title">Activity</h2>
+    <h2 class="section-title">${t('Activity')}</h2>
     ${activitySection}`;
 }
 
@@ -99,14 +100,14 @@ registerScreen('asset', {
       [assets, sync] = await Promise.all([ctx.backend.assets.list(), ctx.backend.sync.cached()]);
     } catch (err) {
       if (!ctx.isCurrent()) return;
-      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Could not load this asset</span>${err && err.message ? err.message : 'Something went wrong.'}</span></div>`;
+      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">${t('Could not load this asset')}</span>${err && err.message ? err.message : t('Something went wrong.')}</span></div>`;
       return;
     }
     if (!ctx.isCurrent()) return;
 
     const asset = assets.find((a) => a.index === index);
     if (!asset) {
-      root.innerHTML = h`<div class="card"><div class="empty"><span class="empty-title">Asset not found</span><button class="btn sm" type="button" data-go="home">Back to home</button></div></div>`;
+      root.innerHTML = h`<div class="card"><div class="empty"><span class="empty-title">${t('Asset not found')}</span><button class="btn sm" type="button" data-go="home">${t('Back to home')}</button></div></div>`;
       return;
     }
     const assetsByIndex = new Map(assets.map((a) => [a.index, a]));
@@ -120,7 +121,7 @@ registerScreen('asset', {
     let withdraw = null;
     if (canWithdrawAsset(asset) && ctx.backend.bridge && typeof ctx.backend.bridge.canWithdraw === 'function') {
       try { withdraw = (await ctx.backend.bridge.canWithdraw()) || null; } catch (err) {
-        withdraw = { ok: false, reason: (err && err.message) || 'The bridge could not be asked.' };
+        withdraw = { ok: false, reason: (err && err.message) || t('The bridge could not be asked.') };
       }
       if (!ctx.isCurrent()) return;
     }

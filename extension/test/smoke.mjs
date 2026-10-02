@@ -12,8 +12,10 @@
 //   node extension/test/smoke.mjs [test|production]
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { initSync, call, version } from '../shared/core/rand_wallet.js';
 import { UNLOCKED_SESSION_KEY } from '../../ui/engine/backend-wasm.js';
+import { checkManifestLocales } from './manifest-locales.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
 const at = (path) => new URL(path, ROOT);
@@ -74,6 +76,9 @@ const NEEDED = [
   'core/rand_wallet.js', 'core/rand_wallet_bg.wasm',
   // the page provider (`window.rand`) and its consent window
   'inpage.js', 'content.js', 'provider-host.js', 'connect.html', 'connect.js', 'lib/recipient-hash.js',
+  // the manifest's own strings (`__MSG_…__`, WebExtension i18n): without `default_locale`'s file
+  // the browser refuses the manifest outright
+  '_locales/en/messages.json', 'ui/i18n.js', 'lib/window-locale.js',
 ];
 
 /**
@@ -108,6 +113,11 @@ function checkPacked(browser) {
   for (const gone of GONE) {
     if (existsSync(at(`${dist}/${gone}`))) throw new Error(`${dist}/${gone} should not be in the packed extension`);
   }
+  // The manifest's strings: every `__MSG_name__` it uses is a key of `_locales/<default_locale>/
+  // messages.json`, each language directory is one of the wallet's, and the translators'
+  // README (extension/shared/_locales/README.md) stayed in the repo.
+  if (existsSync(at(`${dist}/_locales/README.md`))) throw new Error(`${dist}/_locales/README.md is for translators, not for the store`);
+  const l10n = checkManifestLocales({ manifestPath: fileURLToPath(at(`${dist}/manifest.json`)), localesDir: fileURLToPath(at(`${dist}/_locales`)) });
 
   let scanned = 0;
   let resolved = 0;
@@ -129,7 +139,7 @@ function checkPacked(browser) {
       if (!existsSync(target)) throw new Error(`${path} imports ${ref}, which does not exist in ${dist}`);
     }
   }
-  console.log(`packed ${dist}: ${NEEDED.length} required files present, ${scanned} text files clean, ${resolved} references resolve inside it`);
+  console.log(`packed ${dist}: ${NEEDED.length} required files present, ${scanned} text files clean, ${resolved} references resolve inside it, ${l10n.names.length} __MSG_ strings resolve in _locales (${l10n.languages.join(', ')})`);
 }
 
 checkPacked('chrome');

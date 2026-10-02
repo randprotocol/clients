@@ -7,12 +7,15 @@ import { recordDuration } from '../../lib/progress.js';
 import { formatUnits, parseUnits, elapsed } from '../../lib/format.js';
 import { TX_HASH_RE } from '../../lib/explorer.js';
 import { displayMemo } from '../../lib/memo.js';
+import { t } from '../../i18n.js';
 
+// Every sentence here is a function (or built inside one), read at each render: the language can
+// change while the wallet is up, so nothing is translated at import.
 /** What `'proving'` says when this device makes the proof. */
-export const DEVICE_PROVING_LABEL = 'Proving the bundle';
+export const deviceProvingLabel = () => t('Proving the bundle');
 
 /** What `'proving'` says while this device makes the auth proof, before a prover has the job. */
-export const AUTHORISING_LABEL = 'Authorising the spend on this device…';
+export const authorisingLabel = () => t('Authorising the spend on this device…');
 
 /**
  * `'proving'`'s label from its `detail` (ui/backend.js, R3): on a paired prover, first that this
@@ -24,38 +27,39 @@ export const AUTHORISING_LABEL = 'Authorising the spend on this device…';
 export function provingLabel(detail = {}) {
   const d = detail || {};
   const name = typeof d.prover === 'string' && d.prover ? d.prover : '';
-  if (d.authorising === true) return AUTHORISING_LABEL;
+  if (d.authorising === true) return authorisingLabel();
   const position = Number(d.position);
-  if (name && Number.isInteger(position) && position >= 1) return `Waiting at position ${position} on ${name}`;
-  if (name) return `Proving on ${name}…`;
-  return DEVICE_PROVING_LABEL;
+  if (name && Number.isInteger(position) && position >= 1) return t('Waiting at position {position} on {name}', { position, name });
+  if (name) return t('Proving on {name}…', { name });
+  return deviceProvingLabel();
 }
 
 export const PHASE_LABELS = {
-  selecting: 'Selecting notes',
-  witness: 'Building the witness',
+  selecting: () => t('Selecting notes'),
+  witness: () => t('Building the witness'),
   proving: provingLabel,
-  submitting: 'Submitting to the node',
-  confirming: 'Waiting for the block',
+  submitting: () => t('Submitting to the node'),
+  confirming: () => t('Waiting for the block'),
 };
 
 /** The label for `phase` with its `detail`, for any table shaped like `PHASE_LABELS`. */
 export function phaseLabel(phase, detail, labels = PHASE_LABELS) {
   const label = labels[phase];
   if (typeof label === 'function') return label(detail || {});
-  return label || 'Working';
+  return label || t('Working');
 }
 
 /**
  * The proving step's banner, `{title, text}`, from the store: a proof made by the paired prover
  * survives this window closing (the wallet resumes it until it locks); one made here does not.
  */
-export function provingBanner(store, deviceText = 'The proof runs on this device. You can look at other screens — it keeps going — but closing the wallet stops it.') {
+export function provingBanner(store, deviceText = t('The proof runs on this device. You can look at other screens — it keeps going — but closing the wallet stops it.')) {
   const name = store && typeof store.proverName === 'string' ? store.proverName : '';
-  if (!name) return { title: 'Keep this window open', text: deviceText };
+  if (!name) return { title: t('Keep this window open'), text: deviceText };
   return {
-    title: 'A prover is making the proof',
-    text: `This device authorises the spend; the proof itself is being made by ${name}. You can look at other screens — it keeps going — and if the wallet closes, opening it again before it locks picks the proof up where it was.`,
+    title: t('A prover is making the proof'),
+    text: t('This device authorises the spend; the proof itself is being made by {name}. You can look at other screens '
+      + '— it keeps going — and if the wallet closes, opening it again before it locks picks the proof up where it was.', { name }),
   };
 }
 
@@ -79,17 +83,17 @@ export const CANCELLABLE = ['selecting', 'witness', 'proving'];
 // thing it must not do is invite the user to send it again.
 export const AFTER_BROADCAST = ['submitting', 'confirming'];
 export const ADDRESS_DEBOUNCE_MS = 150;
-export const SELF_SEND_QUESTION = 'Send to yourself? This consolidates your notes.';
-export const UNKNOWN_NOTICE = 'Your last transfer’s outcome is unknown — check Activity first.';
-export const UNKNOWN_CONFIRM = 'I checked — it did not go through';
+export const selfSendQuestion = () => t('Send to yourself? This consolidates your notes.');
+export const unknownNotice = () => t('Your last transfer’s outcome is unknown — check Activity first.');
+export const unknownConfirm = () => t('I checked — it did not go through');
 
 // ------------------------------------------------------------------ recipients and the memo ---
 // Spec 2026-09-26 §2.3, §3: a memo is at most 510 bytes of UTF-8 — bytes, not characters, so the
 // counter reads `TextEncoder`'s length — and a chain that declares no envelope size carries none.
 export const MEMO_MAX_BYTES = 510;
 export { MEMO_ENVELOPE_BYTES, memoSupportedFor } from '../../lib/memo.js';
-export const NO_MEMO_NOTICE = "This network doesn't carry memos; the memo will not be sent";
-export const NOT_A_RECIPIENT = 'That is not a shielded address, a randpay: link, or a saved contact.';
+export const noMemoNotice = () => t("This network doesn't carry memos; the memo will not be sent");
+export const notARecipient = () => t('That is not a shielded address, a randpay: link, or a saved contact.');
 
 /** The memo's length as the chain counts it: UTF-8 bytes. */
 export function utf8Length(text) {
@@ -119,17 +123,20 @@ export function recipientKind(text) {
  * ignored, so a caller that still passes it cannot put it back on this line.)
  */
 export function confirmationLine({ name = null, fingerprint = null, amount, symbol }) {
-  // A contact name is user-entered (and may end in a space): shown through the memo rule, the
-  // separator included, so the line never carries a control character or a run of spaces.
-  const who = name ? displayMemo(`${name} · `) : '';
-  const fp = fingerprint ? `fingerprint ${fingerprint}` : 'fingerprint unavailable';
-  return `to ${who}${fp} · ${amount} ${symbol}`;
+  // A contact name is user-entered (and may end in a space): shown through the memo rule and
+  // trimmed, so the line never carries a control character or a run of spaces. Four whole
+  // sentences rather than fragments, so each language can order its own.
+  const who = name ? displayMemo(name).trim() : '';
+  if (name && fingerprint) return t('to {name} · fingerprint {fingerprint} · {amount} {symbol}', { name: who, fingerprint, amount, symbol });
+  if (name) return t('to {name} · fingerprint unavailable · {amount} {symbol}', { name: who, amount, symbol });
+  if (fingerprint) return t('to fingerprint {fingerprint} · {amount} {symbol}', { fingerprint, amount, symbol });
+  return t('to fingerprint unavailable · {amount} {symbol}', { amount, symbol });
 }
 
 /** The memo's own line on the confirmation: `memo "<text>"`, control and bidi characters shown
  *  as U+FFFD (`displayMemo`), so it is always exactly one line that reads as a memo. */
 export function memoLine(memo = '') {
-  return `memo "${displayMemo(memo)}"`;
+  return t('memo "{memo}"', { memo: displayMemo(memo) });
 }
 
 /**
@@ -148,7 +155,10 @@ export function mergeWithLink(typed, fromLink, same = (a, b) => a === b) {
  *  two minutes of native proving per proof; a withdrawal needs two, a transfer one. */
 export function proveCost(proofs) {
   const n = Number.isFinite(Number(proofs)) && Number(proofs) >= 1 ? Math.floor(Number(proofs)) : 1;
-  return `${n} ${n === 1 ? 'proof' : 'proofs'} · about ${n * 2} minutes on this computer`;
+  const minutes = n * 2;
+  return n === 1
+    ? t('{n} proof · about {minutes} minutes on this computer', { n, minutes })
+    : t('{n} proofs · about {minutes} minutes on this computer', { n, minutes });
 }
 
 /**
@@ -191,11 +201,11 @@ export function safeHash(hash) {
 export function explainProvingError(msg) {
   const text = String((msg && msg.message) || msg || '').trim();
   if (/unreachable|out of memory|alloc|worker failed|memory access/i.test(text)) {
-    return 'This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a '
+    return t('This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a '
       + 'browser gives WebAssembly at most 4 GB. Your notes are untouched — send from the desktop '
-      + 'app, which proves natively.';
+      + 'app, which proves natively.');
   }
-  return text || 'The transfer could not be proved.';
+  return text || t('The transfer could not be proved.');
 }
 
 /** An error that means "this was cancelled", not "it failed" — see ui/backend.js. */
@@ -353,7 +363,7 @@ function launchSend(ctx, { req, asset, run, phase = 'selecting', detail = null, 
   // The chip's clock. Deliberately separate from the proving screen's own timer (which belongs to
   // that render and is cleared with it): this one has to keep counting while the user is looking
   // at something else entirely, which is the whole point of the chip.
-  const paintChip = () => ctx.setPinnedChip({ text: `Proving… ${elapsed(Date.now() - store.startedMs)}`, go: 'send' });
+  const paintChip = () => ctx.setPinnedChip({ text: t('Proving… {elapsed}', { elapsed: elapsed(Date.now() - store.startedMs) }), go: 'send' });
   const stopTicker = () => {
     if (store.ticker !== null) { clearInterval(store.ticker); store.ticker = null; }
   };
@@ -410,7 +420,7 @@ function launchSend(ctx, { req, asset, run, phase = 'selecting', detail = null, 
         if (ctx.session.id === session.id) {
           // Not a navigation: the user may be in the middle of something else. A chip that says
           // the transfer landed, and leads to the receipt, is how they find out.
-          if (hash) ctx.setPinnedChip({ text: 'Sent — view', go: `sent/${hash}`, kind: 'positive' });
+          if (hash) ctx.setPinnedChip({ text: t('Sent — view'), go: `sent/${hash}`, kind: 'positive' });
           else ctx.setPinnedChip(null);
         }
         fan();
@@ -452,22 +462,22 @@ export function plainUnits(units, decimals) {
  */
 export function checkAmount(text, asset, fee = null) {
   const raw0 = String(text || '').trim();
-  if (!raw0) return { error: 'Enter an amount to send.' };
+  if (!raw0) return { error: t('Enter an amount to send.') };
   let units;
   try {
     units = parseUnits(raw0, asset.decimals);
   } catch (err) {
     const message = (err && err.message) || '';
-    if (/decimal places/.test(message)) return { error: `${asset.symbol} has ${asset.decimals} decimal places — that is more.` };
-    return { error: 'Enter the amount as a number, for example 1.25.' };
+    if (/decimal places/.test(message)) return { error: t('{symbol} has {decimals} decimal places — that is more.', { symbol: asset.symbol, decimals: asset.decimals }) };
+    return { error: t('Enter the amount as a number, for example 1.25.') };
   }
-  if (units <= 0n) return { error: 'Enter an amount greater than zero.' };
+  if (units <= 0n) return { error: t('Enter an amount greater than zero.') };
   const balance = BigInt(asset.balance || '0');
   if (units > balance) {
-    return { error: `That is more than your balance of ${formatUnits(balance, 6, asset.decimals)} ${asset.symbol}.` };
+    return { error: t('That is more than your balance of {balance} {symbol}.', { balance: formatUnits(balance, 6, asset.decimals), symbol: asset.symbol }) };
   }
   if (fee !== null && units + fee > balance) {
-    return { error: `The amount plus the ${formatUnits(fee, 9, asset.decimals)} ${asset.symbol} network fee is more than your balance.` };
+    return { error: t('The amount plus the {fee} {symbol} network fee is more than your balance.', { fee: formatUnits(fee, 9, asset.decimals), symbol: asset.symbol }) };
   }
   return { units };
 }

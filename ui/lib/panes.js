@@ -11,6 +11,7 @@
 // and it is the single place that fact is written down. The shell uses it to remember where the
 // user was; a detail screen's `parent()` uses it to refuse a `from` that is not a list.
 import { h, raw } from './dom.js';
+import { t } from '../i18n.js';
 import { icons } from './icons.js';
 
 /**
@@ -203,12 +204,12 @@ export function detailTopbar(ctx, title, backGo) {
       <div class="topbar">
         <span class="topbar-title">${title}</span>
         <span class="grow"></span>
-        <button class="btn-icon" type="button" data-action="close-detail" aria-label="Close">${raw(icons.close())}</button>
+        <button class="btn-icon" type="button" data-action="close-detail" aria-label="${t('Close')}">${raw(icons.close())}</button>
       </div>`;
   }
   return h`
     <div class="topbar">
-      <button class="btn-icon icon-flip" type="button" data-go="${backGo}" aria-label="Back">${raw(icons.chevron())}</button>
+      <button class="btn-icon icon-flip" type="button" data-go="${backGo}" aria-label="${t('Back')}">${raw(icons.chevron())}</button>
       <span class="topbar-title">${title}</span>
       <span class="spacer"></span>
     </div>`;

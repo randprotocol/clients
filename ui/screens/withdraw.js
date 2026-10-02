@@ -26,6 +26,7 @@
 // not cancel two minutes of work.
 import { expectedMs, progressAt, remainingText, recordDuration } from '../lib/progress.js';
 import { h, raw, on } from '../lib/dom.js';
+import { t } from '../i18n.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { parseUnits, formatUnits, shortHex, elapsed } from '../lib/format.js';
@@ -45,9 +46,10 @@ import { proverNoticeMarkup, proverUnreachableMarkup, proverDeclinedMarkup } fro
  */
 export const EVM_CHAINS = Object.freeze([2, 3, 4]);
 
+// Labels are functions, read at each paint: the language can change while a proof is running.
 export const PHASE_LABELS = Object.freeze({
-  selecting: 'Selecting notes',
-  witness: 'Building the witnesses',
+  selecting: () => t('Selecting notes'),
+  witness: () => t('Building the witnesses'),
   // ONE bundle since chain 14: the token is burned from slots 0–1 and the RAND fee is paid from
   // slots 2–3 of the same proof. `'proving-asset'` named the first of two and is gone from the
   // contract; a backend that reported it now would be reporting a phase nothing knows, and this
@@ -55,16 +57,16 @@ export const PHASE_LABELS = Object.freeze({
   // On a paired prover, where the job waits and who proves it (ui/backend.js, R3); the device
   // sentence otherwise — the transfer's own rule, shared.
   proving: provingLabel,
-  submitting: 'Submitting to the node',
-  confirming: 'Waiting for the block',
+  submitting: () => t('Submitting to the node'),
+  confirming: () => t('Waiting for the block'),
 });
 
 /** Cancel is offered up to, but not including, the moment the transaction leaves this device. */
 const CANCELLABLE = ['selecting', 'witness', 'proving'];
 const AFTER_BROADCAST = ['submitting', 'confirming'];
 
-export const LEAVES_POOL_WARNING = 'This leaves the shielded pool. The destination address and '
-  + 'amount become public on the other chain.';
+export const leavesPoolWarning = () => t('This leaves the shielded pool. The destination address and '
+  + 'amount become public on the other chain.');
 
 const STEPS = ['chain', 'address', 'amount', 'review'];
 
@@ -85,18 +87,18 @@ function plainHex(text) {
  */
 export function checkRecipient(toChain, text) {
   const hex = plainHex(text);
-  if (!hex) return { error: 'Enter the address this should be released to.' };
-  if (!/^[0-9a-f]+$/.test(hex)) return { error: 'An address here is hexadecimal — 0-9 and a-f only.' };
+  if (!hex) return { error: t('Enter the address this should be released to.') };
+  if (!/^[0-9a-f]+$/.test(hex)) return { error: t('An address here is hexadecimal — 0-9 and a-f only.') };
   const evm = EVM_CHAINS.includes(Number(toChain));
   if (evm && hex.length !== 40) {
-    return { error: `An address on this chain is 20 bytes — 40 hex characters. That is ${hex.length}.` };
+    return { error: t('An address on this chain is 20 bytes — 40 hex characters. That is {length}.', { length: hex.length }) };
   }
   if (!evm && hex.length !== 64) {
-    return { error: `An address on this chain is 32 bytes — 64 hex characters. That is ${hex.length}.` };
+    return { error: t('An address on this chain is 32 bytes — 64 hex characters. That is {length}.', { length: hex.length }) };
   }
   // Left-padded to 32 bytes, which is what the action carries and what the bridge checks.
   const to = evm ? '0'.repeat(24) + hex : hex;
-  if (/^0+$/.test(to)) return { error: 'That is the zero address; nothing sent there can ever be spent.' };
+  if (/^0+$/.test(to)) return { error: t('That is the zero address; nothing sent there can ever be spent.') };
   return { to, display: evm ? `0x${hex}` : hex };
 }
 
@@ -191,7 +193,7 @@ function launchWithdrawal(ctx, { req, asset, display, run, phase = 'selecting', 
     }
   };
 
-  const paintChip = () => ctx.setPinnedChip({ text: `Withdrawing… ${elapsed(Date.now() - store.startedMs)}`, go: `withdraw/${req.asset}` });
+  const paintChip = () => ctx.setPinnedChip({ text: t('Withdrawing… {elapsed}', { elapsed: elapsed(Date.now() - store.startedMs) }), go: `withdraw/${req.asset}` });
   const stopTicker = () => {
     if (store.ticker !== null) { clearInterval(store.ticker); store.ticker = null; }
   };
@@ -230,7 +232,7 @@ function launchWithdrawal(ctx, { req, asset, display, run, phase = 'selecting', 
               hash: store.hash, display, toChain: req.toChain, amount: req.amount,
               relayerFee: req.relayerFee, assetIndex: req.asset,
             };
-            ctx.setPinnedChip({ text: 'Withdrawn — view', go: `withdrawn/${store.hash}`, kind: 'positive' });
+            ctx.setPinnedChip({ text: t('Withdrawn — view'), go: `withdrawn/${store.hash}`, kind: 'positive' });
           } else ctx.setPinnedChip(null);
         }
         fan();
@@ -253,10 +255,10 @@ function launchWithdrawal(ctx, { req, asset, display, run, phase = 'selecting', 
 
 function shellMarkup() {
   return h`
-    <h1 class="sr-only">Withdraw</h1>
+    <h1 class="sr-only">${t('Withdraw')}</h1>
     <div class="narrow">
       <div class="topbar">
-        <button class="btn-icon icon-flip" type="button" data-role="back" aria-label="Back">${raw(icons.chevron())}</button>
+        <button class="btn-icon icon-flip" type="button" data-role="back" aria-label="${t('Back')}">${raw(icons.chevron())}</button>
         <span class="grow"></span>
       </div>
       <p class="caption" data-role="step-indicator" aria-live="polite"></p>
@@ -269,13 +271,13 @@ function cannotMarkup(title, reason) {
     <h2 class="title" data-role="step-title" tabindex="-1">${title}</h2>
     <div class="banner warn">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">Not available here</span>${reason}</span>
+      <span><span class="banner-title">${t('Not available here')}</span>${reason}</span>
     </div>
-    <button class="btn btn-ghost block" type="button" data-go="home">Back to home</button>`;
+    <button class="btn btn-ghost block" type="button" data-go="home">${t('Back to home')}</button>`;
 }
 
 function chainName(id) {
-  return EVM_CHAINS.includes(Number(id)) ? `Chain ${id} (EVM)` : `Chain ${id}`;
+  return EVM_CHAINS.includes(Number(id)) ? t('Chain {id} (EVM)', { id }) : t('Chain {id}', { id });
 }
 
 /**
@@ -291,14 +293,14 @@ function chainName(id) {
  */
 function backingStepMarkup(asset, { chains, backings }) {
   const note = backings.length === 0
-    ? raw(h`<p class="caption">This wallet does not know which coins back ${asset.symbol}, so there is nothing it can safely burn to.</p>`)
-    : raw(h`<p class="caption">${asset.symbol} is released as the coin you pick, on that coin's own chain.</p>`);
+    ? raw(h`<p class="caption">${t('This wallet does not know which coins back {symbol}, so there is nothing it can safely burn to.', { symbol: asset.symbol })}</p>`)
+    : raw(h`<p class="caption">${t('{symbol} is released as the coin you pick, on that coin\'s own chain.', { symbol: asset.symbol })}</p>`);
   const unknown = backings.filter((b) => chains.length > 0 && !chains.includes(b.chain));
   const warning = unknown.length > 0
     ? raw(h`
       <div class="banner warn">
         <span class="ic">${raw(icons.warning())}</span>
-        <span><span class="banner-title">This bridge does not list every chain below</span>A withdrawal to one it does not list may be refused. Nothing is spent until it is proved.</span>
+        <span><span class="banner-title">${t('This bridge does not list every chain below')}</span>${t('A withdrawal to one it does not list may be refused. Nothing is spent until it is proved.')}</span>
       </div>`)
     : '';
   const rows = backings.map((b, i) => h`
@@ -309,14 +311,14 @@ function backingStepMarkup(asset, { chains, backings }) {
           <span class="row-title">${chainName(b.chain)}</span>
           <span class="row-sub mono truncate">${shortHex(b.token, 8)}</span>
         </span>
-        <span class="row-end"><span class="amount">${formatUnits(b.locked ?? '0', Number(b.decimals) || 0, Number(b.decimals) || 0)}</span><span class="row-meta">held</span></span>
+        <span class="row-end"><span class="amount">${formatUnits(b.locked ?? '0', Number(b.decimals) || 0, Number(b.decimals) || 0)}</span><span class="row-meta">${t('held')}</span></span>
       </button>
     </li>`).join('');
   const empty = backings.length === 0
-    ? raw(h`<div class="card"><div class="empty"><span class="empty-title">No coin to release</span><span>This node lists no backing for ${asset.symbol}.</span></div></div>`)
+    ? raw(h`<div class="card"><div class="empty"><span class="empty-title">${t('No coin to release')}</span><span>${t('This node lists no backing for {symbol}.', { symbol: asset.symbol })}</span></div></div>`)
     : raw(h`<div class="card flush"><ul class="list">${raw(rows)}</ul></div>`);
   return h`
-    <h2 class="title" data-role="step-title" tabindex="-1">Withdraw ${asset.symbol} as</h2>
+    <h2 class="title" data-role="step-title" tabindex="-1">${t('Withdraw {symbol} as', { symbol: asset.symbol })}</h2>
     ${warning}
     ${empty}
     ${note}`;
@@ -325,46 +327,46 @@ function backingStepMarkup(asset, { chains, backings }) {
 function addressStepMarkup(asset, toChain, draft) {
   const evm = EVM_CHAINS.includes(Number(toChain));
   const hint = evm
-    ? `A 20-byte address on ${chainName(toChain)}, for example 0x… — it is padded to 32 bytes for the bridge.`
-    : `A 32-byte recipient on ${chainName(toChain)}, written as 64 hex characters.`;
+    ? t('A 20-byte address on {chain}, for example 0x… — it is padded to 32 bytes for the bridge.', { chain: chainName(toChain) })
+    : t('A 32-byte recipient on {chain}, written as 64 hex characters.', { chain: chainName(toChain) });
   return h`
-    <h2 class="title" data-role="step-title" tabindex="-1">Which address?</h2>
+    <h2 class="title" data-role="step-title" tabindex="-1">${t('Which address?')}</h2>
     <div class="banner warn">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">There is no way back</span>${LEAVES_POOL_WARNING}</span>
+      <span><span class="banner-title">${t('There is no way back')}</span>${leavesPoolWarning()}</span>
     </div>
     <form class="stack loose" data-role="address-form" novalidate>
       <div class="field">
-        <label class="label" for="withdraw-to">Recipient on ${chainName(toChain)}</label>
-        <textarea id="withdraw-to" name="to" rows="2" spellcheck="false" autocomplete="off" placeholder="${evm ? '0x…' : '64 hex characters'}" aria-describedby="withdraw-to-hint">${draft.to}</textarea>
+        <label class="label" for="withdraw-to">${t('Recipient on {chain}', { chain: chainName(toChain) })}</label>
+        <textarea id="withdraw-to" name="to" rows="2" spellcheck="false" autocomplete="off" placeholder="${evm ? '0x…' : t('64 hex characters')}" aria-describedby="withdraw-to-hint">${draft.to}</textarea>
         <span class="hint" id="withdraw-to-hint">${hint}</span>
         <span class="error" id="withdraw-to-error"></span>
       </div>
-      <button class="btn btn-primary block" type="submit">Continue</button>
+      <button class="btn btn-primary block" type="submit">${t('Continue')}</button>
     </form>`;
 }
 
 function amountStepMarkup(asset, draft) {
   return h`
-    <h2 class="title" data-role="step-title" tabindex="-1">How much ${asset.symbol}?</h2>
+    <h2 class="title" data-role="step-title" tabindex="-1">${t('How much {symbol}?', { symbol: asset.symbol })}</h2>
     <form class="stack loose" data-role="amount-form" novalidate>
       <div class="field amount-field">
         <div class="field-top">
-          <label class="label" for="withdraw-amount">Amount</label>
-          <button class="btn sm" type="button" data-role="max">Max</button>
+          <label class="label" for="withdraw-amount">${t('Amount')}</label>
+          <button class="btn sm" type="button" data-role="max">${t('Max')}</button>
         </div>
         <input id="withdraw-amount" name="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" value="${draft.amount}" aria-describedby="withdraw-amount-hint">
-        <span class="hint" id="withdraw-amount-hint">Available ${formatUnits(asset.balance ?? '0', 6, asset.decimals)} ${asset.symbol}</span>
+        <span class="hint" id="withdraw-amount-hint">${t('Available {amount} {symbol}', { amount: formatUnits(asset.balance ?? '0', 6, asset.decimals), symbol: asset.symbol })}</span>
         <span class="error" id="withdraw-amount-error"></span>
       </div>
       <div class="field">
-        <label class="label" for="withdraw-relayer">Relayer fee (optional)</label>
+        <label class="label" for="withdraw-relayer">${t('Relayer fee (optional)')}</label>
         <input id="withdraw-relayer" name="relayerFee" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value="${draft.relayerFee}" aria-describedby="withdraw-relayer-hint">
-        <span class="hint" id="withdraw-relayer-hint">Deducted on the destination chain, out of the amount above — it pays whoever delivers the release there. Leave it at zero to deliver it yourself.</span>
+        <span class="hint" id="withdraw-relayer-hint">${t('Deducted on the destination chain, out of the amount above — it pays whoever delivers the release there. Leave it at zero to deliver it yourself.')}</span>
         <span class="error" id="withdraw-relayer-error"></span>
       </div>
       <div data-role="form-banner"></div>
-      <button class="btn btn-primary block" type="submit">Review</button>
+      <button class="btn btn-primary block" type="submit">${t('Review')}</button>
     </form>`;
 }
 
@@ -372,41 +374,41 @@ function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [
   const amountOf = (u) => `${formatUnits(u, 9, asset.decimals)} ${asset.symbol}`;
   const relayer = BigInt(estimate.relayerFee || '0');
   const relayerRow = relayer > 0n
-    ? raw(h`<div class="kv"><span class="k">Relayer fee</span><span class="v amount">${amountOf(relayer)}</span></div>`)
+    ? raw(h`<div class="kv"><span class="k">${t('Relayer fee')}</span><span class="v amount">${amountOf(relayer)}</span></div>`)
     : '';
   // The burn's fee is RAND, read at the RAND row's own decimals — writing `9` here was the one
   // number about money this screen produced without the chain (task 4.5's M8).
   const feeLine = `${formatUnits(estimate.fee || '0', 9, feeDecimals(assets))} ${feeSymbol(assets)}`;
   return h`
-    <h2 class="title" data-role="step-title" tabindex="-1">Review</h2>
+    <h2 class="title" data-role="step-title" tabindex="-1">${t('Review')}</h2>
     <div class="banner warn">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">There is no way back</span>${LEAVES_POOL_WARNING}</span>
+      <span><span class="banner-title">${t('There is no way back')}</span>${leavesPoolWarning()}</span>
     </div>
     <div class="card">
-      <div class="kv"><span class="k">To</span><span class="v mono truncate">${display}</span></div>
-      <div class="kv"><span class="k">On</span><span class="v">${chainName(toChain)}</span></div>
-      <div class="kv"><span class="k">Burned</span><span class="v amount">${amountOf(units)}</span></div>
+      <div class="kv"><span class="k">${t('To')}</span><span class="v mono truncate">${display}</span></div>
+      <div class="kv"><span class="k">${t('On')}</span><span class="v">${chainName(toChain)}</span></div>
+      <div class="kv"><span class="k">${t('Burned')}</span><span class="v amount">${amountOf(units)}</span></div>
       ${relayerRow}
-      ${raw(BigInt(estimate.bridgeFee || '0') > 0n ? h`<div class="kv"><span class="k">Bridge fee</span><span class="v amount">${amountOf(BigInt(estimate.bridgeFee))}</span></div>` : '')}
-      <div class="kv"><span class="k">Arrives</span><span class="v amount">${amountOf(BigInt(estimate.receive || '0'))}</span></div>
-      <div class="kv"><span class="k">Network fee</span><span class="v amount">${feeLine}</span></div>
+      ${raw(BigInt(estimate.bridgeFee || '0') > 0n ? h`<div class="kv"><span class="k">${t('Bridge fee')}</span><span class="v amount">${amountOf(BigInt(estimate.bridgeFee))}</span></div>` : '')}
+      <div class="kv"><span class="k">${t('Arrives')}</span><span class="v amount">${amountOf(BigInt(estimate.receive || '0'))}</span></div>
+      <div class="kv"><span class="k">${t('Network fee')}</span><span class="v amount">${feeLine}</span></div>
     </div>
     <div class="address-box"><span class="mono">${display}</span></div>
     <form class="stack" data-role="confirm-form" novalidate>
       <div class="field">
-        <label class="label" for="withdraw-confirm">Type the last four characters of that address</label>
+        <label class="label" for="withdraw-confirm">${t('Type the last four characters of that address')}</label>
         <input id="withdraw-confirm" name="confirm" type="text" autocomplete="off" spellcheck="false" maxlength="4" aria-describedby="withdraw-confirm-hint">
-        <span class="hint" id="withdraw-confirm-hint">So the address above is one you have actually read.</span>
+        <span class="hint" id="withdraw-confirm-hint">${t('So the address above is one you have actually read.')}</span>
       </div>
     </form>
     ${raw(notice
     // The one-time notice before the first proof by the RandProtocol prover (the default where
     // this device cannot prove), in the Withdraw button's place until it is read.
     ? proverNoticeMarkup(provers)
-    : h`<button class="btn btn-primary block" type="button" data-action="prove" disabled>${raw(icons.bridge())}Withdraw</button>
+    : h`<button class="btn btn-primary block" type="button" data-action="prove" disabled>${raw(icons.bridge())}${t('Withdraw')}</button>
     <p class="caption">${proveCost(estimate.proofs)}</p>`)}
-    <button class="btn btn-ghost block" type="button" data-role="edit">Edit</button>`;
+    <button class="btn btn-ghost block" type="button" data-role="edit">${t('Edit')}</button>`;
 }
 
 /** One of the two proof rings. `state` is 'pending' | 'active' | 'done'. */
@@ -443,15 +445,15 @@ function estimateLine(store) {
 
 function provingStepMarkup(store) {
   const label = phaseLabel(store.phase, store.detail, PHASE_LABELS);
-  const banner = provingBanner(store, 'One proof runs on this device — about two minutes. You can look at other screens; closing the wallet stops it.');
+  const banner = provingBanner(store, t('One proof runs on this device — about two minutes. You can look at other screens; closing the wallet stops it.'));
   const cancel = store.controller && CANCELLABLE.includes(store.phase)
-    ? raw(h`<button class="btn block" type="button" data-role="cancel">Cancel</button>`)
+    ? raw(h`<button class="btn block" type="button" data-role="cancel">${t('Cancel')}</button>`)
     : '';
   return h`
-    <h2 class="title" data-role="step-title" tabindex="-1">Withdrawing</h2>
+    <h2 class="title" data-role="step-title" tabindex="-1">${t('Withdrawing')}</h2>
     <div class="stage">
       <div class="cluster rings">
-        ${raw(ringMarkup('ring-bundle', 'Bundle', ringState(store.phase)))}
+        ${raw(ringMarkup('ring-bundle', t('Bundle'), ringState(store.phase)))}
       </div>
       <span class="amount mono" data-role="elapsed">${elapsed(Date.now() - store.startedMs)}</span>
       <span class="caption" data-role="estimate">${estimateLine(store)}</span>
@@ -467,29 +469,29 @@ function provingStepMarkup(store) {
 /** As the send screen's: `resumable` offers Resume/Cancel for a prover job still pending. */
 function failedStepMarkup(message, { resumable = false } = {}) {
   const actions = resumable
-    ? raw(h`<button class="btn btn-primary block" type="button" data-role="resume-proof">Resume</button>
-    <button class="btn block" type="button" data-role="cancel-proof">Cancel the proof</button>`)
-    : raw(h`<button class="btn btn-primary block" type="button" data-role="retry">Back to review</button>`);
+    ? raw(h`<button class="btn btn-primary block" type="button" data-role="resume-proof">${t('Resume')}</button>
+    <button class="btn block" type="button" data-role="cancel-proof">${t('Cancel the proof')}</button>`)
+    : raw(h`<button class="btn btn-primary block" type="button" data-role="retry">${t('Back to review')}</button>`);
   return h`
-    <h2 class="title" data-role="step-title" tabindex="-1">Not withdrawn</h2>
+    <h2 class="title" data-role="step-title" tabindex="-1">${t('Not withdrawn')}</h2>
     <div class="banner negative">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">Nothing left the pool</span>${message}</span>
+      <span><span class="banner-title">${t('Nothing left the pool')}</span>${message}</span>
     </div>
     ${actions}
-    <button class="btn btn-ghost block" type="button" data-go="home">Back to home</button>`;
+    <button class="btn btn-ghost block" type="button" data-go="home">${t('Back to home')}</button>`;
 }
 
 function unknownStepMarkup(message) {
   return h`
-    <h2 class="title" data-role="step-title" tabindex="-1">We couldn’t confirm this withdrawal</h2>
+    <h2 class="title" data-role="step-title" tabindex="-1">${t('We couldn’t confirm this withdrawal')}</h2>
     <div class="banner warn">
       <span class="ic">${raw(icons.warning())}</span>
-      <span><span class="banner-title">Outcome unknown</span>The transaction may already be on chain. Check Activity before withdrawing again — withdrawing twice would burn twice.</span>
+      <span><span class="banner-title">${t('Outcome unknown')}</span>${t('The transaction may already be on chain. Check Activity before withdrawing again — withdrawing twice would burn twice.')}</span>
     </div>
-    ${raw(message ? h`<p class="caption">The wallet was told: ${message}</p>` : '')}
-    <button class="btn btn-primary block" type="button" data-go="activity">Check Activity</button>
-    <button class="btn btn-ghost block" type="button" data-go="home">Back to home</button>`;
+    ${raw(message ? h`<p class="caption">${t('The wallet was told: {message}', { message })}</p>` : '')}
+    <button class="btn btn-primary block" type="button" data-go="activity">${t('Check Activity')}</button>
+    <button class="btn btn-ghost block" type="button" data-go="home">${t('Back to home')}</button>`;
 }
 
 // ==================================================================================== the screen =
@@ -510,13 +512,13 @@ registerScreen('withdraw', {
     // asked nothing at all.
     const bridge = ctx.backend.bridge;
     if (!bridge || typeof bridge.canWithdraw !== 'function') {
-      endOfTheRoad(cannotMarkup('Withdrawals are not available', 'This version of the wallet cannot withdraw to another chain.'));
+      endOfTheRoad(cannotMarkup(t('Withdrawals are not available'), t('This version of the wallet cannot withdraw to another chain.')));
       return;
     }
 
     const index = Number(arg);
     let assets = [];
-    let can = { ok: false, reason: 'Withdrawals are not available here.' };
+    let can = { ok: false, reason: t('Withdrawals are not available here.') };
     let state = { enabled: false, chains: [] };
     let pendingJob = null;
     try {
@@ -532,7 +534,7 @@ registerScreen('withdraw', {
       pendingJob = pending && typeof pending === 'object' ? pending : null;
     } catch (err) {
       if (!live()) return;
-      endOfTheRoad(cannotMarkup('Could not start a withdrawal', (err && err.message) || 'Something went wrong.'));
+      endOfTheRoad(cannotMarkup(t('Could not start a withdrawal'), (err && err.message) || t('Something went wrong.')));
       return;
     }
     if (!live()) return;
@@ -540,7 +542,7 @@ registerScreen('withdraw', {
     if (!can.ok) {
       endOfTheRoad(can.unreachable
         ? proverUnreachableMarkup(can.reason)
-        : cannotMarkup('This device cannot withdraw', can.reason || 'Withdrawals are not available here.'));
+        : cannotMarkup(t('This device cannot withdraw'), can.reason || t('Withdrawals are not available here.')));
       return;
     }
 
@@ -548,8 +550,8 @@ registerScreen('withdraw', {
     const asset = assets.find((a) => a.index === index) || null;
     if (!asset || index < 1) {
       endOfTheRoad(cannotMarkup(
-        'That asset cannot be withdrawn',
-        asset ? 'RAND is this chain’s own token, not a bridged asset, so there is nothing to withdraw it to.' : 'This wallet holds no such asset.',
+        t('That asset cannot be withdrawn'),
+        asset ? t('RAND is this chain’s own token, not a bridged asset, so there is nothing to withdraw it to.') : t('This wallet holds no such asset.'),
       ));
       return;
     }
@@ -558,7 +560,7 @@ registerScreen('withdraw', {
     // whole address/amount/review walk: its decimals are this wallet's guess, so nothing the user
     // could type about it means what they meant (task 4.5's M6).
     if (isUnlisted(asset)) {
-      endOfTheRoad(cannotMarkup(`${asset.symbol} cannot be withdrawn`, UNLISTED_TEXT));
+      endOfTheRoad(cannotMarkup(t('{symbol} cannot be withdrawn', { symbol: asset.symbol }), UNLISTED_TEXT));
       return;
     }
 
@@ -568,7 +570,7 @@ registerScreen('withdraw', {
       state = (await bridge.state()) || state;
     } catch (err) {
       if (!live()) return;
-      endOfTheRoad(cannotMarkup('Could not start a withdrawal', (err && err.message) || 'Something went wrong.'));
+      endOfTheRoad(cannotMarkup(t('Could not start a withdrawal'), (err && err.message) || t('Something went wrong.')));
       return;
     }
     if (!live()) return;
@@ -604,7 +606,7 @@ registerScreen('withdraw', {
 
     function paintIndicator() {
       const i = STEPS.indexOf(step);
-      indicatorEl.textContent = i === -1 ? '' : `Step ${i + 1} of ${STEPS.length}`;
+      indicatorEl.textContent = i === -1 ? '' : t('Step {step} of {total}', { step: i + 1, total: STEPS.length });
     }
 
     function stopScreenTicker() {
@@ -652,7 +654,7 @@ registerScreen('withdraw', {
       } else if (next === 'proving') paintProving();
       else if (next === 'failed') {
         const err = attached && attached.error;
-        stepEl.innerHTML = failedStepMarkup((err && err.message) || 'The withdrawal could not be proved.', { resumable: !!err && err.proverSilent === true });
+        stepEl.innerHTML = failedStepMarkup((err && err.message) || t('The withdrawal could not be proved.'), { resumable: !!err && err.proverSilent === true });
       }
       else if (next === 'unknown') stepEl.innerHTML = unknownStepMarkup((attached && attached.error && attached.error.message) || '');
       paintIndicator();
@@ -698,7 +700,7 @@ registerScreen('withdraw', {
       if (!store.hash) {
         ctx.state.withdrawal = null;
         ctx.state.withdrawDraft = null;
-        ctx.toast('The withdrawal was submitted, but the node did not return a usable hash.', { kind: 'negative' });
+        ctx.toast(t('The withdrawal was submitted, but the node did not return a usable hash.'), { kind: 'negative' });
         ctx.go('#activity');
         return;
       }
@@ -726,7 +728,7 @@ registerScreen('withdraw', {
       stepEl.insertAdjacentHTML('beforebegin', h`
         <div class="banner warn" data-role="pending-elsewhere">
           <span class="ic">${raw(icons.warning())}</span>
-          <span><span class="banner-title">A transfer is still being proved</span>Its proof is pending on ${String(pendingJob.name || 'your prover')}. Open Send to let it finish or cancel it; a new withdrawal waits until then.</span>
+          <span><span class="banner-title">${t('A transfer is still being proved')}</span>${t('Its proof is pending on {prover}. Open Send to let it finish or cancel it; a new withdrawal waits until then.', { prover: String(pendingJob.name || t('your prover')) })}</span>
         </div>`);
     }
     if (running) attach(running);
@@ -765,7 +767,7 @@ registerScreen('withdraw', {
       // A burn's fee is RAND out of slots 2–3 of the same bundle, so the whole asset balance is
       // withdrawable — it is never the fee's source, whatever is being burned.
       const balance = BigInt(asset.balance || '0');
-      if (balance <= 0n) { setFieldError(amountInput, `You hold no ${asset.symbol}.`); return; }
+      if (balance <= 0n) { setFieldError(amountInput, t('You hold no {symbol}.', { symbol: asset.symbol })); return; }
       amountInput.value = plainUnits(balance, asset.decimals);
       draft.amount = amountInput.value;
       setFieldError(amountInput, null);
@@ -779,8 +781,12 @@ registerScreen('withdraw', {
       if (!raw0) return { units: 0n };
       try { return { units: parseUnits(raw0, asset.decimals) }; } catch (err) {
         const message = (err && err.message) || '';
-        if (/decimal places/.test(message)) return { error: `${asset.symbol} has ${asset.decimals} decimal places — that is more.` };
-        return { error: `Enter the ${what} as a number, for example 1.25.` };
+        if (/decimal places/.test(message)) return { error: t('{symbol} has {decimals} decimal places — that is more.', { symbol: asset.symbol, decimals: asset.decimals }) };
+        return {
+          error: what === 'relayer fee'
+            ? t('Enter the relayer fee as a number, for example 1.25.')
+            : t('Enter the amount as a number, for example 1.25.'),
+        };
       }
     }
 
@@ -794,10 +800,10 @@ registerScreen('withdraw', {
       // costs an RPC round trip on the way to costing a proof.
       const amount = readUnits(amountInput.value, 'amount');
       if (amount.error) { setFieldError(amountInput, amount.error); return; }
-      if (amount.units <= 0n) { setFieldError(amountInput, 'Enter an amount greater than zero.'); return; }
+      if (amount.units <= 0n) { setFieldError(amountInput, t('Enter an amount greater than zero.')); return; }
       const balance = BigInt(asset.balance || '0');
       if (amount.units > balance) {
-        setFieldError(amountInput, `That is more than your balance of ${formatUnits(balance, 6, asset.decimals)} ${asset.symbol}.`);
+        setFieldError(amountInput, t('That is more than your balance of {balance} {symbol}.', { balance: formatUnits(balance, 6, asset.decimals), symbol: asset.symbol }));
         return;
       }
       setFieldError(amountInput, null);
@@ -806,7 +812,7 @@ registerScreen('withdraw', {
       if (relayer.error) { setFieldError(relayerInput, relayer.error); return; }
       if (relayer.units > amount.units) {
         // The chain's own rule (`relayer_fee <= amount`), refused before the backend is asked.
-        setFieldError(relayerInput, 'The relayer fee cannot be more than the amount being withdrawn.');
+        setFieldError(relayerInput, t('The relayer fee cannot be more than the amount being withdrawn.'));
         return;
       }
       setFieldError(relayerInput, null);
@@ -826,7 +832,7 @@ registerScreen('withdraw', {
         });
       } catch (err) {
         if (!live()) return;
-        showFormBanner((err && err.message) || 'This withdrawal could not be prepared.');
+        showFormBanner((err && err.message) || t('This withdrawal could not be prepared.'));
         return;
       }
       if (!live()) return;
@@ -992,31 +998,31 @@ registerScreen('withdrawn', {
     // A resumed proof's receipt knows only its hash (see `resumeWithdrawal`).
     const toRow = receipt && receipt.display
       ? raw(h`
-        <div class="kv"><span class="k">To</span><span class="v mono truncate">${receipt.display}</span></div>
-        <div class="kv"><span class="k">On</span><span class="v">${chainName(receipt.toChain)}</span></div>`)
+        <div class="kv"><span class="k">${t('To')}</span><span class="v mono truncate">${receipt.display}</span></div>
+        <div class="kv"><span class="k">${t('On')}</span><span class="v">${chainName(receipt.toChain)}</span></div>`)
       : '';
     const explorerBtn = explorer
       ? raw(h`<button class="btn block" type="button" data-role="explorer">${explorer.label}</button>`)
       : '';
 
     root.innerHTML = h`
-      <h1 class="sr-only">Withdrawn</h1>
+      <h1 class="sr-only">${t('Withdrawn')}</h1>
       <div class="narrow">
         <div class="stage">
           <span class="avatar lg out">${raw(icons.bridge())}</span>
-          <h2 class="title" data-role="step-title" tabindex="-1">Withdrawal submitted</h2>
+          <h2 class="title" data-role="step-title" tabindex="-1">${t('Withdrawal submitted')}</h2>
           ${amountLine}
         </div>
         <div class="banner">
           <span class="ic">${raw(icons.info())}</span>
-          <span><span class="banner-title">The bridge takes it from here</span>The burn is on this chain now. Guardians sign it and a relayer releases it on the destination chain, which is not something this wallet can watch.</span>
+          <span><span class="banner-title">${t('The bridge takes it from here')}</span>${t('The burn is on this chain now. Guardians sign it and a relayer releases it on the destination chain, which is not something this wallet can watch.')}</span>
         </div>
         <div class="card">
           ${toRow}
-          <div class="kv"><span class="k">Transaction</span><span class="v mono truncate">${shortHex(hash, 10)}</span></div>
+          <div class="kv"><span class="k">${t('Transaction')}</span><span class="v mono truncate">${shortHex(hash, 10)}</span></div>
         </div>
         ${explorerBtn}
-        <button class="btn btn-primary block" type="button" data-go="home">Done</button>
+        <button class="btn btn-primary block" type="button" data-go="home">${t('Done')}</button>
       </div>`;
 
     const title = root.querySelector('[data-role="step-title"]');

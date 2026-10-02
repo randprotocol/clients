@@ -33,6 +33,8 @@ import {
 } from './validate.js';
 import { isTransportFailure } from './rpc.js';
 import { invokeError, createdCells, vaultShortfall, isStaleRead } from './invoke.js';
+import { translatedCoreError } from './core-errors.js';
+import { t } from '../i18n.js';
 
 const PAGE = 500;
 export const COMMIT_TIMEOUT_MS = 180_000;
@@ -305,7 +307,7 @@ function mergeSent(store, sent) {
 
 /** The shape ui/ recognises as "this was cancelled", not "the node failed" (ui/backend.js). */
 export function abortError() {
-  const err = new Error('The operation was aborted.');
+  const err = new Error(t('The operation was aborted.'));
   err.name = 'AbortError';
   return err;
 }
@@ -324,7 +326,7 @@ export function isStaleStoreError(err) {
 }
 
 function staleAfterRetry() {
-  const err = new Error('another tab changed this wallet while it was syncing; try again');
+  const err = new Error(t('another tab changed this wallet while it was syncing; try again'));
   err.retryable = true;
   return err;
 }
@@ -334,9 +336,20 @@ function isCursor(value) {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
-/** The core's methods by name, over the one `call(method, params)` entry point every binding has. */
+/**
+ * The core's methods by name, over the one `call(method, params)` entry point every binding has.
+ * A rejection comes back with the core's English sentence put into the user's language
+ * (./core-errors.js) — here, once, so no caller and no screen has to know which of its errors
+ * came from Rust.
+ */
 export function coreApi(core) {
-  const call = (method, params) => core.call(method, params || {});
+  const call = async (method, params) => {
+    try {
+      return await core.call(method, params || {});
+    } catch (err) {
+      throw translatedCoreError(err);
+    }
+  };
   return {
     call,
     version: () => call('version'),
@@ -423,10 +436,10 @@ function provenChainIdOf(st, identity) {
     ? identity.chainId
     : st.chain_id;
   if (proven === null || proven === undefined) {
-    throw new Error('this wallet has no verified chain to prove against');
+    throw new Error(t('this wallet has no verified chain to prove against'));
   }
   if (st.chain_id !== null && String(st.chain_id) !== String(proven)) {
-    const err = new Error('This node is on a different chain — switch node or rescan.');
+    const err = new Error(t('This node is on a different chain — switch node or rescan.'));
     err.definite = true;
     throw err;
   }
@@ -488,7 +501,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       const current = (await store.getNoteStore()) || {};
       const epoch = isCursor(current.reset_epoch) ? current.reset_epoch : 0;
       if (epoch > (isCursor(st.reset_epoch) ? st.reset_epoch : 0)) {
-        const err = new Error('this wallet was rescanned while the scan was running; the scan was discarded');
+        const err = new Error(t('this wallet was rescanned while the scan was running; the scan was discarded'));
         err.name = 'StoreResetError';
         err.retryable = true;
         throw err;
@@ -526,7 +539,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       // once more. A second loss means the tabs are fighting; that is the user's to retry.
       const fresh = await loadStore();
       if (!reset && (fresh.reset_epoch || 0) > (st.reset_epoch || 0)) {
-        const stop = new Error('this wallet was rescanned while the scan was running; the scan was discarded');
+        const stop = new Error(t('this wallet was rescanned while the scan was running; the scan was discarded'));
         stop.name = 'StoreResetError';
         stop.retryable = true;
         throw stop;
@@ -876,7 +889,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       }
     }
     if (!written) {
-      const err = new Error('another tab kept changing this wallet; try the rescan again');
+      const err = new Error(t('another tab kept changing this wallet; try the rescan again'));
       err.retryable = true;
       throw err;
     }
@@ -1044,7 +1057,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       if (last === from) {
         // The condition fires at exactly PAGE too: a full page that never left `from` means the
         // block holds at least that many, and this wallet cannot page inside one height.
-        const err = new Error(`block ${from} has ${PAGE} or more nullifiers; this wallet cannot page inside one block`);
+        const err = new Error(t('block {height} has {n} or more nullifiers; this wallet cannot page inside one block', { height: from, n: PAGE }));
         err.name = 'NodeLimitError';
         err.code = 'too_many_nullifiers_in_block';
         throw err;
@@ -1104,7 +1117,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
         paths.push(w.path);
       }
       if (!moved) return { anchor, paths };
-      if (attempt >= 3) throw new Error('the tree moved while fetching witnesses; retry');
+      if (attempt >= 3) throw new Error(t('the tree moved while fetching witnesses; retry'));
     }
   }
 
@@ -1385,21 +1398,21 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     const client = given || (await rpcFor(s));
     const limits = await chainLimitsOf(client, signal);
     if (!limits.programState) {
-      throw invokeError('PROGRAMS_UNSUPPORTED', 'This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent.');
+      throw invokeError('PROGRAMS_UNSUPPORTED', t('This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent.'));
     }
     const program = request.program;
     const code = checkProgramCode(await client.getProgramCode(program, { signal }));
-    if (!code) throw invokeError('NO_PROGRAM', `There is no program ${program.slice(0, 12)}… on this chain. Nothing was sent.`);
+    if (!code) throw invokeError('NO_PROGRAM', t('There is no program {program}… on this chain. Nothing was sent.', { program: program.slice(0, 12) }));
     const publicHex = checkProgramPublic(await client.getProgramPublic(program, { signal })) ?? '';
     const live = async (key) => {
       const v = checkProgramCell(await client.getProgramCell(program, key, { signal }), key);
-      if (v === null) throw invokeError('PROGRAMS_UNSUPPORTED', 'This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent.');
+      if (v === null) throw invokeError('PROGRAMS_UNSUPPORTED', t('This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent.'));
       return v;
     };
     for (const r of request.reads) {
       // eslint-disable-next-line no-await-in-loop -- a handful of cells, one node, in order
       if ((await live(r.key)) !== r.value) {
-        throw invokeError('STALE_READ', 'The pool changed since this page read it. Nothing was sent; the site can quote again.');
+        throw invokeError('STALE_READ', t('The pool changed since this page read it. Nothing was sent; the site can quote again.'));
       }
     }
     const cells = await createdCells(request, live);
@@ -1418,7 +1431,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     try {
       dry = await c.dryRunInvoke(transition);
     } catch (err) {
-      throw invokeError('PROGRAM_REFUSED', `The program would not accept this request, so nothing was sent: ${(err && err.message) || err}`);
+      throw invokeError('PROGRAM_REFUSED', t('The program would not accept this request, so nothing was sent: {reason}', { reason: (err && err.message) || err }));
     }
     // Under a `gas` section (`bundle_gas_limit` set: chain 18 and later) the call is priced by the
     // gas it declares and every byte of its proof; without one, by tier alone.
@@ -1436,7 +1449,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       const vault = checkProgramVault(await client.getProgramVault(program, { signal }));
       const short = vaultShortfall(request, vault || []);
       if (short) {
-        throw invokeError('VAULT_SHORT', 'The pool does not hold enough to pay this out. Nothing was sent; the site can quote again.');
+        throw invokeError('VAULT_SHORT', t('The pool does not hold enough to pay this out. Nothing was sent; the site can quote again.'));
       }
     }
     const st = scanFirst ? await scan(spendKey, { signal, client }, s) : await loadStore();
@@ -1450,7 +1463,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
         fee,
       });
     } catch (err) {
-      throw invokeError('INSUFFICIENT_FUNDS', `Rand Wallet does not hold enough to cover this and its network fee: ${(err && err.message) || err}`);
+      throw invokeError('INSUFFICIENT_FUNDS', t('Rand Wallet does not hold enough to cover this and its network fee: {reason}', { reason: (err && err.message) || err }));
     }
     return { transition, dry, fee: String(plan.fee ?? fee), cells, limits, plan, notes: st.notes || [], st };
   }
@@ -1514,7 +1527,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       hash = checkSubmitted('rand_sendTransaction', await client.sendTransaction(res.tx_hex));
     } catch (err) {
       if (isStaleRead(err)) {
-        throw invokeError('STALE_READ', 'The pool changed while this was being proved. Nothing was sent; the site can quote again.');
+        throw invokeError('STALE_READ', t('The pool changed while this was being proved. Nothing was sent; the site can quote again.'));
       }
       throw err;
     }

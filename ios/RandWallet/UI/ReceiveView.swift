@@ -88,10 +88,7 @@ struct ReceiveView: View {
     private var linkForm: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: "Payment link")
-            Text(ReceiveLinkRules.showsMemo(envelopeBytes: envelopeBytes)
-                 ? "Optional: ask for an amount, and add a note the payer’s wallet fills in for them."
-                 : "Optional: ask for an amount the payer’s wallet fills in for them.")
-                .font(.ui(13)).foregroundColor(Theme.textMute)
+            Text(linkHint).font(.ui(13)).foregroundColor(Theme.textMute)
             HStack {
                 Field(placeholder: "Amount — the payer decides", text: $amountText, keyboard: .decimalPad)
                 Text("RAND").font(.ui(14, .semibold)).foregroundColor(Theme.textSoft)
@@ -106,6 +103,12 @@ struct ReceiveView: View {
         }
     }
 
+    private var linkHint: LocalizedStringKey {
+        ReceiveLinkRules.showsMemo(envelopeBytes: envelopeBytes)
+            ? "Optional: ask for an amount, and add a note the payer’s wallet fills in for them."
+            : "Optional: ask for an amount the payer’s wallet fills in for them."
+    }
+
     /// A field the user is still getting wrong leaves the link — and the QR — at the last good form.
     private func rebuild() {
         guard !wallet.address.isEmpty else { return }
@@ -113,7 +116,7 @@ struct ReceiveView: View {
         if let m = linkMemo, let tooLong = Memo.tooLong(m) { linkError = tooLong; return }
         let amount = amountText.trimmingCharacters(in: .whitespaces)
         if !amount.isEmpty, Amount.parse(amount) == nil {
-            linkError = "Enter the amount as a number, for example 1.25."
+            linkError = String(localized: "Enter the amount as a number, for example 1.25.")
             return
         }
         do {

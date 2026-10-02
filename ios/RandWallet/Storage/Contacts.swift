@@ -25,7 +25,7 @@ struct ContactBook: Equatable {
         var errorDescription: String? { message }
     }
 
-    static let nameRule = "a contact name is 1-64 characters and cannot start with rand1 or randpay:"
+    static var nameRule: String { String(localized: "a contact name is 1-64 characters and cannot start with rand1 or randpay:") }
 
     private(set) var entries: [String: String] = [:]
 
@@ -44,14 +44,14 @@ struct ContactBook: Equatable {
     mutating func add(name: String, address: String) throws {
         if let bad = Self.checkName(name) { throw ContactError(message: bad) }
         let addr = address.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !addr.isEmpty else { throw ContactError(message: "a contact needs an address") }
-        if entries[name] != nil { throw ContactError(message: "a contact named \(name) exists") }
-        if let other = self.name(of: addr) { throw ContactError(message: "this address is already saved as \(other)") }
+        guard !addr.isEmpty else { throw ContactError(message: String(localized: "a contact needs an address")) }
+        if entries[name] != nil { throw ContactError(message: String(localized: "a contact named \(name) exists")) }
+        if let other = self.name(of: addr) { throw ContactError(message: String(localized: "this address is already saved as \(other)")) }
         entries[name] = addr
     }
 
     mutating func remove(name: String) throws {
-        guard entries.removeValue(forKey: name) != nil else { throw ContactError(message: "no contact named \(name)") }
+        guard entries.removeValue(forKey: name) != nil else { throw ContactError(message: String(localized: "no contact named \(name)")) }
     }
 
     func address(of name: String) -> String? { entries[name] }

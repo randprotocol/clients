@@ -676,7 +676,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
         <div class="sidebar-foot stack tight">
           <span data-role="pinned"></span>
           <span class="chip"><span class="dot"></span>${networkLabel(settings.chainId)}</span>
-          <button class="btn sm block" type="button" data-action="lock">${raw(icons.lock())}Lock</button>
+          <button class="btn sm block" type="button" data-action="lock">${raw(icons.lock())}${t('Lock')}</button>
         </div>
       </div>`;
   }
@@ -715,9 +715,9 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       return h`
         <div class="topbar">${raw(brandMarkup())}</div>
         <div class="card stack">
-          <span class="title">More is on the way</span>
-          <span class="subtitle">This screen ships in a later task. Your wallet is unlocked and ready.</span>
-          ${info ? raw(h`<div class="kv"><span class="k">Address</span><span class="v mono">${shortAddress(info.address)}</span></div>`) : ''}
+          <span class="title">${t('More is on the way')}</span>
+          <span class="subtitle">${t('This screen ships in a later task. Your wallet is unlocked and ready.')}</span>
+          ${info ? raw(h`<div class="kv"><span class="k">${t('Address')}</span><span class="v mono">${shortAddress(info.address)}</span></div>`) : ''}
         </div>`;
     },
   };
@@ -758,7 +758,7 @@ export async function mount(container, backend, { mode = 'app' } = {}) {
       markup = (await screen.render(screenCtx, r.arg)) || '';
     } catch (err) {
       console.error('rand-wallet: screen render failed', err);
-      markup = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Something went wrong</span>This screen could not be shown.</span></div>`;
+      markup = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">${t('Something went wrong')}</span>${t('This screen could not be shown.')}</span></div>`;
     }
     // Past the commit point the epoch, not the sequence number, is the authority: a newer render
     // that resolved to the destination already on screen returns without committing, and must not

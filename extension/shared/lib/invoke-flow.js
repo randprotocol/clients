@@ -12,44 +12,63 @@
 //      (`rand:invokeProgress`), so a window closed mid-way is answered for correctly: refused before
 //      anything left the device, unknown once it may have reached the node.
 //   4. `rand:invokeResult` — `{tx}` or `{code, message}` — exactly once.
+//
+// The text here is the user's: what the window shows under "Not sent", and the `message` beside
+// the error code the site is answered with (the code is the contract; the message is for the same
+// person, in the wallet's language). It is written in English and translated through `t`, which
+// the window passes in from ui/i18n.js — this file imports nothing, so it stays loadable under
+// plain Node for its test, where `t` defaults to English with its `{holes}` filled.
+
+/** `t` when none is given: English, holes filled (ui/i18n.js's `fill`). */
+const plain = (s, vars) => (vars ? String(s).replace(/\{(\w+)\}/g, (hole, name) => (name in vars ? String(vars[name]) : hole)) : String(s));
 
 /** Firefox did not let the wallet send its viewing key to the RandProtocol provers. */
-export const CONSENT_DECLINED = 'Firefox did not allow this wallet to send your viewing key to the RandProtocol provers, so this browser has no prover to make the proof. Nothing was sent. Pair your own prover in the wallet\'s Settings.';
+export function consentDeclined(t = plain) {
+  return [
+    t('Firefox did not allow this wallet to send your viewing key to the RandProtocol provers, so this browser has no prover to make the proof.'),
+    t('Nothing was sent.'),
+    t('Pair your own prover in the wallet\'s Settings.'),
+  ].join(' ');
+}
 
 /**
  * The RandProtocol provers' one-time notice, as the approval window shows it — named as every
  * surface names them (ui/screens/send/markup.js `poolPhrase`): `n` machines, each with its own key.
  */
-export function proverNotice(n) {
-  const count = Number.isSafeInteger(n) && n > 0 ? `${n} machines` : 'machines';
-  return `This device cannot make the proof, so one of the RandProtocol provers (${count} run by the validators; each one that proves a send sees that wallet's viewing key) makes it. `
-    + 'The one that does receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. '
-    + 'It cannot spend. You are asked once; to keep your history to yourself, pair your own prover in the wallet\'s Settings.';
+export function proverNotice(n, t = plain) {
+  const known = Number.isSafeInteger(n) && n > 0;
+  const count = !known ? t('machines') : n === 1 ? t('{n} machine', { n }) : t('{n} machines', { n });
+  return [
+    t('This device cannot make the proof, so one of the RandProtocol provers ({count} run by the validators; each one that proves a send sees that wallet\'s viewing key) makes it.', { count }),
+    t('The one that does receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future.'),
+    t('It cannot spend.'),
+    t('You are asked once; to keep your history to yourself, pair your own prover in the wallet\'s Settings.'),
+  ].join(' ');
 }
 
 /** What the site sees for an error with no code of its own. */
 const FALLBACK_CODE = 'UNKNOWN';
 
-function errorOf(err) {
-  const code = err && typeof err.code === 'string' && /^[A-Z_]{2,32}$/.test(err.code) ? err.code : FALLBACK_CODE;
-  const message = (err && err.message) || 'Rand Wallet could not complete the request.';
-  return { code, message: String(message).slice(0, 300) };
-}
-
 /**
- * `makeInvokeFlow({id, send, backend, onChange})` → `{state, start, approve, reject}`.
+ * `makeInvokeFlow({id, send, backend, onChange, t})` → `{state, start, acknowledge, approve, reject}`.
  *
  *   send(msg)  → the background's answer (`ext.runtime.sendMessage`).
  *   backend    a Backend with the optional `program` group (ui/engine/backend-shared.js).
  *   onChange(state) after every change.
+ *   t          ui/i18n.js's `t`, from the window; English when absent.
  *
  * `state.step` is one of 'loading' | 'review' | 'running' | 'done' | 'failed'. In 'review' it
  * carries `origin` and `quote` (`{title, spend, receive, fee, cells, tier}`); in 'running',
  * `phase` and `detail`; in 'done', `tx`; in 'failed', `error` and `sent` (whether the site has been
  * told).
  */
-export function makeInvokeFlow({ id, send, backend, onChange = () => {} }) {
+export function makeInvokeFlow({ id, send, backend, onChange = () => {}, t = plain }) {
   const state = { step: 'loading', origin: '', quote: null, phase: null, detail: null, tx: null, error: null };
+  const errorOf = (err) => {
+    const code = err && typeof err.code === 'string' && /^[A-Z_]{2,32}$/.test(err.code) ? err.code : FALLBACK_CODE;
+    const message = (err && err.message) || t('Rand Wallet could not complete the request.');
+    return { code, message: String(message).slice(0, 300) };
+  };
   let request = null;
   let answered = false;
   const set = (patch) => { Object.assign(state, patch); onChange(state); };
@@ -66,7 +85,7 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {} }) {
   }
 
   async function start() {
-    if (!id) { await refuse(Object.assign(new Error('This window was not opened by a site.'), { code: 'GONE' })); return; }
+    if (!id) { await refuse(Object.assign(new Error(t('This window was not opened by a site.')), { code: 'GONE' })); return; }
     let parked;
     try {
       parked = await send({ type: 'rand:invokeRequest', id });
@@ -77,16 +96,16 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {} }) {
     if (!parked || !parked.ok) {
       // The request is gone (answered, or the background restarted): there is nobody to tell.
       answered = true;
-      set({ step: 'failed', error: (parked && parked.error) || { code: 'GONE', message: 'That request is no longer waiting.' } });
+      set({ step: 'failed', error: (parked && parked.error) || { code: 'GONE', message: t('That request is no longer waiting.') } });
       return;
     }
     request = parked.result.request;
     set({ origin: String(parked.result.origin || '') });
     const program = backend && backend.program;
-    if (!program) { await refuse(Object.assign(new Error('This Rand Wallet cannot run programs.'), { code: 'UNSUPPORTED' })); return; }
+    if (!program) { await refuse(Object.assign(new Error(t('This Rand Wallet cannot run programs.')), { code: 'UNSUPPORTED' })); return; }
     try {
       const can = await program.canInvoke();
-      if (!can || !can.ok) throw Object.assign(new Error((can && can.reason) || 'Rand Wallet cannot send this here.'), { code: (can && can.code) || 'PROVER_UNAVAILABLE' });
+      if (!can || !can.ok) throw Object.assign(new Error((can && can.reason) || t('Rand Wallet cannot send this here.')), { code: (can && can.code) || 'PROVER_UNAVAILABLE' });
       const quote = await program.quote(request);
       // The RandProtocol prover's one-time notice, when it is still to be read: the window shows it
       // in Approve's place, and `acknowledge` (from its own click) reads it.
@@ -111,7 +130,7 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {} }) {
         let granted = false;
         try { granted = (await consent) === true; } catch { granted = false; }
         if (!granted) {
-          await refuse(Object.assign(new Error(CONSENT_DECLINED), { code: 'PROVER_UNAVAILABLE' }));
+          await refuse(Object.assign(new Error(consentDeclined(t)), { code: 'PROVER_UNAVAILABLE' }));
           return;
         }
       }
@@ -147,7 +166,7 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {} }) {
 
   async function reject() {
     if (state.step !== 'review' && state.step !== 'loading') return;
-    await refuse(Object.assign(new Error('The request was not approved in Rand Wallet.'), { code: 'USER_REJECTED' }));
+    await refuse(Object.assign(new Error(t('The request was not approved in Rand Wallet.')), { code: 'USER_REJECTED' }));
   }
 
   return { state, start, acknowledge, approve, reject };

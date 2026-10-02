@@ -8,6 +8,9 @@
      * transitions are 150–250 ms ease-out, presses scale to .98, and all of it is switched off
        under prefers-reduced-motion (see base.css);
      * anything you can tap is at least 44 px high, on its own or via an expanded hit area. */
+/* Direction: margins, paddings, borders and text alignment use the logical (inline-start/end)
+   properties, so the layout mirrors for Arabic and Farsi when app.js sets <html dir="rtl">.
+   `left: 0; right: 0` pairs and centring transforms are symmetric and stay as they are. */
 
 /* ========================================================================== buttons ========= */
 .btn {
@@ -351,7 +354,7 @@ html.veiled [data-role="assets"] .row-end .amount {
 .kv:last-child { border-bottom: 0; padding-bottom: 0; }
 .kv:first-child { padding-top: 0; }
 .kv .k { color: var(--text-soft); }
-.kv .v { color: var(--text-strong); font-weight: 600; text-align: right; min-width: 0; }
+.kv .v { color: var(--text-strong); font-weight: 600; text-align: end; min-width: 0; }
 /* A value that is a cluster (a truncated mono value plus an icon button) still belongs on the
    right-hand side of its row — `text-align` does nothing to a flex container, so say it. */
 .kv .v.cluster { justify-content: flex-end; flex-wrap: nowrap; }
@@ -373,7 +376,7 @@ html.veiled [data-role="assets"] .row-end .amount {
    left-aligned across the full row. Still used where the value is the whole point of the row and
    there is nothing to gain from keeping it beside a label. */
 .kv.wrap { flex-wrap: wrap; }
-.kv.wrap .v { flex-basis: 100%; text-align: left; }
+.kv.wrap .v { flex-basis: 100%; text-align: start; }
 .kv.wrap .v.cluster { justify-content: flex-start; }
 
 /* ============================================================================== row ========= */
@@ -389,7 +392,7 @@ html.veiled [data-role="assets"] .row-end .amount {
   border-radius: var(--r-md);
   background: transparent;
   color: var(--text);
-  text-align: left;
+  text-align: start;
   transition: background var(--mid) var(--ease), transform var(--fast) var(--ease);
 }
 .row:hover { background: var(--press); }
@@ -421,7 +424,7 @@ html.veiled [data-role="assets"] .row-end .amount {
   align-items: flex-end;
   gap: 2px;
   flex: none;
-  text-align: right;
+  text-align: end;
 }
 .row .row-end .amount { font-size: var(--fs-body); color: var(--text-strong); }
 .row .row-meta { font-size: var(--fs-caption); color: var(--text-soft); }
@@ -597,7 +600,7 @@ body.wide .tabbar { display: none; }
   display: flex;
   flex-direction: column;
   background: var(--bg-soft);
-  border-right: 1px solid var(--border-soft);
+  border-inline-end: 1px solid var(--border-soft);
 }
 .sidebar > .sidebar-inner {
   position: sticky;
@@ -1216,7 +1219,7 @@ body.wide .toast-area { bottom: var(--s-6); }
 }
 .onboard.form {
   align-items: stretch;
-  text-align: left;
+  text-align: start;
 }
 .onboard .mark-lg {
   width: 64px;
@@ -1247,7 +1250,7 @@ body.wide .toast-area { bottom: var(--s-6); }
   border-radius: var(--r-lg);
   background: var(--field-ink);
   border: 1px solid color-mix(in srgb, var(--field-grain) 8%, transparent);
-  text-align: left;
+  text-align: start;
 }
 .onboard .plate > .field { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; max-width: none; image-rendering: pixelated; }
 .onboard .plate .plate-word {
@@ -1419,11 +1422,11 @@ body.wide .narrow { max-width: 440px; margin: 0 auto; }
 /* A collapsible JSON tree (ui/screens/explore.js's Lookup result): one `<details>` per
    object/array, native disclosure rather than a hand-rolled expand/collapse control. */
 .tree, .tree-children { display: flex; flex-direction: column; gap: var(--s-1); font-size: 13px; }
-.tree-children { padding-left: var(--s-4); border-left: 1px solid var(--border-soft); margin-top: var(--s-1); }
+.tree-children { padding-inline-start: var(--s-4); border-inline-start: 1px solid var(--border-soft); margin-top: var(--s-1); }
 .tree summary { cursor: pointer; color: var(--text-strong); }
 .tree summary::marker { color: var(--text-soft); }
 .tree-key { color: var(--text-soft); }
-.tree-summary { color: var(--text-soft); margin-left: var(--s-1); }
+.tree-summary { color: var(--text-soft); margin-inline-start: var(--s-1); }
 .tree-null { color: var(--text-soft); font-style: italic; }
 .detail-empty .ic svg { width: 20px; height: 20px; }
 
@@ -1445,8 +1448,8 @@ body.wide .narrow { max-width: 440px; margin: 0 auto; }
 }
 .memo {
   margin: 0;
-  padding-left: var(--s-3);
-  border-left: 2px solid var(--border);
+  padding-inline-start: var(--s-3);
+  border-inline-start: 2px solid var(--border);
   color: var(--text-soft);
 }
 /* Every memo view (activity rows, tx and note details, the send confirmation): one line that

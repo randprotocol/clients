@@ -10,8 +10,12 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { paintField } from '../lib/entropy.js';
+import { t } from '../i18n.js';
 
-const STRENGTH_LABELS = ['Enter at least 10 characters', 'Weak', 'Fair', 'Good', 'Strong'];
+/** The strength meter's caption for a 0–4 score; read at each change so it follows the language. */
+function strengthLabel(score) {
+  return [t('Enter at least 10 characters'), t('Weak'), t('Fair'), t('Good'), t('Strong')][score];
+}
 
 /** A rough 0–4 estimate from length and character variety — good enough to nudge, not a policy. */
 function scorePassword(pw) {
@@ -35,14 +39,14 @@ registerScreen('welcome', {
       <div class="onboard">
         <div class="plate" aria-hidden="true"><canvas class="field"></canvas><span class="plate-word">rand</span></div>
         <div class="stack tight">
-          <h1 class="title">Rand Wallet</h1>
-          <p class="subtitle pitch">A shielded wallet for the Rand network. Balances and history stay private — every send is proved on this device.</p>
+          <h1 class="title">${t('Rand Wallet')}</h1>
+          <p class="subtitle pitch">${t('A shielded wallet for the Rand network. Balances and history stay private — every send is proved on this device.')}</p>
         </div>
         <div class="onboard-actions">
-          <button class="btn btn-primary block" type="button" data-go="create">Create a new wallet</button>
-          <button class="btn block" type="button" data-go="import">I already have a wallet</button>
+          <button class="btn btn-primary block" type="button" data-go="create">${t('Create a new wallet')}</button>
+          <button class="btn block" type="button" data-go="import">${t('I already have a wallet')}</button>
         </div>
-        <p class="caption onboard-foot">${raw(icons.shield())}Your keys stay on this device unless you pair a prover you run.</p>
+        <p class="caption onboard-foot">${raw(icons.shield())}${t('Your keys stay on this device unless you pair a prover you run.')}</p>
       </div>`;
   },
   // There is no address yet, so the welcome plate is the network's own field: the same seed on
@@ -59,38 +63,38 @@ function passwordFormMarkup({ mode }) {
   const isImport = mode === 'import';
   return h`
     <div class="topbar">
-      <button class="btn-icon icon-flip" type="button" data-go="welcome" aria-label="Back">${raw(icons.chevron())}</button>
-      <span class="topbar-title">${isImport ? 'Import wallet' : 'Create wallet'}</span>
+      <button class="btn-icon icon-flip" type="button" data-go="welcome" aria-label="${t('Back')}">${raw(icons.chevron())}</button>
+      <span class="topbar-title">${isImport ? t('Import wallet') : t('Create wallet')}</span>
       <span class="spacer"></span>
     </div>
     <div class="onboard form">
       <form novalidate class="stack loose">
         ${isImport ? raw(h`
         <label class="field">
-          <span class="label">Recovery key</span>
-          <textarea name="key" rows="3" spellcheck="false" autocomplete="off" placeholder="Paste your recovery key" aria-describedby="key-hint"></textarea>
-          <span class="hint" id="key-hint">The key you exported when this wallet was created.</span>
-          <span class="error" id="key-error">Enter your recovery key.</span>
+          <span class="label">${t('Recovery key')}</span>
+          <textarea name="key" rows="3" spellcheck="false" autocomplete="off" placeholder="${t('Paste your recovery key')}" aria-describedby="key-hint"></textarea>
+          <span class="hint" id="key-hint">${t('The key you exported when this wallet was created.')}</span>
+          <span class="error" id="key-error">${t('Enter your recovery key.')}</span>
         </label>`) : ''}
         <label class="field">
-          <span class="label">${isImport ? 'New password' : 'Password'}</span>
+          <span class="label">${isImport ? t('New password') : t('Password')}</span>
           <input name="password" type="password" autocomplete="new-password" minlength="10" aria-describedby="password-hint">
           <span class="strength" data-level="0">
             <span class="strength-track">
               <span class="strength-bar"></span><span class="strength-bar"></span><span class="strength-bar"></span><span class="strength-bar"></span>
             </span>
-            <span class="strength-label">${STRENGTH_LABELS[0]}</span>
+            <span class="strength-label">${strengthLabel(0)}</span>
           </span>
-          <span class="hint" id="password-hint">Unlocks this wallet on this device only — it is never sent anywhere.</span>
-          <span class="error" id="password-error">Use at least 10 characters.</span>
+          <span class="hint" id="password-hint">${t('Unlocks this wallet on this device only — it is never sent anywhere.')}</span>
+          <span class="error" id="password-error">${t('Use at least 10 characters.')}</span>
         </label>
         <label class="field">
-          <span class="label">Confirm password</span>
+          <span class="label">${t('Confirm password')}</span>
           <input name="confirm" type="password" autocomplete="new-password" aria-describedby="confirm-hint">
-          <span class="hint" id="confirm-hint">Type it once more.</span>
-          <span class="error" id="confirm-error">Passwords do not match.</span>
+          <span class="hint" id="confirm-hint">${t('Type it once more.')}</span>
+          <span class="error" id="confirm-error">${t('Passwords do not match.')}</span>
         </label>
-        <button class="btn btn-primary block" type="submit">${isImport ? 'Import wallet' : 'Create wallet'}</button>
+        <button class="btn btn-primary block" type="submit">${isImport ? t('Import wallet') : t('Create wallet')}</button>
       </form>
     </div>`;
 }
@@ -103,14 +107,14 @@ function wirePasswordForm(ctx, root, { mode }) {
   const pwWrap = pwField.closest('.field');
   const confirmWrap = confirmField.closest('.field');
   const strengthEl = form.querySelector('.strength');
-  const strengthLabel = strengthEl.querySelector('.strength-label');
+  const strengthText = strengthEl.querySelector('.strength-label');
   const keyField = isImport ? form.querySelector('textarea[name=key]') : null;
   const keyWrap = keyField ? keyField.closest('.field') : null;
 
   const offInput = on(form, 'input[name=password]', 'input', (_evt, input) => {
     const score = scorePassword(input.value);
     strengthEl.dataset.level = String(score);
-    strengthLabel.textContent = STRENGTH_LABELS[score];
+    strengthText.textContent = strengthLabel(score);
     if (input.value.length >= 10) markValid(pwWrap, pwField, 'password-hint');
   });
 
@@ -133,7 +137,7 @@ function wirePasswordForm(ctx, root, { mode }) {
     // a second time over an existing wallet (that overwrites, i.e. destroys, the current keys),
     // so it checks again itself rather than trust routing alone.
     if (await ctx.backend.wallet.exists()) {
-      ctx.toast('A wallet already exists on this device.', { kind: 'negative' });
+      ctx.toast(t('A wallet already exists on this device.'), { kind: 'negative' });
       ctx.go('#home');
       return;
     }
@@ -149,7 +153,7 @@ function wirePasswordForm(ctx, root, { mode }) {
       if (keyField) keyField.value = '';
       ctx.go('#backup');
     } catch (err) {
-      const message = (err && err.message) || 'Could not create the wallet.';
+      const message = (err && err.message) || t('Could not create the wallet.');
       pwWrap.querySelector('.error').textContent = message;
       markInvalid(pwWrap, pwField, 'password-error');
       ctx.toast(message, { kind: 'negative' });
@@ -175,27 +179,28 @@ registerScreen('backup', {
   nav: false, // a security gate — no tab bar/sidebar to tab away through mid-flow
   render() {
     return h`
-      <div class="topbar"><span class="topbar-title">Back up your wallet</span></div>
+      <div class="topbar"><span class="topbar-title">${t('Back up your wallet')}</span></div>
       <div class="onboard form">
         <div class="stack loose">
           <div class="banner">
             <span class="ic">${raw(icons.shield())}</span>
-            <span><span class="banner-title">Save your recovery key</span>This key is your wallet. Anyone who has it can spend your funds, and without it a lost device means lost funds. You can view it again in Settings with your password.</span>
+            <span><span class="banner-title">${t('Save your recovery key')}</span>${t('This key is your wallet. Anyone who has it can spend your funds, and without it a lost device ' +
+              'means lost funds. You can view it again in Settings with your password.')}</span>
           </div>
           <div class="hold-reveal">
             <span class="key-mask masked" data-role="key">•••• •••• •••• •••• •••• •••• •••• ••••</span>
             <button class="btn block hold-btn" type="button" data-role="hold">
-              <span class="fill"></span>${raw(icons.eye())}Hold to reveal
+              <span class="fill"></span>${raw(icons.eye())}${t('Hold to reveal')}
             </button>
           </div>
           <form novalidate class="stack" data-role="check-form" hidden>
             <label class="field">
-              <span class="label">Confirm you saved it</span>
-              <input name="check" type="text" autocomplete="off" spellcheck="false" placeholder="First 4 characters" aria-describedby="check-hint">
-              <span class="hint" id="check-hint">Enter the first 4 characters of your recovery key.</span>
-              <span class="error" id="check-error">That does not match — reveal the key again and check.</span>
+              <span class="label">${t('Confirm you saved it')}</span>
+              <input name="check" type="text" autocomplete="off" spellcheck="false" placeholder="${t('First 4 characters')}" aria-describedby="check-hint">
+              <span class="hint" id="check-hint">${t('Enter the first 4 characters of your recovery key.')}</span>
+              <span class="error" id="check-error">${t('That does not match — reveal the key again and check.')}</span>
             </label>
-            <button class="btn btn-primary block" type="submit">Continue</button>
+            <button class="btn btn-primary block" type="submit">${t('Continue')}</button>
           </form>
         </div>
       </div>`;
@@ -205,7 +210,7 @@ registerScreen('backup', {
     try {
       key = await ctx.backend.wallet.exportSpendKey();
     } catch {
-      if (ctx.isCurrent()) ctx.toast('Could not load your recovery key.', { kind: 'negative' });
+      if (ctx.isCurrent()) ctx.toast(t('Could not load your recovery key.'), { kind: 'negative' });
     }
     // The user may have navigated away while the key was being exported. Drop it on the floor
     // rather than wiring up a screen that is no longer on display: `key` goes out of scope with

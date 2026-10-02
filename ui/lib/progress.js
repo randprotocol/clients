@@ -12,6 +12,7 @@
 // Kinds: 'transfer' (RAND), 'transfer-token' (an RPL token), 'withdraw', 'invoke' (a program call,
 // a durian.market swap). The average lives in localStorage — a per-viewer convenience, nothing
 // else reads it — and every access is guarded: a private window simply keeps the defaults.
+import { t } from '../i18n.js';
 
 /** Measured 2026-10-01 on chain 20, through the RandProtocol prover: authorising on the device,
  *  the bundle proof on the pool, submitting. An invoke also proves the program call in the browser. */
@@ -66,7 +67,7 @@ const clock = (ms) => {
 
 export function remainingText(elapsed, expected) {
   const left = expected - elapsed;
-  if (left > 15_000) return `about ${clock(left)} left`;
-  if (left > -30_000) return 'almost done';
-  return 'taking longer than usual';
+  if (left > 15_000) return t('about {left} left', { left: clock(left) });
+  if (left > -30_000) return t('almost done');
+  return t('taking longer than usual');
 }

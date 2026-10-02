@@ -5,6 +5,7 @@
 // so anything that already imported it from there still works.
 //
 // Importable under plain Node: no `document`/`window` access at module scope.
+import { t } from '../i18n.js';
 
 // 32 bytes of hex, with the `0x` prefix this chain's hashes are written with throughout (see
 // `send.send()`'s return shape in ui/backend.js) optional.
@@ -29,5 +30,5 @@ export function explorerLink(explorerUrl, hash) {
   // RandScan's transaction page is `/transactions/<hash>` (no `0x`); `/tx/` is not one of its routes.
   const url = new URL(`transactions/${String(hash).replace(/^0x/i, '')}`, base);
   const onRandscan = base.hostname === 'randscan.org' || base.hostname.endsWith('.randscan.org');
-  return { url: url.href, label: onRandscan ? 'Open in randscan' : 'Open in explorer' };
+  return { url: url.href, label: onRandscan ? t('Open in randscan') : t('Open in explorer') };
 }

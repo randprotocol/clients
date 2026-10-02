@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Rand Wallet",
-  "short_name": "Rand Wallet",
+  "name": "__MSG_appName__",
+  "short_name": "__MSG_appShortName__",
   "version": "0.7.1",
-  "description": "Your private wallet for Rand Protocol: shielded RAND and tokens, private payments, bridge withdrawals and dapp approvals.",
+  "description": "__MSG_appDescription__",
+  "default_locale": "en",
   "author": "RandProtocol Contributors",
   "homepage_url": "https://randprotocol.org/clients",
   "browser_specific_settings": {
@@ -27,7 +28,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Rand Wallet",
+    "default_title": "__MSG_actionTitle__",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -37,7 +38,7 @@
   },
   "sidebar_action": {
     "default_panel": "sidepanel.html",
-    "default_title": "Rand Wallet",
+    "default_title": "__MSG_sidebarTitle__",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png"

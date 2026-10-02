@@ -154,11 +154,11 @@ struct HomeView: View {
 
     private func faucet() async {
         faucetBusy = true
-        faucetMessage = "Asking the faucet for 100 RAND…"
+        faucetMessage = String(localized: "Asking the faucet for 100 RAND…")
         defer { faucetBusy = false }
         do {
             let hash = try await wallet.faucet()
-            faucetMessage = "Faucet mint \(hash.shortened(head: 8, tail: 6)) submitted. It appears once committed."
+            faucetMessage = String(localized: "Faucet mint \(hash.shortened(head: 8, tail: 6)) submitted. It appears once committed.")
         } catch {
             faucetMessage = error.localizedDescription
         }
@@ -273,17 +273,21 @@ struct ActivityRow: View {
     }
     private var title: String {
         switch item {
-        case .received(let n): return n.spent ? "Received (spent)" : "Received"
-        case .sent(let s) where s.isInvoke: return s.status == .pending ? "Swapping" : (s.status == .failed ? "Not committed" : "Swapped")
-        case .sent(let s): return s.status == .pending ? "Sending" : (s.status == .failed ? "Not committed" : "Sent")
-        case .sentRow: return "Sent"
+        case .received(let n): return n.spent ? String(localized: "Received (spent)") : String(localized: "Received")
+        case .sent(let s) where s.isInvoke:
+            return s.status == .pending ? String(localized: "Swapping") : (s.status == .failed ? String(localized: "Not committed") : String(localized: "Swapped"))
+        case .sent(let s):
+            return s.status == .pending ? String(localized: "Sending") : (s.status == .failed ? String(localized: "Not committed") : String(localized: "Sent"))
+        case .sentRow: return String(localized: "Sent")
         }
     }
     private var subtitle: String {
         switch item {
-        case .received(let n): return "Leaf #\(n.index) · block \(n.height)"
-        case .sent(let s): return s.height.map { "Block \($0)" } ?? "Submitted \(s.submittedAt.formatted(date: .omitted, time: .shortened))"
-        case .sentRow(let r): return "Leaf #\(r.index) · block \(r.height)"
+        case .received(let n): return String(localized: "Leaf #\(n.index) · block \(n.height)")
+        case .sent(let s):
+            return s.height.map { String(localized: "Block \($0)") }
+                ?? String(localized: "Submitted \(s.submittedAt.formatted(date: .omitted, time: .shortened))")
+        case .sentRow(let r): return String(localized: "Leaf #\(r.index) · block \(r.height)")
         }
     }
     private var amountText: String {

@@ -28,7 +28,7 @@ struct SettingsView: View {
     /// says once more what the prover can now read.
     enum StatusTone { case positive, warn, negative }
     @State private var proverStatus: (tone: StatusTone, title: String, message: String)?
-    @State private var probeLine = "Asking the prover…"
+    @State private var probeLine = String(localized: "Asking the prover…")
     @State private var showProverScanner = false
     /// The prover the build ships the address of (the core's `version.trusted_prover`), offered in
     /// one step inside the pairing form once the core names one — never paired by itself.
@@ -56,8 +56,8 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Button("Export key file (wallet.key.json)") { Task { await reveal(title: "wallet.key.json", value: wallet.exportKeyFile()) } }
-                    Button("Show spend key") { Task { await reveal(title: "Spend key", value: wallet.exportSpendKey()) } }
+                    Button("Export key file (wallet.key.json)") { Task { await reveal(title: "wallet.key.json", value: wallet.exportKeyFile()) } } // a file name, not a phrase
+                    Button("Show spend key") { Task { await reveal(title: String(localized: "Spend key"), value: wallet.exportSpendKey()) } }
                         .foregroundColor(Theme.negative)
                 } header: { Text("Backup") } footer: {
                     Text("The spend key is the wallet. Anyone who sees it can spend your RAND. The key file is what the rand command-line wallet reads.")
@@ -76,7 +76,7 @@ struct SettingsView: View {
 
                 Section("Appearance") {
                     Picker("Theme", selection: $settings.theme) {
-                        ForEach(Settings.Theme.allCases) { t in Text(t.rawValue.capitalized).tag(t) }
+                        ForEach(Settings.Theme.allCases) { t in Text(Self.themeName(t)).tag(t) }
                     }
                 }
 
@@ -89,7 +89,7 @@ struct SettingsView: View {
                     row("App", Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
                     row("Core", RandCore.version)
                     row("Chain build", (try? RandCore.constants())?.chainBuild ?? "")
-                    row("Fee floor", "\(Amount.format((try? RandCore.constants())?.bundleBaseFee ?? "0")) RAND")
+                    row("Fee floor", String(localized: "\(Amount.format((try? RandCore.constants())?.bundleBaseFee ?? "0")) RAND"))
                     Link("Rand Protocol", destination: URL(string: "https://randprotocol.org/clients")!)
                 }
             }
@@ -133,7 +133,7 @@ struct SettingsView: View {
                 // "My own" only for a pairing whose link said so: a prover somebody else runs
                 // makes the proofs too (the job carries the viewing key), and the line under it
                 // says what it sees.
-                row("Proofs are made by", "\(p.own ? "My own prover" : "Paired prover") · \(p.name)")
+                row("Proofs are made by", "\(p.own ? String(localized: "My own prover") : String(localized: "Paired prover")) · \(p.name)")
                 if !p.own {
                     Text(ProverPairingService.notOwnNote).font(.ui(13)).foregroundColor(Theme.textSoft)
                 }
@@ -146,14 +146,14 @@ struct SettingsView: View {
             } else if wallet.usesDefaultProver, let t = trusted {
                 // The default: the RandProtocol provers make the proofs this device cannot — each
                 // member named with its own fingerprint, what they see, asked, off in one tap.
-                row("Proofs are made by", "\(t.name) provers · where this device cannot prove")
-                ForEach(t.members, id: \.name) { m in row(m.name, m.fingerprint) }
+                row("Proofs are made by", String(localized: "\(t.name) provers · where this device cannot prove"))
+                ForEach(t.members, id: \.name) { m in memberRow(m.name, m.fingerprint) }
                 Text("The RandProtocol provers: \(t.members.count) machines run by the validators, each with its own key, used until you choose another. They charge nothing. \(Self.defaultNote)")
                     .font(.ui(13)).foregroundColor(Theme.textSoft)
                 Text(probeLine).font(.ui(13)).foregroundColor(Theme.textSoft)
                 Button("Use no prover") { useNoProver() }
             } else {
-                row("Proofs are made by", "This device")
+                row("Proofs are made by", String(localized: "This device"))
                 Text("Where this device cannot make a proof, pair a prover — rand-prover on a machine of yours, or one somebody else runs, reachable from this phone over https. It receives your viewing key and a salt, never your spend key: it can read this wallet's whole history and cannot spend.")
                     .font(.ui(13)).foregroundColor(Theme.textSoft)
                 // No prover chosen: the way back to the default is one tap, with what it sees.
@@ -161,7 +161,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Or use the RandProtocol provers — \(t.members.count) machines run by the validators, each with its own key. They charge nothing. \(Self.defaultNote)")
                             .font(.ui(13)).foregroundColor(Theme.textSoft)
-                        ForEach(t.members, id: \.name) { m in row(m.name, m.fingerprint) }
+                        ForEach(t.members, id: \.name) { m in memberRow(m.name, m.fingerprint) }
                         Button("Use the RandProtocol provers") { useTrustedProver() }
                     }
                 }
@@ -197,14 +197,14 @@ struct SettingsView: View {
         let link = proverLink.trimmingCharacters(in: .whitespacesAndNewlines)
         proverStatus = nil
         guard !link.isEmpty else {
-            proverStatus = (.negative, "Not paired", "Paste the randprover: link your prover shows.")
+            proverStatus = (.negative, String(localized: "Not paired"), String(localized: "Paste the randprover: link your prover shows."))
             return
         }
         pairing = true
         defer { pairing = false }
         let seen: ProverPairingService.Preview
         do { seen = try ProverPairingService.preview(link) } catch {
-            proverStatus = (.negative, "Not paired", error.localizedDescription)
+            proverStatus = (.negative, String(localized: "Not paired"), error.localizedDescription)
             return
         }
         do {
@@ -212,37 +212,37 @@ struct SettingsView: View {
             try ProverPairingService.save(paired, token: token, settings: settings)
             proverLink = "" // the token goes with it
             let note = seen.note.map { " \($0)" } ?? ""
-            proverStatus = (.positive, "Paired", "Proofs this device cannot make go to \(paired.name).\(note) Its fingerprint is \(paired.fingerprint) — check that your prover shows the same.")
+            proverStatus = (.positive, String(localized: "Paired"), String(localized: "Proofs this device cannot make go to \(paired.name).\(note) Its fingerprint is \(paired.fingerprint) — check that your prover shows the same."))
             await probeProver()
         } catch {
-            proverStatus = (.negative, "Not paired", error.localizedDescription)
+            proverStatus = (.negative, String(localized: "Not paired"), error.localizedDescription)
         }
     }
 
     /// What the RandProtocol prover sees, in one line, wherever it is offered or in use.
-    static let defaultNote = "Each one that proves a send receives this wallet's viewing key, so it can read your whole history, past and future. None can spend."
+    static var defaultNote: String { String(localized: "Each one that proves a send receives this wallet's viewing key, so it can read your whole history, past and future. None can spend.") }
 
     /// "Use the RandProtocol prover": back to the default — nothing paired, nothing asked; the
     /// one-time notice still comes before the first send through it.
     private func useTrustedProver() {
         guard let t = trusted, !pairing else { return }
         wallet.useDefaultProver()
-        proverStatus = (.warn, "Using the \(t.name) provers", "Proofs this device cannot make go to one of them; each one that proves a send sees that wallet's viewing key. \(ProverPairingService.warning)")
+        proverStatus = (.warn, String(localized: "Using the \(t.name) provers"), String(localized: "Proofs this device cannot make go to one of them; each one that proves a send sees that wallet's viewing key. \(ProverPairingService.warning)"))
         Task { await probeProver() }
     }
 
     private func useNoProver() {
         wallet.useNoProver()
-        proverStatus = (.positive, "No prover", "Proofs are made on this device only; where it cannot make one, sending waits until you pair a prover or use the RandProtocol provers again.")
+        proverStatus = (.positive, String(localized: "No prover"), String(localized: "Proofs are made on this device only; where it cannot make one, sending waits until you pair a prover or use the RandProtocol provers again."))
     }
 
     private func forgetProver() {
         ProverPairingService.forget(settings: settings)
         if wallet.usesDefaultProver, let t = trusted {
-            proverStatus = (.positive, "Forgotten", "The prover's pairing is gone from this wallet. Proofs this device cannot make go to the \(t.name) provers again.")
+            proverStatus = (.positive, String(localized: "Forgotten"), String(localized: "The prover's pairing is gone from this wallet. Proofs this device cannot make go to the \(t.name) provers again."))
             Task { await probeProver() }
         } else {
-            proverStatus = (.positive, "Forgotten", "Proofs are made on this device again. The prover's pairing is gone from this wallet.")
+            proverStatus = (.positive, String(localized: "Forgotten"), String(localized: "Proofs are made on this device again. The prover's pairing is gone from this wallet."))
         }
     }
 
@@ -255,7 +255,7 @@ struct SettingsView: View {
     }
 
     private func probeProver() async {
-        probeLine = "Asking the prover…"
+        probeLine = String(localized: "Asking the prover…")
         if let p = settings.prover {
             let answer = await ProverPairingService.probe(p)
             if settings.prover == p { probeLine = ProverPairingService.statusLine(answer) }
@@ -268,12 +268,26 @@ struct SettingsView: View {
                     return
                 }
             }
-            if settings.prover == nil { probeLine = "None of the RandProtocol provers answers right now." }
+            if settings.prover == nil { probeLine = String(localized: "None of the RandProtocol provers answers right now.") }
         }
     }
 
-    private func row(_ k: String, _ v: String) -> some View {
+    /// `k` is a key in the catalog; `v` is data, or a sentence already localised.
+    private func row(_ k: LocalizedStringKey, _ v: String) -> some View {
         HStack { Text(k); Spacer(); Text(v).font(.mono).foregroundColor(Theme.textSoft) }
+    }
+
+    /// A pool member's name is data: the same row, no catalog key.
+    private func memberRow(_ k: String, _ v: String) -> some View {
+        HStack { Text(k); Spacer(); Text(v).font(.mono).foregroundColor(Theme.textSoft) }
+    }
+
+    private static func themeName(_ t: Settings.Theme) -> String {
+        switch t {
+        case .system: return String(localized: "System")
+        case .dark: return String(localized: "Dark")
+        case .light: return String(localized: "Light")
+        }
     }
 
     private func saveAndTest() async {

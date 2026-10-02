@@ -6,9 +6,15 @@
 // script that cannot import the hash module — only ever stores what this page vouched for, and
 // checks the address against the wallet on the device before it does. Everything shown here is
 // built from DOM nodes and textContent: the origin is data from a URL, never markup.
+//
+// No app.js here, so the language is this page's own job (lib/window-locale.js): the wallet's
+// `settings.locale` is read straight from storage, as the wallet's address is, and nothing is
+// rendered before the dictionary is in force. Every string shown goes through `t()`.
 import { ext } from './lib/browser.js';
 import { recipientHash } from './lib/recipient-hash.js';
+import { applyWindowLocale, sentenceWith } from './lib/window-locale.js';
 import { markSvg } from './ui/lib/entropy.js';
+import { t } from './ui/i18n.js';
 
 const q = new URLSearchParams(location.search);
 const id = q.get('id') || '';
@@ -40,7 +46,17 @@ async function decide(approved) {
   window.close();
 }
 
+/** The wallet's language setting, from the settings the engine keeps under `settings`; nothing when unset. */
+async function localeSetting() {
+  try {
+    const bag = await ext.storage.local.get('settings');
+    const settings = bag && bag.settings;
+    return settings && typeof settings === 'object' ? settings.locale : undefined;
+  } catch { return undefined; }
+}
+
 function render() {
+  document.title = t('Connect to Rand Wallet');
   let host = origin;
   try { host = new URL(origin).host; } catch { /* shown as given */ }
 
@@ -51,15 +67,16 @@ function render() {
   // reviewer's linter sees no markup assignment at all.
   mark.append(new DOMParser().parseFromString(markSvg(), 'image/svg+xml').documentElement);
   const text = el('div', 'stack tight');
-  const title = el('h1', 'title', 'Connect to this site?');
+  const title = el('h1', 'title', t('Connect to this site?'));
   const sub = el('p', 'subtitle');
-  sub.append(el('strong', null, host), document.createTextNode(' wants to connect to Rand Wallet.'));
+  sub.append(sentenceWith(t('{host} wants to connect to Rand Wallet.'), 'host', el('strong', null, host)));
   text.append(title, sub);
-  const pitch = el('p', 'caption pitch', 'It will see your Rand address and can suggest it as a bridge destination. It cannot see your balance or your activity, and it cannot move anything.');
+  const pitch = el('p', 'caption pitch', t('It will see your Rand address and can suggest it as a bridge destination.') + ' '
+    + t('It cannot see your balance or your activity, and it cannot move anything.'));
   const actions = el('div', 'onboard-actions');
-  const yes = el('button', 'btn btn-primary block', 'Connect');
+  const yes = el('button', 'btn btn-primary block', t('Connect'));
   yes.type = 'button';
-  const no = el('button', 'btn block', 'Cancel');
+  const no = el('button', 'btn block', t('Cancel'));
   no.type = 'button';
   actions.append(yes, no);
   box.append(mark, text, pitch, actions);
@@ -68,8 +85,8 @@ function render() {
 
   if (!id || !origin) {
     yes.disabled = true;
-    title.textContent = 'Nothing to connect';
-    sub.textContent = 'Open this window from a site that asked to connect.';
+    title.textContent = t('Nothing to connect');
+    sub.textContent = t('Open this window from a site that asked to connect.');
   }
   yes.addEventListener('click', () => { void decide(true); });
   no.addEventListener('click', () => { void decide(false); });
@@ -78,4 +95,4 @@ function render() {
   yes.focus();
 }
 
-render();
+localeSetting().then(applyWindowLocale).then(render);

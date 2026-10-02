@@ -176,8 +176,8 @@ enum Amm {
         var errorDescription: String? { message }
     }
 
-    private static let tooSmall = "That amount is too small: it would buy nothing."
-    private static let tooLarge = "That amount is more than the pool can hold."
+    private static var tooSmall: String { String(localized: "That amount is too small: it would buy nothing.") }
+    private static var tooLarge: String { String(localized: "That amount is more than the pool can hold.") }
 
     struct Hop: Equatable {
         let pool: Pool
@@ -229,8 +229,8 @@ enum Amm {
 
     /// The quote and the exact transition for selling `dx` of the route's sell side.
     static func buildSwap(route: Route?, dx: UInt64, rnd: [UInt32] = randomWords(), title: String = "") -> Result<Swap, Refusal> {
-        guard let route else { return .failure(Refusal(code: "no-route", message: "There is no pool for that pair.")) }
-        if dx == 0 { return .failure(Refusal(code: "no-amount", message: "Enter an amount.")) }
+        guard let route else { return .failure(Refusal(code: "no-route", message: String(localized: "There is no pool for that pair."))) }
+        if dx == 0 { return .failure(Refusal(code: "no-amount", message: String(localized: "Enter an amount."))) }
         if dx >= noteBound { return .failure(Refusal(code: "over-bound", message: tooLarge)) }
         let inputs = [methodSwap] + rnd.prefix(3)
         switch route {

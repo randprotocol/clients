@@ -17,6 +17,7 @@
 // is formatted by the core, which parses it back before returning it, so this screen cannot hand
 // out a link another wallet would refuse. Everything the user types reaches the page as text only.
 import { h, raw, on } from '../lib/dom.js';
+import { t } from '../i18n.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { shortAddress, parseUnits } from '../lib/format.js';
@@ -26,15 +27,17 @@ import { isUnlisted } from '../lib/assets.js';
 import { memoSupportedFor } from '../lib/memo.js';
 
 // The sentence iOS (`ReceiveView`) and Android (`receive_qr_too_long`) show in place of a QR when
-// the link is longer than a level-M QR code holds (version 40: 2 331 bytes).
-export const QR_TOO_LONG = 'This link is too long for a QR code; share or copy it instead.';
+// the link is longer than a level-M QR code holds (version 40: 2 331 bytes). A function, read when
+// shown: the language can change while the screen is up.
+export const qrTooLongNotice = () => t('This link is too long for a QR code; share or copy it instead.');
 
 export const MEMO_MAX_BYTES = 510;
 const REBUILD_DEBOUNCE_MS = 150;
 const utf8Length = (text) => new TextEncoder().encode(String(text ?? '')).length;
+const memoCountText = (bytes) => t('{n}/{max} bytes', { n: bytes, max: MEMO_MAX_BYTES });
 
 function topbarMarkup() {
-  return h`<div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="home" aria-label="Back">${raw(icons.chevron())}</button><span class="topbar-title">Receive</span><span class="spacer"></span></div>`;
+  return h`<div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="home" aria-label="${t('Back')}">${raw(icons.chevron())}</button><span class="topbar-title">${t('Receive')}</span><span class="spacer"></span></div>`;
 }
 
 function assetOptions(assets) {
@@ -53,7 +56,7 @@ registerScreen('receive', {
       info = await ctx.backend.wallet.info();
     } catch (err) {
       if (!ctx.isCurrent()) return;
-      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Could not load your address</span>${err && err.message ? err.message : 'Something went wrong.'}</span></div>`;
+      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">${t('Could not load your address')}</span>${err && err.message ? err.message : t('Something went wrong.')}</span></div>`;
       return;
     }
     if (!ctx.isCurrent()) return;
@@ -62,52 +65,52 @@ registerScreen('receive', {
     const formats = ctx.backend.address && typeof ctx.backend.address.formatLink === 'function' ? ctx.backend.address : null;
     const canShare = typeof ctx.backend.platform.share === 'function';
     const share = canShare
-      ? raw(h`<button class="btn block" type="button" data-role="share-link">${raw(icons.arrowUpRight())}Share payment link</button>`)
+      ? raw(h`<button class="btn block" type="button" data-role="share-link">${raw(icons.arrowUpRight())}${t('Share payment link')}</button>`)
       : '';
     root.innerHTML = h`
-      <h1 class="sr-only">Receive</h1>
+      <h1 class="sr-only">${t('Receive')}</h1>
       ${raw(topbarMarkup())}
       <div class="card">
         <div class="stack">
-          <div class="qr"><canvas data-role="qr" data-ec-level="M" aria-label="QR code of your payment link"></canvas></div>
-          <p class="caption" data-role="qr-too-long" hidden>${QR_TOO_LONG}</p>
+          <div class="qr"><canvas data-role="qr" data-ec-level="M" aria-label="${t('QR code of your payment link')}"></canvas></div>
+          <p class="caption" data-role="qr-too-long" hidden>${qrTooLongNotice()}</p>
           <div class="cluster">
-            <button class="chip action" type="button" data-role="copy-chip" aria-label="Copy address"><span class="mono">${shortAddress(address)}</span>${raw(icons.copy())}</button>
+            <button class="chip action" type="button" data-role="copy-chip" aria-label="${t('Copy address')}"><span class="mono">${shortAddress(address)}</span>${raw(icons.copy())}</button>
           </div>
           <div class="address-box">
             <span class="mono" data-role="full-address">${address}</span>
           </div>
           <div class="kv" data-role="fingerprint-row" hidden>
-            <span class="k">Fingerprint</span>
+            <span class="k">${t('Fingerprint')}</span>
             <span class="v mono fingerprint" data-role="fingerprint"></span>
           </div>
-          <button class="btn block" type="button" data-role="copy-block" aria-label="Copy address">${raw(icons.copy())}Copy address</button>
-          <p class="caption">This address is reusable — share it to receive any asset. It never expires. Whoever pays you sees the fingerprint above on their confirmation; if it does not match, it is not your address.</p>
+          <button class="btn block" type="button" data-role="copy-block" aria-label="${t('Copy address')}">${raw(icons.copy())}${t('Copy address')}</button>
+          <p class="caption">${t('This address is reusable — share it to receive any asset. It never expires. Whoever pays you sees the fingerprint above on their confirmation; if it does not match, it is not your address.')}</p>
         </div>
       </div>
-      <h2 class="section-title">Payment link</h2>
+      <h2 class="section-title">${t('Payment link')}</h2>
       <div class="card">
         <form class="stack" data-role="link-form" novalidate>
           <div class="address-box"><span class="mono" data-role="link"></span></div>
-          <button class="btn btn-primary block" type="button" data-role="copy-link">${raw(icons.copy())}Copy payment link</button>
+          <button class="btn btn-primary block" type="button" data-role="copy-link">${raw(icons.copy())}${t('Copy payment link')}</button>
           ${share}
-          <p class="caption">Optional: ask for an amount, and add a note the payer’s wallet fills in for them.</p>
+          <p class="caption">${t('Optional: ask for an amount, and add a note the payer’s wallet fills in for them.')}</p>
           <div class="field">
-            <label class="label" for="link-amount">Amount</label>
+            <label class="label" for="link-amount">${t('Amount')}</label>
             <div class="cluster">
-              <input id="link-amount" name="link-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="The payer decides" aria-describedby="link-amount-hint">
-              <select name="link-asset" aria-label="Asset" data-role="link-asset"></select>
+              <input id="link-amount" name="link-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="${t('The payer decides')}" aria-describedby="link-amount-hint">
+              <select name="link-asset" aria-label="${t('Asset')}" data-role="link-asset"></select>
             </div>
-            <span class="hint" id="link-amount-hint">Leave empty to let the payer choose.</span>
+            <span class="hint" id="link-amount-hint">${t('Leave empty to let the payer choose.')}</span>
             <span class="error" id="link-amount-error"></span>
           </div>
           <div class="field" data-role="link-memo-field">
             <div class="field-top">
-              <label class="label" for="link-memo">Memo</label>
-              <span class="caption" data-role="link-memo-count">0/${MEMO_MAX_BYTES} bytes</span>
+              <label class="label" for="link-memo">${t('Memo')}</label>
+              <span class="caption" data-role="link-memo-count">${memoCountText(0)}</span>
             </div>
             <textarea id="link-memo" name="link-memo" rows="2" autocomplete="off" aria-describedby="link-memo-hint"></textarea>
-            <span class="hint" id="link-memo-hint">Encrypted with the payment: only you, the payer and anyone they show it to can read it.</span>
+            <span class="hint" id="link-memo-hint">${t('Encrypted with the payment: only you, the payer and anyone they show it to can read it.')}</span>
             <span class="error" id="link-memo-error"></span>
           </div>
         </form>
@@ -188,17 +191,17 @@ registerScreen('receive', {
         } catch (err) {
           ok = false;
           fieldError(amountInput, /decimal places/.test(String(err && err.message))
-            ? `${asset.symbol} has ${asset.decimals} decimal places — that is more.`
-            : 'Enter an amount greater than zero, for example 1.25.');
+            ? t('{symbol} has {decimals} decimal places — that is more.', { symbol: asset.symbol, decimals: asset.decimals })
+            : t('Enter an amount greater than zero, for example 1.25.'));
         }
       } else {
         fieldError(amountInput, null);
       }
       const bytes = utf8Length(memo);
-      memoCount.textContent = `${bytes}/${MEMO_MAX_BYTES} bytes`;
+      memoCount.textContent = memoCountText(bytes);
       if (bytes > MEMO_MAX_BYTES) {
         ok = false;
-        fieldError(memoInput, `The memo is ${bytes} bytes; the limit is ${MEMO_MAX_BYTES}.`);
+        fieldError(memoInput, t('The memo is {n} bytes; the limit is {max}.', { n: bytes, max: MEMO_MAX_BYTES }));
       } else {
         fieldError(memoInput, null);
       }
@@ -211,7 +214,7 @@ registerScreen('receive', {
         next = await formats.formatLink({ address, amount: amountText, asset: assetParam, memo });
       } catch (err) {
         if (!ctx.isCurrent() || mine !== generation) return;
-        fieldError(amountInput, (err && err.message) || 'That link could not be built.');
+        fieldError(amountInput, (err && err.message) || t('That link could not be built.'));
         return;
       }
       if (!ctx.isCurrent() || mine !== generation) return;
@@ -221,7 +224,7 @@ registerScreen('receive', {
 
     function scheduleRebuild() {
       clearTimeout(debounce);
-      memoCount.textContent = `${utf8Length(memoInput.value)}/${MEMO_MAX_BYTES} bytes`;
+      memoCount.textContent = memoCountText(utf8Length(memoInput.value));
       debounce = setTimeout(() => { if (ctx.isCurrent()) rebuild(); }, REBUILD_DEBOUNCE_MS);
     }
 
@@ -232,12 +235,12 @@ registerScreen('receive', {
       if (!ctx.isCurrent()) return;
       ctx.toast(message, { kind: 'positive' });
     }
-    const offChip = on(root, '[data-role="copy-chip"]', 'click', (evt) => { evt.preventDefault(); copy(address, 'Address copied'); });
-    const offBlock = on(root, '[data-role="copy-block"]', 'click', (evt) => { evt.preventDefault(); copy(address, 'Address copied'); });
-    const offLink = on(root, '[data-role="copy-link"]', 'click', (evt) => { evt.preventDefault(); copy(link, 'Payment link copied'); });
+    const offChip = on(root, '[data-role="copy-chip"]', 'click', (evt) => { evt.preventDefault(); copy(address, t('Address copied')); });
+    const offBlock = on(root, '[data-role="copy-block"]', 'click', (evt) => { evt.preventDefault(); copy(address, t('Address copied')); });
+    const offLink = on(root, '[data-role="copy-link"]', 'click', (evt) => { evt.preventDefault(); copy(link, t('Payment link copied')); });
     const offShare = on(root, '[data-role="share-link"]', 'click', async (evt) => {
       evt.preventDefault();
-      try { await ctx.backend.platform.share({ title: 'Pay me on Rand', text: link }); } catch { /* the user closed the share sheet */ }
+      try { await ctx.backend.platform.share({ title: t('Pay me on Rand'), text: link }); } catch { /* the user closed the share sheet */ }
     });
     const offInput = on(root, 'input[name=link-amount], textarea[name=link-memo]', 'input', () => scheduleRebuild());
     const offAsset = on(root, 'select[name=link-asset]', 'change', () => scheduleRebuild());

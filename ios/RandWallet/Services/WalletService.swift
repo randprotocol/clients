@@ -125,7 +125,7 @@ final class WalletService: ObservableObject {
 
     private func client() throws -> RpcClient {
         guard let url = settings.rpcURL, url.scheme != nil else {
-            throw RpcClient.RpcError(code: 0, message: "Set a valid RPC URL in Settings")
+            throw RpcClient.RpcError(code: 0, message: String(localized: "Set a valid RPC URL in Settings"))
         }
         if rpc?.url != url { rpc = RpcClient(url: url) }
         return rpc!
@@ -245,10 +245,10 @@ final class WalletService: ObservableObject {
     /// The whole send path. `amount` and `fee` in units. Returns after the commit or the commit
     /// timeout; throws with a message the UI shows verbatim.
     func send(to: String, amount: UInt64, fee: UInt64, memo: String = "") async throws -> SendOutcome {
-        guard let sk = spendKey else { throw RpcClient.RpcError(code: 0, message: "wallet is locked") }
+        guard let sk = spendKey else { throw RpcClient.RpcError(code: 0, message: String(localized: "wallet is locked")) }
         let rpc = try client()
         let addr = try RandCore.parseAddress(to)
-        guard addr.valid else { throw RpcClient.RpcError(code: 0, message: addr.error ?? "invalid address") }
+        guard addr.valid else { throw RpcClient.RpcError(code: 0, message: addr.error.map(CoreErrors.localized) ?? String(localized: "invalid address")) }
         defer { phase = .idle }
         // Where the proof is made, decided before any work: this device, or the paired prover
         // (delegated proving; on a split-authorisation chain any paired prover, own or not — the
@@ -257,7 +257,7 @@ final class WalletService: ObservableObject {
         // The RandProtocol prover only once this wallet has read what it sees (Send shows the
         // notice before it starts; this is the rule, not the screen).
         if let route, route.isDefault, !defaultNoticeRead {
-            throw ProverRefusal(message: "Before the first send through the RandProtocol prover, read what it can see: it gets this wallet's viewing key. Send again and read the notice, or pair your own prover in Settings.")
+            throw ProverRefusal(message: String(localized: "Before the first send through the RandProtocol prover, read what it can see: it gets this wallet's viewing key. Send again and read the notice, or pair your own prover in Settings."))
         }
 
         phase = .syncing
@@ -282,7 +282,7 @@ final class WalletService: ObservableObject {
                 inputs.append(ProveInput(note: n, path: w.path))
             }
             if !moved { break }
-            if attempt >= 3 { throw RpcClient.RpcError(code: 0, message: "the tree moved while fetching witnesses; try again") }
+            if attempt >= 3 { throw RpcClient.RpcError(code: 0, message: String(localized: "the tree moved while fetching witnesses; try again")) }
         }
 
         // Read from the node this send talks to, right before proving: every output is sealed at
@@ -314,7 +314,7 @@ final class WalletService: ObservableObject {
         // The receipt's key is the PAYMENT output's own, named by the core — never a slot index:
         // chain 14's four slots put dummies ahead of the payment for a RAND transfer.
         guard let paymentTxKey = proof.paymentTxKey else {
-            throw RpcClient.RpcError(code: 0, message: "the core did not name the payment's transaction key")
+            throw RpcClient.RpcError(code: 0, message: String(localized: "the core did not name the payment's transaction key"))
         }
 
         phase = .submitting
@@ -460,7 +460,7 @@ final class WalletService: ObservableObject {
     /// end. A transfer and an invoke take the same path; only the core's seal and open differ.
     private func provePool<R: Sendable>(_ remote: RemoteJob<R>, route: ProveRoute, rpc: RpcClient, started: Date) async throws -> R {
         let pool = route.poolName ?? "RandProtocol"
-        phase = .provingRemotely(prover: "\(pool) provers", position: nil, started: started)
+        phase = .provingRemotely(prover: String(localized: "\(pool) provers"), position: nil, started: started)
         let maxProofBytes = try await rpc.maxProofBytes()
         UIApplication.shared.isIdleTimerDisabled = true
         let bg = UIApplication.shared.beginBackgroundTask(withName: "remote-prove")
@@ -553,7 +553,7 @@ final class WalletService: ObservableObject {
             throw InvokeRefusal(code: .proverUnavailable, message: error.localizedDescription)
         }
         if route == nil && !deviceCanProve() {
-            throw InvokeRefusal(code: .proverUnavailable, message: "This device does not have the memory for this proof, and no prover is set up. Pair a prover in Settings › Prover.")
+            throw InvokeRefusal(code: .proverUnavailable, message: String(localized: "This device does not have the memory for this proof, and no prover is set up. Pair a prover in Settings › Prover."))
         }
         return route
     }
@@ -563,11 +563,11 @@ final class WalletService: ObservableObject {
     func canInvoke() async throws -> InvokeVia {
         // Said before anything is quoted, rather than the system stopping the app mid-proof.
         guard ProverRequirements.deviceCanMakeCallProof else {
-            throw InvokeRefusal(code: .proverUnavailable, message: "This device does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead.")
+            throw InvokeRefusal(code: .proverUnavailable, message: String(localized: "This device does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead."))
         }
         let route = try await invokeRoute()
         guard try await client().limits().programState != nil else {
-            throw InvokeRefusal(code: .programsUnsupported, message: "This chain does not run programs yet.")
+            throw InvokeRefusal(code: .programsUnsupported, message: String(localized: "This chain does not run programs yet."))
         }
         guard let route else { return .device }
         if route.isDefault { return .pool(name: route.poolName ?? "RandProtocol", notice: !defaultNoticeRead) }
@@ -577,7 +577,7 @@ final class WalletService: ObservableObject {
     /// Every refusal an invoke can meet before anything is proved, and its network fee
     /// (`InvokeFlow.quote`; the wallet scans first so the plan sees every note).
     func quoteInvoke(_ request: InvokeRequest) async throws -> InvokeFlow.Quote {
-        guard spendKey != nil else { throw RpcClient.RpcError(code: 0, message: "wallet is locked") }
+        guard spendKey != nil else { throw RpcClient.RpcError(code: 0, message: String(localized: "wallet is locked")) }
         let rpc = try client()
         return try await InvokeFlow.quote(request, chain: rpc, core: RandInvokeCore(), notes: { [weak self] in
             guard let self else { return [] }
@@ -593,14 +593,14 @@ final class WalletService: ObservableObject {
     /// goes out exactly as a transfer's does (`proveRemotely`, `provePool`). A pool that moved is
     /// `STALE_READ`, before the proof or at submit; nothing is sent either way.
     func invoke(_ request: InvokeRequest, wait: Bool = true) async throws -> InvokeOutcome {
-        guard let sk = spendKey else { throw RpcClient.RpcError(code: 0, message: "wallet is locked") }
+        guard let sk = spendKey else { throw RpcClient.RpcError(code: 0, message: String(localized: "wallet is locked")) }
         let rpc = try client()
         defer { phase = .idle }
         let route = try await invokeRoute()
         // The RandProtocol provers only once this wallet has read what they see (Swap shows the
         // notice before it starts; this is the rule, not the screen).
         if let route, route.isDefault, !defaultNoticeRead {
-            throw InvokeRefusal(code: .proverNotice, message: "Before the first swap through the RandProtocol provers, read what they can see: the one that proves it gets this wallet's viewing key. Review the swap again and read the notice, or pair your own prover in Settings.")
+            throw InvokeRefusal(code: .proverNotice, message: String(localized: "Before the first swap through the RandProtocol provers, read what they can see: the one that proves it gets this wallet's viewing key. Review the swap again and read the notice, or pair your own prover in Settings."))
         }
 
         phase = .syncing
@@ -680,7 +680,7 @@ final class WalletService: ObservableObject {
     /// unlisted index at nine (`ui/screens/swap.js`'s `infoOf`).
     func tokenName(_ asset: UInt32) -> TokenName {
         if asset == Amm.randAsset { return TokenName(symbol: "RAND", decimals: Amount.decimals) }
-        return tokens[asset] ?? TokenName(symbol: "asset \(asset)", decimals: Amount.decimals)
+        return tokens[asset] ?? TokenName(symbol: String(localized: "asset \(asset)"), decimals: Amount.decimals)
     }
 
     /// Every cell of `program` (`nil`: this chain runs no programs).
@@ -711,7 +711,7 @@ final class WalletService: ObservableObject {
         let st = try await rpc.status()
         let height = st["height"] as? Int ?? 0
         let peers = st["peer_count"] as? Int ?? 0
-        if id != chainId { return "Connected to chain \(id) at height \(height) (\(peers) peers) — but Settings says chain \(chainId)" }
-        return "Chain \(id), height \(height), \(peers) peers"
+        if id != chainId { return String(localized: "Connected to chain \(id) at height \(height) (\(peers) peers) — but Settings says chain \(chainId)") }
+        return String(localized: "Chain \(id), height \(height), \(peers) peers")
     }
 }

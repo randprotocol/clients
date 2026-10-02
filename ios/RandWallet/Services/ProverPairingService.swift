@@ -70,15 +70,16 @@ enum ProverPairingService {
     /// says the same thing; this string is its fallback, word for word. Shown before ANY pairing
     /// is saved, the user's own or not (a prover of the user's own learns exactly as much; it is
     /// theirs).
-    static let historyWarningFallback = "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own."
+    static var historyWarningFallback: String { String(localized: "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.") }
     static var warning: String {
         let w = (try? RandCore.constants())?.proverHistoryWarning?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return w.isEmpty ? historyWarningFallback : w
+        // The core's sentence is English: shown through the mapper, which knows it word for word.
+        return w.isEmpty ? historyWarningFallback : CoreErrors.localized(w)
     }
 
     /// Under a pairing that is not the user's own: what that prover can do, in one line
     /// (`ui/screens/settings.js`'s `PROVER_NOT_OWN_NOTE`).
-    static let notOwnNote = "Not marked as your own: it can read this wallet's whole history. It cannot spend."
+    static var notOwnNote: String { String(localized: "Not marked as your own: it can read this wallet's whole history. It cannot spend.") }
 
     struct ParsedLink {
         let kemEk: String
@@ -105,7 +106,7 @@ enum ProverPairingService {
         guard let v = try RandCore.call("parse_prover_link", ["link": link.trimmingCharacters(in: .whitespacesAndNewlines)]) as? [String: Any],
               let kemEk = v["kem_ek"] as? String, let url = v["url"] as? String,
               let token = v["token"] as? String, let fp = v["fingerprint"] as? String else {
-            throw ProverRefusal(message: "That is not a pairing link.")
+            throw ProverRefusal(message: String(localized: "That is not a pairing link."))
         }
         return ParsedLink(kemEk: kemEk.lowercased(), url: url, token: token, own: v["own"] as? Bool == true, fingerprint: fp)
     }
@@ -141,10 +142,10 @@ enum ProverPairingService {
         do {
             info = try await ProverClient(url: url, session: session).info()
         } catch {
-            throw ProverRefusal(message: "The prover at \(url) did not answer: \(error.localizedDescription)")
+            throw ProverRefusal(message: String(localized: "The prover at \(url) did not answer: \(error.localizedDescription)"))
         }
         guard sameKey(info, kemEk: p.kemEk, fingerprint: p.fingerprint) else {
-            throw ProverRefusal(message: "The prover at that address has a different key from the one the link names. Do not pair it.")
+            throw ProverRefusal(message: String(localized: "The prover at that address has a different key from the one the link names. Do not pair it."))
         }
         let comps = URLComponents(string: url)
         let host = comps?.host ?? url
@@ -199,16 +200,19 @@ enum ProverPairingService {
         Keychain.deleteProverSecret()
     }
 
+    /// `probe`'s word for a prover whose key is not the pairing's; `notReady` tells it apart from silence.
+    static var keyChangedWarning: String { String(localized: "the prover at that address now has a different key; pair it again") }
+
     /// Whether the paired prover answers with the pairing's key.
     static func probe(_ pairing: ProverPairing, session: URLSession? = nil) async -> Probe {
         let info: ProverInfo
         do {
             info = try await ProverClient(url: pairing.url, session: session).info()
         } catch {
-            return .unavailable("the prover at \(pairing.url) did not answer (\(error.localizedDescription))")
+            return .unavailable(String(localized: "the prover at \(pairing.url) did not answer (\(error.localizedDescription))"))
         }
         guard sameKey(info, kemEk: pairing.kemEk, fingerprint: pairing.fingerprint) else {
-            return .unavailable("the prover at that address now has a different key; pair it again")
+            return .unavailable(keyChangedWarning)
         }
         return .ok(info)
     }
@@ -243,11 +247,11 @@ enum ProverPairingService {
     static func notReady(_ m: PoolMember, _ answer: Probe) -> (busy: Bool, reason: String)? {
         switch answer {
         case .unavailable(let w):
-            return (false, w.contains("different key") ? "\(m.member) answered with another key than the one this wallet pins" : "\(m.member) did not answer")
+            return (false, w == keyChangedWarning ? String(localized: "\(m.member) answered with another key than the one this wallet pins") : String(localized: "\(m.member) did not answer"))
         case .ok(let info):
             if let fee = feeRefusal(info.fee) { return (false, "\(m.member): \(fee)") }
-            if !info.witnessKinds.contains("viewing_key") { return (false, "\(m.member) does not take this wallet's jobs") }
-            if info.max > 0 && info.depth >= info.max { return (true, "\(m.member) is busy") }
+            if !info.witnessKinds.contains("viewing_key") { return (false, String(localized: "\(m.member) does not take this wallet's jobs")) }
+            if info.max > 0 && info.depth >= info.max { return (true, String(localized: "\(m.member) is busy")) }
             return nil
         }
     }
@@ -255,9 +259,9 @@ enum ProverPairingService {
     /// Every member busy, or none reachable: plainly, with the way out.
     static func poolUnavailable(lead: String, pool: String, _ whys: [(busy: Bool, reason: String)]) -> ProverRefusal {
         if !whys.isEmpty && whys.allSatisfy({ $0.busy }) {
-            return ProverRefusal(message: "\(lead)The \(pool) provers are all busy right now; try again in a minute, or pair your own prover in Settings.", busy: true)
+            return ProverRefusal(message: String(localized: "\(lead)The \(pool) provers are all busy right now; try again in a minute, or pair your own prover in Settings."), busy: true)
         }
-        return ProverRefusal(message: "\(lead)The \(pool) provers cannot be reached right now (\(whys.map { $0.reason }.joined(separator: "; "))). Try again later, or pair your own prover in Settings.")
+        return ProverRefusal(message: String(localized: "\(lead)The \(pool) provers cannot be reached right now (\(whys.map { $0.reason }.joined(separator: "; "))). Try again later, or pair your own prover in Settings."))
     }
 
     /// One job through the RandProtocol provers: the members in order — for each, `probe` again
@@ -292,17 +296,16 @@ enum ProverPairingService {
 
     /// The RandProtocol provers, named the one way every surface names them (wallet 0.6.9).
     static func poolPhrase(_ n: Int) -> String {
-        "the RandProtocol provers (\(n > 0 ? "\(n) machines" : "machines") run by the validators; each one that proves a send sees that wallet's viewing key)"
+        let machines = n > 0 ? String(localized: "\(n) machines") : String(localized: "machines")
+        return String(localized: "the RandProtocol provers (\(machines) run by the validators; each one that proves a send sees that wallet's viewing key)")
     }
 
     /// The one-time notice before the first proof by the RandProtocol provers (the default where
     /// this device cannot prove): what the one that proves learns, that it cannot spend, and the
     /// way to use a prover of your own instead.
-    static let defaultNoticeTitle = "The RandProtocol provers can read your history"
+    static var defaultNoticeTitle: String { String(localized: "The RandProtocol provers can read your history") }
     static func defaultNotice(_ n: Int) -> String {
-        "This device cannot make the proof, so one of \(poolPhrase(n)) makes it. "
-            + "The one that does receives this wallet's viewing key, so it can read your whole history — every payment received and sent, past and future. "
-            + "It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead."
+        String(localized: "This device cannot make the proof, so one of \(poolPhrase(n)) makes it. The one that does receives this wallet's viewing key, so it can read your whole history — every payment received and sent, past and future. It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.")
     }
 
     /// Whether proofs this device cannot make go to the RandProtocol provers: nothing paired, no
@@ -322,7 +325,7 @@ enum ProverPairingService {
     /// own; its token is the one every copy ships. In the pool's order — the caller shuffles.
     /// `pool` is the test seam.
     static func builtInPool(pool source: TrustedProverPool?? = nil) throws -> [PoolMember] {
-        guard let t = source ?? trustedPool() else { throw ProverRefusal(message: "This build ships no prover to use.") }
+        guard let t = source ?? trustedPool() else { throw ProverRefusal(message: String(localized: "This build ships no prover to use.")) }
         let name = trusted(from: .some(t))?.name ?? "RandProtocol"
         var out: [PoolMember] = []
         for m in t.members where !m.link.isEmpty && !m.own {
@@ -332,7 +335,7 @@ enum ProverPairingService {
                                                          fingerprint: parsed.fingerprint, own: false), token: parsed.token))
         }
         if out.isEmpty {
-            throw ProverRefusal(message: "None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.")
+            throw ProverRefusal(message: String(localized: "None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them."))
         }
         return out
     }
@@ -345,9 +348,9 @@ enum ProverPairingService {
         if !amount.isEmpty && amount.allSatisfy({ $0 == "0" }) { return nil }
         var shown = ""
         if (1...20).contains(amount.count), amount.allSatisfy({ $0.isNumber }), let f = try? RandCore.formatAmount(units: amount) {
-            shown = " of \(f) RAND"
+            shown = String(localized: " of \(f) RAND")
         }
-        return "it charges a fee\(shown) per proof, which this version of the wallet does not pay"
+        return String(localized: "it charges a fee\(shown) per proof, which this version of the wallet does not pay")
     }
 
     /// Where a send's proof is made (`proveRoute` in the JS). `nil` = this device: it can prove,
@@ -373,10 +376,10 @@ enum ProverPairingService {
         if display == nil, let defaultProver { return try await defaultRoute(probe: probe, defaultProver: defaultProver) }
         guard let d = display else { return nil }
         guard let s = secret(), !s.token.isEmpty else {
-            throw ProverRefusal(message: "Your prover's pairing could not be opened. Pair the prover again in Settings.")
+            throw ProverRefusal(message: String(localized: "Your prover's pairing could not be opened. Pair the prover again in Settings."))
         }
         let p = ProverPairing(name: d.name, url: s.url, kemEk: s.kemEk, fingerprint: s.fingerprint, own: s.own)
-        let reason = "This device does not have the memory for this proof."
+        let reason = String(localized: "This device does not have the memory for this proof.")
         let why: String?
         switch await probe(p) {
         case .unavailable(let w):
@@ -387,10 +390,10 @@ enum ProverPairingService {
             } else if info.witnessKinds.contains("viewing_key") || (p.own && info.witnessKinds.contains("spend_key")) {
                 why = nil
             } else {
-                why = "it does not take this wallet's jobs"
+                why = String(localized: "it does not take this wallet's jobs")
             }
         }
-        if let why { throw ProverRefusal(message: "\(reason) Your paired prover is not available: \(why).") }
+        if let why { throw ProverRefusal(message: String(localized: "\(reason) Your paired prover is not available: \(why).")) }
         return Route(pairing: p, token: s.token)
     }
 
@@ -399,10 +402,10 @@ enum ProverPairingService {
     /// `provePool`. None can: "all busy" or "cannot be reached", plainly, pointing to Settings.
     private static func defaultRoute(probe: (ProverPairing) async -> Probe,
                                      defaultProver: () throws -> [PoolMember]) async throws -> Route {
-        let lead = "This device does not have the memory for this proof. "
+        let lead = String(localized: "This device does not have the memory for this proof. ")
         let members: [PoolMember]
         do { members = try defaultProver() } catch {
-            throw ProverRefusal(message: "\(lead)\(error.localizedDescription)")
+            throw ProverRefusal(message: lead + error.localizedDescription)
         }
         let pool = members.first.map { m -> String in
             let n = m.pairing.name
@@ -443,11 +446,11 @@ enum ProverPairingService {
             guests = try RandCore.chainGuests(hcBundle: hcBundle, hcAuth: hcAuth)
         } catch {
             let m = error.localizedDescription
-            throw ProverRefusal(message: m.isEmpty ? "This wallet cannot prove for this chain." : m)
+            throw ProverRefusal(message: m.isEmpty ? String(localized: "This wallet cannot prove for this chain.") : m)
         }
         let wants = guests.witnessKind
         if wants == "spend_key" && !route.pairing.own {
-            throw ProverRefusal(message: "On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the rand command-line wallet.")
+            throw ProverRefusal(message: String(localized: "On this chain a proof needs the spend key, which goes only to a prover paired as your own. Pair your own prover in Settings, or send from the rand command-line wallet."))
         }
         let now: ProverInfo
         do {
@@ -455,18 +458,18 @@ enum ProverPairingService {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            throw ProverRefusal(message: "Your prover did not answer: \(error.localizedDescription)")
+            throw ProverRefusal(message: String(localized: "Your prover did not answer: \(error.localizedDescription)"))
         }
         guard sameKey(now, kemEk: route.pairing.kemEk, fingerprint: route.pairing.fingerprint) else {
-            throw ProverRefusal(message: "The prover at that address now has a different key. Pair it again in Settings.")
+            throw ProverRefusal(message: String(localized: "The prover at that address now has a different key. Pair it again in Settings."))
         }
         guard now.witnessKinds.contains(wants) else {
             throw ProverRefusal(message: wants == "viewing_key"
-                ? "Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another."
-                : "Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the rand command-line wallet.")
+                ? String(localized: "Your prover does not take viewing-key jobs (it is older than this chain). Update it, or pair another.")
+                : String(localized: "Your prover does not take spend-key jobs. Pair your own prover in Settings, or send from the rand command-line wallet."))
         }
         if let fee = feeRefusal(now.fee) {
-            throw ProverRefusal(message: "This prover charges a fee, which this version of the wallet does not pay (\(fee)). Pair a prover that charges nothing, or send from the rand command-line wallet.")
+            throw ProverRefusal(message: String(localized: "This prover charges a fee, which this version of the wallet does not pay (\(fee)). Pair a prover that charges nothing, or send from the rand command-line wallet."))
         }
         return JobCheck(guests: guests, fee: now.fee)
     }
@@ -475,12 +478,12 @@ enum ProverPairingService {
     static func statusLine(_ probe: Probe) -> String {
         switch probe {
         case .ok(let info):
-            let max = info.max > 0 ? " of \(info.max)" : ""
-            return "Answering · \(info.depth)\(max) in its queue."
+            let max = info.max > 0 ? String(localized: " of \(info.max)") : ""
+            return String(localized: "Answering · \(info.depth)\(max) in its queue.")
         case .unavailable(let why):
             var w = why
             if w.hasSuffix(".") { w.removeLast() }
-            return "Not answering: \(w)."
+            return String(localized: "Not answering: \(w).")
         }
     }
 

@@ -16,7 +16,12 @@ import { makePasskey } from './passkey.js';
  */
 export const PROVER_DATA_COLLECTION = Object.freeze({ data_collection: ['financialAndPaymentInfo'] });
 
-export function makePlatform({ firefox = IS_FIREFOX } = {}) {
+/**
+ * `t` is ui/i18n.js's, handed down to the passkey's labels (backend-extension.js passes it; this
+ * file and lib/passkey.js import nothing from ui/ so extension/test/backend-extension.test.mjs can
+ * load them under plain Node, where the labels stay English).
+ */
+export function makePlatform({ firefox = IS_FIREFOX, t } = {}) {
   const platform = {
     name: IS_FIREFOX ? 'firefox' : 'chrome',
     // A new tab, never this popup's window: an explorer must get no handle on the wallet.
@@ -83,7 +88,7 @@ export function makePlatform({ firefox = IS_FIREFOX } = {}) {
     platform.paste = () => navigator.clipboard.readText();
   }
   // Unlock with a passkey (Touch ID): Chrome only, see lib/passkey.js.
-  const passkey = makePasskey(ext);
+  const passkey = makePasskey(ext, t ? { t } : {});
   if (passkey) platform.passkey = passkey;
   return platform;
 }

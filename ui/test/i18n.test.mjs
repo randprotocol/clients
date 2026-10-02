@@ -118,6 +118,9 @@ const ALLOWED = new Set([
   'Binance', 'Smart', 'Chain', 'fake', 'dev', 'WIPE', 'randscan', 'Durian', 'Tauri', 'Chrome', 'Firefox',
   // The fake backend's own data (ui/test/fake-backend.mjs): asset names, a prover host, a version.
   'Wrapped', 'Ether', 'wETH', 'Durian', 'Token', 'prover', 'example', 'org', 'com', 'https', 'http', 'localhost',
+  // The receive screen's data: the `randpay:` link's scheme, and the fake wallet's address
+  // fingerprint (fakeFingerprint of the fake address, Crockford digits split into "DPE5-S6JD-…").
+  'randpay', 'DPE', 'JD', 'DEEX',
 ]);
 
 const SCREENS = [

@@ -18,6 +18,7 @@
 // window are never reached on this device. Everything else — keys, the address, scanning a real
 // node, the note store, the faucet, viewing keys — is real.
 import { makeWasmBackend, UNLOCKED_SESSION_KEY } from './ui/engine/backend-wasm.js';
+import { t } from './ui/i18n.js';
 import { ext } from './lib/browser.js';
 import { call } from './lib/core.js';
 import { wireIdleLock } from './lib/idle-lock.js';
@@ -94,7 +95,7 @@ export function extensionBackend() {
   const backend = makeWasmBackend({
     core: { call },            // lib/core.js: the wasm core in a Web Worker, as `call(method, params)`
     storage: extensionStorage(),
-    platform: makePlatform(),
+    platform: makePlatform({ t }), // `t` reaches the passkey's labels (lib/passkey.js)
   });
 
   const disposeIdleLock = wireIdleLock(backend, ext, { sessionKey: UNLOCKED_SESSION_KEY });

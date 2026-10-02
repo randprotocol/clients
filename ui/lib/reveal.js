@@ -16,6 +16,7 @@
 // sitting on a screen nobody is looking at is the failure mode this guards against.
 //
 // Importable under plain Node: nothing here runs at module scope.
+import { t } from '../i18n.js';
 
 export const HOLD_MS = 650;
 export const SHOW_MS = 10_000;
@@ -80,7 +81,7 @@ export function wireSecretReveal(root, options = {}) {
 
   function paintTimedLabel() {
     if (!timedBtn) return;
-    const label = revealed ? (labels.hide || 'Hide') : (labels.reveal || `Show for ${Math.round(showMs / 1000)} seconds`);
+    const label = revealed ? (labels.hide || t('Hide')) : (labels.reveal || t('Show for {secs} seconds', { secs: Math.round(showMs / 1000) }));
     // The label is the button's text; `aria-label` is set too because some of these buttons carry
     // only an icon. Neither ever contains the secret.
     if (timedBtn.dataset.keepLabel !== 'true') timedBtn.textContent = label;

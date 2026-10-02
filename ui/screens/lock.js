@@ -6,6 +6,7 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { markSvg } from '../lib/entropy.js';
+import { t } from '../i18n.js';
 
 /** A passkey prompt is open. The screen can mount twice in a row (a route resolved, then
  *  re-entered), and a second fingerprint prompt stacked on the first is a bug the user sees: the
@@ -19,24 +20,24 @@ registerScreen('lock', {
       <div class="onboard">
         <span class="mark-lg bare">${raw(markSvg())}</span>
         <div class="stack tight">
-          <h1 class="title">Welcome back</h1>
-          <p class="subtitle" data-role="lock-subtitle">Enter your password to unlock Rand Wallet.</p>
+          <h1 class="title">${t('Welcome back')}</h1>
+          <p class="subtitle" data-role="lock-subtitle">${t('Enter your password to unlock Rand Wallet.')}</p>
         </div>
         <div class="stack onboard-actions" data-role="passkey-slot" hidden>
-          <button class="btn btn-primary block" type="button" data-action="passkey">Unlock</button>
+          <button class="btn btn-primary block" type="button" data-action="passkey">${t('Unlock')}</button>
           <span class="hint" data-role="passkey-note"></span>
         </div>
         <form novalidate class="stack onboard-actions">
           <label class="field">
-            <span class="label">Password</span>
+            <span class="label">${t('Password')}</span>
             <input name="password" type="password" autocomplete="current-password" aria-describedby="lock-password-hint">
-            <span class="hint" id="lock-password-hint">Set on this device when this wallet was created.</span>
-            <span class="error" id="lock-password-error">Incorrect password.</span>
+            <span class="hint" id="lock-password-hint">${t('Set on this device when this wallet was created.')}</span>
+            <span class="error" id="lock-password-error">${t('Incorrect password.')}</span>
           </label>
-          <button class="btn btn-primary block" type="submit">Unlock</button>
+          <button class="btn btn-primary block" type="submit">${t('Unlock')}</button>
         </form>
         <div data-role="damaged-slot"></div>
-        <button class="btn btn-ghost sm" type="button" data-action="wipe">Forgot? Wipe and restore</button>
+        <button class="btn btn-ghost sm" type="button" data-action="wipe">${t('Forgot? Wipe and restore')}</button>
       </div>`;
   },
   after(ctx, root) {
@@ -60,13 +61,14 @@ registerScreen('lock', {
         <div class="banner negative">
           <span class="ic">${raw(icons.warning())}</span>
           <span>
-            <span class="banner-title">This wallet cannot be opened</span>
-            ${(err && err.message) || 'The stored wallet data could not be read.'}
-            Your funds are on chain: wipe this device and restore with your recovery key.
+            <span class="banner-title">${t('This wallet cannot be opened')}</span>
+            ${t('{reason} Your funds are on chain: wipe this device and restore with your recovery key.', {
+              reason: (err && err.message) || t('The stored wallet data could not be read.'),
+            })}
           </span>
         </div>`;
       wipeBtn.classList.add('btn-primary');
-      wipeBtn.textContent = 'Wipe and restore from your recovery key';
+      wipeBtn.textContent = t('Wipe and restore from your recovery key');
     }
 
     async function onSubmit(evt) {
@@ -92,7 +94,7 @@ registerScreen('lock', {
           if (ctx.isCurrent()) wipeBtn.focus();
           return;
         }
-        errorEl.textContent = 'Incorrect password.';
+        errorEl.textContent = t('Incorrect password.');
         markInvalid(wrap, input, 'lock-password-error');
         input.focus();
       }
@@ -112,12 +114,12 @@ registerScreen('lock', {
       const pk = ctx.backend.wallet.passkey;
       const label = pk.label();
       const dialog = ctx.sheet(h`
-        <h3 class="sheet-title">Unlock with ${label} next time?</h3>
-        <p class="sheet-sub">Open Rand Wallet with ${label} instead of typing your password. Your password still works, and stays the way to restore access.</p>
+        <h3 class="sheet-title">${t('Unlock with {label} next time?', { label })}</h3>
+        <p class="sheet-sub">${t('Open Rand Wallet with {label} instead of typing your password. Your password still works, and stays the way to restore access.', { label })}</p>
         <p class="caption" data-role="offer-error"></p>
         <div class="sheet-foot">
-          <button class="btn" type="button" data-role="not-now">Not now</button>
-          <button class="btn btn-primary" type="button" data-role="turn-on">Turn on ${label}</button>
+          <button class="btn" type="button" data-role="not-now">${t('Not now')}</button>
+          <button class="btn btn-primary" type="button" data-role="turn-on">${t('Turn on {label}', { label })}</button>
         </div>`);
       let done = false;
       const finish = () => { if (done) return; done = true; password = ''; ctx.closeSheet(); ctx.go('#home'); };
@@ -129,11 +131,13 @@ registerScreen('lock', {
         btn.disabled = true;
         try {
           await pk.enable(password);
-          ctx.toast(`${label} is on`, { kind: 'positive' });
+          ctx.toast(t('{label} is on', { label }), { kind: 'positive' });
           finish();
         } catch (err) {
           btn.disabled = false;
-          dialog.querySelector('[data-role="offer-error"]').textContent = `${label} could not be set up: ${(err && err.message) || err}. You can try again from Settings → Security.`;
+          dialog.querySelector('[data-role="offer-error"]').textContent = t('{label} could not be set up: {reason}. You can try again from Settings → Security.', {
+            label, reason: (err && err.message) || err,
+          });
         }
       });
     }
@@ -163,7 +167,7 @@ registerScreen('lock', {
           // The password changed since the passkey sealed it: the copy is worthless now.
           await pkApi.disable();
           pkSlot.hidden = true;
-          errorEl.textContent = `${pkApi.label()} no longer opens this wallet (its password changed). Unlock with the password, then turn ${pkApi.label()} on again in Settings.`;
+          errorEl.textContent = t('{label} no longer opens this wallet (its password changed). Unlock with the password, then turn {label} on again in Settings.', { label: pkApi.label() });
           markInvalid(wrap, input, 'lock-password-error');
           input.focus();
           return;
@@ -171,8 +175,8 @@ registerScreen('lock', {
         ctx.go('#home');
       } catch (err) {
         pkNote.textContent = err && err.code === 'CANCELLED'
-          ? `Cancelled. Press Unlock to try ${pkApi.label()} again, or use your password.`
-          : `${(err && err.message) || 'The passkey did not answer.'} Use your password instead.`;
+          ? t('Cancelled. Press Unlock to try {label} again, or use your password.', { label: pkApi.label() })
+          : t('{reason} Use your password instead.', { reason: (err && err.message) || t('The passkey did not answer.') });
       } finally {
         pkBusy = false;
         promptOpen = false;
@@ -186,10 +190,10 @@ registerScreen('lock', {
         try { on = (await pkApi.enabled()) && (await pkApi.available()); } catch { on = false; }
         if (!on || !ctx.isCurrent()) return;
         const label = pkApi.label();
-        pkBtn.textContent = `Unlock with ${label}`;
-        root.querySelector('[data-role="lock-subtitle"]').textContent = `Use ${label}, or enter your password.`;
+        pkBtn.textContent = t('Unlock with {label}', { label });
+        root.querySelector('[data-role="lock-subtitle"]').textContent = t('Use {label}, or enter your password.', { label });
         form.querySelector('button[type=submit]').classList.remove('btn-primary');
-        form.querySelector('button[type=submit]').textContent = 'Unlock with password';
+        form.querySelector('button[type=submit]').textContent = t('Unlock with password');
         pkSlot.hidden = false;
         // Asked for at once where the browser lets a focused page do so; a browser that wants a
         // click first simply leaves the button.
@@ -202,11 +206,11 @@ registerScreen('lock', {
     function onWipe(evt) {
       evt.preventDefault();
       const dialog = ctx.sheet(h`
-        <h3 class="sheet-title">Wipe this wallet?</h3>
-        <p class="sheet-sub">This removes the wallet from this device. You will need your recovery key to restore it.</p>
+        <h3 class="sheet-title">${t('Wipe this wallet?')}</h3>
+        <p class="sheet-sub">${t('This removes the wallet from this device. You will need your recovery key to restore it.')}</p>
         <div class="sheet-foot">
-          <button class="btn" type="button" data-role="cancel">Keep wallet</button>
-          <button class="btn danger" type="button" data-role="confirm">Wipe wallet</button>
+          <button class="btn" type="button" data-role="cancel">${t('Keep wallet')}</button>
+          <button class="btn danger" type="button" data-role="confirm">${t('Wipe wallet')}</button>
         </div>`);
       on(dialog, '[data-role="cancel"]', 'click', () => ctx.closeSheet());
       on(dialog, '[data-role="confirm"]', 'click', async () => {

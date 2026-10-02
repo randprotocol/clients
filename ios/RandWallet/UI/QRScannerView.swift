@@ -5,7 +5,7 @@ import UIKit
 /// Scans a QR code with the camera — a recipient address, or a prover's pairing link. Falls back
 /// to a message on the simulator.
 struct QRScannerView: View {
-    var prompt = "Point the camera at a Rand Wallet address"
+    var prompt: LocalizedStringKey = "Point the camera at a Rand Wallet address"
     let onCode: (String) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -48,7 +48,7 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
         view.backgroundColor = .black
         guard let device = AVCaptureDevice.default(for: .video), let input = try? AVCaptureDeviceInput(device: device) else {
             let label = UILabel()
-            label.text = "No camera available"
+            label.text = String(localized: "No camera available")
             label.textColor = .white
             label.textAlignment = .center
             label.frame = view.bounds

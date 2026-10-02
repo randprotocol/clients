@@ -1,6 +1,7 @@
 // Activity: every transaction, grouped by day, with a client-side filter chip row (All + one chip
 // per asset). Filtering never re-fetches — it re-renders the already-fetched list in place.
 import { h, raw, on } from '../lib/dom.js';
+import { t } from '../i18n.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { groupByDay } from '../lib/assets.js';
@@ -10,15 +11,15 @@ import { wrongChainBannerMarkup, identityUnknownBannerMarkup, canRescan, confirm
 
 function skeletonMarkup() {
   return h`
-    <h1 class="sr-only">Activity</h1>
-    <div class="topbar"><span class="topbar-title">Activity</span></div>
+    <h1 class="sr-only">${t('Activity')}</h1>
+    <div class="topbar"><span class="topbar-title">${t('Activity')}</span></div>
     <div class="card flush">${listMarkup(Array.from({ length: 3 }, () => h`
       <li><div class="row"><span class="skeleton circle"></span><span class="row-main"><span class="skeleton line lg"></span><span class="skeleton line sm"></span></span></div></li>`))}</div>`;
 }
 
 function filterChipsMarkup(assets, active) {
-  const chips = [{ index: 'all', symbol: 'All' }, ...assets.map((a) => ({ index: String(a.index), symbol: a.symbol }))];
-  return h`<div class="cluster" role="group" aria-label="Filter activity by asset">${raw(chips.map((c) => h`
+  const chips = [{ index: 'all', symbol: t('All') }, ...assets.map((a) => ({ index: String(a.index), symbol: a.symbol }))];
+  return h`<div class="cluster" role="group" aria-label="${t('Filter activity by asset')}">${raw(chips.map((c) => h`
     <button class="chip action${c.index === active ? ' on' : ''}" type="button" data-filter="${c.index}" aria-pressed="${c.index === active ? 'true' : 'false'}">${c.symbol}</button>`).join(''))}</div>`;
 }
 
@@ -28,9 +29,9 @@ function groupsMarkup(groups, items, assetsByIndex) {
       <div class="card">
         <div class="empty">
           <span class="avatar lg">${raw(icons.activity())}</span>
-          <span class="empty-title">No activity yet</span>
-          <span>Transactions you send or receive will appear here.</span>
-          <button class="btn sm" type="button" data-go="faucet">Get test RAND from the faucet</button>
+          <span class="empty-title">${t('No activity yet')}</span>
+          <span>${t('Transactions you send or receive will appear here.')}</span>
+          <button class="btn sm" type="button" data-go="faucet">${t('Get test RAND from the faucet')}</button>
         </div>
       </div>`;
   }
@@ -43,7 +44,8 @@ registerScreen('activity', {
   tab: 'activity',
   // On a wide screen this list keeps its detail column even with nothing open, so opening a
   // transaction does not shove the list sideways — and the empty column says what it is for.
-  detailEmpty: 'Select a transaction',
+  // A function, read at each render, so it follows the language.
+  detailEmpty: () => t('Select a transaction'),
   render: () => skeletonMarkup(),
   async after(ctx, root) {
     let assets, sync;
@@ -51,7 +53,7 @@ registerScreen('activity', {
       [assets, sync] = await Promise.all([ctx.backend.assets.list(), ctx.backend.sync.cached()]);
     } catch (err) {
       if (!ctx.isCurrent()) return;
-      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Could not load your activity</span>${err && err.message ? err.message : 'Something went wrong.'}</span></div>`;
+      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">${t('Could not load your activity')}</span>${err && err.message ? err.message : t('Something went wrong.')}</span></div>`;
       return;
     }
     if (!ctx.isCurrent()) return;
@@ -73,8 +75,8 @@ registerScreen('activity', {
         : (identityUnknown ? identityUnknownBannerMarkup() : ''));
       const groups = groupByDay(items, Date.now());
       root.innerHTML = h`
-        <h1 class="sr-only">Activity</h1>
-        <div class="topbar"><span class="topbar-title">Activity</span></div>
+        <h1 class="sr-only">${t('Activity')}</h1>
+        <div class="topbar"><span class="topbar-title">${t('Activity')}</span></div>
         ${banner}
         ${raw(filterChipsMarkup(assets, active))}
         ${raw(groupsMarkup(groups, items, assetsByIndex))}`;

@@ -50,10 +50,10 @@ enum RecipientKind: Equatable {
 /// The memo: at most 510 bytes of UTF-8 — bytes, not characters (spec 2026-09-26 §2.3).
 enum Memo {
     static let maxBytes = 510
-    static let noMemoNotice = "This network doesn't carry memos; the memo will not be sent"
+    static var noMemoNotice: String { String(localized: "This network doesn't carry memos; the memo will not be sent") }
 
     static func byteCount(_ text: String) -> Int { text.utf8.count }
-    static func counter(_ text: String) -> String { "\(byteCount(text))/\(maxBytes) bytes" }
+    static func counter(_ text: String) -> String { String(localized: "\(byteCount(text))/\(maxBytes) bytes") }
     /// The memo — or any other stranger-chosen text, like a contact name — as it may be shown
     /// (final reviews 1 and 2). Memos are live on chains 14 and 15: anyone can pay a dust note
     /// carrying any memo to any public address, and a link carries any memo. One rule, the same as
@@ -90,7 +90,7 @@ enum Memo {
     /// The refusal for a memo over the limit, or `nil`.
     static func tooLong(_ text: String) -> String? {
         let n = byteCount(text)
-        return n > maxBytes ? "The memo is \(n) bytes; the limit is \(maxBytes)." : nil
+        return n > maxBytes ? String(localized: "The memo is \(n) bytes; the limit is \(maxBytes).") : nil
     }
 }
 
@@ -112,7 +112,7 @@ struct ResolvedRecipient: Equatable {
 
 enum SendLinkRules {
     static let symbol = "RAND"
-    static let notARecipient = "That is not a shielded address, a randpay: link, or a saved contact."
+    static var notARecipient: String { String(localized: "That is not a shielded address, a randpay: link, or a saved contact.") }
 
     /// This app sends RAND only: a link naming no asset, or an index whose value is zero (`0`,
     /// `00`, …), is RAND — the core's `PaymentUri::parse` reads an index as digits, and the CLI
@@ -128,7 +128,7 @@ enum SendLinkRules {
     static func conflicts(link: PaymentLink, typedAmount: String, typedMemo: String) -> LinkConflicts {
         var out = LinkConflicts()
         if (link.asset != nil || link.amount != nil) && !linkIsRand(link.asset) {
-            out.to = "The link asks for an asset this wallet does not hold (\(link.asset ?? ""))."
+            out.to = String(localized: "The link asks for an asset this wallet does not hold (\(link.asset ?? "")).")
         }
         let typed = typedAmount.trimmingCharacters(in: .whitespaces)
         if out.to == nil, let wanted = link.amount, !typed.isEmpty {
@@ -136,10 +136,10 @@ enum SendLinkRules {
                 guard let a = Amount.parse(typed), let b = Amount.parse(wanted) else { return false }
                 return a == b
             }()
-            if !same { out.amount = "The link asks for \(wanted) \(symbol); you typed \(typed) \(symbol)." }
+            if !same { out.amount = String(localized: "The link asks for \(wanted) \(symbol); you typed \(typed) \(symbol).") }
         }
         if let m = link.memo, !m.isEmpty, !typedMemo.isEmpty, typedMemo != m {
-            out.memo = "The link’s memo is \"\(Memo.display(m))\"; you typed \"\(Memo.display(typedMemo))\"."
+            out.memo = String(localized: "The link’s memo is \"\(Memo.display(m))\"; you typed \"\(Memo.display(typedMemo))\".")
         }
         return out
     }
@@ -194,13 +194,13 @@ enum SendLinkRules {
         // A contact name is user-entered (and may end in a space): shown through the memo rule,
         // the separator included, so the line never carries a control character or two spaces.
         let who = name.map { Memo.display("\($0) · ") } ?? ""
-        let fp = fingerprint.map { "fingerprint \($0)" } ?? "fingerprint unavailable"
-        return "to \(who)\(fp) · \(amount) \(symbol)"
+        let fp = fingerprint.map { String(localized: "fingerprint \($0)") } ?? String(localized: "fingerprint unavailable")
+        return String(localized: "to \(who)\(fp) · \(amount) \(symbol)")
     }
 
     /// The memo's own line on the confirmation: `memo "<text>"`, every control and bidi character
     /// shown as U+FFFD (`Memo.display`), so it is one line that reads as a memo.
-    static func memoLine(_ memo: String) -> String { "memo \"\(Memo.display(memo))\"" }
+    static func memoLine(_ memo: String) -> String { String(localized: "memo \"\(Memo.display(memo))\"") }
 
     /// The recipient field resolved in the CLI's order: a `rand1…` address, a `randpay:` link, a
     /// contact name. Throws with the sentence to show on the field.
@@ -209,7 +209,7 @@ enum SendLinkRules {
         switch RecipientKind(s) {
         case .address:
             let info = try RandCore.parseAddress(s)
-            guard info.valid else { throw RandCore.CoreError(message: info.error ?? "Not a rand1 address") }
+            guard info.valid else { throw RandCore.CoreError(message: info.error ?? String(localized: "Not a rand1 address")) }
             return ResolvedRecipient(address: s, name: contacts.name(of: s), fingerprint: try RandCore.addressFingerprint(s), link: nil)
         case .link:
             let link = try RandCore.uriParse(s)

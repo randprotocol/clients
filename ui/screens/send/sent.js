@@ -13,6 +13,7 @@ import { formatUnits, shortAddress, shortHex } from '../../lib/format.js';
 import { explorerLink } from '../../lib/explorer.js';
 import { wireSecretReveal } from '../../lib/reveal.js';
 import { takeResult, clearFinishedSend } from './state.js';
+import { t } from '../../i18n.js';
 
 function sentSkeletonMarkup() {
   return h`<div class="narrow"><div class="skeleton block"></div></div>`;
@@ -52,45 +53,45 @@ registerScreen('sent', {
       ? raw(h`<span class="amount">${formatUnits(result.amount, 9, asset.decimals)}<span class="unit">${asset.symbol}</span></span>`)
       : '';
     const toRow = result && result.to
-      ? raw(h`<div class="kv"><span class="k">To</span><span class="v mono truncate">${shortAddress(result.to)}</span></div>`)
+      ? raw(h`<div class="kv"><span class="k">${t('To')}</span><span class="v mono truncate">${shortAddress(result.to)}</span></div>`)
       : '';
     const keyBlock = txKey
       ? raw(h`
         <div class="card stack">
-          <span class="caption">The transaction key discloses this one payment — its amount and its recipient — to whoever you give it to. It cannot spend anything.</span>
+          <span class="caption">${t('The transaction key discloses this one payment — its amount and its recipient — to whoever you give it to. It cannot spend anything.')}</span>
           <div class="hold-reveal">
             <span class="key-mask masked" data-role="txkey">•••• •••• •••• •••• •••• ••••</span>
-            <button class="btn block hold-btn" type="button" data-role="hold"><span class="fill"></span>${raw(icons.eye())}Hold to reveal</button>
+            <button class="btn block hold-btn" type="button" data-role="hold"><span class="fill"></span>${raw(icons.eye())}${t('Hold to reveal')}</button>
             <button class="btn block" type="button" data-role="timed"></button>
-            <button class="btn block" type="button" data-role="copy-key">${raw(icons.copy())}Copy transaction key</button>
+            <button class="btn block" type="button" data-role="copy-key">${raw(icons.copy())}${t('Copy transaction key')}</button>
           </div>
         </div>`)
-      : raw(h`<button class="btn block" type="button" data-go="tx/${hash}">View this transaction</button>`);
+      : raw(h`<button class="btn block" type="button" data-go="tx/${hash}">${t('View this transaction')}</button>`);
     const explorerBtn = explorer
       ? raw(h`<button class="btn block" type="button" data-role="explorer">${explorer.label}</button>`)
       : '';
 
     root.innerHTML = h`
-      <h1 class="sr-only">Sent</h1>
+      <h1 class="sr-only">${t('Sent')}</h1>
       <div class="narrow">
         <div class="stage">
           <span class="avatar lg in">${raw(icons.check())}</span>
-          <h2 class="title" data-role="step-title" tabindex="-1">Transfer submitted</h2>
+          <h2 class="title" data-role="step-title" tabindex="-1">${t('Transfer submitted')}</h2>
           ${amountLine}
         </div>
         <div class="card">
           ${toRow}
           <div class="kv">
-            <span class="k">Transaction</span>
+            <span class="k">${t('Transaction')}</span>
             <span class="v cluster">
               <span class="mono truncate">${shortHex(hash, 10)}</span>
-              <button class="btn-icon" type="button" data-role="copy-hash" aria-label="Copy the transaction hash">${raw(icons.copy())}</button>
+              <button class="btn-icon" type="button" data-role="copy-hash" aria-label="${t('Copy the transaction hash')}">${raw(icons.copy())}</button>
             </span>
           </div>
         </div>
         ${keyBlock}
         ${explorerBtn}
-        <button class="btn btn-primary block" type="button" data-go="home">Done</button>
+        <button class="btn btn-primary block" type="button" data-go="home">${t('Done')}</button>
       </div>`;
 
     const title = root.querySelector('[data-role="step-title"]');
@@ -103,8 +104,8 @@ registerScreen('sent', {
       getSecret: () => txKey,
       selectors: { mask: '[data-role="txkey"]', hold: '[data-role="hold"]', timed: '[data-role="timed"]', copy: '[data-role="copy-key"]' },
       copy: (secret) => ctx.backend.platform.copy(secret),
-      onCopied: () => { if (live()) ctx.toast('Transaction key copied', { kind: 'positive' }); },
-      labels: { reveal: 'Show for 10 seconds', hide: 'Hide the transaction key' },
+      onCopied: () => { if (live()) ctx.toast(t('Transaction key copied'), { kind: 'positive' }); },
+      labels: { reveal: t('Show for 10 seconds'), hide: t('Hide the transaction key') },
     });
 
     const offExplorer = on(root, '[data-role="explorer"]', 'click', (evt) => {
@@ -116,8 +117,8 @@ registerScreen('sent', {
     // recipient searches for.
     const offCopyHash = on(root, '[data-role="copy-hash"]', 'click', async (evt) => {
       evt.preventDefault();
-      try { await ctx.backend.platform.copy(String(hash)); } catch { if (live()) ctx.toast('That could not be copied.', { kind: 'negative' }); return; }
-      if (live()) ctx.toast('Transaction hash copied', { kind: 'positive' });
+      try { await ctx.backend.platform.copy(String(hash)); } catch { if (live()) ctx.toast(t('That could not be copied.'), { kind: 'negative' }); return; }
+      if (live()) ctx.toast(t('Transaction hash copied'), { kind: 'positive' });
     });
 
     return () => {

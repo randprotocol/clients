@@ -8,6 +8,7 @@
 // `list-style: none` otherwise costs a <ul> its list semantics in Safari/VoiceOver). Nothing in
 // the app renders a bare `.row` directly under a `role="list"` container.
 import { h, raw } from './dom.js';
+import { t } from '../i18n.js';
 import { icons } from './icons.js';
 import { formatUnits, shortAddress, timeAgo } from './format.js';
 import { avatarFor } from './assets.js';
@@ -39,14 +40,14 @@ function assetSubtitle(asset) {
   const title = String(asset.name || asset.symbol || '');
   const symbol = String(asset.symbol || '');
   if (symbol && symbol.toLowerCase() !== title.toLowerCase()) return symbol;
-  return asset.index === 0 ? 'Native token' : `Registry asset · #${asset.index}`;
+  return asset.index === 0 ? t('Native token') : t('Registry asset · #{index}', { index: asset.index });
 }
 
 /** One `<li>` + `.row` for an asset-list entry. */
 export function assetRowMarkup(asset) {
   const balance = formatUnits(asset.balance ?? '0', 6, asset.decimals ?? 9);
   const pending = asset.pending && asset.pending !== '0'
-    ? raw(h`<span class="row-meta">+${formatUnits(asset.pending, 6, asset.decimals ?? 9)} pending</span>`)
+    ? raw(h`<span class="row-meta">${t('+{amount} pending', { amount: formatUnits(asset.pending, 6, asset.decimals ?? 9) })}</span>`)
     : '';
   const rplChip = asset.index >= 1 ? raw(h`<span class="chip xs">RPL</span>`) : '';
   return h`
@@ -70,24 +71,26 @@ export function assetRowMarkup(asset) {
 // the warning tint and no sign at all (nothing has moved yet). Anything else is a kind this build
 // does not know: it renders neutrally, with the node's own word for it shown as text (escaped by
 // `h`, like every other node-controlled string) rather than being silently relabelled "Pending".
+// The titles are functions, read at each call: the language can change while the app is mounted.
 const KIND_ICON = { in: 'arrowDownLeft', out: 'arrowUpRight', faucet: 'droplet', pending: 'activity' };
-const KIND_TITLE = { in: 'Received', out: 'Sent', faucet: 'Faucet' };
+const KIND_TITLE = { in: () => t('Received'), out: () => t('Sent'), faucet: () => t('Faucet') };
 const KIND_SIGN = { in: '+', out: '−', faucet: '+' };
 // `status` is optional on a pending item; only these known values become a title of their own.
-const PENDING_TITLE = { pending: 'Pending', proving: 'Proving', submitting: 'Submitting', confirming: 'Confirming' };
+const PENDING_TITLE = { pending: () => t('Pending'), proving: () => t('Proving'), submitting: () => t('Submitting'), confirming: () => t('Confirming') };
 
 /** `{kind, icon, title, sign, tint}` for an activity item, for rows and the tx detail alike. */
 export function kindOf(item) {
   const kind = String(item && item.kind);
   if (kind === 'in' || kind === 'out' || kind === 'faucet') {
-    return { kind, icon: KIND_ICON[kind], title: KIND_TITLE[kind], sign: KIND_SIGN[kind], tint: kind };
+    return { kind, icon: KIND_ICON[kind], title: KIND_TITLE[kind](), sign: KIND_SIGN[kind], tint: kind };
   }
   if (kind === 'pending') {
-    const title = PENDING_TITLE[String(item.status || '').toLowerCase()] || 'Pending';
+    const titled = PENDING_TITLE[String(item.status || '').toLowerCase()];
+    const title = titled ? titled() : t('Pending');
     return { kind, icon: 'activity', title, sign: '', tint: 'pending' };
   }
   const known = kind && kind !== 'undefined' && kind !== 'null';
-  return { kind, icon: 'activity', title: known ? kind : 'Transaction', sign: '', tint: '' };
+  return { kind, icon: 'activity', title: known ? kind : t('Transaction'), sign: '', tint: '' };
 }
 
 /**

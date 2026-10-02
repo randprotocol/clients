@@ -15,16 +15,19 @@
 //
 // This module does not decide what a valid address is — that is the core's (`parse_address`), and
 // the backend checks it before calling `addContact`. Importable under plain Node.
+import { t } from '../i18n.js';
+
 export const CONTACTS_KEY = 'contacts';
 
-export const NAME_RULE = 'a contact name is 1-64 characters and cannot start with rand1 or randpay:';
+/** The CLI's sentence, in the language in force (read at each call, never at import). */
+export const nameRule = () => t('a contact name is 1-64 characters and cannot start with rand1 or randpay:');
 
 /** `null` if `name` is a name the CLI would accept, else the CLI's sentence. */
 export function checkContactName(name) {
   const s = typeof name === 'string' ? name : '';
   const lower = s.toLowerCase();
   const chars = [...s].length;
-  if (chars === 0 || chars > 64 || lower.startsWith('rand1') || lower.startsWith('randpay:')) return NAME_RULE;
+  if (chars === 0 || chars > 64 || lower.startsWith('rand1') || lower.startsWith('randpay:')) return nameRule();
   return null;
 }
 
@@ -60,11 +63,11 @@ export async function addContact(storage, name, address) {
   const bad = checkContactName(name);
   if (bad) throw new Error(bad);
   const addr = String(address || '').trim();
-  if (!addr) throw new Error('a contact needs an address');
+  if (!addr) throw new Error(t('a contact needs an address'));
   const map = await readEntries(storage);
-  if (map.has(name)) throw new Error(`a contact named ${name} exists`);
+  if (map.has(name)) throw new Error(t('a contact named {name} exists', { name }));
   for (const [other, saved] of map) {
-    if (saved === addr) throw new Error(`this address is already saved as ${other}`);
+    if (saved === addr) throw new Error(t('this address is already saved as {name}', { name: other }));
   }
   map.set(name, addr);
   await writeEntries(storage, map);
@@ -74,7 +77,7 @@ export async function addContact(storage, name, address) {
 /** Removes `name`, or rejects if there is no such contact. */
 export async function removeContact(storage, name) {
   const map = await readEntries(storage);
-  if (!map.has(name)) throw new Error(`no contact named ${name}`);
+  if (!map.has(name)) throw new Error(t('no contact named {name}', { name }));
   map.delete(name);
   await writeEntries(storage, map);
 }

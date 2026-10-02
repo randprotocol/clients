@@ -2,8 +2,11 @@ import SwiftUI
 import UIKit
 
 /// The primary action: solid signal, full width, 52pt tall.
+/// Every label a component takes is a `LocalizedStringKey`, so a literal at the call site is a key in
+/// `Localizable.xcstrings` (ios/LOCALIZATION.md); a value that is data (an address, an amount) is
+/// passed as `String` and never localised.
 struct PrimaryButton: View {
-    let title: String
+    let title: LocalizedStringKey
     var enabled = true
     var busy = false
     let action: () -> Void
@@ -26,7 +29,7 @@ struct PrimaryButton: View {
 }
 
 struct SecondaryButton: View {
-    let title: String
+    let title: LocalizedStringKey
     var destructive = false
     let action: () -> Void
 
@@ -61,7 +64,7 @@ struct Card<Content: View>: View {
 /// One of the round Receive / Send / Swap actions under the balance card.
 struct RoundAction: View {
     let icon: String
-    let label: String
+    let label: LocalizedStringKey
     let action: () -> Void
     var body: some View {
         Button(action: action) {
@@ -80,7 +83,7 @@ struct RoundAction: View {
 
 /// A mono value with a copy button.
 struct CopyRow: View {
-    let label: String
+    let label: LocalizedStringKey
     let value: String
     var shortened = true
     @State private var copied = false
@@ -106,12 +109,14 @@ struct CopyRow: View {
 /// The heading over a group of rows: sentence case at body size, as the shared UI's
 /// `.section-title`. It names the group, it does not decorate it — no eyebrows.
 struct SectionLabel: View {
-    let text: String
+    let text: LocalizedStringKey
     var body: some View {
         Text(text).font(.ui(15, .semibold)).foregroundColor(Theme.textStrong)
     }
 }
 
+/// `message` is already in the user's language: the sentence a rule or a service produced through
+/// `String(localized:)`, or a core error through `CoreErrors`.
 struct ErrorText: View {
     let message: String?
     var body: some View {
@@ -123,7 +128,7 @@ struct ErrorText: View {
 
 /// A text field styled like the rest of the surfaces.
 struct Field: View {
-    let placeholder: String
+    let placeholder: LocalizedStringKey
     @Binding var text: String
     var mono = false
     var keyboard: UIKeyboardType = .default

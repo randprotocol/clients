@@ -19,19 +19,19 @@ enum ProverURLRule {
     static func check(_ text: String) -> Verdict {
         var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         while value.hasSuffix("/") { value.removeLast() }
-        if value.isEmpty { return .refused("The pairing link has no prover address.") }
+        if value.isEmpty { return .refused(String(localized: "The pairing link has no prover address.")) }
         guard let c = URLComponents(string: value), let scheme = c.scheme?.lowercased() else {
-            return .refused("The pairing link's prover address is not a URL.")
+            return .refused(String(localized: "The pairing link's prover address is not a URL."))
         }
         let host = (c.host ?? "").lowercased()
         let local = ["localhost", "127.0.0.1", "::1", "[::1]"].contains(host)
         if (scheme == "https" || scheme == "http") && host.isEmpty {
-            return .refused("The pairing link's prover address is not a URL.")
+            return .refused(String(localized: "The pairing link's prover address is not a URL."))
         }
         if scheme == "https" { return .ok(value) }
         if scheme == "http" && local { return .ok(value) }
-        if scheme == "http" { return .refused("Use https for a prover — plain http is only allowed for a prover on this machine.") }
-        return .refused("A prover address must be https://.")
+        if scheme == "http" { return .refused(String(localized: "Use https for a prover — plain http is only allowed for a prover on this machine.")) }
+        return .refused(String(localized: "A prover address must be https://."))
     }
 }
 
@@ -80,7 +80,7 @@ struct ProverInfo: Equatable {
 
     init(_ value: Any) throws {
         guard let o = value as? [String: Any] else {
-            throw ProverError(message: "the prover's info is not an object", failure: .body)
+            throw ProverError(message: String(localized: "the prover's info is not an object"), failure: .body)
         }
         func num(_ v: Any?) -> Int { (v as? NSNumber).map { Swift.max(0, $0.intValue) } ?? 0 }
         let q = o["queue"] as? [String: Any] ?? [:]
@@ -114,7 +114,7 @@ final class ProverClient {
         switch ProverURLRule.check(text) {
         case .refused(let why): throw ProverRefusal(message: why)
         case .ok(let value):
-            guard let u = URL(string: value) else { throw ProverRefusal(message: "The pairing link's prover address is not a URL.") }
+            guard let u = URL(string: value) else { throw ProverRefusal(message: String(localized: "The pairing link's prover address is not a URL.")) }
             url = u
         }
         if let session {
@@ -142,17 +142,17 @@ final class ProverClient {
         } catch is CancellationError {
             throw CancellationError()
         } catch let e as URLError where e.code == .timedOut {
-            throw ProverError(message: "cannot reach the prover at \(url.absoluteString): timed out", failure: .timeout)
+            throw ProverError(message: String(localized: "cannot reach the prover at \(url.absoluteString): timed out"), failure: .timeout)
         } catch {
-            throw ProverError(message: "cannot reach the prover at \(url.absoluteString): \(error.localizedDescription)", failure: .connect)
+            throw ProverError(message: String(localized: "cannot reach the prover at \(url.absoluteString): \(error.localizedDescription)"), failure: .connect)
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
             let ok = (200..<300).contains(status)
-            throw ProverError(message: "the prover at \(url.absoluteString) did not answer with JSON-RPC (HTTP \(status))", failure: ok ? .body : .http)
+            throw ProverError(message: String(localized: "the prover at \(url.absoluteString) did not answer with JSON-RPC (HTTP \(status))"), failure: ok ? .body : .http)
         }
         if let e = obj["error"] as? [String: Any] {
-            throw ProverError(message: e["message"] as? String ?? "prover error", code: (e["code"] as? NSNumber)?.intValue,
+            throw ProverError(message: e["message"] as? String ?? String(localized: "prover error"), code: (e["code"] as? NSNumber)?.intValue,
                               data: e["data"] as? [String: Any])
         }
         return obj["result"] ?? NSNull()
@@ -164,14 +164,14 @@ final class ProverClient {
     func submit(_ sealedHex: String) async throws -> String {
         let r = try await call("prover_submit", [sealedHex]) as? [String: Any]
         guard let job = r?["job"] as? String, Self.validJob(job) else {
-            throw ProverError(message: "the prover accepted the job but named no job id", failure: .body)
+            throw ProverError(message: String(localized: "the prover accepted the job but named no job id"), failure: .body)
         }
         return job
     }
 
     func status(_ job: String) async throws -> [String: Any] {
         guard let o = try await call("prover_status", [job]) as? [String: Any] else {
-            throw ProverError(message: "the prover's status is not an object", failure: .body)
+            throw ProverError(message: String(localized: "the prover's status is not an object"), failure: .body)
         }
         return o
     }
@@ -192,19 +192,19 @@ final class ProverClient {
         case busy:
             let depth = (e.data?["depth"] as? NSNumber)?.intValue
             let n = depth.map { $0 >= 0 ? String($0) : "?" } ?? "?"
-            return ProverRefusal(message: "The prover is full (\(n) waiting). Try again in a few minutes.", busy: true)
+            return ProverRefusal(message: String(localized: "The prover is full (\(n) waiting). Try again in a few minutes."), busy: true)
         case unpaired:
-            return ProverRefusal(message: "This prover does not know this pairing. Pair it again in Settings.")
+            return ProverRefusal(message: String(localized: "This prover does not know this pairing. Pair it again in Settings."))
         case witnessKind:
             let reason = (e.data?["reason"] as? String).map { " (\(String($0.prefix(200))))" } ?? ""
-            return ProverRefusal(message: "This prover does not accept this kind of job\(reason). Pair another prover in Settings, or send from the rand command-line wallet.")
+            return ProverRefusal(message: String(localized: "This prover does not accept this kind of job\(reason). Pair another prover in Settings, or send from the rand command-line wallet."))
         case fee:
-            return ProverRefusal(message: "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.")
+            return ProverRefusal(message: String(localized: "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet."))
         case unknownJob:
-            return ProverRefusal(message: "The prover no longer has this proof (it restarted or the job expired). Send again.")
+            return ProverRefusal(message: String(localized: "The prover no longer has this proof (it restarted or the job expired). Send again."))
         default:
             let reason = (e.data?["reason"] as? String).map { ": \($0)" } ?? ""
-            return ProverRefusal(message: "The prover refused the job (\(e.message)\(reason)).")
+            return ProverRefusal(message: String(localized: "The prover refused the job (\(e.message)\(reason))."))
         }
     }
 }
@@ -222,7 +222,7 @@ enum RemoteSendParams {
     static func build(request: ProveRequest, route: ProverPairingService.Route, maxProofBytes: Int?,
                       fee: JSONValue = .null) throws -> [String: Any] {
         guard let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] else {
-            throw RandCore.CoreError(message: "the transfer request did not encode")
+            throw RandCore.CoreError(message: String(localized: "the transfer request did not encode"))
         }
         return build(requestJSON: json, route: route, maxProofBytes: maxProofBytes, fee: fee)
     }
@@ -256,7 +256,7 @@ struct RemoteJob<R> {
 extension RemoteJob where R == ProveResult {
     static func transfer(_ request: ProveRequest) throws -> RemoteJob<ProveResult> {
         guard let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any] else {
-            throw RandCore.CoreError(message: "the transfer request did not encode")
+            throw RandCore.CoreError(message: String(localized: "the transfer request did not encode"))
         }
         return RemoteJob<ProveResult>(kind: "transfer", params: json, hcBundle: request.hcBundle, hcAuth: request.hcAuth,
                                       prepare: { try RandCore.prepareTransfer($0) },
@@ -340,7 +340,7 @@ struct RemoteProver {
                 }
                 let r = ProverClient.refusal(error)
                 if r is ProverRefusal { throw r }
-                throw ProverRefusal(message: "Could not hand the proof to your prover: \(error.localizedDescription)")
+                throw ProverRefusal(message: String(localized: "Could not hand the proof to your prover: \(error.localizedDescription)"))
             }
         }
         return submitted!
@@ -371,7 +371,7 @@ struct RemoteProver {
             } catch let e as ProverError where e.failure != nil {
                 if now().timeIntervalSince(started) >= maxWait {
                     await cancelJob()
-                    throw ProverRefusal(message: "Your prover has not answered for \(minutes) minutes, so nothing was sent. Send again.")
+                    throw ProverRefusal(message: String(localized: "Your prover has not answered for \(minutes) minutes, so nothing was sent. Send again."))
                 }
                 try await pause()
                 continue
@@ -387,23 +387,23 @@ struct RemoteProver {
                 await say(.proving)
             case "done":
                 guard let reply = st["reply"] as? String, !reply.isEmpty else {
-                    throw ProverRefusal(message: "The prover finished but sent no proof.")
+                    throw ProverRefusal(message: String(localized: "The prover finished but sent no proof."))
                 }
                 do {
                     // Off the calling actor, as the local proof is: `finish_proof` verifies a STARK.
                     return try await Task.detached(priority: .userInitiated) { try finish(pending, reply) }.value
                 } catch {
-                    throw ProverRefusal(message: "The prover's proof was refused by this wallet: \(error.localizedDescription)")
+                    throw ProverRefusal(message: String(localized: "The prover's proof was refused by this wallet: \(error.localizedDescription)"))
                 }
             case "failed", "expired":
                 let why = (st["error"] as? String).flatMap { $0.isEmpty ? nil : ": \($0)" } ?? ""
-                throw ProverRefusal(message: "The prover could not make this proof (\(state)\(why)).")
+                throw ProverRefusal(message: String(localized: "The prover could not make this proof (\(state)\(why))."))
             default:
-                throw ProverRefusal(message: "The prover answered with an unknown state (\(String(state.prefix(32)))).")
+                throw ProverRefusal(message: String(localized: "The prover answered with an unknown state (\(String(state.prefix(32))))."))
             }
             if now().timeIntervalSince(started) >= maxWait {
                 await cancelJob()
-                throw ProverRefusal(message: "Your prover has not finished after \(minutes) minutes, so nothing was sent. Send again.")
+                throw ProverRefusal(message: String(localized: "Your prover has not finished after \(minutes) minutes, so nothing was sent. Send again."))
             }
             try await pause()
         }

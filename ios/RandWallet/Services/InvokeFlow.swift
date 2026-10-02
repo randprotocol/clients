@@ -56,7 +56,7 @@ enum InvokeFlow {
     /// The proof cap a fee is quoted at when the node names none (`DEFAULT_PROOF_CAP`).
     static let defaultProofCap = 2_097_152
 
-    private static let unsupported = Refusal(code: .programsUnsupported, message: "This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent.")
+    private static var unsupported: Refusal { Refusal(code: .programsUnsupported, message: String(localized: "This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent.")) }
 
     /// Everything a quote learned, for the proof that follows it.
     struct Quote {
@@ -92,7 +92,7 @@ enum InvokeFlow {
         guard limits.programState != nil else { throw unsupported }
         let program = request.program
         guard let code = try await chain.programCode(program) else {
-            throw Refusal(code: .noProgram, message: "There is no program \(program.prefix(12))… on this chain. Nothing was sent.")
+            throw Refusal(code: .noProgram, message: String(localized: "There is no program \(program.prefix(12))… on this chain. Nothing was sent."))
         }
         let publicHex = try await chain.programPublic(program) ?? ""
         func live(_ key: String) async throws -> String {
@@ -102,7 +102,7 @@ enum InvokeFlow {
         for r in request.reads {
             let now = try await live(r.key)
             if now != r.value {
-                throw Refusal(code: .staleRead, message: "The pool changed since this page read it. Nothing was sent; the site can quote again.")
+                throw Refusal(code: .staleRead, message: String(localized: "The pool changed since this page read it. Nothing was sent; the site can quote again."))
             }
         }
         // A cell is created where a non-zero value is written over the chain's zeros; a read of the
@@ -118,7 +118,7 @@ enum InvokeFlow {
         do {
             dry = try core.dryRun(transition)
         } catch {
-            throw Refusal(code: .programRefused, message: "The program would not accept this request, so nothing was sent: \(error.localizedDescription)")
+            throw Refusal(code: .programRefused, message: String(localized: "The program would not accept this request, so nothing was sent: \(error.localizedDescription)"))
         }
         // Under a `gas` section (`bundle_gas_limit` set: chain 18 and later) the call is priced by
         // the gas it declares and every byte of its proof; without one, by tier alone.
@@ -132,7 +132,7 @@ enum InvokeFlow {
         if !request.pays.isEmpty {
             let vault = try await chain.programVault(program) ?? []
             if vaultShortfall(request, vault: vault) != nil {
-                throw Refusal(code: .vaultShort, message: "The pool does not hold enough to pay this out. Nothing was sent; the site can quote again.")
+                throw Refusal(code: .vaultShort, message: String(localized: "The pool does not hold enough to pay this out. Nothing was sent; the site can quote again."))
             }
         }
         let held = try await notes()
@@ -142,7 +142,7 @@ enum InvokeFlow {
             plan = try core.plan(notes: held, burnR: request.inflow.rand, burnAsset: burnsToken ? request.inflow.asset : 0,
                                  burnA: burnsToken ? request.inflow.amount : "0", fee: fee)
         } catch {
-            throw Refusal(code: .insufficientFunds, message: "Rand Wallet does not hold enough to cover this and its network fee: \(error.localizedDescription)")
+            throw Refusal(code: .insufficientFunds, message: String(localized: "Rand Wallet does not hold enough to cover this and its network fee: \(error.localizedDescription)"))
         }
         return Quote(transition: transition, dry: dry, fee: plan.fee.isEmpty ? fee : plan.fee, cells: cells, limits: limits, plan: plan)
     }
@@ -204,7 +204,7 @@ enum InvokeFlow {
                 paths.append(w.path)
             }
             if !moved { break }
-            if attempt >= 3 { throw RpcClient.RpcError(code: 0, message: "the tree moved while fetching witnesses; try again") }
+            if attempt >= 3 { throw RpcClient.RpcError(code: 0, message: String(localized: "the tree moved while fetching witnesses; try again")) }
         }
         func inputs(_ list: [OwnedNote], from: Int) throws -> [[String: Any]] {
             try list.enumerated().map { i, n in
@@ -242,7 +242,7 @@ enum InvokeFlow {
             return try await chain.sendTransaction(hex: txHex)
         } catch {
             if isStaleRead(error) {
-                throw Refusal(code: .staleRead, message: "The pool changed while this was being proved. Nothing was sent; the site can quote again.")
+                throw Refusal(code: .staleRead, message: String(localized: "The pool changed while this was being proved. Nothing was sent; the site can quote again."))
             }
             throw error
         }

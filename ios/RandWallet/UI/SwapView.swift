@@ -30,7 +30,7 @@ struct SwapView: View {
         case failed(String)
     }
 
-    static let staleNotice = "The pool moved before your swap reached the chain, so nothing was sent. Here is a new quote."
+    static var staleNotice: String { String(localized: "The pool moved before your swap reached the chain, so nothing was sent. Here is a new quote.") }
 
     @State private var step: Step = .loading
     @State private var pools: [Amm.Pool] = []
@@ -78,12 +78,12 @@ struct SwapView: View {
         do {
             cells = try await wallet.programCells(Amm.durianProgram)
         } catch {
-            step = .unavailable("The pools could not be read: \(error.localizedDescription).")
+            step = .unavailable(String(localized: "The pools could not be read: \(error.localizedDescription)."))
             return
         }
-        guard let cells else { step = .unavailable("This chain does not run programs, so there is nothing to swap through."); return }
+        guard let cells else { step = .unavailable(String(localized: "This chain does not run programs, so there is nothing to swap through.")); return }
         pools = Amm.pools(of: cells)
-        if pools.isEmpty { step = .unavailable("durian.market has no pools on this chain yet."); return }
+        if pools.isEmpty { step = .unavailable(String(localized: "durian.market has no pools on this chain yet.")); return }
         let list = Amm.tradeable(pools)
         if !list.contains(sell) { sell = Amm.randAsset }
         if buy == nil || !list.contains(buy!) || buy == sell { buy = list.first { $0 != sell } }
@@ -112,8 +112,8 @@ struct SwapView: View {
     private var amountError: String? {
         let t = amountText.trimmingCharacters(in: .whitespaces)
         if t.isEmpty { return nil }
-        guard let u = units, u > 0 else { return "Enter an amount like 1.5." }
-        if u > available { return "You have \(shown(available, sell, frac: 6))." }
+        guard let u = units, u > 0 else { return String(localized: "Enter an amount like 1.5.") }
+        if u > available { return String(localized: "You have \(shown(available, sell, frac: 6)).") }
         if case .failure(let r) = quote { return r.message }
         return nil
     }
@@ -225,7 +225,7 @@ struct SwapView: View {
         let rate = Amm.spotRate(route, sellDecimals: name(s.sell).decimals) ?? 0
         return Card {
             VStack(alignment: .leading, spacing: 10) {
-                row("Rate", "1 \(name(s.sell).symbol) ≈ \(shown(rate, s.buy, frac: 6))")
+                row("Rate", String(localized: "1 \(name(s.sell).symbol) ≈ \(shown(rate, s.buy, frac: 6))"))
                 row("Price impact", impact < 0.01 ? "< 0.01%" : String(format: "%.2f%%", impact), color: impact >= 5 ? Theme.negative : Theme.text)
                 row("Pool fee", shown(s.fee, s.feeAsset, frac: 6))
                 if s.hops.count == 2 { row("Route", "\(name(s.sell).symbol) → RAND → \(name(s.buy).symbol)") }
@@ -254,7 +254,7 @@ struct SwapView: View {
         } catch let e as InvokeFlow.Refusal where e.code == .staleRead {
             await loadPools(notice: Self.staleNotice)
         } catch {
-            step = .failed(error.localizedDescription.isEmpty ? "The swap could not be checked." : error.localizedDescription)
+            step = .failed(error.localizedDescription.isEmpty ? String(localized: "The swap could not be checked.") : error.localizedDescription)
         }
     }
 
@@ -296,9 +296,9 @@ struct SwapView: View {
 
     private func proverSentence(_ via: WalletService.InvokeVia) -> String {
         switch via {
-        case .device: return "This device proves the swap. It takes a few minutes."
-        case .pool: return "One of the RandProtocol provers makes the large proof; this device makes the small ones. It takes a few minutes."
-        case .prover: return "Your paired prover makes the large proof; this device makes the small ones. It takes a few minutes."
+        case .device: return String(localized: "This device proves the swap. It takes a few minutes.")
+        case .pool: return String(localized: "One of the RandProtocol provers makes the large proof; this device makes the small ones. It takes a few minutes.")
+        case .prover: return String(localized: "Your paired prover makes the large proof; this device makes the small ones. It takes a few minutes.")
         }
     }
 
@@ -312,7 +312,7 @@ struct SwapView: View {
         } catch let e as InvokeFlow.Refusal where e.code == .staleRead {
             await loadPools(notice: Self.staleNotice)
         } catch {
-            step = .failed(error.localizedDescription.isEmpty ? "The swap did not go through." : error.localizedDescription)
+            step = .failed(error.localizedDescription.isEmpty ? String(localized: "The swap did not go through.") : error.localizedDescription)
         }
     }
 
@@ -339,17 +339,17 @@ struct SwapView: View {
 
     private var phaseLabel: String {
         switch wallet.phase {
-        case .syncing: return "Syncing…"
-        case .selecting: return "Choosing notes…"
-        case .fetchingWitnesses: return "Fetching witnesses…"
-        case .proving: return "Proving your swap on this device…"
+        case .syncing: return String(localized: "Syncing…")
+        case .selecting: return String(localized: "Choosing notes…")
+        case .fetchingWitnesses: return String(localized: "Fetching witnesses…")
+        case .proving: return String(localized: "Proving your swap on this device…")
         case .authorising: return SendView.authorisingLabel
         case .provingRemotely(let name, let position, _):
-            if let n = position { return "Waiting at position \(n) on \(name)" }
-            return "Proving on \(name)…"
-        case .submitting: return "Submitting…"
-        case .waitingForCommit: return "Waiting for the block…"
-        default: return "Working…"
+            if let n = position { return String(localized: "Waiting at position \(n) on \(name)") }
+            return String(localized: "Proving on \(name)…")
+        case .submitting: return String(localized: "Submitting…")
+        case .waitingForCommit: return String(localized: "Waiting for the block…")
+        default: return String(localized: "Working…")
         }
     }
 
@@ -405,7 +405,8 @@ struct SwapView: View {
         .padding(20)
     }
 
-    private func row(_ k: String, _ v: String, color: Color = Theme.text, mono: Bool = false) -> some View {
+    /// `k` is a key in the catalog; `v` is data, or a sentence already localised.
+    private func row(_ k: LocalizedStringKey, _ v: String, color: Color = Theme.text, mono: Bool = false) -> some View {
         HStack {
             Text(k).font(.body15).foregroundColor(Theme.textSoft)
             Spacer()

@@ -160,7 +160,7 @@ hr { border: 0; border-top: 1px solid var(--border-soft); margin: var(--s-4) 0; 
   font-size: .62em;
   font-weight: 600;
   opacity: .78;
-  margin-left: .32em;
+  margin-inline-start: .32em;
   letter-spacing: 0;
 }
 .amount.in { color: var(--positive); }
@@ -421,7 +421,7 @@ body.wide .detail {
      baseline at the same left edge, not as two captions centred in tracks of different widths.
      Scoped to the two-pane case — a centred title is the convention everywhere else, including
      every wide single-pane screen (send, receive, settings), and it stays there. */
-  body.wide.two-pane .topbar .topbar-title { text-align: left; }
+  body.wide.two-pane .topbar .topbar-title { text-align: start; }
   /* …and the empty column starts one pane header down, so its placeholder is level with the
      list's own first card rather than floating level with the list's title. The offset belongs
      to the pane (which knows there is a header beside it), not to `.detail-empty` itself. */

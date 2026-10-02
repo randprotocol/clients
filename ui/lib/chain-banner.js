@@ -8,6 +8,7 @@
 // Every field of `wrongChain` came from a node, so all of it goes through `h` and none of it is
 // ever `raw()`ed. Importable under plain Node: no document/window access at module scope.
 import { h, raw } from './dom.js';
+import { t } from '../i18n.js';
 import { icons } from './icons.js';
 
 /**
@@ -19,18 +20,18 @@ import { icons } from './icons.js';
  */
 export function chainLabel(identity) {
   if (!identity || (identity.chainId === null && identity.genesis === null)) {
-    return identity && identity.unknown ? 'a node that would not say which chain it is' : 'an unknown chain';
+    return identity && identity.unknown ? t('a node that would not say which chain it is') : t('an unknown chain');
   }
   const id = identity.chainId === null || identity.chainId === undefined || identity.chainId === ''
-    ? 'chain unknown'
-    : `chain ${identity.chainId}`;
+    ? t('chain unknown')
+    : t('chain {id}', { id: identity.chainId });
   // A missing half is named as missing rather than silently dropped. Without this, a node that
   // gave its id but not its genesis rendered as "different chain (chain 14) … read from chain 14",
   // which reads as a bug in the wallet rather than a problem with the node.
   const genesis = typeof identity.genesis === 'string' && identity.genesis
     ? `${identity.genesis.slice(0, 8)}…`
-    : 'genesis unknown';
-  return `${id} · ${genesis}`;
+    : t('genesis unknown');
+  return t('{chain} · {genesis}', { chain: id, genesis });
 }
 
 /** True when the node could not name every part the wallet wanted to compare. */
@@ -50,24 +51,24 @@ export function wrongChainBannerMarkup(info, { canRescan = false } = {}) {
   const got = info && info.got ? info.got : {};
   const expected = info && info.expected ? info.expected : {};
   const rescan = raw(canRescan
-    ? h`<button class="btn sm" type="button" data-action="rescan-chain">Rescan</button>`
+    ? h`<button class="btn sm" type="button" data-action="rescan-chain">${t('Rescan')}</button>`
     : '');
   // "On a different chain" is a claim; when the node would not fully identify itself, the honest
   // headline is that it did not, not that it is somewhere else.
   const title = partlyIdentified(info)
-    ? `This node did not fully identify its chain (${chainLabel(got)})`
-    : `This node is on a different chain (${chainLabel(got)})`;
+    ? t('This node did not fully identify its chain ({chain})', { chain: chainLabel(got) })
+    : t('This node is on a different chain ({chain})', { chain: chainLabel(got) });
   return h`
     <div class="banner negative" data-role="wrong-chain">
       <span class="ic">${raw(icons.warning())}</span>
       <span>
         <span class="banner-title">${title}</span>
-        Your wallet's history was read from ${chainLabel(expected)} — nothing has been changed, and
-        this wallet will not send or request funds until the two agree.
-        Switch node in Settings, or rescan this wallet for the new chain.
+        ${t('Your wallet\'s history was read from {chain} — nothing has been changed, and '
+          + 'this wallet will not send or request funds until the two agree. '
+          + 'Switch node in Settings, or rescan this wallet for the new chain.', { chain: chainLabel(expected) })}
       </span>
       <span class="banner-actions">
-        <a class="btn sm" href="#settings" data-go="settings">Settings</a>
+        <a class="btn sm" href="#settings" data-go="settings">${t('Settings')}</a>
         ${rescan}
       </span>
     </div>`;
@@ -89,19 +90,19 @@ export function behindBannerMarkup(info, { canRescan = false } = {}) {
   const wallet = String((info && info.wallet) ?? '?');
   const emphasis = !!(info && info.walletAhead);
   const rescan = raw(canRescan
-    ? h`<button class="btn sm${emphasis ? ' btn-primary' : ''}" type="button" data-action="rescan-plain">Rescan wallet</button>`
+    ? h`<button class="btn sm${emphasis ? ' btn-primary' : ''}" type="button" data-action="rescan-plain">${t('Rescan wallet')}</button>`
     : '');
   return h`
     <div class="banner warn" data-role="behind">
       <span class="ic">${raw(emphasis ? icons.warning() : icons.info())}</span>
       <span>
-        <span class="banner-title">This node's chain tip is below your wallet's scan position</span>
-        The node is at block ${tip}; your wallet has read to ${wallet}. If the node is catching up,
-        wait or try another node. If you switched networks, or a node misreported its height,
-        rescan to read this one from the start.
+        <span class="banner-title">${t('This node\'s chain tip is below your wallet\'s scan position')}</span>
+        ${t('The node is at block {tip}; your wallet has read to {wallet}. If the node is catching up, '
+          + 'wait or try another node. If you switched networks, or a node misreported its height, '
+          + 'rescan to read this one from the start.', { tip, wallet })}
       </span>
       <span class="banner-actions">
-        <a class="btn sm" href="#settings" data-go="settings">Try another node</a>
+        <a class="btn sm" href="#settings" data-go="settings">${t('Try another node')}</a>
         ${rescan}
       </span>
     </div>`;
@@ -119,13 +120,13 @@ export function identityUnknownBannerMarkup() {
     <div class="banner negative" data-role="identity-unknown">
       <span class="ic">${raw(icons.warning())}</span>
       <span>
-        <span class="banner-title">This node did not identify its chain</span>
-        A node has to say which chain it is on before this wallet will read from it — otherwise
-        there is no way to notice later that it has changed. Nothing has been read. Choose another
-        node.
+        <span class="banner-title">${t('This node did not identify its chain')}</span>
+        ${t('A node has to say which chain it is on before this wallet will read from it — otherwise '
+          + 'there is no way to notice later that it has changed. Nothing has been read. Choose another '
+          + 'node.')}
       </span>
       <span class="banner-actions">
-        <a class="btn sm btn-primary" href="#settings" data-go="settings">Choose another node</a>
+        <a class="btn sm btn-primary" href="#settings" data-go="settings">${t('Choose another node')}</a>
       </span>
     </div>`;
 }
@@ -145,18 +146,18 @@ export function confirmRescan(ctx, { forChain = false } = {}) {
     if (!canRescan(ctx)) { resolve(null); return; }
     const dialog = ctx.sheet(forChain
       ? h`
-        <h3 class="sheet-title">Rescan for this chain?</h3>
-        <p class="sheet-sub">This forgets the notes and history read from the old chain and reads this node from the start. Your keys and your password are not touched.</p>
+        <h3 class="sheet-title">${t('Rescan for this chain?')}</h3>
+        <p class="sheet-sub">${t('This forgets the notes and history read from the old chain and reads this node from the start. Your keys and your password are not touched.')}</p>
         <div class="sheet-foot">
-          <button class="btn" type="button" data-role="cancel">Cancel</button>
-          <button class="btn btn-primary" type="button" data-role="confirm">Rescan</button>
+          <button class="btn" type="button" data-role="cancel">${t('Cancel')}</button>
+          <button class="btn btn-primary" type="button" data-role="confirm">${t('Rescan')}</button>
         </div>`
       : h`
-        <h3 class="sheet-title">Rescan this wallet?</h3>
-        <p class="sheet-sub">The wallet forgets how far it has read and reads this node again from the start. Your keys, your password and your settings are not touched.</p>
+        <h3 class="sheet-title">${t('Rescan this wallet?')}</h3>
+        <p class="sheet-sub">${t('The wallet forgets how far it has read and reads this node again from the start. Your keys, your password and your settings are not touched.')}</p>
         <div class="sheet-foot">
-          <button class="btn" type="button" data-role="cancel">Cancel</button>
-          <button class="btn btn-primary" type="button" data-role="confirm">Rescan</button>
+          <button class="btn" type="button" data-role="cancel">${t('Cancel')}</button>
+          <button class="btn btn-primary" type="button" data-role="confirm">${t('Rescan')}</button>
         </div>`);
     const cancel = dialog.querySelector('[data-role="cancel"]');
     const confirm = dialog.querySelector('[data-role="confirm"]');
@@ -167,7 +168,7 @@ export function confirmRescan(ctx, { forChain = false } = {}) {
       try {
         resolve(await ctx.backend.sync.rescan({ forChain, signal: ctx.session.signal }));
       } catch (err) {
-        if (ctx.isCurrent()) ctx.toast((err && err.message) || 'The rescan could not be started.', { kind: 'negative' });
+        if (ctx.isCurrent()) ctx.toast((err && err.message) || t('The rescan could not be started.'), { kind: 'negative' });
         resolve(null);
       }
     });

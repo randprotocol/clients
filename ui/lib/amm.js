@@ -15,6 +15,7 @@
 // after, a pay the quoted amount to the unit. If the pool moves first, the read no longer matches
 // and the chain refuses the transaction (a stale read, before any proof is wasted: the wallet's
 // quote re-reads the cell); the screen then quotes again from the new reserves.
+import { t } from '../i18n.js';
 
 /** The AMM program durian.market runs (rand_getProgram: deployed at height 1947 on chain 20). */
 export const DURIAN_PROGRAM = 'db2148e6b81a2268b840bbad271068a37b2b75babaf534f1cd5bd6329a532bda';
@@ -150,14 +151,15 @@ export function findRoute(pools, sell, buy) {
 }
 
 const fail = (code, message) => ({ ok: false, code, message });
-const TOO_SMALL = 'That amount is too small: it would buy nothing.';
-const TOO_LARGE = 'That amount is more than the pool can hold.';
+// The refusals are read at each call, so a quote made after a language change is worded in it.
+const TOO_SMALL = () => t('That amount is too small: it would buy nothing.');
+const TOO_LARGE = () => t('That amount is more than the pool can hold.');
 
 function hop(pool, randIn, amountIn) {
   const rIn = randIn ? pool.rr : pool.rt;
-  if (rIn + amountIn >= NOTE_BOUND) return fail('over-bound', TOO_LARGE);
+  if (rIn + amountIn >= NOTE_BOUND) return fail('over-bound', TOO_LARGE());
   const amountOut = poolSwapOut(pool, randIn, amountIn);
-  if (amountOut <= 0n) return fail('dust', TOO_SMALL);
+  if (amountOut <= 0n) return fail('dust', TOO_SMALL());
   const after = randIn
     ? { rr: pool.rr + amountIn, rt: pool.rt - amountOut }
     : { rr: pool.rr - amountOut, rt: pool.rt + amountIn };
@@ -181,9 +183,9 @@ export function randomWords() {
  * is what `backend.program.quote/invoke` take — or `{ok: false, code, message}`.
  */
 export function buildSwap({ route, dx, rnd = randomWords(), title = '' }) {
-  if (!route) return fail('no-route', 'There is no pool for that pair.');
-  if (typeof dx !== 'bigint' || dx <= 0n) return fail('no-amount', 'Enter an amount.');
-  if (dx >= NOTE_BOUND) return fail('over-bound', TOO_LARGE);
+  if (!route) return fail('no-route', t('There is no pool for that pair.'));
+  if (typeof dx !== 'bigint' || dx <= 0n) return fail('no-amount', t('Enter an amount.'));
+  if (dx >= NOTE_BOUND) return fail('over-bound', TOO_LARGE());
   const inputs = [METHOD_SWAP, rnd[0], rnd[1], rnd[2]];
   if (route.kind === 'direct') {
     const h = hop(route.pool, route.randIn, dx);

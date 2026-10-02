@@ -71,14 +71,14 @@ final class RpcClient {
         let (data, response) = try await session.data(for: req)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let http = response as? HTTPURLResponse
-            throw RpcError(code: http?.statusCode ?? 0, message: "node answered HTTP \(http?.statusCode ?? 0)",
+            throw RpcError(code: http?.statusCode ?? 0, message: String(localized: "node answered HTTP \(http?.statusCode ?? 0)"),
                            isHTTP: true, retryAfter: http?.value(forHTTPHeaderField: "Retry-After"))
         }
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw RpcError(code: 0, message: "node reply is not JSON")
+            throw RpcError(code: 0, message: String(localized: "node reply is not JSON"))
         }
         if let err = obj["error"] as? [String: Any] {
-            throw RpcError(code: err["code"] as? Int ?? 0, message: err["message"] as? String ?? "rpc error")
+            throw RpcError(code: err["code"] as? Int ?? 0, message: err["message"] as? String ?? String(localized: "rpc error"))
         }
         return obj["result"] ?? NSNull()
     }
@@ -256,14 +256,14 @@ final class RpcClient {
     func witness(index: UInt64) async throws -> (root: String, path: [String]) {
         let v = try await call("rand_getWitness", [index])
         guard let d = v as? [String: Any], let path = d["path"] as? [String], let root = d["root"] as? String else {
-            throw RpcError(code: -32001, message: "no leaf at index \(index)")
+            throw RpcError(code: -32001, message: String(localized: "no leaf at index \(index)"))
         }
         return (root, path)
     }
 
     func sendTransaction(hex: String) async throws -> String {
         guard let h = try await call("rand_sendTransaction", [hex]) as? String else {
-            throw RpcError(code: 0, message: "node returned no transaction hash")
+            throw RpcError(code: 0, message: String(localized: "node returned no transaction hash"))
         }
         return h
     }
@@ -277,7 +277,7 @@ final class RpcClient {
 
     func mint(to address: String) async throws -> String {
         guard let h = try await call("rand_mint", [address]) as? String else {
-            throw RpcError(code: 0, message: "faucet returned no transaction hash")
+            throw RpcError(code: 0, message: String(localized: "faucet returned no transaction hash"))
         }
         return h
     }

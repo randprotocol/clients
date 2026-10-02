@@ -9,8 +9,12 @@
 // the frames. Where either is missing this rejects at once with the sentence the screen shows, and
 // the camera button is not offered in the first place (`canScanQr`). The stream is always stopped
 // — on a result, a failure or an abort — so the camera light never stays on behind the wallet.
+import { t } from '../i18n.js';
 
 export const NO_CAMERA_TEXT = 'camera scanning is not available here; paste the link';
+/** The same sentence in the language in force — what a screen shows; `NO_CAMERA_TEXT` is the
+ *  English the tests compare against. */
+export const noCameraText = () => t('camera scanning is not available here; paste the link');
 
 /** True where this browser can plausibly scan (the user may still refuse the camera). */
 export function canScanQr() {
@@ -19,7 +23,7 @@ export function canScanQr() {
 }
 
 function abortError() {
-  const err = new Error('The scan was cancelled.');
+  const err = new Error(t('The scan was cancelled.'));
   err.name = 'AbortError';
   return err;
 }
@@ -30,16 +34,16 @@ function abortError() {
  * error where the user refuses the camera, and with an `AbortError` when `options.signal` aborts.
  */
 export async function scanQr(videoEl, { signal, intervalMs = 200 } = {}) {
-  if (!('BarcodeDetector' in globalThis)) throw new Error(NO_CAMERA_TEXT);
+  if (!('BarcodeDetector' in globalThis)) throw new Error(noCameraText());
   const media = globalThis.navigator?.mediaDevices;
-  if (!media || typeof media.getUserMedia !== 'function') throw new Error(NO_CAMERA_TEXT);
+  if (!media || typeof media.getUserMedia !== 'function') throw new Error(noCameraText());
   if (signal?.aborted) throw abortError();
 
   let detector;
   try {
     detector = new globalThis.BarcodeDetector({ formats: ['qr_code'] });
   } catch {
-    throw new Error(NO_CAMERA_TEXT);
+    throw new Error(noCameraText());
   }
   const stream = await media.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
   const stop = () => {

@@ -14,8 +14,19 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const UI = join(dirname(fileURLToPath(import.meta.url)), '..');
+const REPO = join(UI, '..');
 const OUT = join(UI, 'locales', 'en.js');
-const SKIP_DIRS = new Set(['test', 'node_modules', 'scripts', 'locales', 'fonts']);
+/**
+ * Where `t()` is called from: ui/ (the engine and every screen) first, then the browser
+ * extension's own windows (extension/shared/: connect.js and invoke.js build their DOM without
+ * app.js, and lib/ holds the text their logic shows). en.js carries both, so one dictionary per
+ * language serves every shell. A shell that calls `t()` from anywhere else is invisible to the
+ * translators until it is listed here.
+ */
+export const ROOTS = Object.freeze([UI, join(REPO, 'extension', 'shared')]);
+// Under ui/: the tests, npm, this tooling, the dictionaries and the fonts. Under extension/shared/:
+// the manifest's own strings (_locales/, WebExtension i18n), the wasm core and the icons.
+const SKIP_DIRS = new Set(['test', 'node_modules', 'scripts', 'locales', 'fonts', '_locales', 'core', 'icons']);
 const SKIP_FILES = /^(gallery|dev)\./;
 // The helper's own file defines `t(` and talks about it; nothing in it is a string to show.
 const SKIP_PATHS = new Set(['i18n.js']);
@@ -142,13 +153,17 @@ export function extractFromSource(raw) {
   return { keys, bad };
 }
 
-/** `{ keys: Map<key, [file:line…]>, bad: [{file, line, text}] }` over every shipped source. */
-export function extractAll(root = UI) {
+/**
+ * `{ keys: Map<key, [file:line…]>, bad: [{file, line, text}] }` over every shipped source under
+ * `roots` (one root, or a list; ROOTS by default). Locations are repo-relative.
+ */
+export function extractAll(roots = ROOTS) {
   const keys = new Map();
   const bad = [];
-  for (const file of sourceFiles(root)) {
+  const files = (Array.isArray(roots) ? roots : [roots]).flatMap((root) => sourceFiles(root));
+  for (const file of files) {
     const src = readFileSync(file, 'utf8');
-    const rel = relative(root, file);
+    const rel = relative(REPO, file);
     const r = extractFromSource(src);
     for (const { key, line } of r.keys) {
       if (!keys.has(key)) keys.set(key, []);

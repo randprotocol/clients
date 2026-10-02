@@ -191,8 +191,8 @@ struct SendView: View {
 
     private func recipientCaption(_ r: ResolvedRecipient) -> String {
         let who = r.name.map { "\($0) · " } ?? ""
-        let kind = r.link != nil ? "Payment link · " : ""
-        return "\(kind)\(who)fingerprint \(r.fingerprint)"
+        let kind = r.link != nil ? String(localized: "Payment link · ") : ""
+        return kind + who + String(localized: "fingerprint \(r.fingerprint)")
     }
 
     private func resolveRecipient(_ text: String) {
@@ -209,7 +209,7 @@ struct SendView: View {
             }
         } catch {
             resolved = nil
-            addressError = RecipientKind(s) == .link ? "That payment link could not be read: \(error.localizedDescription)" : error.localizedDescription
+            addressError = RecipientKind(s) == .link ? String(localized: "That payment link could not be read: \(error.localizedDescription)") : error.localizedDescription
         }
     }
 
@@ -217,9 +217,9 @@ struct SendView: View {
         VStack(spacing: 20) {
             Card {
                 VStack(alignment: .leading, spacing: 14) {
-                    row("Amount", "\(Amount.format(amountUnits ?? 0)) RAND")
-                    row("Fee", "\(Amount.format(fee)) RAND")
-                    row("Total", "\(Amount.format((amountUnits ?? 0) &+ fee)) RAND")
+                    row("Amount", String(localized: "\(Amount.format(amountUnits ?? 0)) RAND"))
+                    row("Fee", String(localized: "\(Amount.format(fee)) RAND"))
+                    row("Total", String(localized: "\(Amount.format((amountUnits ?? 0) &+ fee)) RAND"))
                     Divider().background(Theme.borderSoft)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("To").font(.caption12).foregroundColor(Theme.textMute)
@@ -300,29 +300,29 @@ struct SendView: View {
     }
 
     /// `ui/screens/send/state.js`'s `AUTHORISING_LABEL`: the auth proof, made on this device.
-    static let authorisingLabel = "Authorising the spend on this device…"
+    static var authorisingLabel: String { String(localized: "Authorising the spend on this device…") }
 
     private var phaseTitle: String {
         switch wallet.phase {
-        case .syncing: return "Syncing…"
-        case .selecting: return "Choosing notes…"
-        case .fetchingWitnesses: return "Fetching witnesses…"
-        case .proving: return "Proving your transfer…"
+        case .syncing: return String(localized: "Syncing…")
+        case .selecting: return String(localized: "Choosing notes…")
+        case .fetchingWitnesses: return String(localized: "Fetching witnesses…")
+        case .proving: return String(localized: "Proving your transfer…")
         case .authorising: return Self.authorisingLabel
         case .provingRemotely(let name, let position, _):
-            if let n = position { return "Waiting at position \(n) on \(name)" }
-            return "Proving on \(name)…"
-        case .submitting: return "Submitting…"
-        case .waitingForCommit: return "Waiting for the block…"
-        default: return "Working…"
+            if let n = position { return String(localized: "Waiting at position \(n) on \(name)") }
+            return String(localized: "Proving on \(name)…")
+        case .submitting: return String(localized: "Submitting…")
+        case .waitingForCommit: return String(localized: "Waiting for the block…")
+        default: return String(localized: "Working…")
         }
     }
     private var phaseDetail: String {
         switch wallet.phase {
-        case .proving: return "About a minute or two on this device. Keep the app open."
-        case .authorising(let name, _): return "The spend authorisation is proved here, from your spend key, before the job goes to \(name). About ten seconds. Keep the app open."
-        case .provingRemotely: return "Your prover makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent."
-        case .waitingForCommit(let h): return "Transaction \(h.shortened(head: 8, tail: 6)) is in the mempool."
+        case .proving: return String(localized: "About a minute or two on this device. Keep the app open.")
+        case .authorising(let name, _): return String(localized: "The spend authorisation is proved here, from your spend key, before the job goes to \(name). About ten seconds. Keep the app open.")
+        case .provingRemotely: return String(localized: "Your prover makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.")
+        case .waitingForCommit(let h): return String(localized: "Transaction \(h.shortened(head: 8, tail: 6)) is in the mempool.")
         default: return ""
         }
     }
@@ -340,7 +340,8 @@ struct SendView: View {
         .padding(20)
     }
 
-    private func row(_ k: String, _ v: String) -> some View {
+    /// `k` is a key in the catalog; `v` is data, or a sentence already localised.
+    private func row(_ k: LocalizedStringKey, _ v: String) -> some View {
         HStack {
             Text(k).font(.body15).foregroundColor(Theme.textSoft)
             Spacer()
@@ -381,11 +382,13 @@ struct SentView: View {
     let onDone: () -> Void
     @Environment(\.openURL) private var openURL
 
+    private var heading: LocalizedStringKey { outcome.committedHeight == nil ? "Submitted" : "Sent" }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 56)).foregroundColor(Theme.positive).padding(.top, 20)
-                Text(outcome.committedHeight == nil ? "Submitted" : "Sent").font(.title).foregroundColor(Theme.textStrong)
+                Text(heading).font(.title).foregroundColor(Theme.textStrong)
                 Text("\(Amount.format(outcome.amount)) RAND").font(.balance).foregroundColor(Theme.text)
                 Card {
                     VStack(alignment: .leading, spacing: 12) {

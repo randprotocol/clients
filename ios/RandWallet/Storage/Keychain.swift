@@ -16,7 +16,7 @@ enum Keychain {
 
     struct KeychainError: LocalizedError {
         let status: OSStatus
-        var errorDescription: String? { "keychain error \(status)" }
+        var errorDescription: String? { String(localized: "keychain error \(status)") }
     }
 
     static func saveSpendKey(_ hex: String) throws { try save(hex, account: account) }
@@ -76,7 +76,7 @@ enum Keychain {
     /// enrolled this still shows the passcode prompt.
     static func authenticate(reason: String) async -> Bool {
         let ctx = LAContext()
-        ctx.localizedCancelTitle = "Cancel"
+        ctx.localizedCancelTitle = String(localized: "Cancel")
         var err: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &err) else {
             // No passcode set: nothing to authenticate against; let the user in rather than lock
@@ -92,7 +92,7 @@ enum Keychain {
         switch ctx.biometryType {
         case .faceID: return "Face ID"
         case .touchID: return "Touch ID"
-        default: return "passcode"
+        default: return String(localized: "passcode")
         }
     }
 }

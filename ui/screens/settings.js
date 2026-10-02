@@ -37,13 +37,14 @@ const AUTO_LOCK = [
 ];
 const WIPE_WORD = 'WIPE';
 // What each key slot shows when no key is open: the button that asks for the password again.
-const VIEWING_KEY_BUTTON = '<button class="btn block" type="button" data-role="show-viewing-key">'
-  + `${icons.eye()}Show viewing key</button>`;
-const SPEND_KEY_BUTTON = '<button class="btn block" type="button" data-role="export-spend-key">'
-  + `${icons.shield()}Export spend key</button>`;
-const SPEND_KEY_WARNING = 'Anyone with this key can spend everything this wallet holds, now and in '
+// Functions, not constants: built at each paint so the label follows the language.
+const viewingKeyButton = () => '<button class="btn block" type="button" data-role="show-viewing-key">'
+  + h`${raw(icons.eye())}${t('Show viewing key')}</button>`;
+const spendKeyButton = () => '<button class="btn block" type="button" data-role="export-spend-key">'
+  + h`${raw(icons.shield())}${t('Export spend key')}</button>`;
+const spendKeyWarning = () => t('Anyone with this key can spend everything this wallet holds, now and in '
   + 'the future. It is not a backup to keep in a note-taking app or to paste into a chat — an '
-  + 'explorer or a watcher only ever needs the viewing key.';
+  + 'explorer or a watcher only ever needs the viewing key.');
 
 /**
  * Is `url` somewhere this wallet may talk to? https anywhere; plain http only to this machine,
@@ -59,9 +60,9 @@ export function checkRpcUrl(text) {
   const r = urlRule(text);
   if (r.empty) return { url: '', cleared: true };
   if (r.url) return { url: r.url };
-  if (r.problem === 'not-url') return { error: 'That is not a URL. It should look like https://rpc.example.' };
-  if (r.problem === 'plain-http') return { error: 'Use https — plain http is only allowed for a node on this machine.' };
-  return { error: 'Use an https:// address.' };
+  if (r.problem === 'not-url') return { error: t('That is not a URL. It should look like https://rpc.example.') };
+  if (r.problem === 'plain-http') return { error: t('Use https — plain http is only allowed for a node on this machine.') };
+  return { error: t('Use an https:// address.') };
 }
 
 /**
@@ -86,21 +87,21 @@ function networkMarkup(settings) {
   // these strings comes from the backend's settings, so it is interpolated, never `raw()`ed.
   const defaults = Array.isArray(settings.rpcUrls) ? settings.rpcUrls.filter((u) => typeof u === 'string' && u) : [];
   const hint = settings.rpcUrl
-    ? 'The Rand node this wallet reads from and submits to. Clear this field to go back to the default nodes.'
+    ? t('The Rand node this wallet reads from and submits to. Clear this field to go back to the default nodes.')
     : defaults.length > 0
-      ? `Using the default nodes (${defaults.join(', ')}), whichever answers. Enter one to use it instead.`
-      : 'The Rand node this wallet reads from and submits to.';
-  return sectionMarkup('Network', h`
+      ? t('Using the default nodes ({nodes}), whichever answers. Enter one to use it instead.', { nodes: defaults.join(', ') })
+      : t('The Rand node this wallet reads from and submits to.');
+  return sectionMarkup(t('Network'), h`
     <form data-role="network-form" class="stack" novalidate>
       <div class="field">
-        <label class="label" for="settings-rpc">RPC URL</label>
+        <label class="label" for="settings-rpc">${t('RPC URL')}</label>
         <input id="settings-rpc" name="rpcUrl" type="text" spellcheck="false" autocomplete="off" value="${settings.rpcUrl || ''}" placeholder="${defaults[0] || ''}" aria-describedby="settings-rpc-hint">
         <span class="hint" id="settings-rpc-hint">${hint}</span>
         <span class="error" id="settings-rpc-error"></span>
       </div>
       <div class="cluster">
-        <button class="btn btn-primary" type="submit">Save</button>
-        <button class="btn" type="button" data-role="test-connection">Test connection</button>
+        <button class="btn btn-primary" type="submit">${t('Save')}</button>
+        <button class="btn" type="button" data-role="test-connection">${t('Test connection')}</button>
       </div>
       <div data-role="network-status"></div>
     </form>
@@ -112,19 +113,33 @@ function networkMarkup(settings) {
 // the wallet's viewing key, never its spend key. The core's own sentence (`version`'s
 // `prover_history_warning`; web/wallet's integration test holds the two equal), shown before a
 // pairing is saved, as part of the form, above the password — not a dismissible notice.
-export const PROVER_WARNING = 'This prover will be able to read this wallet\'s whole history — every payment '
-  + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.';
+export const proverWarning = () => t('This prover will be able to read this wallet\'s whole history — every payment '
+  + 'received and sent, before and after today. It cannot spend. To keep your history private, run your own.');
 /** What the RandProtocol prover (the default) sees, in one line, wherever it is offered or in use. */
-export const PROVER_DEFAULT_NOTE = 'Each one that proves a send receives this wallet\'s viewing key, so it can read your whole history, past and future. None can spend.';
+export const proverDefaultNote = () => t('Each one that proves a send receives this wallet\'s viewing key, so it can read your whole history, past and future. None can spend.');
 
 /** The pool's members as rows: name and the fingerprint the build pins for it. Text only. */
 function poolMembersMarkup(members) {
   const list = Array.isArray(members) ? members : [];
   return list.map((m) => h`<div class="kv" data-role="prover-pool-member"><span class="k">${m.name || ''}</span><span class="v mono">${m.fingerprint || ''}</span></div>`).join('');
 }
-const machines = (members) => (Array.isArray(members) && members.length ? `${members.length} machines` : 'machines');
+/** The pool in a sentence: how many machines run it, where the engine says, else just "machines". */
+const poolSentence = (members) => {
+  const n = Array.isArray(members) ? members.length : 0;
+  if (n === 0) return t('The RandProtocol provers: machines run by the validators, each with its own key, used until you choose another.');
+  return n === 1
+    ? t('The RandProtocol provers: {n} machine run by the validators, with its own key, used until you choose another.', { n })
+    : t('The RandProtocol provers: {n} machines run by the validators, each with its own key, used until you choose another.', { n });
+};
+const poolOffer = (members) => {
+  const n = Array.isArray(members) ? members.length : 0;
+  if (n === 0) return t('Or use the RandProtocol provers — machines run by the validators, each with its own key.');
+  return n === 1
+    ? t('Or use the RandProtocol provers — {n} machine run by the validators, with its own key.', { n })
+    : t('Or use the RandProtocol provers — {n} machines run by the validators, each with its own key.', { n });
+};
 /** Under a pairing that is not the user's own: what that prover can do, in one line. */
-export const PROVER_NOT_OWN_NOTE = 'Not marked as your own: it can read this wallet\'s whole history. It cannot spend.';
+export const proverNotOwnNote = () => t('Not marked as your own: it can read this wallet\'s whole history. It cannot spend.');
 
 /**
  * Who makes this wallet's proofs: this device, the RandProtocol prover (the default, wallet 0.6.8),
@@ -135,13 +150,13 @@ export const PROVER_NOT_OWN_NOTE = 'Not marked as your own: it can read this wal
 function proverStateMarkup(prover, { trusted = null, choose = false } = {}) {
   if (prover && prover.mode === 'default') {
     const off = choose
-      ? raw('<button class="btn block" type="button" data-role="use-no-prover">Use no prover</button>')
+      ? raw(h`<button class="btn block" type="button" data-role="use-no-prover">${t('Use no prover')}</button>`)
       : '';
     return h`
-      <div class="kv"><span class="k">Proofs are made by</span><span class="v">This device, or where it cannot · ${prover.name || 'RandProtocol'} provers</span></div>
+      <div class="kv"><span class="k">${t('Proofs are made by')}</span><span class="v">${t('This device, or where it cannot · {name} provers', { name: prover.name || 'RandProtocol' })}</span></div>
       ${raw(poolMembersMarkup(prover.members))}
-      <p class="caption" data-role="prover-default-note">The RandProtocol provers: ${machines(prover.members)} run by the validators, each with its own key, used until you choose another. They charge nothing. ${PROVER_DEFAULT_NOTE}</p>
-      <p class="caption" data-role="prover-probe">Asking the provers…</p>
+      <p class="caption" data-role="prover-default-note">${poolSentence(prover.members)} ${t('They charge nothing.')} ${proverDefaultNote()}</p>
+      <p class="caption" data-role="prover-probe">${t('Asking the provers…')}</p>
       ${off}`;
   }
   if (prover && prover.mode === 'remote') {
@@ -149,33 +164,34 @@ function proverStateMarkup(prover, { trusted = null, choose = false } = {}) {
     // proofs too (the job carries the viewing key), and the line under it says what it sees.
     const own = prover.own === true;
     const who = own
-      ? h`My own prover · ${prover.name || prover.url || ''}`
-      : h`Paired prover · ${prover.name || prover.url || ''}`;
-    const note = own ? '' : raw(h`<p class="caption" data-role="prover-not-own">${PROVER_NOT_OWN_NOTE}</p>`);
+      ? t('My own prover · {name}', { name: prover.name || prover.url || '' })
+      : t('Paired prover · {name}', { name: prover.name || prover.url || '' });
+    const note = own ? '' : raw(h`<p class="caption" data-role="prover-not-own">${proverNotOwnNote()}</p>`);
     const back = choose && trusted
-      ? raw(h`<p class="caption">Forgetting it goes back to the ${trusted.name || 'RandProtocol'} provers.</p>`)
+      ? raw(h`<p class="caption">${t('Forgetting it goes back to the {name} provers.', { name: trusted.name || 'RandProtocol' })}</p>`)
       : '';
     return h`
-      <div class="kv"><span class="k">Proofs are made by</span><span class="v">${raw(who)}</span></div>
-      <div class="kv"><span class="k">Fingerprint</span><span class="v mono">${prover.fingerprint || ''}</span></div>
+      <div class="kv"><span class="k">${t('Proofs are made by')}</span><span class="v">${who}</span></div>
+      <div class="kv"><span class="k">${t('Fingerprint')}</span><span class="v mono">${prover.fingerprint || ''}</span></div>
       ${note}
-      <p class="caption" data-role="prover-probe">Asking the prover…</p>
+      <p class="caption" data-role="prover-probe">${t('Asking the prover…')}</p>
       ${back}
-      <button class="btn block" type="button" data-role="forget-prover">Forget this prover</button>`;
+      <button class="btn block" type="button" data-role="forget-prover">${t('Forget this prover')}</button>`;
   }
   // No prover: chosen (`useNone`), or a build that ships none. The way back to the default is
   // one button, with what that prover sees right beside it.
   const useIt = choose && trusted
     ? raw(h`
       <div class="stack tight" data-role="trusted-prover">
-        <p class="caption">Or use the RandProtocol provers — ${machines(trusted.members)} run by the validators, each with its own key. They charge nothing. ${PROVER_DEFAULT_NOTE}</p>
+        <p class="caption">${poolOffer(trusted.members)} ${t('They charge nothing.')} ${proverDefaultNote()}</p>
         ${raw(poolMembersMarkup(trusted.members))}
-        <button class="btn" type="button" data-role="use-trusted-prover">Use the RandProtocol provers</button>
+        <button class="btn" type="button" data-role="use-trusted-prover">${t('Use the RandProtocol provers')}</button>
       </div>`)
     : '';
   return h`
-    <div class="kv"><span class="k">Proofs are made by</span><span class="v">This device</span></div>
-    <p class="caption">Where this device cannot make a proof, pair a prover. Your spend key stays here either way; a prover you run yourself — the desktop app, or rand-prover on your own machine — also keeps your history to yourself.</p>
+    <div class="kv"><span class="k">${t('Proofs are made by')}</span><span class="v">${t('This device')}</span></div>
+    <p class="caption">${t('Where this device cannot make a proof, pair a prover. Your spend key stays here either way; '
+      + 'a prover you run yourself — the desktop app, or rand-prover on your own machine — also keeps your history to yourself.')}</p>
     ${useIt}`;
 }
 
@@ -183,28 +199,28 @@ function proverStateMarkup(prover, { trusted = null, choose = false } = {}) {
 // markup (it carries the pairing token): the field starts empty and is emptied after a pairing.
 function proverMarkup(settings, platform, host = '') {
   const scan = typeof platform.scanQr === 'function'
-    ? raw('<button class="btn" type="button" data-role="scan-prover">Scan QR code</button>')
+    ? raw(h`<button class="btn" type="button" data-role="scan-prover">${t('Scan QR code')}</button>`)
     : '';
-  return sectionMarkup('Prover', h`
+  return sectionMarkup(t('Prover'), h`
     <div data-role="prover-state" class="stack tight">${raw(proverStateMarkup(settings.prover))}</div>
-    <h3 class="label">Pair your own prover</h3>
+    <h3 class="label">${t('Pair your own prover')}</h3>
     <form data-role="prover-form" class="stack" novalidate>
       <div class="field">
-        <label class="label" for="settings-prover-link">Pairing link</label>
+        <label class="label" for="settings-prover-link">${t('Pairing link')}</label>
         <input id="settings-prover-link" name="proverLink" type="text" spellcheck="false" autocomplete="off" placeholder="randprover:…" aria-describedby="settings-prover-link-hint">
-        <span class="hint" id="settings-prover-link-hint">The randprover: link your prover shows. It carries a secret — paste it here and nowhere else.</span>
+        <span class="hint" id="settings-prover-link-hint">${t('The randprover: link your prover shows. It carries a secret — paste it here and nowhere else.')}</span>
       </div>
       ${scan}
       <div class="banner warn" data-role="prover-warning">
         <span class="ic">${raw(icons.warning())}</span>
-        <span><span class="banner-title">A prover sees your history</span>${PROVER_WARNING}</span>
+        <span><span class="banner-title">${t('A prover sees your history')}</span>${proverWarning()}</span>
       </div>
       <div class="field">
-        <label class="label" for="settings-prover-password">Password</label>
+        <label class="label" for="settings-prover-password">${t('Password')}</label>
         <input id="settings-prover-password" name="proverPassword" type="password" autocomplete="current-password" aria-describedby="settings-prover-password-hint">
-        <span class="hint" id="settings-prover-password-hint">The password that unlocks this wallet — the pairing is sealed under it.</span>
+        <span class="hint" id="settings-prover-password-hint">${t('The password that unlocks this wallet — the pairing is sealed under it.')}</span>
       </div>
-      <div class="cluster"><button class="btn btn-primary" type="submit" data-role="save-prover">Save</button></div>
+      <div class="cluster"><button class="btn btn-primary" type="submit" data-role="save-prover">${t('Save')}</button></div>
       <div data-role="prover-status"></div>
     </form>
     ${raw(host)}`);
@@ -219,18 +235,19 @@ function proverHostMarkup() {
     <div class="stack" data-role="prover-host">
       <label class="check">
         <input type="checkbox" name="proverHost">
-        <span>Prove for my other devices</span>
+        <span>${t('Prove for my other devices')}</span>
       </label>
-      <p class="caption">This computer makes the proofs for your browser extension or web wallet on this machine, one at a time. It listens on this computer only. A wallet you pair with it sends it its viewing key — enough to read that wallet's history, never to spend from it.</p>
-      <p class="caption" data-role="prover-host-status">Off.</p>
+      <p class="caption">${t('This computer makes the proofs for your browser extension or web wallet on this machine, one at a time. '
+        + 'It listens on this computer only. A wallet you pair with it sends it its viewing key — enough to read that wallet\'s history, never to spend from it.')}</p>
+      <p class="caption" data-role="prover-host-status">${t('Off.')}</p>
       <div class="stack" data-role="prover-host-link" hidden>
-        <div class="qr qr-large"><canvas data-role="prover-qr" data-ec-level="L" aria-label="QR code of the pairing link"></canvas></div>
-        <p class="caption" data-role="prover-qr-too-long" hidden>This link is too long for a QR code — copy it instead.</p>
+        <div class="qr qr-large"><canvas data-role="prover-qr" data-ec-level="L" aria-label="${t('QR code of the pairing link')}"></canvas></div>
+        <p class="caption" data-role="prover-qr-too-long" hidden>${t('This link is too long for a QR code — copy it instead.')}</p>
         <div class="address-box"><span class="mono" data-role="prover-host-link-text"></span></div>
-        <p class="caption">Paste this link into Settings → Prover on the wallet that should use this computer. It carries a secret: share it with nothing else.</p>
+        <p class="caption">${t('Paste this link into Settings → Prover on the wallet that should use this computer. It carries a secret: share it with nothing else.')}</p>
         <div class="cluster">
-          <button class="btn" type="button" data-role="copy-prover-link">${raw(icons.copy())}Copy link</button>
-          <button class="btn" type="button" data-role="rotate-prover-link">Regenerate link</button>
+          <button class="btn" type="button" data-role="copy-prover-link">${raw(icons.copy())}${t('Copy link')}</button>
+          <button class="btn" type="button" data-role="rotate-prover-link">${t('Regenerate link')}</button>
         </div>
       </div>
     </div>`;
@@ -239,17 +256,17 @@ function proverHostMarkup() {
 // Offered only where the backend has `sync.rescan` (optional in the contract). It is the
 // non-destructive way out of a wallet that has read the wrong chain, or has simply got itself
 // into a state a fresh read would fix — the alternative used to be a wipe, which loses the keys.
-const RESCAN_CONTROL = '<div class="stack tight">'
-  + '<p class="caption">Re-read this node from the start. Your keys, your password and your settings are not touched. '
-  + 'A light wallet can only report what its node serves it, so if a balance looks wrong, switch node and rescan.</p>'
-  + '<button class="btn block" type="button" data-role="rescan">Rescan wallet</button>'
+const rescanControl = () => '<div class="stack tight">'
+  + h`<p class="caption">${t('Re-read this node from the start. Your keys, your password and your settings are not touched. '
+  + 'A light wallet can only report what its node serves it, so if a balance looks wrong, switch node and rescan.')}</p>`
+  + h`<button class="btn block" type="button" data-role="rescan">${t('Rescan wallet')}</button>`
   + '</div>';
 
 // Offered only where the backend has the (optional) `contacts` group.
 function contactsMarkup() {
-  return sectionMarkup('Contacts', h`
-    <p class="caption">Names for the addresses you pay often, kept on this device only. Send to a contact by name; its fingerprint is checked when you save it.</p>
-    <button class="btn block" type="button" data-go="contacts">Manage contacts</button>`);
+  return sectionMarkup(t('Contacts'), h`
+    <p class="caption">${t('Names for the addresses you pay often, kept on this device only. Send to a contact by name; its fingerprint is checked when you save it.')}</p>
+    <button class="btn block" type="button" data-go="contacts">${t('Manage contacts')}</button>`);
 }
 
 function appearanceMarkup(settings) {
@@ -278,47 +295,48 @@ function securityMarkup(settings) {
   const options = AUTO_LOCK.map((o) => h`
     <option value="${o.value}"${raw(String(o.value) === String(settings.autoLockMin) ? ' selected' : '')}>${o.label()}</option>`).join('');
   return h`
-    <h2 class="section-title">Security</h2>
+    <h2 class="section-title">${t('Security')}</h2>
     <div class="card stack">
       <div class="field">
-        <label class="label" for="settings-autolock">Lock automatically after</label>
+        <label class="label" for="settings-autolock">${t('Lock automatically after')}</label>
         <select id="settings-autolock" name="autoLockMin" aria-describedby="settings-autolock-hint">${raw(options)}</select>
-        <span class="hint" id="settings-autolock-hint">The wallet asks for your password again after this long without use.</span>
+        <span class="hint" id="settings-autolock-hint">${t('The wallet asks for your password again after this long without use.')}</span>
       </div>
     </div>
     <div class="card stack" data-role="passkey-card" hidden>
-      <div class="card-head"><h3 data-role="passkey-title">Unlock with a passkey</h3></div>
+      <div class="card-head"><h3 data-role="passkey-title">${t('Unlock with a passkey')}</h3></div>
       <p class="caption" data-role="passkey-caption"></p>
       <button class="btn block" type="button" data-role="passkey-toggle"></button>
     </div>
     <div class="card stack">
-      <div class="card-head"><h3>Viewing key</h3></div>
-      <p class="caption">A viewing key shows everything this wallet has ever received or sent, past and future. It cannot spend. It is all or nothing — to disclose one payment, use that payment's transaction key instead.</p>
-      <div data-role="viewing-key-slot">${raw(VIEWING_KEY_BUTTON)}</div>
+      <div class="card-head"><h3>${t('Viewing key')}</h3></div>
+      <p class="caption">${t('A viewing key shows everything this wallet has ever received or sent, past and future. It cannot spend. '
+        + 'It is all or nothing — to disclose one payment, use that payment\'s transaction key instead.')}</p>
+      <div data-role="viewing-key-slot">${raw(viewingKeyButton())}</div>
     </div>
     <div class="card stack">
-      <div class="card-head"><h3>Spend key</h3></div>
-      <p class="caption">The spend key <em>is</em> the wallet. Export it to move to another device, or to send from the desktop app, which can prove a transfer natively.</p>
-      <div data-role="spend-key-slot">${raw(SPEND_KEY_BUTTON)}</div>
+      <div class="card-head"><h3>${t('Spend key')}</h3></div>
+      <p class="caption">${t('The spend key is the wallet. Export it to move to another device, or to send from the desktop app, which can prove a transfer natively.')}</p>
+      <div data-role="spend-key-slot">${raw(spendKeyButton())}</div>
     </div>
     <div class="card stack">
-      <div class="card-head"><h3>Wipe this wallet</h3></div>
+      <div class="card-head"><h3>${t('Wipe this wallet')}</h3></div>
       <div class="banner negative">
         <span class="ic">${raw(icons.warning())}</span>
-        <span><span class="banner-title">This cannot be undone here</span>The notes stay on chain, but without your recovery key they are gone for good.</span>
+        <span><span class="banner-title">${t('This cannot be undone here')}</span>${t('The notes stay on chain, but without your recovery key they are gone for good.')}</span>
       </div>
       <div class="field">
-        <label class="label" for="settings-wipe">Type ${WIPE_WORD} to confirm</label>
+        <label class="label" for="settings-wipe">${t('Type {word} to confirm', { word: WIPE_WORD })}</label>
         <input id="settings-wipe" name="wipe" type="text" autocomplete="off" spellcheck="false" aria-describedby="settings-wipe-hint">
-        <span class="hint" id="settings-wipe-hint">Exactly those four letters, in capitals.</span>
+        <span class="hint" id="settings-wipe-hint">${t('Exactly those four letters, in capitals.')}</span>
       </div>
-      <button class="btn danger block" type="button" data-role="wipe" disabled>Wipe this wallet</button>
+      <button class="btn danger block" type="button" data-role="wipe" disabled>${t('Wipe this wallet')}</button>
     </div>`;
 }
 
 function aboutMarkup(platform, settings) {
   const version = typeof platform.version === 'string' && platform.version
-    ? raw(h`<div class="kv"><span class="k">Version</span><span class="v mono">${platform.version}</span></div>`)
+    ? raw(h`<div class="kv"><span class="k">${t('Version')}</span><span class="v mono">${platform.version}</span></div>`)
     : '';
   // https only, and only a URL the user's own settings supplied.
   let explorer = '';
@@ -328,10 +346,10 @@ function aboutMarkup(platform, settings) {
       explorer = raw(h`<button class="btn block" type="button" data-role="external" data-url="${url.href}">${url.hostname}</button>`);
     }
   } catch { explorer = ''; }
-  return sectionMarkup('About', h`
+  return sectionMarkup(t('About'), h`
     <div data-role="about" class="stack tight">
-      <div class="kv"><span class="k">App</span><span class="v">Rand Wallet</span></div>
-      <div class="kv"><span class="k">Running on</span><span class="v">${platform.name || 'this device'}</span></div>
+      <div class="kv"><span class="k">${t('App')}</span><span class="v">Rand Wallet</span></div>
+      <div class="kv"><span class="k">${t('Running on')}</span><span class="v">${platform.name || t('this device')}</span></div>
       ${version}
       ${explorer}
     </div>`);
@@ -340,8 +358,8 @@ function aboutMarkup(platform, settings) {
 registerScreen('settings', {
   render() {
     return h`
-      <h1 class="sr-only">Settings</h1>
-      <div class="topbar"><span class="topbar-title">Settings</span></div>
+      <h1 class="sr-only">${t('Settings')}</h1>
+      <div class="topbar"><span class="topbar-title">${t('Settings')}</span></div>
       <div class="stack" data-role="body"><div class="skeleton block"></div></div>`;
   },
   async after(ctx, root) {
@@ -354,7 +372,7 @@ registerScreen('settings', {
     } catch (err) {
       if (!live()) return;
       root.querySelector('[data-role="body"]').innerHTML = h`
-        <div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Could not load your settings</span>${(err && err.message) || 'Something went wrong.'}</span></div>`;
+        <div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">${t('Could not load your settings')}</span>${(err && err.message) || t('Something went wrong.')}</span></div>`;
       return;
     }
     if (!live()) return;
@@ -369,14 +387,14 @@ registerScreen('settings', {
     body.innerHTML = h`
       ${raw(networkMarkup(settings))}
       ${raw(proverGroup ? proverMarkup(settings, platform, proverHost ? proverHostMarkup() : '')
-    : proverHost ? sectionMarkup('Prover', proverHostMarkup()) : '')}
+    : proverHost ? sectionMarkup(t('Prover'), proverHostMarkup()) : '')}
       ${raw(ctx.backend.contacts && typeof ctx.backend.contacts.list === 'function' ? contactsMarkup() : '')}
       ${raw(appearanceMarkup(settings))}
       ${raw(securityMarkup(settings))}
       ${raw(aboutMarkup(platform, settings))}`;
 
     const rescanSlot = body.querySelector('[data-role="rescan-slot"]');
-    if (rescanSlot && typeof ctx.backend.sync.rescan === 'function') rescanSlot.innerHTML = RESCAN_CONTROL;
+    if (rescanSlot && typeof ctx.backend.sync.rescan === 'function') rescanSlot.innerHTML = rescanControl();
 
     const statusEl = body.querySelector('[data-role="network-status"]');
     const rpcInput = body.querySelector('input[name=rpcUrl]');
@@ -434,7 +452,7 @@ registerScreen('settings', {
         try { granted = await platform.ensureHostPermission(checked.url); } catch { granted = false; }
         if (!live()) return;
         if (!granted) {
-          showStatus('negative', 'Not saved', 'Permission to reach that host was not granted, so the node was left as it was.');
+          showStatus('negative', t('Not saved'), t('Permission to reach that host was not granted, so the node was left as it was.'));
           return;
         }
       }
@@ -447,14 +465,14 @@ registerScreen('settings', {
           answer = await ctx.backend.rpc.probe(checked.url);
         } catch (err) {
           if (!live()) return;
-          showStatus('negative', 'Not saved', (err && err.message) || 'That node could not be reached.');
+          showStatus('negative', t('Not saved'), (err && err.message) || t('That node could not be reached.'));
           return;
         }
         if (!live()) return;
         const theirs = String(answer.chainId ?? '');
         const ours = String(settings.chainId ?? '');
         if (ours && theirs && theirs !== ours) {
-          showStatus('negative', 'Not saved', `That node is on chain ${theirs}; this wallet is set up for chain ${ours}. The node was left as it was.`);
+          showStatus('negative', t('Not saved'), t('That node is on chain {theirs}; this wallet is set up for chain {ours}. The node was left as it was.', { theirs, ours }));
           return;
         }
       }
@@ -462,7 +480,7 @@ registerScreen('settings', {
         await ctx.backend.settings.set({ rpcUrl: checked.url });
       } catch (err) {
         if (!live()) return;
-        showStatus('negative', 'Not saved', (err && err.message) || 'The node could not be saved.');
+        showStatus('negative', t('Not saved'), (err && err.message) || t('The node could not be saved.'));
         return;
       }
       if (!live()) return;
@@ -470,12 +488,12 @@ registerScreen('settings', {
       const back = Array.isArray(settings.rpcUrls) ? settings.rpcUrls.filter((u) => typeof u === 'string' && u) : [];
       showStatus(
         'positive',
-        'Saved',
+        t('Saved'),
         checked.cleared
           ? back.length > 0
-            ? `New transfers and scans use the default nodes (${back.join(', ')}).`
-            : 'New transfers and scans use the default nodes.'
-          : 'New transfers and scans use this node.',
+            ? t('New transfers and scans use the default nodes ({nodes}).', { nodes: back.join(', ') })
+            : t('New transfers and scans use the default nodes.')
+          : t('New transfers and scans use this node.'),
       );
     });
 
@@ -488,7 +506,7 @@ registerScreen('settings', {
       btn.setAttribute('aria-busy', 'true');
       // Neutral: nothing is known yet, and a green banner that says "Connecting" reads as a
       // result. The real answer replaces it.
-      showStatus('info', 'Connecting…', 'Asking the node for its height and chain id.');
+      showStatus('info', t('Connecting…'), t('Asking the node for its height and chain id.'));
 
       // An extension reaches nothing it has no permission for, and a typed URL is not yet
       // granted: without asking first, Test would report "No answer" for a node that is up,
@@ -501,7 +519,7 @@ registerScreen('settings', {
         if (!granted) {
           btn.disabled = false;
           btn.removeAttribute('aria-busy');
-          showStatus('negative', 'Not tested', 'Permission to reach that host was not granted.');
+          showStatus('negative', t('Not tested'), t('Permission to reach that host was not granted.'));
           return;
         }
       }
@@ -525,48 +543,55 @@ registerScreen('settings', {
       btn.disabled = false;
       btn.removeAttribute('aria-busy');
       if (!answer) {
-        showStatus('negative', 'No answer', (lastErr && lastErr.message) || 'The node could not be reached.');
+        showStatus('negative', t('No answer'), (lastErr && lastErr.message) || t('The node could not be reached.'));
         return;
       }
       // Grouped as a string, never through Number(): a chain's height is not bounded by 2^53, and
       // `Number('9007199254740993123').toLocaleString()` quietly invents digits.
-      const heightText = groupDigits(String(answer.height ?? 'unknown'));
+      const heightText = answer.height === undefined || answer.height === null ? t('unknown') : groupDigits(String(answer.height));
       const theirs = String(answer.chainId ?? '');
       const ours = String(settings.chainId ?? '');
-      const where = candidates.length > 1 ? `${answer.url} answered first — ` : '';
+      // Which node answered is part of the sentence when more than one was asked: one key per
+      // shape, never a translated prefix glued onto a translated rest.
+      const first = candidates.length > 1 ? answer.url : '';
       if (ours && theirs && theirs !== ours) {
-        showStatus('warn', 'A different chain',
-          `${where}it reports chain ${theirs}; this wallet is set up for chain ${ours}. Its notes and addresses will not match. Height ${heightText}.`);
+        showStatus('warn', t('A different chain'), first
+          ? t('{url} answered first — it reports chain {theirs}; this wallet is set up for chain {ours}. Its notes and addresses will not match. Height {height}.', { url: first, theirs, ours, height: heightText })
+          : t('it reports chain {theirs}; this wallet is set up for chain {ours}. Its notes and addresses will not match. Height {height}.', { theirs, ours, height: heightText }));
         return;
       }
-      showStatus('positive', 'Connected', `${where}chain ${theirs || 'unknown'} · height ${heightText}.`);
+      const chain = theirs || t('unknown');
+      showStatus('positive', t('Connected'), first
+        ? t('{url} answered first — chain {chain} · height {height}.', { url: first, chain, height: heightText })
+        : t('chain {chain} · height {height}.', { chain, height: heightText }));
     });
 
     const offRescan = on(body, '[data-role="rescan"]', 'click', (evt) => {
       evt.preventDefault();
       const dialog = ctx.sheet(h`
-        <h3 class="sheet-title">Rescan this wallet?</h3>
-        <p class="sheet-sub">The wallet forgets how far it has read and reads this node again from the start. It can take a while on a long chain. Your keys, your password and your settings are not touched, and nothing on chain changes.</p>
+        <h3 class="sheet-title">${t('Rescan this wallet?')}</h3>
+        <p class="sheet-sub">${t('The wallet forgets how far it has read and reads this node again from the start. It can take a while on a long chain. '
+          + 'Your keys, your password and your settings are not touched, and nothing on chain changes.')}</p>
         <div class="sheet-foot">
-          <button class="btn" type="button" data-role="cancel">Cancel</button>
-          <button class="btn btn-primary" type="button" data-role="confirm">Rescan</button>
+          <button class="btn" type="button" data-role="cancel">${t('Cancel')}</button>
+          <button class="btn btn-primary" type="button" data-role="confirm">${t('Rescan')}</button>
         </div>`);
       on(dialog, '[data-role="cancel"]', 'click', () => ctx.closeSheet());
       on(dialog, '[data-role="confirm"]', 'click', async () => {
         ctx.closeSheet();
         if (!live()) return;
-        showStatus('info', 'Rescanning…', 'Reading this node from the start. You can leave this screen.');
+        showStatus('info', t('Rescanning…'), t('Reading this node from the start. You can leave this screen.'));
         try {
           // Not `forChain`: this is "read it again", not "this is a different chain" — the notes
           // are kept and the scan re-establishes them.
           await ctx.backend.sync.rescan({ signal: ctx.session.signal });
         } catch (err) {
           if (!live()) return;
-          showStatus('negative', 'The rescan did not finish', (err && err.message) || 'Something went wrong.');
+          showStatus('negative', t('The rescan did not finish'), (err && err.message) || t('Something went wrong.'));
           return;
         }
         if (!live()) return;
-        showStatus('positive', 'Rescanned', 'This wallet has re-read the chain from the start.');
+        showStatus('positive', t('Rescanned'), t('This wallet has re-read the chain from the start.'));
       });
     });
 
@@ -584,16 +609,17 @@ registerScreen('settings', {
       if (!proverGroup || !line() || typeof proverGroup.probe !== 'function') return;
       const mine = ++probeRun;
       let answer;
-      try { answer = await proverGroup.probe(); } catch (err) { answer = { ok: false, reason: (err && err.message) || 'it did not answer' }; }
+      try { answer = await proverGroup.probe(); } catch (err) { answer = { ok: false, reason: (err && err.message) || t('it did not answer') }; }
       if (!live() || mine !== probeRun || !line()) return;
       // Text only: the reason and the queue are the prover's words.
       if (answer && answer.ok) {
         const q = answer.queue || {};
         const depth = Number.isFinite(Number(q.depth)) ? Number(q.depth) : 0;
-        const max = Number.isFinite(Number(q.max)) ? ` of ${Number(q.max)}` : '';
-        line().textContent = `Answering · ${depth}${max} in its queue.`;
+        line().textContent = Number.isFinite(Number(q.max))
+          ? t('Answering · {depth} of {max} in its queue.', { depth, max: Number(q.max) })
+          : t('Answering · {depth} in its queue.', { depth });
       } else {
-        line().textContent = `Not answering: ${String((answer && answer.reason) || 'no reply').replace(/\.$/, '')}.`;
+        line().textContent = t('Not answering: {reason}.', { reason: String((answer && answer.reason) || t('no reply')).replace(/\.$/, '') });
       }
     }
 
@@ -630,10 +656,10 @@ registerScreen('settings', {
       if (!link) {
         proverPasswordInput.value = '';
         password = '';
-        showStatus('negative', 'Not paired', 'Paste the randprover: link your prover shows.', proverStatusEl);
+        showStatus('negative', t('Not paired'), t('Paste the randprover: link your prover shows.'), proverStatusEl);
         return;
       }
-      if (!password) { showStatus('negative', 'Not paired', 'Enter this wallet\'s password — the pairing is sealed under it.', proverStatusEl); return; }
+      if (!password) { showStatus('negative', t('Not paired'), t('Enter this wallet\'s password — the pairing is sealed under it.'), proverStatusEl); return; }
       pairing = true;
       const saveBtn = body.querySelector('[data-role="save-prover"]');
       if (saveBtn) { saveBtn.disabled = true; saveBtn.setAttribute('aria-busy', 'true'); }
@@ -651,7 +677,7 @@ registerScreen('settings', {
       } catch (err) {
         done();
         if (!live()) return;
-        showStatus('negative', 'Not paired', (err && err.message) || 'That is not a pairing link.', proverStatusEl);
+        showStatus('negative', t('Not paired'), (err && err.message) || t('That is not a pairing link.'), proverStatusEl);
         return;
       }
       if (!live()) { done(); return; }
@@ -663,7 +689,7 @@ registerScreen('settings', {
         if (!live()) { done(); return; }
         if (!granted) {
           done();
-          showStatus('negative', 'Not paired', 'Permission to reach that prover was not granted, so nothing was saved.', proverStatusEl);
+          showStatus('negative', t('Not paired'), t('Permission to reach that prover was not granted, so nothing was saved.'), proverStatusEl);
           return;
         }
       }
@@ -673,7 +699,7 @@ registerScreen('settings', {
       } catch (err) {
         done();
         if (!live()) return;
-        showStatus('negative', 'Not paired', (err && err.message) || 'The prover could not be paired.', proverStatusEl);
+        showStatus('negative', t('Not paired'), (err && err.message) || t('The prover could not be paired.'), proverStatusEl);
         return;
       }
       done();
@@ -683,11 +709,12 @@ registerScreen('settings', {
       paintProverState();
       // A prover that is not the user's own makes the proofs too; the engine's sentence (the
       // core's) says once more what it can then see, beside where the proofs now go.
-      const where = `Proofs this device cannot make go to ${paired.name || seen.url}. Its fingerprint is ${paired.fingerprint || seen.fingerprint} — check that the prover shows the same.`;
+      const where = t('Proofs this device cannot make go to {name}. Its fingerprint is {fingerprint} — check that the prover shows the same.',
+        { name: paired.name || seen.url, fingerprint: paired.fingerprint || seen.fingerprint });
       if (seen.warning) {
-        showStatus('warn', 'Paired — this prover can read your history', `${where} ${seen.warning}`, proverStatusEl);
+        showStatus('warn', t('Paired — this prover can read your history'), `${where} ${seen.warning}`, proverStatusEl);
       } else {
-        showStatus('positive', 'Paired', where, proverStatusEl);
+        showStatus('positive', t('Paired'), where, proverStatusEl);
       }
     });
 
@@ -701,15 +728,15 @@ registerScreen('settings', {
         await proverGroup.useDefault();
       } catch (err) {
         if (!live()) return;
-        showStatus('negative', 'Not changed', (err && err.message) || 'The prover could not be changed.', proverStatusEl);
+        showStatus('negative', t('Not changed'), (err && err.message) || t('The prover could not be changed.'), proverStatusEl);
         return;
       }
       if (!live()) return;
       settings = { ...settings, prover: await rereadProver({ mode: 'default', name: trusted.name, members: trusted.members }) };
       if (!live()) return;
       paintProverState();
-      showStatus('warn', `Using the ${trusted.name || 'RandProtocol'} provers`,
-        `Proofs this device cannot make go to one of them; each one that proves a send sees that wallet's viewing key. ${trusted.warning || PROVER_WARNING}`, proverStatusEl);
+      showStatus('warn', t('Using the {name} provers', { name: trusted.name || 'RandProtocol' }),
+        `${t('Proofs this device cannot make go to one of them; each one that proves a send sees that wallet\'s viewing key.')} ${trusted.warning || proverWarning()}`, proverStatusEl);
     });
 
     const offUseNone = on(body, '[data-role="use-no-prover"]', 'click', async (evt) => {
@@ -720,13 +747,13 @@ registerScreen('settings', {
         await proverGroup.useNone();
       } catch (err) {
         if (!live()) return;
-        showStatus('negative', 'Not changed', (err && err.message) || 'The prover could not be changed.', proverStatusEl);
+        showStatus('negative', t('Not changed'), (err && err.message) || t('The prover could not be changed.'), proverStatusEl);
         return;
       }
       if (!live()) return;
       settings = { ...settings, prover: { mode: 'device' } };
       paintProverState();
-      showStatus('positive', 'No prover', 'Proofs are made on this device only. Where it cannot make one, sending waits until you pair a prover or use the RandProtocol prover again.', proverStatusEl);
+      showStatus('positive', t('No prover'), t('Proofs are made on this device only. Where it cannot make one, sending waits until you pair a prover or use the RandProtocol prover again.'), proverStatusEl);
     });
 
     const offScanProver = on(body, '[data-role="scan-prover"]', 'click', async (evt) => {
@@ -735,7 +762,7 @@ registerScreen('settings', {
       let text = '';
       try { text = await platform.scanQr(); } catch (err) {
         if (!live() || (err && err.name === 'AbortError')) return;
-        showStatus('negative', 'Nothing scanned', (err && err.message) || 'The camera could not read a code.', proverStatusEl);
+        showStatus('negative', t('Nothing scanned'), (err && err.message) || t('The camera could not read a code.'), proverStatusEl);
         return;
       }
       if (!live() || !text) return;
@@ -749,16 +776,16 @@ registerScreen('settings', {
         await proverGroup.forget();
       } catch (err) {
         if (!live()) return;
-        showStatus('negative', 'Not forgotten', (err && err.message) || 'The pairing could not be removed.', proverStatusEl);
+        showStatus('negative', t('Not forgotten'), (err && err.message) || t('The pairing could not be removed.'), proverStatusEl);
         return;
       }
       if (!live()) return;
       settings = { ...settings, prover: await rereadProver({ mode: 'device' }) };
       if (!live()) return;
       paintProverState();
-      showStatus('positive', 'Forgotten', settings.prover.mode === 'default'
-        ? `The prover's pairing is gone from this wallet. Proofs this device cannot make go to the ${settings.prover.name || 'RandProtocol'} provers again.`
-        : 'Proofs are made on this device again. The prover\'s pairing is gone from this wallet.', proverStatusEl);
+      showStatus('positive', t('Forgotten'), settings.prover.mode === 'default'
+        ? t('The prover\'s pairing is gone from this wallet. Proofs this device cannot make go to the {name} provers again.', { name: settings.prover.name || 'RandProtocol' })
+        : t('Proofs are made on this device again. The prover\'s pairing is gone from this wallet.'), proverStatusEl);
     });
 
     // ---- the prover host ----
@@ -775,11 +802,13 @@ registerScreen('settings', {
       if (!hostStatusEl) return;
       if (error) { hostStatusEl.textContent = String(error); return; }
       if (status && status.running) {
-        const work = status.proving ? 'Proving a transfer now.' : 'Waiting for a proof to make.';
-        hostStatusEl.textContent = `On · ${status.addr || ''} · fingerprint ${status.fingerprint || ''}. ${work}`;
+        const vars = { addr: status.addr || '', fingerprint: status.fingerprint || '' };
+        hostStatusEl.textContent = status.proving
+          ? t('On · {addr} · fingerprint {fingerprint}. Proving a transfer now.', vars)
+          : t('On · {addr} · fingerprint {fingerprint}. Waiting for a proof to make.', vars);
       } else {
         const note = status && status.note ? ` ${status.note}` : '';
-        hostStatusEl.textContent = `Off.${note}`;
+        hostStatusEl.textContent = `${t('Off.')}${note}`;
       }
     }
 
@@ -823,7 +852,7 @@ registerScreen('settings', {
       try { link = await fetchLink(); } catch (err) {
         if (!live()) return;
         paintHostLink('');
-        paintHostStatus(null, (err && err.message) || 'The pairing link could not be made.');
+        paintHostStatus(null, (err && err.message) || t('The pairing link could not be made.'));
         return;
       }
       if (!live() || !hostBox || !hostBox.checked) return;
@@ -834,7 +863,7 @@ registerScreen('settings', {
       (async () => {
         let status;
         try { status = await proverHost.status(); } catch (err) {
-          if (live()) paintHostStatus(null, (err && err.message) || 'The prover could not be asked.');
+          if (live()) paintHostStatus(null, (err && err.message) || t('The prover could not be asked.'));
           return;
         }
         if (!live()) return;
@@ -850,7 +879,7 @@ registerScreen('settings', {
       box.disabled = true;
       const on_ = box.checked;
       if (!on_) paintHostLink(''); // the link goes the moment the user says off
-      hostStatusEl.textContent = on_ ? 'Starting…' : 'Stopping…';
+      hostStatusEl.textContent = on_ ? t('Starting…') : t('Stopping…');
       let status;
       try {
         status = on_ ? await proverHost.start() : await proverHost.stop();
@@ -860,7 +889,7 @@ registerScreen('settings', {
         if (!live()) return;
         box.checked = false;
         paintHostLink('');
-        paintHostStatus(null, (err && err.message) || 'The prover did not start.');
+        paintHostStatus(null, (err && err.message) || t('The prover did not start.'));
         return;
       }
       hostBusy = false;
@@ -875,10 +904,10 @@ registerScreen('settings', {
       evt.preventDefault();
       if (!hostLink || typeof platform.copy !== 'function') return;
       try { await platform.copy(hostLink); } catch {
-        if (live()) ctx.toast('The link could not be copied.', { kind: 'negative' });
+        if (live()) ctx.toast(t('The link could not be copied.'), { kind: 'negative' });
         return;
       }
-      if (live()) ctx.toast('Copied', { kind: 'positive' });
+      if (live()) ctx.toast(t('Copied'), { kind: 'positive' });
     });
 
     const offRotateHostLink = on(body, '[data-role="rotate-prover-link"]', 'click', async (evt) => {
@@ -887,7 +916,7 @@ registerScreen('settings', {
       hostBusy = true;
       await showHostLink(() => proverHost.rotate());
       hostBusy = false;
-      if (live() && hostLink) ctx.toast('A new link: the old one no longer works.', { kind: 'positive' });
+      if (live() && hostLink) ctx.toast(t('A new link: the old one no longer works.'), { kind: 'positive' });
     });
 
     // ---- appearance ----
@@ -901,7 +930,7 @@ registerScreen('settings', {
       try {
         await ctx.backend.settings.set({ theme: value });
       } catch {
-        if (live()) ctx.toast('The theme could not be saved.', { kind: 'negative' });
+        if (live()) ctx.toast(t('The theme could not be saved.'), { kind: 'negative' });
         return;
       }
       if (!live()) return;
@@ -924,12 +953,12 @@ registerScreen('settings', {
       try {
         await ctx.backend.settings.set({ autoLockMin: minutes });
       } catch {
-        if (live()) ctx.toast('That could not be saved.', { kind: 'negative' });
+        if (live()) ctx.toast(t('That could not be saved.'), { kind: 'negative' });
         return;
       }
       if (!live()) return;
       settings = { ...settings, autoLockMin: minutes };
-      ctx.toast('Saved', { kind: 'positive' });
+      ctx.toast(t('Saved'), { kind: 'positive' });
     });
 
     // ---- unlock with a passkey (Touch ID) ----
@@ -947,28 +976,28 @@ registerScreen('settings', {
       if (!available && !enabled) { pkCard.hidden = true; return; }
       const label = pkApi.label();
       pkCard.hidden = false;
-      pkCard.querySelector('[data-role="passkey-title"]').textContent = `Unlock with ${label}`;
+      pkCard.querySelector('[data-role="passkey-title"]').textContent = t('Unlock with {label}', { label });
       pkCard.querySelector('[data-role="passkey-caption"]').textContent = enabled
-        ? `On. Rand Wallet opens with ${label}; your password still works, and is needed if ${label} cannot answer.`
-        : `Open the wallet with ${label} instead of typing your password. Your password still works, and stays the way to restore access.`;
-      pkCard.querySelector('[data-role="passkey-toggle"]').textContent = enabled ? `Turn off ${label}` : `Turn on ${label}`;
+        ? t('On. Rand Wallet opens with {label}; your password still works, and is needed if {label} cannot answer.', { label })
+        : t('Open the wallet with {label} instead of typing your password. Your password still works, and stays the way to restore access.', { label });
+      pkCard.querySelector('[data-role="passkey-toggle"]').textContent = enabled ? t('Turn off {label}', { label }) : t('Turn on {label}', { label });
       pkCard.dataset.enabled = enabled ? '1' : '';
     }
     function enablePasskey() {
       const label = pkApi.label();
       const dialog = ctx.sheet(h`
-        <h3 class="sheet-title">Turn on ${label}</h3>
-        <p class="sheet-sub">Enter your password once. ${label} will keep it sealed, and give it back to unlock this wallet.</p>
+        <h3 class="sheet-title">${t('Turn on {label}', { label })}</h3>
+        <p class="sheet-sub">${t('Enter your password once. {label} will keep it sealed, and give it back to unlock this wallet.', { label })}</p>
         <form novalidate class="stack">
           <label class="field">
-            <span class="label">Password</span>
+            <span class="label">${t('Password')}</span>
             <input name="password" type="password" autocomplete="current-password" aria-describedby="pk-hint">
-            <span class="hint" id="pk-hint">The password that unlocks this wallet on this device.</span>
-            <span class="error" id="pk-error">That is not the password for this wallet.</span>
+            <span class="hint" id="pk-hint">${t('The password that unlocks this wallet on this device.')}</span>
+            <span class="error" id="pk-error">${t('That is not the password for this wallet.')}</span>
           </label>
           <div class="sheet-foot">
-            <button class="btn" type="button" data-role="cancel">Cancel</button>
-            <button class="btn btn-primary" type="submit" data-role="pk-submit">Continue</button>
+            <button class="btn" type="button" data-role="cancel">${t('Cancel')}</button>
+            <button class="btn btn-primary" type="submit" data-role="pk-submit">${t('Continue')}</button>
           </div>
         </form>`);
       const input = dialog.querySelector('input[name=password]');
@@ -991,15 +1020,15 @@ registerScreen('settings', {
           if (!live()) return;
           const wrong = err && /wrong password/.test(String(err.message));
           dialog.querySelector('#pk-error').textContent = wrong
-            ? 'That is not the password for this wallet.'
-            : `${label} could not be set up: ${(err && err.message) || err}`;
+            ? t('That is not the password for this wallet.')
+            : t('{label} could not be set up: {error}', { label, error: (err && err.message) || err });
           markInvalid(wrap, input, 'pk-error');
           input.focus();
           return;
         }
         ctx.closeSheet();
         if (!live()) return;
-        ctx.toast(`${label} is on`, { kind: 'positive' });
+        ctx.toast(t('{label} is on', { label }), { kind: 'positive' });
         await paintPasskey();
       });
     }
@@ -1008,7 +1037,7 @@ registerScreen('settings', {
       if (pkCard.dataset.enabled) {
         await pkApi.disable();
         if (!live()) return;
-        ctx.toast(`${pkApi.label()} is off`, { kind: 'positive' });
+        ctx.toast(t('{label} is off', { label: pkApi.label() }), { kind: 'positive' });
         await paintPasskey();
       } else {
         enablePasskey();
@@ -1027,18 +1056,18 @@ registerScreen('settings', {
      */
     function askPassword(purpose, onOk) {
       const dialog = ctx.sheet(h`
-        <h3 class="sheet-title">Enter your password</h3>
+        <h3 class="sheet-title">${t('Enter your password')}</h3>
         <p class="sheet-sub">${purpose}</p>
         <form novalidate class="stack">
           <label class="field">
-            <span class="label">Password</span>
+            <span class="label">${t('Password')}</span>
             <input name="password" type="password" autocomplete="current-password" aria-describedby="reauth-hint">
-            <span class="hint" id="reauth-hint">The password that unlocks this wallet on this device.</span>
-            <span class="error" id="reauth-error">That is not the password for this wallet.</span>
+            <span class="hint" id="reauth-hint">${t('The password that unlocks this wallet on this device.')}</span>
+            <span class="error" id="reauth-error">${t('That is not the password for this wallet.')}</span>
           </label>
           <div class="sheet-foot">
-            <button class="btn" type="button" data-role="cancel">Cancel</button>
-            <button class="btn btn-primary" type="submit" data-role="reauth-submit">Continue</button>
+            <button class="btn" type="button" data-role="cancel">${t('Cancel')}</button>
+            <button class="btn btn-primary" type="submit" data-role="reauth-submit">${t('Continue')}</button>
           </div>
         </form>`);
       const input = dialog.querySelector('input[name=password]');
@@ -1097,31 +1126,32 @@ registerScreen('settings', {
       }
       closingPanel = false;
       if (panel && notify && live()) {
-        ctx.toast('Key hidden — enter your password to view it again.', { kind: 'positive' });
+        ctx.toast(t('Key hidden — enter your password to view it again.'), { kind: 'positive' });
       }
     }
 
-    function keyPanelMarkup({ label, extra = '', disabled = false }) {
+    function keyPanelMarkup({ copyLabel, extra = '', disabled = false }) {
       return h`
         <div class="stack">
           ${raw(extra)}
           <div class="hold-reveal">
             <span class="key-mask masked" data-role="mask">•••• •••• •••• •••• •••• ••••</span>
             <button class="btn block hold-btn" type="button" data-role="hold"${raw(disabled ? ' disabled' : '')}>
-              <span class="fill"></span>${raw(icons.eye())}Hold to reveal
+              <span class="fill"></span>${raw(icons.eye())}${t('Hold to reveal')}
             </button>
             <button class="btn block" type="button" data-role="timed"${raw(disabled ? ' disabled' : '')}></button>
-            <button class="btn block" type="button" data-role="copy"${raw(disabled ? ' disabled' : '')}>${raw(icons.copy())}Copy ${label}</button>
-            <button class="btn btn-ghost block" type="button" data-role="done">Done — hide this key</button>
+            <button class="btn block" type="button" data-role="copy"${raw(disabled ? ' disabled' : '')}>${raw(icons.copy())}${copyLabel}</button>
+            <button class="btn btn-ghost block" type="button" data-role="done">${t('Done — hide this key')}</button>
           </div>
         </div>`;
     }
 
     /** Paints a revealed-key panel into `slot` and wires it; `collapsed` is the markup to put back
-     *  when it is closed (the button that asks for the password again). */
-    function openKeyPanel(slot, { label, extra, disabled, getSecret, collapsed }) {
+     *  when it is closed (the button that asks for the password again). `labels` are the three
+     *  button texts (copy, reveal, hide), each a whole sentence naming the key. */
+    function openKeyPanel(slot, { labels, extra, disabled, getSecret, collapsed }) {
       closePanel();
-      slot.innerHTML = keyPanelMarkup({ label, extra, disabled });
+      slot.innerHTML = keyPanelMarkup({ copyLabel: labels.copy, extra, disabled });
       const reveal = wireSecretReveal(slot, {
         getSecret,
         copy: (secret) => ctx.backend.platform.copy(secret),
@@ -1130,28 +1160,28 @@ registerScreen('settings', {
         // Not just "null the variable": the panel goes too, so what is on screen is the password
         // gate rather than three buttons that would quietly do nothing.
         onDrop: () => closePanel({ notify: true }),
-        labels: { reveal: `Show ${label} for 10 seconds`, hide: `Hide ${label}` },
+        labels: { reveal: labels.reveal, hide: labels.hide },
       });
       openPanel = { slot, reveal, collapsed };
     }
 
     const offViewingKey = on(body, '[data-role="show-viewing-key"]', 'click', (evt) => {
       evt.preventDefault();
-      askPassword('The viewing key discloses your whole history, so it is behind your password.', async () => {
+      askPassword(t('The viewing key discloses your whole history, so it is behind your password.'), async () => {
         let key;
         try {
           key = await ctx.backend.wallet.viewingKey();
         } catch (err) {
-          if (live()) ctx.toast((err && err.message) || 'The viewing key could not be read.', { kind: 'negative' });
+          if (live()) ctx.toast((err && err.message) || t('The viewing key could not be read.'), { kind: 'negative' });
           return;
         }
         if (!live()) { key = null; return; } // never written anywhere at all
         // After openKeyPanel, never before: opening a panel closes any other one, and closing a
         // panel forgets both keys.
         openKeyPanel(body.querySelector('[data-role="viewing-key-slot"]'), {
-          label: 'viewing key',
+          labels: { copy: t('Copy viewing key'), reveal: t('Show viewing key for 10 seconds'), hide: t('Hide viewing key') },
           getSecret: () => viewingKey,
-          collapsed: VIEWING_KEY_BUTTON,
+          collapsed: viewingKeyButton(),
         });
         viewingKey = key;
       });
@@ -1159,29 +1189,29 @@ registerScreen('settings', {
 
     const offSpendKey = on(body, '[data-role="export-spend-key"]', 'click', (evt) => {
       evt.preventDefault();
-      askPassword('Exporting the spend key is behind your password.', async () => {
+      askPassword(t('Exporting the spend key is behind your password.'), async () => {
         let key;
         try {
           key = await ctx.backend.wallet.exportSpendKey();
         } catch (err) {
-          if (live()) ctx.toast((err && err.message) || 'The spend key could not be read.', { kind: 'negative' });
+          if (live()) ctx.toast((err && err.message) || t('The spend key could not be read.'), { kind: 'negative' });
           return;
         }
         if (!live()) { key = null; return; }
         openKeyPanel(body.querySelector('[data-role="spend-key-slot"]'), {
-          label: 'spend key',
+          labels: { copy: t('Copy spend key'), reveal: t('Show spend key for 10 seconds'), hide: t('Hide spend key') },
           getSecret: () => spendKey,
-          collapsed: SPEND_KEY_BUTTON,
+          collapsed: spendKeyButton(),
           // Nothing is revealed *or copied* until the sentence has been read and agreed to.
           disabled: true,
           extra: h`
             <div class="banner negative">
               <span class="ic">${raw(icons.warning())}</span>
-              <span><span class="banner-title">This key can spend your funds</span>${SPEND_KEY_WARNING}</span>
+              <span><span class="banner-title">${t('This key can spend your funds')}</span>${spendKeyWarning()}</span>
             </div>
             <label class="check">
               <input type="checkbox" name="understand">
-              <span>I understand anyone with this key can spend my funds</span>
+              <span>${t('I understand anyone with this key can spend my funds')}</span>
             </label>`,
         });
         spendKey = key;

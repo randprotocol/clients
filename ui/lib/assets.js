@@ -24,6 +24,11 @@ export function totalInRand(assets) {
 export const UNLISTED_TEXT = 'This node’s token registry does not list this asset, so its name '
   + 'and decimal places are this wallet’s guess rather than the chain’s. It cannot be sent or '
   + 'withdrawn until a node lists it.';
+/** The same sentence in the language in force — what a screen shows; `UNLISTED_TEXT` is the
+ *  English the tests compare against. */
+export const unlistedText = () => t('This node’s token registry does not list this asset, so its name '
+  + 'and decimal places are this wallet’s guess rather than the chain’s. It cannot be sent or '
+  + 'withdrawn until a node lists it.');
 
 /** The RAND row of an `assets.list()` answer — always index 0, and always first (ui/backend.js). */
 export function nativeAsset(assets) {

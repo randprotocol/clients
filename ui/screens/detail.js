@@ -12,6 +12,7 @@
 //     checked against a strict hex pattern — `item.hash` is node-controlled text. If the user has
 //     no explorer configured, no button is offered at all rather than a guessed default.
 import { h, raw, on } from '../lib/dom.js';
+import { t } from '../i18n.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits, shortAddress, shortHex } from '../lib/format.js';
@@ -54,7 +55,7 @@ registerScreen('tx', {
   // activity when there is nothing to go on — a deep link, a fresh session.
   pane: 'detail',
   parent: (_arg, from) => listParent(from, '#activity'),
-  render: (ctx) => skeletonMarkup(ctx, 'Transaction', 'activity'),
+  render: (ctx) => skeletonMarkup(ctx, t('Transaction'), 'activity'),
   async after(ctx, root, hash) {
     let assets, sync, settings;
     try {
@@ -63,14 +64,14 @@ registerScreen('tx', {
       ]);
     } catch (err) {
       if (!ctx.isCurrent()) return;
-      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Could not load this transaction</span>${err && err.message ? err.message : 'Something went wrong.'}</span></div>`;
+      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">${t('Could not load this transaction')}</span>${err && err.message ? err.message : t('Something went wrong.')}</span></div>`;
       return;
     }
     if (!ctx.isCurrent()) return;
 
     const item = (sync.activity || []).find((a) => a.hash === hash);
     if (!item) {
-      root.innerHTML = notFoundMarkup(ctx, 'Transaction', 'activity', 'This transaction was not found.');
+      root.innerHTML = notFoundMarkup(ctx, t('Transaction'), 'activity', t('This transaction was not found.'));
       return;
     }
 
@@ -85,29 +86,29 @@ registerScreen('tx', {
     const k = kindOf(item);
     const statusChip = raw(k.kind === 'pending'
       ? h`<span class="chip warn">${k.title}</span>`
-      : h`<span class="chip positive">${raw(icons.check())}Confirmed</span>`);
+      : h`<span class="chip positive">${raw(icons.check())}${t('Confirmed')}</span>`);
     // Every row below is optional in the Backend contract — an item may carry none of them.
-    const addressRow = raw(item.address ? h`<div class="kv"><span class="k">${k.kind === 'out' ? 'To' : 'From'}</span><span class="v mono">${shortAddress(item.address)}</span></div>` : '');
-    const blockRow = raw(item.block ? h`<div class="kv"><span class="k">Block</span><span class="v amount">${item.block.toLocaleString('en-US')}</span></div>` : '');
+    const addressRow = raw(item.address ? h`<div class="kv"><span class="k">${k.kind === 'out' ? t('To') : t('From')}</span><span class="v mono">${shortAddress(item.address)}</span></div>` : '');
+    const blockRow = raw(item.block ? h`<div class="kv"><span class="k">${t('Block')}</span><span class="v amount">${item.block.toLocaleString('en-US')}</span></div>` : '');
     // Fees are always paid in the native asset, so they use its decimals — not this row's asset,
     // and not a hard-coded 9.
-    const feeRow = raw(item.fee ? h`<div class="kv"><span class="k">Fee</span><span class="v amount">${formatUnits(item.fee, 6, native ? native.decimals : 9)} ${native ? native.symbol : 'RAND'}</span></div>` : '');
+    const feeRow = raw(item.fee ? h`<div class="kv"><span class="k">${t('Fee')}</span><span class="v amount">${formatUnits(item.fee, 6, native ? native.decimals : 9)} ${native ? native.symbol : 'RAND'}</span></div>` : '');
     const keyRow = raw(txKey ? h`
         <div class="kv controls">
-          <span class="k">Transaction key</span>
+          <span class="k">${t('Transaction key')}</span>
           <span class="v cluster">
             <span class="mono truncate" data-role="txkey">${shortHex(txKey)}</span>
-            <button class="btn-icon" type="button" data-role="reveal-key" data-keep-label="true" aria-label="Reveal the full transaction key">${raw(icons.eye())}</button>
-            <button class="btn-icon" type="button" data-role="copy-key" aria-label="Copy the transaction key">${raw(icons.copy())}</button>
+            <button class="btn-icon" type="button" data-role="reveal-key" data-keep-label="true" aria-label="${t('Reveal the full transaction key')}">${raw(icons.eye())}</button>
+            <button class="btn-icon" type="button" data-role="copy-key" aria-label="${t('Copy the transaction key')}">${raw(icons.copy())}</button>
           </span>
         </div>` : '');
-    const noteLink = raw(k.kind === 'in' && item.index !== undefined ? h`<button class="btn btn-ghost sm" type="button" data-go="note/${item.index}">View the received note</button>` : '');
+    const noteLink = raw(k.kind === 'in' && item.index !== undefined ? h`<button class="btn btn-ghost sm" type="button" data-go="note/${item.index}">${t('View the received note')}</button>` : '');
     const explorer = explorerLink(settings.explorerUrl, item.hash);
     const explorerBtn = raw(explorer ? h`<button class="btn block" type="button" data-role="explorer">${explorer.label}</button>` : '');
 
     root.innerHTML = h`
-      <h1 class="sr-only">Transaction</h1>
-      ${raw(detailTopbar(ctx, 'Transaction', 'activity'))}
+      <h1 class="sr-only">${t('Transaction')}</h1>
+      ${raw(detailTopbar(ctx, t('Transaction'), 'activity'))}
       <div class="card stack">
         <div class="card-head"><h3>${k.title}</h3>${statusChip}</div>
         <span class="amount ${k.sign === '+' ? 'in' : ''}">${k.sign}${formatUnits(item.amount, 6, asset.decimals)}<span class="unit">${asset.symbol}</span></span>
@@ -131,8 +132,8 @@ registerScreen('tx', {
       masked: shortHex(txKey),
       selectors: { mask: '[data-role="txkey"]', hold: null, timed: '[data-role="reveal-key"]', copy: '[data-role="copy-key"]' },
       copy: (secret) => ctx.backend.platform.copy(secret),
-      onCopied: () => { if (ctx.isCurrent()) ctx.toast('Transaction key copied', { kind: 'positive' }); },
-      labels: { reveal: 'Reveal the full transaction key', hide: 'Hide the transaction key' },
+      onCopied: () => { if (ctx.isCurrent()) ctx.toast(t('Transaction key copied'), { kind: 'positive' }); },
+      labels: { reveal: t('Reveal the full transaction key'), hide: t('Hide the transaction key') },
     });
     const offExplorer = on(root, '[data-role="explorer"]', 'click', (evt) => {
       evt.preventDefault();
@@ -156,43 +157,43 @@ registerScreen('note', {
   // the activity list is the one that lists them.
   pane: 'detail',
   parent: (_arg, from) => listParent(from, '#activity'),
-  render: (ctx) => skeletonMarkup(ctx, 'Note', 'home'),
+  render: (ctx) => skeletonMarkup(ctx, t('Note'), 'home'),
   async after(ctx, root, indexArg) {
     let assets, sync;
     try {
       [assets, sync] = await Promise.all([ctx.backend.assets.list(), ctx.backend.sync.cached()]);
     } catch (err) {
       if (!ctx.isCurrent()) return;
-      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">Could not load this note</span>${err && err.message ? err.message : 'Something went wrong.'}</span></div>`;
+      root.innerHTML = h`<div class="banner negative"><span class="ic">${raw(icons.warning())}</span><span><span class="banner-title">${t('Could not load this note')}</span>${err && err.message ? err.message : t('Something went wrong.')}</span></div>`;
       return;
     }
     if (!ctx.isCurrent()) return;
 
     const note = (sync.notes || []).find((n) => String(n.index) === String(indexArg));
     if (!note) {
-      root.innerHTML = notFoundMarkup(ctx, 'Note', 'home', 'This note was not found.');
+      root.innerHTML = notFoundMarkup(ctx, t('Note'), 'home', t('This note was not found.'));
       return;
     }
     const asset = assets.find((a) => a.index === note.asset) || { symbol: `RPL#${note.asset}`, decimals: 9 };
-    const statusChip = raw(note.spent ? h`<span class="chip">Spent</span>` : h`<span class="chip positive">${raw(icons.check())}Unspent</span>`);
-    const blockRow = raw(note.blockHeight ? h`<div class="kv"><span class="k">Block</span><span class="v amount">${note.blockHeight.toLocaleString('en-US')}</span></div>` : '');
+    const statusChip = raw(note.spent ? h`<span class="chip">${t('Spent')}</span>` : h`<span class="chip positive">${raw(icons.check())}${t('Unspent')}</span>`);
+    const blockRow = raw(note.blockHeight ? h`<div class="kv"><span class="k">${t('Block')}</span><span class="v amount">${note.blockHeight.toLocaleString('en-US')}</span></div>` : '');
     const commitmentRow = raw(note.commitment ? h`
         <div class="kv">
-          <span class="k">Commitment</span>
+          <span class="k">${t('Commitment')}</span>
           <span class="v cluster">
             <span class="mono truncate">${shortHex(note.commitment)}</span>
-            <button class="btn-icon" type="button" data-role="copy-commitment" aria-label="Copy the commitment">${raw(icons.copy())}</button>
+            <button class="btn-icon" type="button" data-role="copy-commitment" aria-label="${t('Copy the commitment')}">${raw(icons.copy())}</button>
           </span>
         </div>` : '');
 
     root.innerHTML = h`
-      <h1 class="sr-only">Note</h1>
-      ${raw(detailTopbar(ctx, 'Note', 'home'))}
+      <h1 class="sr-only">${t('Note')}</h1>
+      ${raw(detailTopbar(ctx, t('Note'), 'home'))}
       <div class="card stack">
-        <div class="card-head"><h3>Shielded note</h3>${statusChip}</div>
+        <div class="card-head"><h3>${t('Shielded note')}</h3>${statusChip}</div>
         <span class="amount">${formatUnits(note.amount, 6, asset.decimals)}<span class="unit">${asset.symbol}</span></span>
         ${raw(memoSlot(note))}
-        <div class="kv"><span class="k">Note index</span><span class="v amount">${note.index}</span></div>
+        <div class="kv"><span class="k">${t('Note index')}</span><span class="v amount">${note.index}</span></div>
         ${blockRow}
         ${commitmentRow}
       </div>`;
@@ -202,7 +203,7 @@ registerScreen('note', {
       evt.preventDefault();
       await ctx.backend.platform.copy(note.commitment);
       if (!ctx.isCurrent()) return;
-      ctx.toast('Commitment copied', { kind: 'positive' });
+      ctx.toast(t('Commitment copied'), { kind: 'positive' });
     });
 
     return () => { offCopy(); };

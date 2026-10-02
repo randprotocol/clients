@@ -5,9 +5,11 @@ import RandWalletCore
 /// `{"ok":true,"value":…}` or `{"ok":false,"error":"…"}`. Every method and its parameters are
 /// documented on `wallet_core::dispatch` in core/crates/wallet-core.
 enum RandCore {
+    /// `message` is the core's English sentence, verbatim (logs, tests); what a screen shows is
+    /// `errorDescription`, the same sentence in the user's language where `CoreErrors` knows it.
     struct CoreError: LocalizedError {
         let message: String
-        var errorDescription: String? { message }
+        var errorDescription: String? { CoreErrors.localized(message) }
     }
 
     /// Raw call. Thread-safe; the slow method (`prove_transfer`) must run off the main thread.

@@ -19,6 +19,8 @@
 //   VaultDamagedError  the record is not a usable vault at all
 //   Error('wrong password')  the record is fine and GCM authentication failed — which is the one
 //                            case that genuinely cannot be told from a wrong password, by design
+import { t } from '../i18n.js';
+
 export const VAULT_VERSION = 1;
 export const ITERATIONS = 600_000;
 /** A tampered record must not be able to turn the KDF into a denial of service. */
@@ -33,7 +35,7 @@ const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
 export class VaultDamagedError extends Error {
   constructor(detail) {
-    super('wallet data is damaged');
+    super(t('wallet data is damaged'));
     this.name = 'VaultDamagedError';
     this.code = 'VAULT_DAMAGED';
     /** Never shown to the user; for a log. */
@@ -45,7 +47,7 @@ export class VaultDamagedError extends Error {
 
 export class VaultVersionError extends Error {
   constructor(version) {
-    super('this wallet was saved by a newer version of Rand Wallet');
+    super(t('this wallet was saved by a newer version of Rand Wallet'));
     this.name = 'VaultVersionError';
     this.code = 'VAULT_VERSION';
     this.version = version;
@@ -144,7 +146,7 @@ const PASSKEY_INFO = enc.encode('rand-wallet passkey unlock v1');
 
 async function passkeyKey(prfOutput, usage) {
   const ikm = prfOutput instanceof Uint8Array ? prfOutput : new Uint8Array(prfOutput);
-  if (ikm.length < 32) throw new Error('the passkey gave too little key material');
+  if (ikm.length < 32) throw new Error(t('the passkey gave too little key material'));
   const base = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
     { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: PASSKEY_INFO },
@@ -163,12 +165,12 @@ export async function sealWithPasskey(prfOutput, password) {
 /** The password, or a throw when the PRF output is not the one that sealed it. */
 export async function openWithPasskey(prfOutput, rec) {
   if (!rec || rec.v !== PASSKEY_RECORD_VERSION || typeof rec.iv !== 'string' || typeof rec.ct !== 'string') {
-    throw new Error('the passkey unlock record is not one this build reads');
+    throw new Error(t('the passkey unlock record is not one this build reads'));
   }
   const key = await passkeyKey(prfOutput, ['decrypt']);
   try {
     return dec.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(rec.iv) }, key, unb64(rec.ct)));
   } catch {
-    throw new Error('the passkey did not open this wallet');
+    throw new Error(t('the passkey did not open this wallet'));
   }
 }

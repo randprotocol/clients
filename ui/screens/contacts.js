@@ -18,32 +18,33 @@ import { registerScreen } from '../app.js';
 import { shortAddress } from '../lib/format.js';
 import { canScanQr, scanQr } from '../lib/scan-qr.js';
 import { displayMemo } from '../lib/memo.js';
+import { t } from '../i18n.js';
 
 function topbarMarkup() {
-  return h`<div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="settings" aria-label="Back">${raw(icons.chevron())}</button><span class="topbar-title">Contacts</span><span class="spacer"></span></div>`;
+  return h`<div class="topbar"><button class="btn-icon icon-flip" type="button" data-go="settings" aria-label="${t('Back')}">${raw(icons.chevron())}</button><span class="topbar-title">${t('Contacts')}</span><span class="spacer"></span></div>`;
 }
 
 function formMarkup({ canPaste, canScan }) {
-  const paste = canPaste ? raw(h`<button class="btn sm" type="button" data-role="contact-paste">Paste</button>`) : '';
-  const scan = canScan ? raw(h`<button class="btn sm" type="button" data-role="contact-scan">Scan</button>`) : '';
+  const paste = canPaste ? raw(h`<button class="btn sm" type="button" data-role="contact-paste">${t('Paste')}</button>`) : '';
+  const scan = canScan ? raw(h`<button class="btn sm" type="button" data-role="contact-scan">${t('Scan')}</button>`) : '';
   return h`
-    <h2 class="section-title">Add a contact</h2>
+    <h2 class="section-title">${t('Add a contact')}</h2>
     <div class="card stack">
       <form class="stack" data-role="contact-form" novalidate>
         <div class="field">
-          <label class="label" for="contact-name">Name</label>
+          <label class="label" for="contact-name">${t('Name')}</label>
           <input id="contact-name" name="contact-name" type="text" autocomplete="off" spellcheck="false" maxlength="128">
         </div>
         <div class="field">
           <div class="field-top">
-            <label class="label" for="contact-address">Address or payment link</label>
+            <label class="label" for="contact-address">${t('Address or payment link')}</label>
             <span class="cluster">${paste}${scan}</span>
           </div>
-          <textarea id="contact-address" name="contact-address" rows="2" spellcheck="false" autocomplete="off" placeholder="rand1… or randpay:…"></textarea>
+          <textarea id="contact-address" name="contact-address" rows="2" spellcheck="false" autocomplete="off" placeholder="${t('rand1… or randpay:…')}"></textarea>
         </div>
         <div data-role="contact-video-slot"></div>
         <p class="error field-error" data-role="contact-error" role="alert" hidden></p>
-        <button class="btn btn-primary block" type="submit">Check fingerprint</button>
+        <button class="btn btn-primary block" type="submit">${t('Check fingerprint')}</button>
       </form>
       <div data-role="contact-confirm"></div>
     </div>`;
@@ -52,7 +53,7 @@ function formMarkup({ canPaste, canScan }) {
 registerScreen('contacts', {
   render() {
     return h`
-      <h1 class="sr-only">Contacts</h1>
+      <h1 class="sr-only">${t('Contacts')}</h1>
       ${raw(topbarMarkup())}
       <div class="stack" data-role="body"><div class="skeleton block"></div></div>`;
   },
@@ -60,7 +61,7 @@ registerScreen('contacts', {
     const book = ctx.backend.contacts;
     const body = root.querySelector('[data-role="body"]');
     if (!book || typeof book.list !== 'function') {
-      body.innerHTML = h`<div class="card"><div class="empty"><span class="empty-title">Contacts are not available in this app.</span></div></div>`;
+      body.innerHTML = h`<div class="card"><div class="empty"><span class="empty-title">${t('Contacts are not available in this app.')}</span></div></div>`;
       return;
     }
     const platform = ctx.backend.platform;
@@ -69,7 +70,7 @@ registerScreen('contacts', {
     body.innerHTML = h`
       <div data-role="list"><div class="skeleton block"></div></div>
       ${raw(formMarkup({ canPaste, canScan }))}
-      <p class="caption">Contacts are kept on this device only, beside your wallet. Removing the wallet removes them too.</p>`;
+      <p class="caption">${t('Contacts are kept on this device only, beside your wallet. Removing the wallet removes them too.')}</p>`;
 
     const listEl = body.querySelector('[data-role="list"]');
     const form = body.querySelector('[data-role="contact-form"]');
@@ -96,12 +97,12 @@ registerScreen('contacts', {
       let list;
       try { list = await book.list(); } catch (err) {
         if (!ctx.isCurrent()) return;
-        listEl.textContent = (err && err.message) || 'Could not read your contacts.';
+        listEl.textContent = (err && err.message) || t('Could not read your contacts.');
         return;
       }
       if (!ctx.isCurrent()) return;
       if (list.length === 0) {
-        listEl.innerHTML = h`<div class="card"><div class="empty"><span class="empty-title">No contacts yet</span><span>Save an address you pay often, and send to it by name.</span></div></div>`;
+        listEl.innerHTML = h`<div class="card"><div class="empty"><span class="empty-title">${t('No contacts yet')}</span><span>${t('Save an address you pay often, and send to it by name.')}</span></div></div>`;
         return;
       }
       // The structure is markup; every value in it is written as text below.
@@ -113,7 +114,7 @@ registerScreen('contacts', {
               <span class="row-sub mono" data-role="contact-address"></span>
               <span class="row-sub mono" data-role="contact-fp"></span>
             </span>
-            <span class="row-end"><button class="btn sm" type="button" data-remove="">Remove</button></span>
+            <span class="row-end"><button class="btn sm" type="button" data-remove="">${t('Remove')}</button></span>
           </div>
         </li>`).join(''))}</ul></div>`;
       const items = listEl.querySelectorAll('li');
@@ -128,7 +129,7 @@ registerScreen('contacts', {
         li.querySelector('[data-role="contact-address"]').textContent = shortAddress(c.address);
         const remove = li.querySelector('[data-remove]');
         remove.setAttribute('data-remove', c.name);
-        remove.setAttribute('aria-label', `Remove ${displayMemo(c.name)}`);
+        remove.setAttribute('aria-label', t('Remove {name}', { name: displayMemo(c.name) }));
       });
       // Fingerprints last, one core call each, so the names are on screen at once.
       const fps = await Promise.all(list.map((c) => (typeof ctx.backend.address?.fingerprint === 'function'
@@ -136,13 +137,13 @@ registerScreen('contacts', {
         : Promise.resolve(''))));
       if (!ctx.isCurrent()) return;
       const fpEls = listEl.querySelectorAll('[data-role="contact-fp"]');
-      fps.forEach((fp, i) => { if (fpEls[i]) fpEls[i].textContent = fp ? `fingerprint ${fp}` : ''; });
+      fps.forEach((fp, i) => { if (fpEls[i]) fpEls[i].textContent = fp ? t('fingerprint {fp}', { fp }) : ''; });
     }
 
     /** The address a pasted or typed value names: itself, or a `randpay:` link's. */
     async function addressFrom(text) {
       if (/^randpay:/i.test(text)) {
-        if (typeof ctx.backend.address?.parseLink !== 'function') throw new Error('Payment links cannot be read in this app.');
+        if (typeof ctx.backend.address?.parseLink !== 'function') throw new Error(t('Payment links cannot be read in this app.'));
         const parsed = await ctx.backend.address.parseLink(text);
         return parsed.address;
       }
@@ -157,8 +158,8 @@ registerScreen('contacts', {
       // every surface keeps the CLI's rules (final review, finding 7).
       const name = nameInput.value;
       const text = addressInput.value.trim();
-      if (!name) { showError('Give the contact a name.'); return; }
-      if (!text) { showError('Paste the address or payment link to save.'); return; }
+      if (!name) { showError(t('Give the contact a name.')); return; }
+      if (!text) { showError(t('Paste the address or payment link to save.')); return; }
       let address;
       let fingerprint;
       let taken = null;
@@ -170,7 +171,7 @@ registerScreen('contacts', {
         taken = await book.nameOf(address);
       } catch (err) {
         if (!ctx.isCurrent()) return;
-        showError((err && err.message) || 'That is not an address or a payment link.');
+        showError((err && err.message) || t('That is not an address or a payment link.'));
         return;
       }
       if (!ctx.isCurrent()) return;
@@ -178,25 +179,28 @@ registerScreen('contacts', {
       // the user read a fingerprint first. The same sentence the backend would give.
       const lower = name.toLowerCase();
       if ([...name].length > 64 || lower.startsWith('rand1') || lower.startsWith('randpay:')) {
-        showError('a contact name is 1-64 characters and cannot start with rand1 or randpay:');
+        showError(t('a contact name is 1-64 characters and cannot start with rand1 or randpay:'));
         return;
       }
-      if (taken) { showError(`this address is already saved as ${taken}`); return; }
+      if (taken) { showError(t('this address is already saved as {name}', { name: taken })); return; }
 
       pending = { name, address };
+      // One sentence, one key: the name's slot is cut out of the translated sentence, so the name
+      // itself still reaches the page through textContent below, never through markup.
+      const [askBefore, askAfter] = t('Ask {name} to read out the fingerprint on their receive screen. It must match exactly.', { name: '\u0000' }).split('\u0000');
       confirmEl.innerHTML = h`
         <div class="banner">
           <span class="ic">${raw(icons.shield())}</span>
-          <span><span class="banner-title">Check before saving</span>Ask <span data-role="confirm-name"></span> to read out the fingerprint on their receive screen. It must match exactly.</span>
+          <span><span class="banner-title">${t('Check before saving')}</span>${askBefore}<span data-role="confirm-name"></span>${askAfter}</span>
         </div>
-        <div class="kv"><span class="k">Fingerprint</span><span class="v mono" data-role="contact-fingerprint"></span></div>
+        <div class="kv"><span class="k">${t('Fingerprint')}</span><span class="v mono" data-role="contact-fingerprint"></span></div>
         <div class="address-box"><span class="mono" data-role="confirm-address"></span></div>
         <div class="cluster">
-          <button class="btn btn-primary" type="button" data-role="save-contact">It matches — save</button>
-          <button class="btn" type="button" data-role="cancel-contact">Cancel</button>
+          <button class="btn btn-primary" type="button" data-role="save-contact">${t('It matches — save')}</button>
+          <button class="btn" type="button" data-role="cancel-contact">${t('Cancel')}</button>
         </div>`;
       confirmEl.querySelector('[data-role="confirm-name"]').textContent = displayMemo(name);
-      confirmEl.querySelector('[data-role="contact-fingerprint"]').textContent = fingerprint || 'unavailable in this app';
+      confirmEl.querySelector('[data-role="contact-fingerprint"]').textContent = fingerprint || t('unavailable in this app');
       confirmEl.querySelector('[data-role="confirm-address"]').textContent = address;
     });
 
@@ -209,14 +213,14 @@ registerScreen('contacts', {
       } catch (err) {
         if (!ctx.isCurrent()) return;
         dropPending();
-        showError((err && err.message) || 'The contact could not be saved.');
+        showError((err && err.message) || t('The contact could not be saved.'));
         return;
       }
       if (!ctx.isCurrent()) return;
       dropPending();
       nameInput.value = '';
       addressInput.value = '';
-      ctx.toast('Contact saved', { kind: 'positive' });
+      ctx.toast(t('Contact saved'), { kind: 'positive' });
       await paintList();
     });
 
@@ -227,7 +231,7 @@ registerScreen('contacts', {
       evt.preventDefault();
       const name = btn.getAttribute('data-remove');
       try { await book.remove(name); } catch (err) {
-        if (ctx.isCurrent()) ctx.toast((err && err.message) || 'The contact could not be removed.', { kind: 'negative' });
+        if (ctx.isCurrent()) ctx.toast((err && err.message) || t('The contact could not be removed.'), { kind: 'negative' });
         return;
       }
       if (!ctx.isCurrent()) return;
@@ -263,7 +267,7 @@ registerScreen('contacts', {
         }
       } catch (err) {
         if (!ctx.isCurrent() || (err && err.name === 'AbortError')) return;
-        showError((err && err.message) || 'The code could not be read; paste the link instead.');
+        showError((err && err.message) || t('The code could not be read; paste the link instead.'));
         return;
       }
       if (!ctx.isCurrent() || !text) return;

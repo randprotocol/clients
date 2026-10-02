@@ -16,7 +16,7 @@ final class AuthService: ObservableObject {
     }
 
     func unlock() async -> Bool {
-        let ok = await Keychain.authenticate(reason: "Unlock your wallet")
+        let ok = await Keychain.authenticate(reason: String(localized: "Unlock your wallet"))
         if ok, wallet.unlockFromKeychain() {
             isUnlocked = true
         }
@@ -50,6 +50,6 @@ final class AuthService: ObservableObject {
 
     /// Authenticate again before showing a secret.
     func confirmForSecret() async -> Bool {
-        await Keychain.authenticate(reason: "Reveal your secret key")
+        await Keychain.authenticate(reason: String(localized: "Reveal your secret key"))
     }
 }
