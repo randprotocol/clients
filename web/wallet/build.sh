@@ -42,7 +42,7 @@ for unwanted in ui/test ui/scripts ui/node_modules ui/gallery.html ui/dev.html u
 done
 for needed in index.html main.js idb.js worker.js ui/app.js ui/backend.js ui/tokens.css ui/base.css \
               ui/components.css ui/engine/backend-wasm.js ui/fonts/Inter-Variable.woff2 \
-              ui/fonts/DepartureMono-Regular.woff2 ui/lib/entropy.js \
+              ui/fonts/DepartureMono-Regular.woff2 ui/lib/entropy.js ui/i18n.js ui/locales/en.js ui/locales/ar.js \
               core/rand_wallet.js core/rand_wallet_bg.wasm; do
   if [ ! -e "$OUT/$needed" ]; then echo "build.sh: $needed is missing from dist/" >&2; exit 1; fi
 done

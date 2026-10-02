@@ -50,7 +50,7 @@ for (const unwanted of ['ui/test', 'ui/scripts', 'ui/node_modules', 'ui/gallery.
 }
 for (const needed of ['index.html', 'main.js', 'backend-tauri.js', 'ui/app.js', 'ui/backend.js', 'ui/tokens.css', 'ui/base.css',
                       'ui/components.css', 'ui/engine/backend-native.js', 'ui/engine/backend-shared.js',
-                      'ui/lib/qr.js', 'ui/lib/entropy.js', 'ui/fonts/Inter-Variable.woff2',
+                      'ui/lib/qr.js', 'ui/lib/entropy.js', 'ui/i18n.js', 'ui/locales/en.js', 'ui/locales/ar.js', 'ui/fonts/Inter-Variable.woff2',
                       'ui/fonts/DepartureMono-Regular.woff2']) {
   if (!existsSync(join(OUT, needed))) {
     console.error(`stage-ui.mjs: ${needed} is missing from dist-ui/`);
