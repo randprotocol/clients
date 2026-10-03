@@ -16,19 +16,21 @@ test('the estimate fills to 90% at the usual time and never claims done', () => 
   assert.equal(remainingText(e + 120_000, e), 'taking longer than usual');
 });
 
-test('a swap is expected to take longer than a transfer, and a run on this device moves the estimate', () => {
-  assert.ok(DEFAULT_MS.invoke > DEFAULT_MS.transfer);
+test('every kind is 40 s, and a run on this device can only shorten the estimate', () => {
+  for (const k of Object.keys(DEFAULT_MS)) assert.equal(DEFAULT_MS[k], 40_000);
   const store = new Map();
   globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
   try {
     assert.equal(expectedMs('transfer'), DEFAULT_MS.transfer);
-    recordDuration('transfer', 120_000);
-    assert.equal(expectedMs('transfer'), 120_000, 'the first run is the average');
-    recordDuration('transfer', 220_000);
-    assert.equal(expectedMs('transfer'), Math.round(120_000 * 0.7 + 220_000 * 0.3));
-    recordDuration('transfer', 5);
+    recordDuration('transfer', 180_000);
+    assert.equal(expectedMs('transfer'), 40_000, 'a slow run never stretches the ring past 40 s');
+    recordDuration('withdraw', 30_000);
+    assert.equal(expectedMs('withdraw'), 30_000, 'a faster device shortens it');
+    recordDuration('withdraw', 22_000);
+    assert.equal(expectedMs('withdraw'), Math.round(30_000 * 0.7 + 22_000 * 0.3));
+    recordDuration('withdraw', 5);
     recordDuration('nonsense', 100_000);
-    assert.equal(expectedMs('transfer'), Math.round(120_000 * 0.7 + 220_000 * 0.3), 'an absurd run is ignored');
+    assert.equal(expectedMs('withdraw'), Math.round(30_000 * 0.7 + 22_000 * 0.3), 'an absurd run is ignored');
   } finally {
     delete globalThis.localStorage;
   }

@@ -2,8 +2,8 @@
 // percentage — the device's auth proof and the prover's bundle proof each just finish — so this is
 // the elapsed time against how long that kind of operation usually takes, learned on this device.
 //
-//   expectedMs(kind)          the typical duration: this device's own average once it has one,
-//                             else a default measured on the public chain (2026-10-01)
+//   expectedMs(kind)          the typical duration: 40 s, or this device's own average when that
+//                             is shorter — the estimate never runs longer than 40 s
 //   progressAt(elapsed, exp)  0…1: linear to 0.9 at the expected time, then easing towards 0.99 —
 //                             never "done" before the transaction is actually sent
 //   remainingText(elapsed, exp)  "about 1:20 left" / "almost done" / "taking longer than usual"
@@ -14,13 +14,13 @@
 // else reads it — and every access is guarded: a private window simply keeps the defaults.
 import { t } from '../i18n.js';
 
-/** Measured 2026-10-01 on chain 20, through the RandProtocol prover: authorising on the device,
- *  the bundle proof on the pool, submitting. An invoke also proves the program call in the browser. */
+/** The ring's full span for every kind: 40 s (owner's call, 2026-10-03). A run past it eases
+ *  towards 99% and says "taking longer than usual"; a device's own average may only shorten it. */
 export const DEFAULT_MS = Object.freeze({
-  transfer: 180_000,
-  'transfer-token': 185_000,
-  withdraw: 190_000,
-  invoke: 280_000,
+  transfer: 40_000,
+  'transfer-token': 40_000,
+  withdraw: 40_000,
+  invoke: 40_000,
 });
 
 const KEY = 'rand-wallet.proveMs';
@@ -37,8 +37,9 @@ function read() {
 
 export function expectedMs(kind) {
   const learned = Number(read()[kind]);
-  if (Number.isFinite(learned) && learned >= MIN_MS && learned <= MAX_MS) return learned;
-  return DEFAULT_MS[kind] || DEFAULT_MS.transfer;
+  const cap = DEFAULT_MS[kind] || DEFAULT_MS.transfer;
+  if (Number.isFinite(learned) && learned >= MIN_MS && learned <= MAX_MS) return Math.min(learned, cap);
+  return cap;
 }
 
 /** A finished run, folded into this device's average (an exponential average, so a slow pool one
