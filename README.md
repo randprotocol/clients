@@ -1,5 +1,9 @@
 # Rand Wallet — lightweight clients
 
+[![coverage](https://codecov.io/gh/randprotocol/clients/graph/badge.svg)](https://codecov.io/gh/randprotocol/clients)
+
+Line coverage of the Rust test suite, measured by `.github/workflows/coverage.yml` (cargo-llvm-cov) on every push to `main` and published to Codecov.
+
 Wallets for the Rand Protocol RAND chain (the fully shielded pool served by
 [`rand-node`](https://github.com/randprotocol/fullnode)), one per platform, sharing one Rust core:
 
