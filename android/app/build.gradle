@@ -16,8 +16,8 @@ android {
         applicationId 'org.randprotocol.wallet'
         minSdk 26
         targetSdk 36
-        versionCode 8
-        versionName '0.7.2'
+        versionCode 9
+        versionName '0.7.3'
         // The app's languages (res/xml/locales_config.xml, LOCALIZATION.md): library resources in
         // any other language are left out of the APK.
         resourceConfigurations += ['en', 'ru', 'zh-rCN', 'zh-rHK', 'ko', 'in', 'ms', 'ja', 'ar', 'fa', 'ur', 'ps', 'hi', 'ta',
