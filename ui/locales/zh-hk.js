@@ -1002,4 +1002,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "無法開啟你的證明器配對。請鎖定再解鎖錢包，或在設定中重新配對證明器。",
   "Your wallet picks up what it pays you on its next sync.": "你的錢包會在下次同步時收到其支付給你的金額。",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "你錢包的記錄是從 {chain} 讀取的。沒有任何改變，在兩者一致之前，此錢包不會傳送或索取資金。請在設定中切換節點，或為新鏈重新掃描此錢包。",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "這是 {name} 證明器的地址。無需配對：本錢包預設使用它們。",
 };

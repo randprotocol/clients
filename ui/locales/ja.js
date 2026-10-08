@@ -1002,4 +1002,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "プルーバーとのペアリングを開けませんでした。ウォレットをロックしてからロック解除するか、設定でプルーバーをもう一度ペアリングしてください。",
   "Your wallet picks up what it pays you on its next sync.": "ウォレットは、支払われた額を次回の同期時に受け取ります。",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "ウォレットの履歴は {chain} から読み込まれました。何も変更されておらず、両者が一致するまで、このウォレットは資金の送信や請求を行いません。設定でノードを切り替えるか、新しいチェーン用にこのウォレットを再スキャンしてください。",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "これは {name} プルーバーのアドレスです。ペアリングは不要です。このウォレットは標準でこれらを使います。",
 };

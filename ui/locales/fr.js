@@ -1011,4 +1011,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "Impossible d'ouvrir l'association de votre prouveur. Verrouillez puis déverrouillez le portefeuille, ou associez de nouveau le prouveur dans les Paramètres.",
   "Your wallet picks up what it pays you on its next sync.": "Votre portefeuille récupère ce qu'il vous verse lors de sa prochaine synchronisation.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "L'historique de votre portefeuille a été lu sur {chain} : rien n'a été modifié, et ce portefeuille n'enverra ni ne demandera de fonds tant que les deux ne concordent pas. Changez de nœud dans les Paramètres, ou réanalysez ce portefeuille pour la nouvelle chaîne.",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "C'est l'adresse des prouveurs {name}. Ils ne demandent aucune association : ce portefeuille les utilise par défaut.",
 };

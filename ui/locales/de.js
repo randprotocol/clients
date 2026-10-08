@@ -1009,4 +1009,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "Die Kopplung deines Provers konnte nicht geöffnet werden. Sperre und entsperre die Wallet oder kopple den Prover in den Einstellungen erneut.",
   "Your wallet picks up what it pays you on its next sync.": "Deine Wallet findet bei der nächsten Synchronisierung, was dir ausgezahlt wird.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "Der Verlauf deiner Wallet wurde von {chain} gelesen – es wurde nichts geändert, und diese Wallet sendet oder fordert kein Guthaben an, bis beide übereinstimmen. Wechsle den Knoten in den Einstellungen oder scanne diese Wallet für die neue Chain neu.",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "Das ist die Adresse der {name}-Prover. Sie brauchen keine Kopplung: Diese Wallet verwendet sie standardmäßig.",
 };

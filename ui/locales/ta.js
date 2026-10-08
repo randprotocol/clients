@@ -1009,4 +1009,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "உங்கள் நிரூபிப்பானின் இணைப்பைத் திறக்க முடியவில்லை. வாலட்டைப் பூட்டித் திறக்கவும், அல்லது அமைப்புகளில் நிரூபிப்பானை மீண்டும் இணைக்கவும்.",
   "Your wallet picks up what it pays you on its next sync.": "அது உங்களுக்குச் செலுத்துவதை அடுத்த ஒத்திசைவில் உங்கள் வாலட் எடுத்துக்கொள்ளும்.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "உங்கள் வாலட்டின் வரலாறு {chain} இலிருந்து படிக்கப்பட்டது — எதுவும் மாற்றப்படவில்லை, இரண்டும் பொருந்தும் வரை இந்த வாலட் நிதியை அனுப்பவோ கோரவோ செய்யாது. அமைப்புகளில் நோடை மாற்றவும், அல்லது புதிய செயினுக்காக இந்த வாலட்டை மீண்டும் ஸ்கேன் செய்யவும்.",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "இது {name} நிரூபிப்பான்களின் முகவரி. இவற்றை இணைக்கத் தேவையில்லை: இந்த வாலெட் இயல்பாகவே இவற்றைப் பயன்படுத்துகிறது.",
 };

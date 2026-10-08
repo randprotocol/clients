@@ -1009,4 +1009,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "No se pudo abrir la vinculación de tu probador. Bloquea y desbloquea la billetera, o vuelve a vincular el probador en Ajustes.",
   "Your wallet picks up what it pays you on its next sync.": "Tu billetera recoge lo que te paga en su próxima sincronización.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "El historial de tu billetera se leyó de {chain}: no se cambió nada, y esta billetera no enviará ni pedirá fondos hasta que ambas coincidan. Cambia de nodo en Ajustes o reescanea esta billetera para la nueva cadena.",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "Esa es la dirección de los probadores de {name}. No necesitan vinculación: este monedero los usa de forma predeterminada.",
 };

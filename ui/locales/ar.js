@@ -1009,4 +1009,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "تعذّر فتح إقران مُثبِتك. اقفل المحفظة وافتحها، أو اقرن المُثبِت مرة أخرى في الإعدادات.",
   "Your wallet picks up what it pays you on its next sync.": "تلتقط محفظتك ما يُدفع لك عند مزامنتها التالية.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "قُرئ سجل محفظتك من {chain} — لم يتغيّر شيء، ولن ترسل هذه المحفظة أموالًا أو تطلبها حتى تتوافقا. بدّل العقدة في الإعدادات، أو أعد مسح هذه المحفظة للسلسلة الجديدة.",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "هذا هو عنوان مُثبِتات {name}. لا تحتاج إلى اقتران: تستخدمها هذه المحفظة افتراضيًا.",
 };

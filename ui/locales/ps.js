@@ -1009,4 +1009,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "ستاسو د ثبوت جوړوونکي جوړه کول خلاص نه شول. والټ قلف او بیا خلاص کړئ، یا په امستنو کې ثبوت جوړوونکی بیا جوړه کړئ.",
   "Your wallet picks up what it pays you on its next sync.": "ستاسو والټ هغه څه چې تاسو ته ورکول کېږي په راتلونکې همغږۍ کې ترلاسه کوي.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "ستاسو د والټ تاریخچه له {chain} څخه لوستل شوې — هېڅ نه دي بدل شوي، او دا والټ به تر هغه پیسې ونه لېږي او ونه غواړي چې دواړه سره سمون ونه لري. په امستنو کې نوډ بدل کړئ، یا دا والټ د نوي زنځیر لپاره بیا سکین کړئ.",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "دا د {name} ثبوت جوړوونکو پته ده. جوړه کولو ته اړتیا نه لري: دا والټ یې په ډیفالټ ډول کاروي.",
 };

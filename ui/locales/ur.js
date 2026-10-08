@@ -1010,4 +1010,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "آپ کے پروور کا جوڑ نہیں کھل سکا۔ والیٹ کو لاک اور ان لاک کریں، یا ترتیبات میں پروور دوبارہ جوڑیں۔",
   "Your wallet picks up what it pays you on its next sync.": "آپ کا والیٹ اگلی ہم آہنگی پر وہ رقم لے لیتا ہے جو یہ آپ کو ادا کرتا ہے۔",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "آپ کے والیٹ کی تاریخ {chain} سے پڑھی گئی تھی — کچھ نہیں بدلا گیا، اور جب تک دونوں میل نہ کھائیں یہ والیٹ نہ فنڈز بھیجے گا نہ مانگے گا۔ ترتیبات میں نوڈ بدلیں، یا نئی چین کے لیے یہ والیٹ دوبارہ اسکین کریں۔",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "یہ {name} پرووَرز کا پتہ ہے۔ انہیں پیئر کرنے کی ضرورت نہیں: یہ والیٹ انہیں بطورِ طے شدہ استعمال کرتا ہے۔",
 };

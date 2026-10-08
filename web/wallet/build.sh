@@ -13,10 +13,8 @@ cd "$(dirname "$0")/../.."
 OUT=web/wallet/dist
 
 # The wasm core is git-ignored build output too; building it takes a few minutes.
-if [ ! -f extension/shared/core/rand_wallet_bg.wasm ] || [ ! -f extension/shared/core/rand_wallet.js ]; then
-  echo "building the wasm core (this takes a few minutes)…"
-  core/scripts/build-wasm.sh
-fi
+# Rebuilt whenever a core source is newer than it, not only when missing.
+core/scripts/ensure-wasm.sh
 
 rm -rf "$OUT"
 mkdir -p "$OUT/ui" "$OUT/core"

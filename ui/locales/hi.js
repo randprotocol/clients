@@ -1009,4 +1009,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "आपके प्रूवर की पेयरिंग खुल नहीं सकी। वॉलेट को लॉक और अनलॉक करें, या सेटिंग्स में प्रूवर को फिर से पेयर करें।",
   "Your wallet picks up what it pays you on its next sync.": "यह आपको जो भुगतान करता है, उसे आपका वॉलेट अगले सिंक पर ले लेता है।",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "आपके वॉलेट का इतिहास {chain} से पढ़ा गया था — कुछ नहीं बदला गया है, और जब तक दोनों मेल न खाएँ, यह वॉलेट फ़ंड नहीं भेजेगा या माँगेगा। सेटिंग्स में नोड बदलें, या नई चेन के लिए इस वॉलेट को फिर से स्कैन करें।",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "यह {name} प्रूवर का पता है। इन्हें पेयर करने की ज़रूरत नहीं: यह वॉलेट इन्हें डिफ़ॉल्ट रूप से इस्तेमाल करता है।",
 };

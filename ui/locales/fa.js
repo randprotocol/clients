@@ -1010,4 +1010,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "جفت‌سازی اثبات‌گر شما باز نشد. کیف پول را قفل و دوباره باز کنید، یا اثبات‌گر را دوباره در تنظیمات جفت کنید.",
   "Your wallet picks up what it pays you on its next sync.": "کیف پول شما آنچه را به شما پرداخت می‌شود در همگام‌سازی بعدی دریافت می‌کند.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "تاریخچه‌ی کیف پول شما از {chain} خوانده شده است — چیزی تغییر نکرده است و این کیف پول تا زمانی که این دو با هم یکی نشوند دارایی ارسال یا درخواست نمی‌کند. گره را در تنظیمات عوض کنید، یا این کیف پول را برای شبکه‌ی جدید دوباره اسکن کنید.",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "این نشانی اثبات‌گرهای {name} است. نیازی به جفت‌کردن ندارند: این کیف پول به‌طور پیش‌فرض از آن‌ها استفاده می‌کند.",
 };

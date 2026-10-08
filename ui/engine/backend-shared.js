@@ -1679,6 +1679,26 @@ export function makeSharedBackend({
     return !!(rec && w && typeof rec.pk === 'string' && rec.pk && rec.pk === w.pk);
   }
 
+  /**
+   * `parseProverLink`, except that the address of the RandProtocol provers themselves (what the
+   * site and the docs show: `https://prover.randprotocol.org`, a member's `/m/…`) is answered with
+   * what it is — the default, needing no pairing — rather than "not a randprover: link".
+   */
+  async function readProverLink(link) {
+    const text = String(link || '').trim();
+    try {
+      return await c.parseProverLink(text);
+    } catch (err) {
+      let host = '';
+      try { host = /^https?:\/\//i.test(text) ? new URL(text).host.toLowerCase() : ''; } catch { host = ''; }
+      const pool = host ? await builtInPool() : null;
+      if (pool && pool.members.some((m) => { try { return new URL(m.url).host.toLowerCase() === host; } catch { return false; } })) {
+        throw new Error(t('That is the address of the {name} provers. They need no pairing: this wallet uses them by default.', { name: pool.name }));
+      }
+      throw err;
+    }
+  }
+
   const prover = {
     /**
      * What a link names, read through the core and held to the URL rule, WITHOUT saving it or
@@ -1686,7 +1706,7 @@ export function makeSharedBackend({
      * must ask permission for, and to show the fingerprint, before `pair`. Never the token.
      */
     async preview(link) {
-      const parsed = await c.parseProverLink(String(link || '').trim());
+      const parsed = await readProverLink(link);
       const checked = checkProverUrl(parsed.url);
       if (checked.error) throw new Error(checked.error);
       const own = parsed.own === true;
@@ -1698,7 +1718,7 @@ export function makeSharedBackend({
       // under a mistyped password would silently never open at the next unlock.
       const key = await openVault(password);
       if (!key) throw new Error('wrong password');
-      const parsed = await c.parseProverLink(String(link || '').trim());
+      const parsed = await readProverLink(link);
       const checked = checkProverUrl(parsed.url);
       if (checked.error) throw new Error(checked.error);
       let info;

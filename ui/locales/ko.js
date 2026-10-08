@@ -1002,4 +1002,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "프루버 페어링 정보를 열 수 없습니다. 지갑을 잠갔다가 다시 잠금 해제하거나, 설정에서 프루버를 다시 페어링하세요.",
   "Your wallet picks up what it pays you on its next sync.": "이 거래로 받는 금액은 다음 동기화 때 지갑에 반영됩니다.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "지갑 내역은 {chain}에서 읽었습니다 — 아무것도 변경되지 않았으며, 두 체인이 일치할 때까지 이 지갑은 자금을 보내거나 요청하지 않습니다. 설정에서 노드를 바꾸거나 새 체인으로 이 지갑을 재스캔하세요.",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "이것은 {name} 프루버의 주소입니다. 페어링할 필요가 없습니다. 이 지갑은 기본적으로 이 프루버를 사용합니다.",
 };

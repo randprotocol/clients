@@ -161,6 +161,12 @@ test('preview reads a link without saving, asking, or needing the password', asy
   // The core's refusal and the URL rule are the engine's sentences.
   await assert.rejects(() => env.backend.prover.preview('randpay:nope'), /randprover/);
   await assert.rejects(() => env.backend.prover.preview(proverLink({ url: 'http://192.168.1.9:8546' })), /https/);
+  // The RandProtocol provers' own address, pasted as if it were a link: they are the default.
+  for (const pasted of ['https://prover.randprotocol.org', ' https://prover.randprotocol.org/m/a ']) {
+    await assert.rejects(() => env.backend.prover.preview(pasted), /That is the address of the RandProtocol provers\. They need no pairing/);
+    await assert.rejects(() => env.backend.prover.pair(pasted, PASSWORD), /They need no pairing/);
+  }
+  await assert.rejects(() => env.backend.prover.preview('https://example.org'), (err) => !/need no pairing/.test(err.message));
 
   // Nothing was stored and no prover was asked.
   assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);

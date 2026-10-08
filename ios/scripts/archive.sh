@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 : "${DEVELOPMENT_TEAM:?set DEVELOPMENT_TEAM to your Apple Developer team id}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
 ARCHIVE=build/RandWallet.xcarchive
-[ -d Frameworks/RandWalletCore.xcframework ] || ../core/scripts/build-ios.sh
+if why=$(../core/scripts/core-stale.sh Frameworks/RandWalletCore.xcframework/Info.plist); then echo "building the iOS core: $why"; ../core/scripts/build-ios.sh; fi
 xcodebuild -project RandWallet.xcodeproj -scheme RandWallet -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$ARCHIVE" \
   DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \

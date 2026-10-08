@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1002 strings.
+// 1003 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{chain} · {genesis}": "{chain} · {genesis}",
@@ -647,6 +647,7 @@ export default {
   "That is not a valid address.": "That is not a valid address.",
   "That is not an address or a payment link.": "That is not an address or a payment link.",
   "That is not the password for this wallet.": "That is not the password for this wallet.",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.",
   "That is the zero address; nothing sent there can ever be spent.": "That is the zero address; nothing sent there can ever be spent.",
   "That is your own address": "That is your own address",
   "That link could not be built.": "That link could not be built.",

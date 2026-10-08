@@ -14,7 +14,7 @@
 # again. There is no bundler and no minifier on purpose: an AMO reviewer reads the files that run.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-[ -f extension/shared/core/rand_wallet_bg.wasm ] || core/scripts/build-wasm.sh
+core/scripts/ensure-wasm.sh
 VER=$(python3 -c "import json;print(json.load(open('firefox/manifest.json'))['version'])")
 rm -rf dist/firefox && mkdir -p dist/firefox/ui
 # extension/shared/ whole — including _locales/ (the manifest's own strings, one directory per

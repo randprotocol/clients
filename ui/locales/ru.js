@@ -1007,4 +1007,5 @@ export default {
   "Your prover's pairing could not be opened. Lock and unlock the wallet, or pair the prover again in Settings.": "Не удалось открыть сопряжение с вашим прувером. Заблокируйте и разблокируйте кошелёк или подключите прувер заново в настройках.",
   "Your wallet picks up what it pays you on its next sync.": "Кошелёк получит выплату при следующей синхронизации.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "История кошелька прочитана из сети {chain} — ничего не изменено, и кошелёк не будет отправлять или запрашивать средства, пока сети не совпадут. Смените узел в настройках или пересканируйте кошелёк для новой сети.",
+  "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "Это адрес пруверов {name}. Подключать их не нужно: кошелёк использует их по умолчанию.",
 };
