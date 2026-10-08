@@ -1010,4 +1010,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "यह आपको जो भुगतान करता है, उसे आपका वॉलेट अगले सिंक पर ले लेता है।",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "आपके वॉलेट का इतिहास {chain} से पढ़ा गया था — कुछ नहीं बदला गया है, और जब तक दोनों मेल न खाएँ, यह वॉलेट फ़ंड नहीं भेजेगा या माँगेगा। सेटिंग्स में नोड बदलें, या नई चेन के लिए इस वॉलेट को फिर से स्कैन करें।",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "यह {name} प्रूवर का पता है। इन्हें पेयर करने की ज़रूरत नहीं: यह वॉलेट इन्हें डिफ़ॉल्ट रूप से इस्तेमाल करता है।",
+  "{n} proof · about {minutes} minutes on the prover": "{n} प्रूफ़ · प्रूवर पर लगभग {minutes} मिनट",
+  "{n} proofs · about {minutes} minutes on the prover": "{n} प्रूफ़ · प्रूवर पर लगभग {minutes} मिनट",
+  "A prover will make the proof": "प्रूफ़ एक प्रूवर बनाएगा",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "यह डिवाइस ट्रांसफ़र तैयार करता है, फिर प्रूफ़ एक प्रूवर को सौंपता है। जब तक प्रूवर को यह न मिल जाए, वॉलेट खुला रखें; आप दूसरी स्क्रीन देख सकते हैं।",
 };

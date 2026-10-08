@@ -1010,4 +1010,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "அது உங்களுக்குச் செலுத்துவதை அடுத்த ஒத்திசைவில் உங்கள் வாலட் எடுத்துக்கொள்ளும்.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "உங்கள் வாலட்டின் வரலாறு {chain} இலிருந்து படிக்கப்பட்டது — எதுவும் மாற்றப்படவில்லை, இரண்டும் பொருந்தும் வரை இந்த வாலட் நிதியை அனுப்பவோ கோரவோ செய்யாது. அமைப்புகளில் நோடை மாற்றவும், அல்லது புதிய செயினுக்காக இந்த வாலட்டை மீண்டும் ஸ்கேன் செய்யவும்.",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "இது {name} நிரூபிப்பான்களின் முகவரி. இவற்றை இணைக்கத் தேவையில்லை: இந்த வாலெட் இயல்பாகவே இவற்றைப் பயன்படுத்துகிறது.",
+  "{n} proof · about {minutes} minutes on the prover": { one: "{n} நிரூபணம் · நிரூபிப்பானில் சுமார் {minutes} நிமிடங்கள்", other: "{n} நிரூபணங்கள் · நிரூபிப்பானில் சுமார் {minutes} நிமிடங்கள்" },
+  "{n} proofs · about {minutes} minutes on the prover": { one: "{n} நிரூபணம் · நிரூபிப்பானில் சுமார் {minutes} நிமிடங்கள்", other: "{n} நிரூபணங்கள் · நிரூபிப்பானில் சுமார் {minutes} நிமிடங்கள்" },
+  "A prover will make the proof": "ஒரு நிரூபிப்பான் நிரூபணத்தை உருவாக்கும்",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "இந்தச் சாதனம் பரிமாற்றத்தைத் தயார் செய்து, பின் நிரூபணத்தை ஒரு நிரூபிப்பானிடம் ஒப்படைக்கிறது. நிரூபிப்பான் பெறும் வரை வாலெட்டைத் திறந்தே வைத்திருங்கள்; மற்ற திரைகளைப் பார்க்கலாம்.",
 };

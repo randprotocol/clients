@@ -1006,4 +1006,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "Twój portfel odbierze to, co ci wypłaci, przy następnej synchronizacji.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "Historia twojego portfela została odczytana z {chain} — nic nie zostało zmienione, a ten portfel nie będzie wysyłał ani żądał środków, dopóki oba się nie zgodzą. Zmień węzeł w Ustawieniach lub przeskanuj ten portfel ponownie dla nowego łańcucha.",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "To adres proverów {name}. Nie trzeba ich parować: ten portfel używa ich domyślnie.",
+  "{n} proof · about {minutes} minutes on the prover": { one: "{n} dowód · około {minutes} min na proverze", few: "{n} dowody · około {minutes} min na proverze", many: "{n} dowodów · około {minutes} min na proverze", other: "{n} dowodu · około {minutes} min na proverze" },
+  "{n} proofs · about {minutes} minutes on the prover": { one: "{n} dowód · około {minutes} min na proverze", few: "{n} dowody · około {minutes} min na proverze", many: "{n} dowodów · około {minutes} min na proverze", other: "{n} dowodu · około {minutes} min na proverze" },
+  "A prover will make the proof": "Dowód zrobi prover",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "To urządzenie przygotowuje przelew, a potem przekazuje dowód proverowi. Nie zamykaj portfela, dopóki prover go nie otrzyma; możesz przeglądać inne ekrany.",
 };

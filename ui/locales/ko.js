@@ -1003,4 +1003,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "이 거래로 받는 금액은 다음 동기화 때 지갑에 반영됩니다.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "지갑 내역은 {chain}에서 읽었습니다 — 아무것도 변경되지 않았으며, 두 체인이 일치할 때까지 이 지갑은 자금을 보내거나 요청하지 않습니다. 설정에서 노드를 바꾸거나 새 체인으로 이 지갑을 재스캔하세요.",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "이것은 {name} 프루버의 주소입니다. 페어링할 필요가 없습니다. 이 지갑은 기본적으로 이 프루버를 사용합니다.",
+  "{n} proof · about {minutes} minutes on the prover": "증명 {n}개 · 프루버에서 약 {minutes}분",
+  "{n} proofs · about {minutes} minutes on the prover": "증명 {n}개 · 프루버에서 약 {minutes}분",
+  "A prover will make the proof": "프루버가 증명을 만듭니다",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "이 기기가 송금을 준비한 뒤 증명을 프루버에 넘깁니다. 프루버가 받을 때까지 지갑을 열어 두세요. 다른 화면은 봐도 됩니다.",
 };

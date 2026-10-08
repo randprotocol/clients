@@ -1003,4 +1003,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "你的钱包会在下次同步时收到支付给你的资产。",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "你的钱包历史记录读取自 {chain}——没有做任何更改，在两者一致之前此钱包不会发送或请求资金。请在设置中切换节点，或为新链重新扫描此钱包。",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "这是 {name} 证明器的地址。无需配对：本钱包默认使用它们。",
+  "{n} proof · about {minutes} minutes on the prover": "{n} 个证明 · 在证明器上约需 {minutes} 分钟",
+  "{n} proofs · about {minutes} minutes on the prover": "{n} 个证明 · 在证明器上约需 {minutes} 分钟",
+  "A prover will make the proof": "证明将由证明器生成",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "本设备先准备好转账，再把证明交给证明器。在证明器收到之前请保持钱包打开；你可以查看其他页面。",
 };

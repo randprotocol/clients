@@ -1003,4 +1003,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "ウォレットは、支払われた額を次回の同期時に受け取ります。",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "ウォレットの履歴は {chain} から読み込まれました。何も変更されておらず、両者が一致するまで、このウォレットは資金の送信や請求を行いません。設定でノードを切り替えるか、新しいチェーン用にこのウォレットを再スキャンしてください。",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "これは {name} プルーバーのアドレスです。ペアリングは不要です。このウォレットは標準でこれらを使います。",
+  "{n} proof · about {minutes} minutes on the prover": "証明 {n} 件 · プルーバーで約 {minutes} 分",
+  "{n} proofs · about {minutes} minutes on the prover": "証明 {n} 件 · プルーバーで約 {minutes} 分",
+  "A prover will make the proof": "プルーバーが証明を作成します",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "この端末で送金を準備し、証明はプルーバーに渡します。プルーバーが受け取るまでウォレットを開いたままにしてください。他の画面を見ても構いません。",
 };

@@ -1011,4 +1011,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "کیف پول شما آنچه را به شما پرداخت می‌شود در همگام‌سازی بعدی دریافت می‌کند.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "تاریخچه‌ی کیف پول شما از {chain} خوانده شده است — چیزی تغییر نکرده است و این کیف پول تا زمانی که این دو با هم یکی نشوند دارایی ارسال یا درخواست نمی‌کند. گره را در تنظیمات عوض کنید، یا این کیف پول را برای شبکه‌ی جدید دوباره اسکن کنید.",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "این نشانی اثبات‌گرهای {name} است. نیازی به جفت‌کردن ندارند: این کیف پول به‌طور پیش‌فرض از آن‌ها استفاده می‌کند.",
+  "{n} proof · about {minutes} minutes on the prover": "{n} اثبات · حدود {minutes} دقیقه روی اثبات‌گر",
+  "{n} proofs · about {minutes} minutes on the prover": "{n} اثبات · حدود {minutes} دقیقه روی اثبات‌گر",
+  "A prover will make the proof": "یک اثبات‌گر اثبات را می‌سازد",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "این دستگاه انتقال را آماده می‌کند و سپس اثبات را به یک اثبات‌گر می‌سپارد. تا وقتی اثبات‌گر آن را دریافت کند کیف پول را باز نگه دارید؛ می‌توانید صفحه‌های دیگر را ببینید.",
 };

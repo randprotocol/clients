@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1003 strings.
+// 1007 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{chain} · {genesis}": "{chain} · {genesis}",
@@ -45,7 +45,9 @@ export default {
   "{n} machine": "{n} machine",
   "{n} machines": "{n} machines",
   "{n} min ago": "{n} min ago",
+  "{n} proof · about {minutes} minutes on the prover": "{n} proof · about {minutes} minutes on the prover",
   "{n} proof · about {minutes} minutes on this computer": "{n} proof · about {minutes} minutes on this computer",
+  "{n} proofs · about {minutes} minutes on the prover": "{n} proofs · about {minutes} minutes on the prover",
   "{n} proofs · about {minutes} minutes on this computer": "{n} proofs · about {minutes} minutes on this computer",
   "{n}/{max} bytes": "{n}/{max} bytes",
   "{prover} is proving.": "{prover} is proving.",
@@ -87,6 +89,7 @@ export default {
   "A prover address must be https://.": "A prover address must be https://.",
   "A prover is making the proof": "A prover is making the proof",
   "A prover sees your history": "A prover sees your history",
+  "A prover will make the proof": "A prover will make the proof",
   "A shielded wallet for the Rand network. Balances and history stay private — every send is proved on this device.": "A shielded wallet for the Rand network. Balances and history stay private — every send is proved on this device.",
   "A site": "A site",
   "a spend key is 64 hex characters, or a wallet.key.json": "a spend key is 64 hex characters, or a wallet.key.json",
@@ -848,6 +851,7 @@ export default {
   "This device cannot prove the transfer": "This device cannot prove the transfer",
   "This device cannot prove.": "This device cannot prove.",
   "This device cannot withdraw": "This device cannot withdraw",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.",
   "This device proves the swap. It takes a few minutes.": "This device proves the swap. It takes a few minutes.",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched — send from the desktop app, which proves natively.": "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched — send from the desktop app, which proves natively.",
   "This device, or where it cannot · {name} provers": "This device, or where it cannot · {name} provers",

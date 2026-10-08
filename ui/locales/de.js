@@ -1010,4 +1010,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "Deine Wallet findet bei der nächsten Synchronisierung, was dir ausgezahlt wird.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "Der Verlauf deiner Wallet wurde von {chain} gelesen – es wurde nichts geändert, und diese Wallet sendet oder fordert kein Guthaben an, bis beide übereinstimmen. Wechsle den Knoten in den Einstellungen oder scanne diese Wallet für die neue Chain neu.",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "Das ist die Adresse der {name}-Prover. Sie brauchen keine Kopplung: Diese Wallet verwendet sie standardmäßig.",
+  "{n} proof · about {minutes} minutes on the prover": { one: "{n} Beweis · etwa {minutes} Minuten auf dem Prover", other: "{n} Beweise · etwa {minutes} Minuten auf dem Prover" },
+  "{n} proofs · about {minutes} minutes on the prover": { one: "{n} Beweis · etwa {minutes} Minuten auf dem Prover", other: "{n} Beweise · etwa {minutes} Minuten auf dem Prover" },
+  "A prover will make the proof": "Ein Prover wird den Beweis erstellen",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "Dieses Gerät bereitet die Überweisung vor und übergibt den Beweis dann an einen Prover. Lass die Wallet geöffnet, bis der Prover ihn hat; du kannst dir andere Bildschirme ansehen.",
 };

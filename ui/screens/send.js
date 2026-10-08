@@ -1081,6 +1081,7 @@ registerScreen('send', {
         // What the confirmation line showed, and nothing a chain without memos could not carry.
         memo: memoSupported ? draft.memo : '',
       }, asset);
+      store.viaProver = canProve.via === 'prover';
       attach(store);
     });
 

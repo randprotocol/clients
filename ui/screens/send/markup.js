@@ -294,7 +294,7 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
     ? raw(h`
       ${gate}
       <button class="btn btn-primary block" type="button" data-action="prove"${raw(gated ? ' disabled' : '')}>${raw(icons.arrowUpRight())}${t('Prove and send')}</button>
-      <p class="caption">${proveCost(estimate.proofs)}</p>`)
+      <p class="caption">${proveCost(estimate.proofs, canProve.via)}</p>`)
     : raw(h`
       <div class="banner warn">
         <span class="ic">${raw(icons.warning())}</span>

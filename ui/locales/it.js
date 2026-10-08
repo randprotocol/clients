@@ -1010,4 +1010,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "Il tuo portafoglio rileva ciò che ti paga alla prossima sincronizzazione.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "La cronologia del tuo portafoglio è stata letta da {chain} — non è stato modificato nulla, e questo portafoglio non invierà né richiederà fondi finché le due non coincidono. Cambia nodo nelle Impostazioni, oppure esegui una nuova scansione di questo portafoglio per la nuova catena.",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "Questo è l'indirizzo dei prover {name}. Non serve associarli: questo wallet li usa per impostazione predefinita.",
+  "{n} proof · about {minutes} minutes on the prover": { one: "{n} prova · circa {minutes} minuti sul prover", many: "{n} prove · circa {minutes} minuti sul prover", other: "{n} prove · circa {minutes} minuti sul prover" },
+  "{n} proofs · about {minutes} minutes on the prover": { one: "{n} prova · circa {minutes} minuti sul prover", many: "{n} prove · circa {minutes} minuti sul prover", other: "{n} prove · circa {minutes} minuti sul prover" },
+  "A prover will make the proof": "Un prover creerà la prova",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "Questo dispositivo prepara il trasferimento, poi affida la prova a un prover. Tieni aperto il wallet finché il prover non l'ha ricevuta; puoi guardare altre schermate.",
 };

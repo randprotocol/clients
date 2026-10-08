@@ -1561,11 +1561,11 @@ test('only a chain whose envelope is exactly 1860 bytes gets a memo field', asyn
 // mid-proof) is picked up on mount through `send.resume`, cancellable through `send.cancelPending`.
 
 /** A backend whose send.send forwards `detail` with each phase. */
-function detailedSend() {
+function detailedSend({ via = 'prover' } = {}) {
   const ctl = { emit: null, settle: null };
   const b = unlockedBackend({
     send: {
-      canProve: async () => ({ ok: true, via: 'prover' }),
+      canProve: async () => (via ? { ok: true, via } : { ok: true }),
       send: (_req, onPhase) => {
         ctl.emit = (phase, detail) => onPhase(phase, detail);
         return new Promise((resolve) => { ctl.settle = resolve; });
@@ -1594,14 +1594,29 @@ test('a paired prover\'s queue position and name are what the proving step says'
 });
 
 test('without a prover the proving step keeps the device sentence', async (t) => {
-  const { b, ctl } = detailedSend();
+  const { b, ctl } = detailedSend({ via: null });
   const { root } = await review(t, b);
+  assert.match(root.textContent, /minutes on this computer/);
   root.querySelector('[data-action="prove"]').click();
   await turns();
   ctl.emit('proving');
   await turns();
   assert.equal(root.querySelector('[data-role="phase"]').textContent, 'Proving the bundle');
   assert.match(root.textContent, /runs on this device/);
+});
+
+test('a send the review routed to a prover never says the proof runs on this device', async (t) => {
+  const { b, ctl } = detailedSend();
+  const { root } = await review(t, b);
+  assert.match(root.textContent, /1 proof · about 2 minutes on the prover/);
+  assert.doesNotMatch(root.textContent, /on this computer/);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  // Before the prover has the job (no name reported yet): still not "on this device".
+  ctl.emit('witness');
+  await turns();
+  assert.match(root.textContent, /A prover will make the proof/);
+  assert.doesNotMatch(root.textContent, /runs on this device/);
 });
 
 /** A backend with a pending remote transfer whose `resume` never settles on its own. */

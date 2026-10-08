@@ -1011,4 +1011,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "آپ کا والیٹ اگلی ہم آہنگی پر وہ رقم لے لیتا ہے جو یہ آپ کو ادا کرتا ہے۔",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "آپ کے والیٹ کی تاریخ {chain} سے پڑھی گئی تھی — کچھ نہیں بدلا گیا، اور جب تک دونوں میل نہ کھائیں یہ والیٹ نہ فنڈز بھیجے گا نہ مانگے گا۔ ترتیبات میں نوڈ بدلیں، یا نئی چین کے لیے یہ والیٹ دوبارہ اسکین کریں۔",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "یہ {name} پرووَرز کا پتہ ہے۔ انہیں پیئر کرنے کی ضرورت نہیں: یہ والیٹ انہیں بطورِ طے شدہ استعمال کرتا ہے۔",
+  "{n} proof · about {minutes} minutes on the prover": "{n} پروف · پروور پر تقریباً {minutes} منٹ",
+  "{n} proofs · about {minutes} minutes on the prover": "{n} پروف · پروور پر تقریباً {minutes} منٹ",
+  "A prover will make the proof": "ایک پروور پروف بنائے گا",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "یہ ڈیوائس منتقلی تیار کرتی ہے، پھر پروف ایک پروور کے حوالے کرتی ہے۔ جب تک پروور کو یہ نہ مل جائے والیٹ کھلا رکھیں؛ آپ دوسری اسکرینیں دیکھ سکتے ہیں۔",
 };

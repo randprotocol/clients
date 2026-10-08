@@ -1003,4 +1003,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "Dompet Anda mengambil apa yang dibayarkan kepada Anda pada sinkronisasi berikutnya.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "Riwayat dompet Anda dibaca dari {chain} — tidak ada yang diubah, dan dompet ini tidak akan mengirim atau meminta dana sampai keduanya sesuai. Ganti node di Pengaturan, atau pindai ulang dompet ini untuk chain baru.",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "Itu alamat prover {name}. Prover ini tidak perlu dipasangkan: dompet ini menggunakannya secara default.",
+  "{n} proof · about {minutes} minutes on the prover": "{n} bukti · sekitar {minutes} menit di prover",
+  "{n} proofs · about {minutes} minutes on the prover": "{n} bukti · sekitar {minutes} menit di prover",
+  "A prover will make the proof": "Sebuah prover akan membuat bukti",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "Perangkat ini menyiapkan transfer, lalu menyerahkan bukti ke prover. Biarkan dompet tetap terbuka sampai prover menerimanya; Anda bisa melihat layar lain.",
 };

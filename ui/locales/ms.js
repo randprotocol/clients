@@ -1005,4 +1005,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "Dompet anda menerima apa yang dibayar kepada anda pada penyegerakan seterusnya.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "Sejarah dompet anda dibaca dari {chain} — tiada apa-apa yang diubah, dan dompet ini tidak akan menghantar atau meminta dana sehingga kedua-duanya sepadan. Tukar nod dalam Tetapan, atau imbas semula dompet ini untuk rantaian baharu.",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "Itu alamat pembukti {name}. Ia tidak perlu dipasangkan: dompet ini menggunakannya secara lalai.",
+  "{n} proof · about {minutes} minutes on the prover": "{n} bukti · kira-kira {minutes} minit pada pembukti",
+  "{n} proofs · about {minutes} minutes on the prover": "{n} bukti · kira-kira {minutes} minit pada pembukti",
+  "A prover will make the proof": "Pembukti akan membuat bukti",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "Peranti ini menyediakan pemindahan, kemudian menyerahkan bukti kepada pembukti. Biarkan dompet terbuka sehingga pembukti menerimanya; anda boleh melihat skrin lain.",
 };

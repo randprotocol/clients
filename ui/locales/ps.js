@@ -1010,4 +1010,8 @@ export default {
   "Your wallet picks up what it pays you on its next sync.": "ستاسو والټ هغه څه چې تاسو ته ورکول کېږي په راتلونکې همغږۍ کې ترلاسه کوي.",
   "Your wallet's history was read from {chain} — nothing has been changed, and this wallet will not send or request funds until the two agree. Switch node in Settings, or rescan this wallet for the new chain.": "ستاسو د والټ تاریخچه له {chain} څخه لوستل شوې — هېڅ نه دي بدل شوي، او دا والټ به تر هغه پیسې ونه لېږي او ونه غواړي چې دواړه سره سمون ونه لري. په امستنو کې نوډ بدل کړئ، یا دا والټ د نوي زنځیر لپاره بیا سکین کړئ.",
   "That is the address of the {name} provers. They need no pairing: this wallet uses them by default.": "دا د {name} ثبوت جوړوونکو پته ده. جوړه کولو ته اړتیا نه لري: دا والټ یې په ډیفالټ ډول کاروي.",
+  "{n} proof · about {minutes} minutes on the prover": "{n} ثبوت · په ثبوت جوړوونکي شاوخوا {minutes} دقیقې",
+  "{n} proofs · about {minutes} minutes on the prover": "{n} ثبوتونه · په ثبوت جوړوونکي شاوخوا {minutes} دقیقې",
+  "A prover will make the proof": "یو ثبوت جوړوونکی به ثبوت جوړ کړي",
+  "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "دا وسیله لېږد چمتو کوي، بیا ثبوت ثبوت جوړوونکي ته سپاري. والټ خلاص وساتئ تر هغه چې ثبوت جوړوونکی یې ترلاسه کړي؛ تاسو نورې پردې کتلی شئ.",
 };

@@ -373,7 +373,7 @@ function amountStepMarkup(asset, draft) {
     </form>`;
 }
 
-function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [], notice = false, provers = 0 }) {
+function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [], notice = false, provers = 0, via }) {
   const amountOf = (u) => `${formatUnits(u, 9, asset.decimals)} ${asset.symbol}`;
   const relayer = BigInt(estimate.relayerFee || '0');
   const relayerRow = relayer > 0n
@@ -410,7 +410,7 @@ function reviewStepMarkup({ asset, display, toChain, units, estimate, assets = [
     // this device cannot prove), in the Withdraw button's place until it is read.
     ? proverNoticeMarkup(provers)
     : h`<button class="btn btn-primary block" type="button" data-action="prove" disabled>${raw(icons.bridge())}${t('Withdraw')}</button>
-    <p class="caption">${proveCost(estimate.proofs)}</p>`)}
+    <p class="caption">${proveCost(estimate.proofs, via)}</p>`)}
     <button class="btn btn-ghost block" type="button" data-role="edit">${t('Edit')}</button>`;
 }
 
@@ -652,7 +652,7 @@ registerScreen('withdraw', {
       else if (next === 'review') {
         stepEl.innerHTML = reviewStepMarkup({
           asset, display: draft.display, toChain: draft.toChain, units: reviewUnits, estimate: draft.estimate, assets,
-          notice: !!can.notice, provers: can.provers,
+          notice: !!can.notice, provers: can.provers, via: can.via,
         });
       } else if (next === 'proving') paintProving();
       else if (next === 'failed') {
@@ -934,6 +934,7 @@ registerScreen('withdraw', {
         // own default and reach `plan_burn` as a fee the chain never named (task 4.5's T4).
         fee: draft.estimate.fee ? String(draft.estimate.fee) : undefined,
       }, asset, draft.display);
+      store.viaProver = can.via === 'prover';
       attach(store);
     });
 

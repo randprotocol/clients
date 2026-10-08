@@ -57,6 +57,15 @@ export function phaseLabel(phase, detail, labels = PHASE_LABELS) {
  */
 export function provingBanner(store, deviceText = t('The proof runs on this device. You can look at other screens — it keeps going — but closing the wallet stops it.')) {
   const name = store && typeof store.proverName === 'string' ? store.proverName : '';
+  // A prover was chosen at review (`canProve.via`) but has not taken the job yet: the notes and
+  // the witness are still being made here, so the window still matters — but "the proof runs on
+  // this device" would be untrue.
+  if (!name && store && store.viaProver === true) {
+    return {
+      title: t('A prover will make the proof'),
+      text: t('This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.'),
+    };
+  }
   if (!name) return { title: t('Keep this window open'), text: deviceText };
   return {
     title: t('A prover is making the proof'),
@@ -161,10 +170,17 @@ export function mergeWithLink(typed, fromLink, same = (a, b) => a === b) {
 }
 
 /** "1 proof · about 2 minutes on this computer" — from the estimate, not from a constant. Roughly
- *  two minutes of native proving per proof; a withdrawal needs two, a transfer one. */
-export function proveCost(proofs) {
+ *  two minutes of native proving per proof; a withdrawal needs two, a transfer one. `via` is
+ *  `canProve`'s: `'prover'` when a prover makes them (the RandProtocol provers or a paired one),
+ *  which a browser that cannot prove a transfer always uses — "on this computer" would be untrue. */
+export function proveCost(proofs, via) {
   const n = Number.isFinite(Number(proofs)) && Number(proofs) >= 1 ? Math.floor(Number(proofs)) : 1;
   const minutes = n * 2;
+  if (via === 'prover') {
+    return n === 1
+      ? t('{n} proof · about {minutes} minutes on the prover', { n, minutes })
+      : t('{n} proofs · about {minutes} minutes on the prover', { n, minutes });
+  }
   return n === 1
     ? t('{n} proof · about {minutes} minutes on this computer', { n, minutes })
     : t('{n} proofs · about {minutes} minutes on this computer', { n, minutes });
