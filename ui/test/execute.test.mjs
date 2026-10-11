@@ -4,7 +4,7 @@ import { UI_PHASE, classify, makeReporter, runPhased, executeTransfer, executeBu
 import { RpcError } from '../engine/rpc.js';
 
 const refused = () => new RpcError('refused', -32000);
-const transport = () => new RpcError('down', -1, { failure: 'timeout' });
+const transport = () => new RpcError('down', -1, 'timeout');
 
 test('the engine\'s phases map to the contract\'s', () => {
   assert.deepEqual({ ...UI_PHASE }, { select: 'selecting', witness: 'witness', prove: 'proving', submit: 'submitting', wait: 'confirming' });
