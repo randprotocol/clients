@@ -1576,7 +1576,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
   }
 
   return {
-    scan, rescan, send, burn, completeSend, completeBurn, quoteInvoke, invoke, completeInvoke, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable,
+    scan, rescan, send, burn, completeSend, completeBurn, quoteInvoke, invoke, completeInvoke, faucet, loadStore, persist, core: c, rpcFor, activity, balanceOf, isSpendable, anchorAndWitnesses,
     // Exposed so a backend can prove the chain WITHOUT scanning — the gate in front of send and
     // faucet is two RPC calls, not a page of leaves.
     chainIdentity, chainVerdict,
