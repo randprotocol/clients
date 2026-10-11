@@ -35,6 +35,9 @@ import { recipientHash } from '../../../extension/shared/lib/recipient-hash.js';
 const CORE_JS = new URL('../../../extension/shared/core/rand_wallet.js', import.meta.url);
 const CORE_WASM = new URL('../../../extension/shared/core/rand_wallet_bg.wasm', import.meta.url);
 const NODE_BIN = process.env.RAND_NODE_BIN || '';
+// A release `rand-node` (fullnode v0.6.8 and later, #94) refuses a Test-profile genesis at `init`
+// and `run` unless told it is a test harness; the child processes inherit this. Older nodes ignore it.
+process.env.RAND_ALLOW_TEST_FRI_PROFILE ??= '1';
 
 /**
  * What chain 18's genesis has beyond the defaults (fullnode v0.6.7): the `gas` section — the
@@ -56,7 +59,10 @@ function chainArgs(nodeBin) {
   // BIND-1: a chain after 19 binds its genesis hash, and this wallet builds every transaction for
   // one that way — so the test chain must say so, or its node expects the chain-id binding.
   const bind = help.includes('--binding-domain') ? ['--binding-domain', '1'] : [];
-  return [...gas, ...auth, ...bind];
+  // A chain with a bridge and the faucet must say it is a testnet, or `rand-node init` refuses it
+  // (fullnode audit: a chain holding custody hands out no free RAND otherwise).
+  const testnet = help.includes('--testnet') ? ['--testnet'] : [];
+  return [...gas, ...auth, ...bind, ...testnet];
 }
 /** Whether the node cuts a split-authorisation chain (see `chainArgs`). */
 function splitAuthorisation(nodeBin) {
@@ -302,6 +308,9 @@ test('the bridge is on, zUSD is listed, and the extension\'s recipient hash is t
 });
 
 test('a wasm wallet cannot withdraw until a prover is paired', { skip }, async () => {
+  // With no choice made a build proves through the RandProtocol provers (wallet 0.6.8): choose
+  // none first, so this test never reaches the public pool.
+  await env.a.backend.prover.useNone();
   const answer = await env.a.backend.bridge.canWithdraw();
   assert.equal(answer.ok, false);
   assert.match(answer.reason, /Pair a prover/);
