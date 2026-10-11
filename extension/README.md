@@ -144,3 +144,10 @@ RAND_BRIDGE_URL=http://localhost:3000 node --test extension/test/bridge-chrome.e
 The withdrawal itself — a burn proved by a paired `rand-prover`, against a real node with a
 bridged genesis — is `web/wallet/test/withdraw.e2e.test.mjs`, run by `scripts/e2e-withdraw.sh`
 (the transfer's counterpart is `scripts/e2e-prover.sh`).
+
+The wallet's whole client side of the node's JSON-RPC contract is tested against a real node by
+`web/wallet/test/node.e2e.test.mjs`, run by `scripts/e2e-node.sh` (set `RAND_NODE_BIN`, and
+`RAND_PROVER_BIN` for the spend round trip; its header lists what it covers). Unlike the two above
+it runs in CI, as the `real-node` job of `.github/workflows/node-integration.yml`, against the
+fullnode v0.7.1 release binaries; the spawn, polling and genesis helpers it shares with
+`prover.e2e.test.mjs` live in `web/wallet/test/node-harness.mjs`.

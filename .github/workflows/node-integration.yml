@@ -1,0 +1,73 @@
+# The wallet against a real node: the wallet's real transport, reply validators and flows (the wasm
+# core and engine under Node, real `fetch`) against a real `rand-node` from the fullnode v0.7.1
+# release, on a Test-profile chain the test cuts itself. See scripts/e2e-node.sh for what it covers
+# and web/wallet/test/node.e2e.test.mjs for the cases.
+#
+# The node binaries are the release's, not built here: that is what makes this a check of the
+# wallet against the node that is deployed, and it keeps the job to the wasm core's build plus about
+# a minute of tests with `rand-prover`'s one real bundle proof on top (a few minutes on a shared
+# runner). To test against another release set FULLNODE_TAG; nothing the suite asserts may depend on
+# a node feature newer than v0.7.1.
+name: node-integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: node-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: 1.98.1
+  FULLNODE_TAG: v0.7.1
+
+jobs:
+  real-node:
+    name: real-node
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Rust ${{ env.RUST_TOOLCHAIN }}
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown
+          rustup default "$RUST_TOOLCHAIN"
+      - name: Cache cargo registry and wasm-bindgen
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/bin/wasm-bindgen*
+          key: cargo-wasm-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('core/Cargo.lock') }}
+      - name: The wasm core
+        run: core/scripts/build-wasm.sh
+      - name: Download the fullnode ${{ env.FULLNODE_TAG }} release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/fullnode"
+          gh release download "$FULLNODE_TAG" --repo randprotocol/fullnode \
+            --pattern rand-node --pattern rand-prover --pattern SHA256SUMS \
+            --dir "$RUNNER_TEMP/fullnode"
+          (cd "$RUNNER_TEMP/fullnode" && sha256sum -c --ignore-missing SHA256SUMS)
+          chmod +x "$RUNNER_TEMP/fullnode/rand-node" "$RUNNER_TEMP/fullnode/rand-prover"
+          "$RUNNER_TEMP/fullnode/rand-node" --version
+          {
+            echo "RAND_NODE_BIN=$RUNNER_TEMP/fullnode/rand-node"
+            echo "RAND_PROVER_BIN=$RUNNER_TEMP/fullnode/rand-prover"
+          } >> "$GITHUB_ENV"
+      - name: The wallet against the real node
+        run: scripts/e2e-node.sh
