@@ -1837,6 +1837,7 @@ name = "wallet-ffi"
 version = "0.1.0"
 dependencies = [
  "jni",
+ "serde_json",
  "wallet-core",
 ]
 
@@ -1845,6 +1846,7 @@ name = "wallet-wasm"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "serde_json",
  "wallet-core",
  "wasm-bindgen",
 ]

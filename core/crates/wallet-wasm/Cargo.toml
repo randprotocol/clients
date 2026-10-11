@@ -14,3 +14,6 @@ wallet-core = { workspace = true }
 wasm-bindgen = "0.2"
 # A panic inside the prover otherwise surfaces as a bare `unreachable`; this prints the message.
 console_error_panic_hook = "0.1"
+
+[dev-dependencies]
+serde_json = { workspace = true }

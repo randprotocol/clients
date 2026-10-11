@@ -7588,3 +7588,422 @@ mod tests {
         }
     }
 }
+
+/// Behaviour pinned by `cargo llvm-cov` gap-filling (2026-10-11): refusals and small pure
+/// helpers that the proving tests do not reach. Nothing here proves anything, so it is fast.
+#[cfg(test)]
+mod gap_tests {
+    use super::*;
+    use randprotocol_prover::pairing::PairingLink;
+
+    /// The reply of `call` as JSON.
+    fn reply(method: &str, params: Value) -> Value {
+        serde_json::from_str(&call(method, &params.to_string())).expect("call replies with JSON")
+    }
+
+    /// The `error` of a refused call (panics if it succeeded).
+    fn refused(method: &str, params: Value) -> String {
+        let r = reply(method, params);
+        assert_eq!(r["ok"], false, "{method} should have been refused: {r}");
+        r["error"].as_str().expect("error is a string").to_string()
+    }
+
+    /// The `value` of a successful call.
+    fn value(method: &str, params: Value) -> Value {
+        let r = reply(method, params);
+        assert_eq!(r["ok"], true, "{method} failed: {r}");
+        r["value"].clone()
+    }
+
+    fn stub(index: u64, asset: u32, amount: u64) -> Value {
+        json!({
+            "index": index, "note": "", "cm": "", "nf": "", "amount": amount.to_string(), "asset": asset,
+            "time": 1, "from": "", "height": 1, "spent": false,
+        })
+    }
+
+    // ---------------------------------------------------------------- the build-time chain id
+
+    #[test]
+    fn parse_chain_id_reads_decimal_digits() {
+        assert_eq!(parse_chain_id("0"), 0);
+        assert_eq!(parse_chain_id("20"), 20);
+        assert_eq!(parse_chain_id("18446744073709551615"), u64::MAX);
+    }
+
+    #[test]
+    #[should_panic(expected = "RAND_WALLET_CHAIN_ID is empty")]
+    fn parse_chain_id_refuses_empty() {
+        parse_chain_id("");
+    }
+
+    #[test]
+    #[should_panic(expected = "is not a decimal number")]
+    fn parse_chain_id_refuses_non_digits() {
+        parse_chain_id("2o");
+    }
+
+    // ---------------------------------------------------------------- the trusted prover pool
+
+    fn link(url: &str, own: bool, key_fill: u8) -> String {
+        PairingLink { kem_ek: vec![key_fill; KEM_EK_BYTES], url: url.into(), token: [9; 32], own }.format()
+    }
+
+    fn fingerprint_of_fill(fill: u8) -> String {
+        randprotocol_prover::key::fingerprint_of(&vec![fill; KEM_EK_BYTES]).to_string()
+    }
+
+    #[test]
+    fn a_pool_member_is_checked_against_its_pinned_url_and_key() {
+        let good = json!({
+            "name": "m", "url": "https://p.example", "fingerprint": fingerprint_of_fill(1),
+            "link": link("https://p.example", false, 1),
+        });
+        let m = trusted_member(&good).unwrap();
+        assert_eq!(m["own"], false);
+        assert_eq!(m["name"], "m");
+
+        let mut missing = good.clone();
+        missing["fingerprint"] = json!("");
+        assert!(trusted_member(&missing).unwrap_err().contains("is missing its name, url, fingerprint or link"));
+
+        let mut wrong_key = good.clone();
+        wrong_key["fingerprint"] = json!(fingerprint_of_fill(2));
+        assert!(trusted_member(&wrong_key).unwrap_err().contains("but the pinned fingerprint is"));
+
+        let mut wrong_url = good.clone();
+        wrong_url["url"] = json!("https://other.example");
+        assert!(trusted_member(&wrong_url).unwrap_err().contains("but the pinned URL is https://other.example"));
+
+        let mut own = good.clone();
+        own["link"] = json!(link("https://p.example", true, 1));
+        assert!(trusted_member(&own).unwrap_err().contains("marked own=1"));
+
+        let mut junk = good.clone();
+        junk["link"] = json!("randprover:nonsense");
+        assert!(trusted_member(&junk).unwrap_err().contains("the link does not parse"));
+    }
+
+    // ---------------------------------------------------------------- keys
+
+    #[test]
+    fn a_key_file_is_accepted_only_at_version_2_with_a_spend_key() {
+        let sk = "AB".repeat(32);
+        let ok = json!({ "version": 2, "spend_key": sk }).to_string();
+        assert_eq!(spend_key_from_input(&ok).unwrap(), "ab".repeat(32), "lower-cased");
+        assert_eq!(spend_key_from_input(&format!("  {}  ", "cd".repeat(32))).unwrap(), "cd".repeat(32));
+        let v1 = json!({ "version": 1, "spend_key": sk }).to_string();
+        assert_eq!(spend_key_from_input(&v1).unwrap_err(), "key file must be version 2");
+        let none = json!({ "version": 2 }).to_string();
+        assert_eq!(spend_key_from_input(&none).unwrap_err(), "key file has no spend_key");
+        let short = json!({ "version": 2, "spend_key": "abcd" }).to_string();
+        assert_eq!(spend_key_from_input(&short).unwrap_err(), "spend_key must be 64 hex characters");
+        assert!(spend_key_from_input("{not json").unwrap_err().starts_with("not a key file"));
+    }
+
+    // ---------------------------------------------------------------- rebuilt notes, pending
+
+    #[test]
+    fn rebuilding_notes_from_an_unrelated_action_finds_nothing() {
+        let w = Wallet::from_spend_key(SpendKey([3; 8]));
+        assert!(rebuilt_deposit(&w, &json!({ "kind": "transfer" })).is_none());
+        assert!(rebuilt_deposit(&w, &Value::Null).is_none());
+        assert!(rebuilt_notes(&w, &json!({ "kind": "transfer" })).is_empty());
+        assert!(rebuilt_notes(&w, &Value::Null).is_empty());
+        assert_eq!(value("rebuilt_deposit", json!({ "spend_key": w.spend_key_hex(), "action": { "kind": "x" } })), Value::Null);
+        assert_eq!(value("rebuilt_notes", json!({ "spend_key": w.spend_key_hex(), "action": { "kind": "x" } })), json!([]));
+    }
+
+    #[test]
+    fn a_bridge_attest_to_somebody_else_is_not_ours() {
+        let me = Wallet::from_spend_key(SpendKey([3; 8]));
+        let them = Wallet::from_spend_key(SpendKey([4; 8]));
+        let action = json!({
+            "kind": "bridge_attest", "amount": "5", "asset_index": 1, "time": 1,
+            "recipient": them.address.to_string(), "r": word8_to_hex(&[1; 8]), "commitment": "00",
+        });
+        assert!(rebuilt_deposit(&me, &action).is_none());
+        // A recipient that is not an address at all is the same answer, not a panic.
+        let junk = json!({ "kind": "bridge_attest", "recipient": "nope" });
+        assert!(rebuilt_deposit(&me, &junk).is_none());
+    }
+
+    #[test]
+    fn a_note_with_no_pending_hold_is_never_cleared() {
+        let mut n: OwnedNote = serde_json::from_value(stub(0, 0, 1)).unwrap();
+        assert!(!pending_cleared_within(&n, u64::MAX, 256));
+        n.pending = Some(100);
+        assert!(!pending_cleared_within(&n, 100 + 256, 256), "the window is inclusive of its last block");
+        assert!(pending_cleared_within(&n, 100 + 257, 256));
+        n.spent = true;
+        assert!(pending_cleared_within(&n, 0, 256), "a spent note clears at once");
+    }
+
+    #[test]
+    fn the_proof_window_is_clamped_to_256_through_4096() {
+        assert_eq!(proof_window(None), 256);
+        assert_eq!(proof_window(Some(1)), 256, "a node cannot shorten it");
+        assert_eq!(proof_window(Some(1024)), 1024);
+        assert_eq!(proof_window(Some(1_000_000)), 4096, "nor lengthen it past 4096");
+    }
+
+    // ---------------------------------------------------------------- bridge fee quote
+
+    fn bridge_state(bps: Value, decimals: u8, token: &[u8; 32], chain: u16) -> Value {
+        json!({
+            "fees": { "burn_bps": bps },
+            "assets": [{ "chain": chain, "token": hex::encode(token), "decimals": decimals }],
+        })
+    }
+
+    #[test]
+    fn the_bridge_fee_is_bps_of_the_amount_rounded_down_to_the_release_unit() {
+        let token = [0xab; 32];
+        // 123_456_789 * 25 bps = 308_641 (floor); the coin has 4 decimals, so its release unit is
+        // 10^(8-4) = 10_000, and the fee is 300_000.
+        let state = bridge_state(json!(25), 4, &token, 2);
+        assert_eq!(bridge_fee_quote(&state, 2, &token, 123_456_789), (300_000, 123_156_789));
+        // A coin with 8 decimals has a unit of 1: no rounding beyond the floor.
+        let state = bridge_state(json!(25), 8, &token, 2);
+        assert_eq!(bridge_fee_quote(&state, 2, &token, 123_456_789), (308_641, 123_148_148));
+        // A tiny amount's fee rounds to zero and the whole amount is released.
+        assert_eq!(bridge_fee_quote(&state, 2, &token, 100), (0, 100));
+    }
+
+    #[test]
+    fn a_quote_with_anything_unknown_is_free_rather_than_wrong() {
+        let token = [0xab; 32];
+        let state = bridge_state(json!(25), 8, &token, 2);
+        // another destination chain, another token, no state, no bps, bps out of u16, no row
+        assert_eq!(bridge_fee_quote(&state, 3, &token, 1_000_000), (0, 1_000_000));
+        assert_eq!(bridge_fee_quote(&state, 2, &[0xcd; 32], 1_000_000), (0, 1_000_000));
+        assert_eq!(bridge_fee_quote(&Value::Null, 2, &token, 1_000_000), (0, 1_000_000));
+        assert_eq!(bridge_fee_quote(&bridge_state(Value::Null, 8, &token, 2), 2, &token, 1_000_000), (0, 1_000_000));
+        assert_eq!(bridge_fee_quote(&bridge_state(json!(70_000), 8, &token, 2), 2, &token, 1_000_000), (0, 1_000_000));
+        let mut no_rows = state.clone();
+        no_rows["assets"] = json!([]);
+        assert_eq!(bridge_fee_quote(&no_rows, 2, &token, 1_000_000), (0, 1_000_000));
+    }
+
+    #[test]
+    fn bridge_fee_quote_through_dispatch_takes_a_0x_token_and_string_amounts() {
+        let token = [0xab; 32];
+        let v = value("bridge_fee_quote", json!({
+            "bridge_state": bridge_state(json!(25), 4, &token, 2),
+            "to_chain": 2,
+            "token": format!("0x{}", hex::encode(token)),
+            "amount": "123456789",
+        }));
+        assert_eq!(v, json!({ "fee": "300000", "release": "123156789" }));
+        let base = json!({ "bridge_state": Value::Null, "to_chain": 2, "token": hex::encode(token), "amount": "10" });
+        let mut bad_chain = base.clone();
+        bad_chain["to_chain"] = json!("2");
+        assert_eq!(refused("bridge_fee_quote", bad_chain), "to_chain must be a number");
+        let mut big_chain = base.clone();
+        big_chain["to_chain"] = json!(70_000);
+        assert_eq!(refused("bridge_fee_quote", big_chain), "to_chain is out of range");
+        let mut bad_token = base.clone();
+        bad_token["token"] = json!("abcd");
+        assert!(refused("bridge_fee_quote", bad_token).contains("token"));
+        let mut number_amount = base;
+        number_amount["amount"] = json!(10);
+        assert!(refused("bridge_fee_quote", number_amount).contains("amount"));
+    }
+
+    // ---------------------------------------------------------------- the string entry point
+
+    #[test]
+    fn call_reports_bad_params_unknown_methods_and_missing_parameters_as_json() {
+        let r: Value = serde_json::from_str(&call("version", "{nope")).unwrap();
+        assert_eq!(r["ok"], false);
+        assert!(r["error"].as_str().unwrap().starts_with("params is not JSON"));
+        assert!(refused("no_such_method", json!({})).contains("unknown method \"no_such_method\""));
+        assert_eq!(refused("wallet_info", json!({})), "missing string parameter \"spend_key\"");
+        assert_eq!(refused("format_amount", json!({})), "missing parameter \"units\"");
+        // blank params mean `{}`
+        let r: Value = serde_json::from_str(&call("version", "  \n")).unwrap();
+        assert_eq!(r["ok"], true);
+    }
+
+    #[test]
+    fn uri_format_optional_fields_must_be_strings_or_null() {
+        let w = Wallet::from_spend_key(SpendKey([5; 8]));
+        let addr = w.address.to_string();
+        assert_eq!(refused("uri_format", json!({ "address": addr, "amount": 5 })), "amount must be a string");
+        assert_eq!(refused("uri_format", json!({ "address": addr, "memo": ["x"] })), "memo must be a string");
+        let v = value("uri_format", json!({ "address": addr, "amount": null, "asset": null, "memo": null }));
+        assert!(v["uri"].as_str().unwrap().contains(&addr), "{v}");
+    }
+
+    #[test]
+    fn chain_guests_takes_strings_or_null_only() {
+        let msg = refused("chain_guests", json!({ "hc_bundle": 5 }));
+        assert!(msg.contains("hc_bundle must be a string of 64 hex characters, or null"), "{msg}");
+        let msg = refused("chain_guests", json!({ "hc_auth": ["x"] }));
+        assert!(msg.contains("hc_auth must be a string"), "{msg}");
+        let v = value("chain_guests", json!({ "hc_bundle": null, "hc_auth": null }));
+        assert_eq!(v["split_authorisation"], true, "absent guests are this build's own (bundle guest v3)");
+        assert!(v["hc_auth"].is_string());
+    }
+
+    // ---------------------------------------------------------------- prover links
+
+    #[test]
+    fn a_prover_link_parses_to_its_parts_and_names_its_key() {
+        let l = PairingLink { kem_ek: vec![7; KEM_EK_BYTES], url: "https://prover.example:9000/p".into(), token: [0x11; 32], own: true };
+        let v = value("parse_prover_link", json!({ "link": format!("  {}  ", l.format()) }));
+        assert_eq!(v["kem_ek"], hex::encode(vec![7u8; KEM_EK_BYTES]));
+        assert_eq!(v["url"], "https://prover.example:9000/p");
+        assert_eq!(v["token"], "11".repeat(32));
+        assert_eq!(v["own"], true);
+        assert_eq!(v["fingerprint"], fingerprint_of_fill(7));
+        // …and the same key's fingerprint through `prover_fingerprint`
+        assert_eq!(value("prover_fingerprint", json!({ "kem_ek": hex::encode(vec![7u8; KEM_EK_BYTES]) })), json!(fingerprint_of_fill(7)));
+        assert_ne!(fingerprint_of_fill(7), fingerprint_of_fill(8));
+        // four groups of four Crockford characters
+        let fp = fingerprint_of_fill(7);
+        assert_eq!(fp.split('-').map(str::len).collect::<Vec<_>>(), vec![4, 4, 4, 4]);
+    }
+
+    #[test]
+    fn a_bad_prover_link_or_key_is_refused_with_the_reason() {
+        assert!(refused("parse_prover_link", json!({ "link": "https://not-a-link" })).contains("not a randprover: link"));
+        assert!(refused("parse_prover_link", json!({ "link": "randprover:abc" })).contains("no ?url"));
+        assert_eq!(refused("prover_fingerprint", json!({ "kem_ek": "zz" })), "kem_ek is not hex");
+        assert_eq!(
+            refused("prover_fingerprint", json!({ "kem_ek": "abcd" })),
+            format!("kem_ek is 2 bytes, expected {KEM_EK_BYTES}")
+        );
+    }
+
+    // ---------------------------------------------------------------- plan_invoke through dispatch
+
+    #[test]
+    fn plan_invoke_reads_its_optional_burns_and_refuses_what_is_not_a_number() {
+        let notes = json!([stub(0, 0, 3_000_000_000)]);
+        let fee = gas::BUNDLE_BASE.to_string();
+        // nothing deposited: a RAND bundle that only pays the fee
+        let plan = value("plan_invoke", json!({ "notes": notes, "fee": fee, "burn_r": null, "burn_a": null, "burn_asset": null }));
+        assert_eq!(plan["need"], fee);
+        assert_eq!(plan["inputs"].as_array().unwrap().len(), 1);
+        // a token deposit with a RAND note for the fee
+        let notes2 = json!([stub(0, 1, 500), stub(1, 0, 3_000_000_000)]);
+        let plan = value("plan_invoke", json!({ "notes": notes2, "fee": fee, "burn_a": "200", "burn_asset": 1 }));
+        assert_eq!(plan["need"], "200");
+        assert_eq!(plan["change"], "300");
+        // errors
+        assert_eq!(
+            refused("plan_invoke", json!({ "notes": notes, "fee": fee, "burn_asset": "1" })),
+            "burn_asset must be a non-negative integer"
+        );
+        assert_eq!(
+            refused("plan_invoke", json!({ "notes": notes, "fee": fee, "burn_asset": -1 })),
+            "burn_asset must be a non-negative integer"
+        );
+        assert_eq!(
+            refused("plan_invoke", json!({ "notes": notes, "fee": fee, "burn_asset": 4_294_967_296u64 })),
+            "burn_asset must be a non-negative integer"
+        );
+        assert_eq!(refused("plan_invoke", json!({ "notes": notes, "fee": fee, "burn_a": "5" })), RAND_NOT_BURN_A);
+        assert!(refused("plan_invoke", json!({ "notes": notes, "fee": "1" })).contains("at least"));
+        assert_eq!(refused("plan_invoke", json!({ "notes": notes, "fee": fee, "burn_r": 5 })), "amounts must be decimal strings");
+        assert!(refused("plan_invoke", json!({ "notes": "x", "fee": fee })).starts_with("notes:"));
+    }
+
+    // ---------------------------------------------------------------- prove_transfer refusals
+
+    /// Mutate the RAND (or token) fixture and expect the build to be refused with `needle`
+    /// before any proof is paid for.
+    fn transfer_refusal(asset: u32, edit: impl FnOnce(&mut Value), needle: &str) {
+        let mut req = fixture_prove_request("test", asset).unwrap();
+        edit(&mut req);
+        let msg = refused("prove_transfer", req);
+        assert!(msg.contains(needle), "wanted {needle:?} in {msg:?}");
+    }
+
+    #[test]
+    fn prove_transfer_refuses_a_malformed_request_before_proving() {
+        transfer_refusal(0, |r| r["amount"] = json!("0"), "amount must be greater than zero");
+        transfer_refusal(0, |r| r["fee"] = json!("1"), "is below the bundle floor");
+        transfer_refusal(0, |r| r["inputs"] = json!([]), "a bundle spends one or two notes");
+        transfer_refusal(0, |r| r["anchor_root"] = json!("zz"), "anchor_root is not 64 hex characters");
+        transfer_refusal(0, |r| r["anchor_height"] = json!(u64::MAX), "anchor height does not fit");
+        transfer_refusal(0, |r| r["profile"] = json!("fast"), "unknown FRI profile");
+        transfer_refusal(0, |r| r["amount"] = json!("1.5"), "amount must be a decimal string of units");
+        transfer_refusal(0, |r| r["amount"] = json!("99999999999999999999"), "amount is out of range");
+        transfer_refusal(0, |r| r["to"] = json!("rand1nope"), "recipient:");
+        transfer_refusal(0, |r| r["bundle_gas_limit"] = json!(1), "update the wallet");
+        transfer_refusal(0, |r| r["memo"] = json!("hi"), "memo");
+    }
+
+    #[test]
+    fn prove_transfer_refuses_inputs_that_do_not_fit_the_groups() {
+        // a RAND transfer pays its own fee: fee_inputs is for tokens
+        transfer_refusal(
+            0,
+            |r| r["fee_inputs"] = r["inputs"].clone(),
+            "a RAND transfer pays its fee out of the notes in `inputs`",
+        );
+        // a token transfer must name RAND notes for the fee
+        transfer_refusal(1, |r| r["fee_inputs"] = json!([]), "pays its fee in RAND");
+        // three notes in a group
+        transfer_refusal(
+            0,
+            |r| {
+                let n = r["inputs"][0].clone();
+                r["inputs"] = json!([n.clone(), n.clone(), n]);
+            },
+            "spends one or two notes, not 3",
+        );
+        // the notes must be this wallet's
+        transfer_refusal(
+            0,
+            |r| r["spend_key"] = json!(Wallet::from_spend_key(SpendKey([9; 8])).spend_key_hex()),
+            "is not owned by this wallet",
+        );
+        // of the group's asset: the RAND note offered as the token input
+        transfer_refusal(
+            1,
+            |r| r["inputs"] = r["fee_inputs"].clone(),
+            "holds asset 0, but this group spends asset 1",
+        );
+    }
+
+    #[test]
+    fn prove_transfer_refuses_a_shortfall_before_proving() {
+        transfer_refusal(0, |r| r["amount"] = json!("900000000000"), "inputs hold");
+        transfer_refusal(1, |r| r["amount"] = json!("900000000000"), "hold");
+        transfer_refusal(1, |r| r["fee"] = json!("900000000000"), "the RAND notes hold");
+    }
+
+    // ---------------------------------------------------------------- prove_burn refusals
+
+    fn burn_refusal(edit: impl FnOnce(&mut Value), needle: &str) {
+        let mut req = fixture_burn_request("test").unwrap();
+        edit(&mut req);
+        let msg = refused("prove_burn", req);
+        assert!(msg.contains(needle), "wanted {needle:?} in {msg:?}");
+    }
+
+    #[test]
+    fn prove_burn_refuses_a_malformed_request_before_proving() {
+        burn_refusal(|r| r["fee_inputs"] = json!([]), "a burn pays its fee in RAND");
+        burn_refusal(|r| r["inputs"] = json!([]), "a burn spends one or two notes of asset");
+        burn_refusal(|r| r["anchor_root"] = json!("zz"), "anchor_root is not 64 hex characters");
+        burn_refusal(|r| r["anchor_height"] = json!(u64::MAX), "anchor height does not fit");
+        burn_refusal(|r| r["profile"] = json!("fast"), "unknown FRI profile");
+        burn_refusal(|r| r["bundle_gas_limit"] = json!(1), "update the wallet");
+        burn_refusal(|r| r["amount"] = json!("900000000000"), "but the burn is");
+        burn_refusal(|r| r["fee"] = json!("900000000000"), "the RAND notes hold");
+    }
+
+    // ---------------------------------------------------------------- finish_proof refusals
+
+    #[test]
+    fn finish_proof_refuses_a_request_that_is_not_a_pending_transaction() {
+        let msg = refused("finish_proof", json!({ "pending": { "kind": "swap" }, "reply_hex": "" }));
+        assert!(msg.starts_with("request:"), "{msg}");
+        let msg = refused("finish_proof", json!({}));
+        assert!(msg.starts_with("request:"), "{msg}");
+    }
+}
