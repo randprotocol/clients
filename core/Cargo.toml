@@ -60,3 +60,7 @@ p3-fri = { path = "vendor/fullnode/vendor/p3-fri" }
 # The other half (fullnode 0e70ddc, Plonky3 PR #2368): MerkleTreeHidingMmcs::commit held the same
 # spin lock across the parallel tree build.
 p3-merkle-tree = { path = "vendor/fullnode/vendor/p3-merkle-tree" }
+# The fullnode's quotient-layout fork of p3-batch-stark 0.7.0 (fullnode 22827279, circuits 5ff7676):
+# `QuotientLayout::PerChunk`, what the RV32 machine and every wallet proof use, is crates.io's
+# behaviour byte for byte. Repeated here so this workspace builds the same p3-batch-stark the node does.
+p3-batch-stark = { path = "vendor/fullnode/vendor/p3-batch-stark" }
