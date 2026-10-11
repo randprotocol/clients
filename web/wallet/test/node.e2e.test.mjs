@@ -319,6 +319,24 @@ function wireNamesInSource() {
 /** The methods the contract cases below exercise on the real node, filled in as they run. */
 const CONTRACT_METHODS = new Set();
 
+/**
+ * Whether the node serves the seven reads fullnode v0.8.0 added (getRandPrice, getScanLeaves,
+ * getPerps, getPerpAccount, getPerpAccounts, getPerpInputs, getMultisig). The release this suite
+ * runs against in CI (v0.7.1) answers each with -32601; a v0.8.0-candidate answers. Decided once,
+ * by `rand_getRandPrice`; every method then has exactly one acceptable outcome, never "either".
+ */
+async function servesV08Reads(client) {
+  if (env.v08 !== undefined) return env.v08;
+  try {
+    await client.rpc('rand_getRandPrice', []);
+    env.v08 = true;
+  } catch (err) {
+    assert.ok(err instanceof RpcError && err.code === -32601 && err.message === 'unknown method rand_getRandPrice', `an older node refuses by name, got ${err && err.message}`);
+    env.v08 = false;
+  }
+  return env.v08;
+}
+
 test('b. before any note: the empty shapes of every read the wallet makes', { skip }, withLogs(async () => {
   const client = makeRpc(env.rpcUrl, { chainId: CHAIN_ID, genesis: env.cutHash });
   const call = async (name, ...args) => { CONTRACT_METHODS.add(name); return client[name](...args); };
@@ -423,6 +441,33 @@ test('b. before any note: the empty shapes of every read the wallet makes', { sk
   assert.deepEqual(await call('getUnsealed', 0, 10), { bundles: [], next_from: null });
   assert.equal((await call('getAdmitted')).admission_by_vote, false);
 
+  // The reads fullnode v0.8.0 added: served with exact shapes there, refused by name on v0.7.1.
+  const NEW = ['getRandPrice', 'getScanLeaves', 'getPerps', 'getPerpAccount', 'getPerpAccounts', 'getPerpInputs', 'getMultisig'];
+  const newArgs = {
+    getRandPrice: [], getScanLeaves: [0, 10], getPerps: [], getPerpAccount: [ZERO32],
+    getPerpAccounts: [{ after: null, limit: 10 }], getPerpInputs: [1], getMultisig: [ZERO32],
+  };
+  if (await servesV08Reads(client)) {
+    assert.equal(await call('getRandPrice'), null, 'no usd_subsidy section: no voted price');
+    assert.deepEqual(await call('getScanLeaves', 0, 10), []);
+    assert.deepEqual(await call('getScanLeaves', 100, 10), []);
+    assert.deepEqual(await call('getPerps'), { enabled: false });
+    assert.equal(await call('getPerpAccount', ZERO32), null);
+    assert.deepEqual(await call('getPerpAccounts', { after: null, limit: 10 }), { accounts: [], next: null });
+    assert.equal(await call('getPerpInputs', 1), null);
+    assert.equal(await call('getPerpInputs', 999_999), null);
+    assert.deepEqual(await call('getMultisig', ZERO32), { enabled: false });
+  } else {
+    for (const name of NEW) {
+      await assert.rejects(() => call(name, ...newArgs[name]), (err) => {
+        assert.ok(err instanceof RpcError);
+        assert.equal(err.code, -32601);
+        assert.equal(err.message, `unknown method ${wireName(name)}`);
+        return true;
+      }, name);
+    }
+  }
+
   // The node-held viewing-key facility (loopback only, which this test is).
   assert.deepEqual(await call('importViewingKey', ZERO32), { imported: true, rescan_from_height: 0, viewing_keys: 1 });
   assert.deepEqual(await call('getViewingNotes', ZERO32), { complete: true, next_index: 0, notes: [], scanned_index: 0 });
@@ -474,6 +519,15 @@ test('b. after a faucet mint: the populated shapes, exact values, and the valida
   // …and checkCommitments refuses what the real page is not: asked from 1, answered from 0.
   assert.throws(() => checkCommitments(rows, { from: 1, limit: 10 }), (err) => err instanceof NodeReplyError && /starts at leaf 0, not the 1 it was asked for/.test(err.message));
   assert.throws(() => checkCommitments(rows, { from: 0, limit: 10, leafCount: 0 }), (err) => err instanceof NodeReplyError && /past the 0 leaves the tree reports/.test(err.message));
+
+  // v0.8.0's compact scan page: the same leaf, with the scan blob a wallet trial-decrypts.
+  if (await servesV08Reads(client)) {
+    const leaves = await call('getScanLeaves', 0, 10);
+    assert.equal(leaves.length, 1);
+    assert.deepEqual({ cm: leaves[0].cm, height: leaves[0].height, index: leaves[0].index }, { cm: rows[0].cm, height, index: 0 });
+    assert.ok(typeof leaves[0].scan === 'string' && leaves[0].scan.length > 0);
+    assert.deepEqual(await call('getScanLeaves', 1, 10), []);
+  }
 
   // The witness: 32 levels, rooted at the anchor; leaf 1 does not exist.
   const witness = checkWitness(await call('getWitness', 0));
