@@ -52,6 +52,12 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/bin/wasm-bindgen*
           key: cargo-wasm-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('core/Cargo.lock') }}
+      - name: Cache the wasm core's build
+        uses: actions/cache@v4
+        with:
+          path: core/target
+          key: core-target-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('core/Cargo.lock') }}
+          restore-keys: core-target-${{ env.RUST_TOOLCHAIN }}-
       - name: The wasm core
         run: core/scripts/build-wasm.sh
       - name: Download the fullnode ${{ env.FULLNODE_TAG }} release

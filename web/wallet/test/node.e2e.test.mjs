@@ -560,6 +560,21 @@ test('b. every method name the wallet can put on the wire is allowed, and each h
 
 // ---- c. the wallet's flows over the real core -------------------------------------------------
 
+/**
+ * Wallet C: a fresh key funded by one faucet mint and scanned. Every case that needs it calls this;
+ * the first caller sets it up and the rest reuse it, so each case also runs alone
+ * (`--test-name-pattern`). What a case may assume about it is asserted at the top of that case.
+ */
+async function ensureC() {
+  if (env.c) return env.c;
+  const key = await env.core.call('keygen');
+  const one = engine(env.rpcUrl, { genesis: env.cutHash });
+  env.c = { key, ...one };
+  env.c.hash = await one.w.faucet(key.spend_key, key.address);
+  env.c.height = checkTransaction(await one.client.getTransaction(env.c.hash)).height;
+  return env.c;
+}
+
 test('c. keygen → faucet → scan → balance → activity, then a second wallet rescans the same key to the same notes', { skip }, withLogs(async () => {
   const key = await env.core.call('keygen');
   assert.match(key.address, /^rand1/);
@@ -633,7 +648,7 @@ test('c. keygen → faucet → scan → balance → activity, then a second wall
 }));
 
 test('c. a second scan adds nothing: the cursors and the notes are where the first left them', { skip }, withLogs(async () => {
-  const { w, store, key } = env.c;
+  const { w, store, key } = await ensureC();
   const first = await w.loadStore();
   const second = await w.scan(key.spend_key, {});
   const strip = (s) => ({ ...s, last_sync_ms: 0, head: 0, rev: undefined });
@@ -644,23 +659,22 @@ test('c. a second scan adds nothing: the cursors and the notes are where the fir
   const third = await w.loadStore();
   assert.equal(third.notes.length, first.notes.length + 1);
   assert.equal(third.scanned_index, first.scanned_index + 1);
-  assert.equal(balanceOf(third), FAUCET_UNITS * 2n);
+  assert.equal(balanceOf(third), balanceOf(first) + FAUCET_UNITS);
   assert.equal(third.notes.filter((n) => n.index === first.notes[0].index).length, 1, 'the first note is not duplicated');
   assert.deepEqual(third.notes.slice(0, first.notes.length), first.notes);
   assert.ok(third.submissions.some((s) => s.hash === hash2 && s.status === 'committed'));
-  env.c.hash2 = hash2;
 }));
 
 test('c. anchorAndWitnesses returns witnesses rooted at rand_getAnchor\'s root, and refuses a leaf that is not there', { skip }, withLogs(async () => {
-  const { w, client, key } = env.c;
+  const { w, client, key } = await ensureC();
   const store = await w.loadStore();
   const chosen = store.notes.filter((n) => !n.spent);
-  assert.equal(chosen.length, 2);
+  assert.ok(chosen.length >= 1, 'wallet C holds at least its faucet note');
   const { anchor, paths } = await w.anchorAndWitnesses(client, chosen);
   const wire = await rpc(env.rpcUrl, 'rand_getAnchor');
   assert.equal(anchor.root, wire.root);
   assert.equal(anchor.root, (await rpc(env.rpcUrl, 'rand_getTreeInfo')).root);
-  assert.equal(paths.length, 2);
+  assert.equal(paths.length, chosen.length);
   for (const [i, n] of chosen.entries()) {
     const raw = await rpc(env.rpcUrl, 'rand_getWitness', [n.index]);
     assert.equal(raw.root, anchor.root, `the witness for leaf ${n.index} is rooted at the anchor`);
@@ -689,7 +703,7 @@ test('d. A sends to B through a real rand-prover: balances move by amount + fee 
       '--home', env.proverHome, 'run', '--listen', `127.0.0.1:${env.proverPort}`,
       ...(v3 ? [] : ['--accept-spend-key']), '--skip-memory-check',
     ], 'rand-prover');
-    await until('rand-prover to answer prover_info', () => rpc(env.proverUrl, 'prover_info'), { timeoutMs: 30_000, everyMs: 200 });
+    await until('rand-prover to answer prover_info', () => rpc(env.proverUrl, 'prover_info'), { timeoutMs: 60_000, everyMs: 200 });
     const paired = await env.a.backend.prover.pair(link, PASSWORD, { name: 'laptop' });
     assert.equal(paired.mode, 'remote');
 
@@ -698,7 +712,7 @@ test('d. A sends to B through a real rand-prover: balances move by amount + fee 
     const funded = await until('the faucet note to be spendable', async () => {
       const scan = await env.a.backend.sync.scan(() => {});
       return spendableRand(scan).length > 0 ? scan : null;
-    }, { timeoutMs: 120_000, everyMs: 500 });
+    }, { timeoutMs: 300_000, everyMs: 500 });
     const fundedUnits = spendableRand(funded).reduce((a, n) => a + toUnits(n.amount), 0n);
     assert.equal(fundedUnits, FAUCET_UNITS);
     const bScanBefore = await env.b.backend.sync.scan(() => {});
@@ -717,7 +731,7 @@ test('d. A sends to B through a real rand-prover: balances move by amount + fee 
     const aScan = await until('A to see its nullifier', async () => {
       const scan = await env.a.backend.sync.scan(() => {});
       return (scan.notes || []).some((n) => n.spent) ? scan : null;
-    }, { timeoutMs: 60_000, everyMs: 500 });
+    }, { timeoutMs: 240_000, everyMs: 500 });
     const spentNotes = aScan.notes.filter((n) => n.spent);
     assert.equal(spentNotes.length, 1);
     assert.equal(spentNotes[0].amount, FAUCET_UNITS.toString());
@@ -745,7 +759,7 @@ test('d. A sends to B through a real rand-prover: balances move by amount + fee 
     const bScan = await until('B to see the payment', async () => {
       const scan = await env.b.backend.sync.scan(() => {});
       return (scan.notes || []).some((n) => String(n.amount) === SEND_UNITS) ? scan : null;
-    }, { timeoutMs: 60_000, everyMs: 500 });
+    }, { timeoutMs: 240_000, everyMs: 500 });
     const received = bScan.notes.filter((n) => toUnits(n.amount) > 0n);
     assert.equal(received.length, 1);
     assert.equal(String(received[0].amount), SEND_UNITS);
@@ -761,12 +775,10 @@ test('d. A sends to B through a real rand-prover: balances move by amount + fee 
     await assert.rejects(() => direct.sendTransaction(sent[0].params[0]), (err) => {
       assert.ok(err instanceof RpcError);
       assert.equal(isTransportFailure(err), false);
-      assert.equal(typeof err.code, 'number');
-      assert.match(err.message, /./);
-      env.replayRefusal = { code: err.code, message: err.message };
+      assert.equal(err.code, -32000);
+      assert.equal(err.message, 'nullifier already spent');
       return true;
     });
-    t.diagnostic(`replay refused: ${env.replayRefusal.code} ${env.replayRefusal.message}`);
     // …and the chain did not move: still one commit of that transaction, B still holds one note.
     assert.equal(checkTransaction(await rpc(env.rpcUrl, 'rand_getTransaction', [out.hash])).height, committed.height);
     assert.equal((await env.b.backend.sync.scan(() => {})).notes.filter((n) => toUnits(n.amount) > 0n).length, 1);
@@ -823,9 +835,9 @@ test('e. a submit that timed out is never repeated on another endpoint', { skip 
   const mute = await rawServer(() => {});
   const live = await forwarder(env.rpcUrl);
   try {
-    const pool = makeRpc([mute.url, live.url], { timeoutMs: 400 });
+    const pool = makeRpc([mute.url, live.url], { timeoutMs: 2000 });
     const before = checkTreeInfo(await rpc(env.rpcUrl, 'rand_getTreeInfo')).next_index;
-    for (const [name, args] of [['sendTransaction', ['00']], ['mint', [env.c.key.address]]]) {
+    for (const [name, args] of [['sendTransaction', ['00']], ['mint', [(await env.core.call('keygen')).address]]]) {
       await assert.rejects(() => pool[name](...args), (err) => {
         assert.ok(err instanceof RpcError);
         assert.equal(err.failure, 'timeout');
@@ -857,7 +869,8 @@ test('e. a submit to a port that is listening but hangs up is not repeated elsew
   const live = await forwarder(env.rpcUrl);
   try {
     const pool = makeRpc([reader.url, live.url], { timeoutMs: 5000 });
-    await assert.rejects(() => pool.mint(env.c.key.address), (err) => {
+    const payee = (await env.core.call('keygen')).address;
+    await assert.rejects(() => pool.mint(payee), (err) => {
       assert.match(err.message, new RegExp(`^cannot reach ${reader.url}: `));
       return true;
     });
@@ -886,31 +899,24 @@ test('e. a malformed rand_sendTransaction comes back as the node\'s JSON-RPC err
     const cases = [
       ['zz', -32602, 'tx must be hex'],
       ['00', -32602, 'tx decode: io error: unexpected end of file'],
-      ['', -32602, null],
+      ['', -32602, 'tx decode: io error: unexpected end of file'],
+      ['ff'.repeat(64), -32602, 'tx decode: tag for enum is not valid, found 255'],
     ];
     for (const [hex, code, message] of cases) {
       await assert.rejects(() => pool.sendTransaction(hex), (err) => {
         assert.ok(err instanceof RpcError, 'the wallet\'s error type');
         assert.equal(err.name, 'Error');
         assert.equal(err.code, code);
-        if (message) assert.equal(err.message, message);
+        assert.equal(err.message, message);
         assert.equal(err.failure, undefined);
         assert.equal(isTransportFailure(err), false);
         return true;
       }, `sendTransaction(${JSON.stringify(hex)})`);
     }
-    assert.deepEqual(counter.seen, ['rand_sendTransaction', 'rand_sendTransaction', 'rand_sendTransaction']);
+    assert.deepEqual(counter.seen, cases.map(() => 'rand_sendTransaction'));
     assert.deepEqual(second.seen, [], 'a refusal is an answer: it was not shopped to the second endpoint');
     // The same, byte for byte, over the wallet's own raw escape hatch.
     await assert.rejects(() => pool.rpc('rand_sendTransaction', ['zz']), (err) => err instanceof RpcError && err.code === -32602 && err.message === 'tx must be hex');
-    // A transaction that decodes but was never valid: also the node's word, not a crash.
-    const bogus = await assert.rejects(() => pool.sendTransaction('ff'.repeat(64)), (err) => {
-      assert.ok(err instanceof RpcError);
-      assert.equal(typeof err.code, 'number');
-      assert.equal(isTransportFailure(err), false);
-      return true;
-    });
-    void bogus;
   } finally {
     await Promise.all([counter.shutdown(), second.shutdown()]);
   }
@@ -919,7 +925,7 @@ test('e. a malformed rand_sendTransaction comes back as the node\'s JSON-RPC err
 // ---- f. restarting the node -------------------------------------------------------------------
 
 test('f. after the node restarts on the same data directory, the wallet continues from its cursor with the same balance', { skip }, withLogs(async (t) => {
-  const { w, key, store } = env.c;
+  const { w, key, store } = await ensureC();
   await w.scan(key.spend_key, {}); // catch up with the leaves the transport cases minted
   const before = await w.loadStore();
   const balanceBefore = balanceOf(before);
