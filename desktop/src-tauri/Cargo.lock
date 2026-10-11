@@ -476,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "bridge-codec"
-version = "0.7.0"
+version = "0.7.1"
 
 [[package]]
 name = "brotli"
@@ -3167,8 +3167,6 @@ dependencies = [
 [[package]]
 name = "p3-batch-stark"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d68b4d3ba163ef87fb27a61f1c47be9b9eb05e5320c410f9f8cf09503ae4f95"
 dependencies = [
  "hashbrown 0.17.1",
  "p3-air",
@@ -3915,7 +3913,7 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "randprotocol-core"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "bincode",
  "blake3",
@@ -3935,7 +3933,7 @@ dependencies = [
 
 [[package]]
 name = "randprotocol-prover"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -3953,6 +3951,7 @@ dependencies = [
  "rand_core 0.10.1",
  "randprotocol-core",
  "randprotocol-zkvm",
+ "rayon",
  "serde",
  "serde_json",
  "sysinfo",
@@ -3964,7 +3963,7 @@ dependencies = [
 
 [[package]]
 name = "randprotocol-zkvm"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "chacha20",
  "chacha20poly1305",

@@ -56,8 +56,12 @@ pub const ADDRESS_HRP: &str = randprotocol_core::notes::ADDRESS_PREFIX;
 pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode's tag
-/// `v0.7.0` (`806ed34`) — over `v0.6.9` (`3f43101`, node-only on chain 20: headers carry invokes in
+/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode `main`
+/// `37c4fdd` (the v0.8.0 candidate) — over `v0.7.0` it adds the new action kinds (perps 34–39,
+/// multisig 40–43, `SetRandPrice` 44), `Action::Aggregate`'s `payout_total` and `layout`, and the
+/// scan heads (`rand_getScanLeaves`); chain 20 keeps running on it with every gated action refused,
+/// and the wallet's bundle and auth guests are unchanged (`inner_vk_digest` `346ee184…`). Before it:
+/// fullnode's tag `v0.7.0` (`806ed34`) — over `v0.6.9` (`3f43101`, node-only on chain 20: headers carry invokes in
 /// `public_notes`) it adds the audit v7 rows, the incremental token root (TOK-1) and the pool's
 /// per-member keys; the proof guests are byte-identical (circuits re-pinned at `6d2015d` for the
 /// provenance only), and evm-core/sbpf-core now come vendored inside the fullnode tree. Chain 20
@@ -78,7 +82,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
 /// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
 /// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "806ed34";
+pub const CHAIN_BUILD: &str = "37c4fdd";
 /// The chain the defaults below describe: chain 20, cut 2026-10-01 on fullnode v0.6.8 (`c9c9bd3`)
 /// from chain 19's state, with `program_state`, `binding_domain: 1` and `bridge.fees` (10 bps each
 /// way) in its genesis. Before it, chain 19, the next cut (not live on 2026-09-30; the
@@ -6116,7 +6120,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 20);
-            assert_eq!(v["chain_build"], "806ed34");
+            assert_eq!(v["chain_build"], "37c4fdd");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
@@ -7260,6 +7264,9 @@ mod tests {
             fn node_hash(&self, left: &Word8, right: &Word8) -> Word8 {
                 self.0.node_hash(left, right)
             }
+            fn hash_domain(&self, domain: u32, msg: &[u32]) -> Word8 {
+                self.0.hash_domain(domain, msg)
+            }
             fn note_commitment(&self, pk: &Word8, from: &Word8, amount: u64, asset: u32, time: u32, r: &Word8) -> Word8 {
                 self.0.note_commitment(pk, from, amount, asset, time, r)
             }
@@ -7712,6 +7719,22 @@ mod gap_tests {
         assert!(rebuilt_notes(&w, &Value::Null).is_empty());
         assert_eq!(value("rebuilt_deposit", json!({ "spend_key": w.spend_key_hex(), "action": { "kind": "x" } })), Value::Null);
         assert_eq!(value("rebuilt_notes", json!({ "spend_key": w.spend_key_hex(), "action": { "kind": "x" } })), json!([]));
+    }
+
+    /// Fullnode v0.8.0's new kinds (perps, tags 34–39; multisig, 40–43; `set_rand_price`, 44) and
+    /// the aggregate's new `layout` reach the walk as plain block actions: none is a deposit, and
+    /// none may make the core refuse the walk.
+    #[test]
+    fn the_v080_action_kinds_rebuild_nothing() {
+        let w = Wallet::from_spend_key(SpendKey([3; 8]));
+        for kind in [
+            "perp_deposit", "perp_order", "perp_cancel", "perp_withdraw", "perp_oracle", "perp_state_proof",
+            "create_multisig", "multisig_deposit", "multisig_rotate", "set_rand_price", "aggregate",
+        ] {
+            let action = json!({ "kind": kind, "layout": "tree", "payout_total": "0", "recipient": w.address.to_string() });
+            assert!(rebuilt_deposit(&w, &action).is_none(), "{kind}");
+            assert!(rebuilt_notes_with(&w, &action, Some(&w.address.to_string())).is_empty(), "{kind}");
+        }
     }
 
     #[test]

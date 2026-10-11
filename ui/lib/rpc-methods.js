@@ -44,6 +44,8 @@ export const METHODS = {
   getLimits: { params: [] },
   getMempoolInfo: { params: [] },
   getEmission: { params: [] },
+  // The validator set's RAND/USD vote (`fees.usd_subsidy`, fullnode v0.8.0); nothing calls it yet.
+  getRandPrice: { params: [] },
   // The genesis vesting register (fullnode v0.5.11, docs/rpc.md §rand_getVesting…); nothing in the
   // wallet calls these yet. Each lists only the parameters the node requires: `rand_getVesting`'s
   // `at_ms` is optional.
@@ -57,6 +59,9 @@ export const METHODS = {
   getWitness: { params: ['index'] },
   getWitnesses: { params: ['indices'] },
   getCommitments: { params: ['from', 'limit'] },
+  // The same page with each envelope cut to its 1 208-byte head (fullnode v0.8.0; `-32601` on an
+  // older node). Listed for the table; this wallet still scans with `getCommitments`.
+  getScanLeaves: { params: ['from', 'limit'] },
   getNullifiers: { params: ['fromHeight', 'limit'] },
   getCompactBlocks: { params: ['fromHeight', 'toHeight'] },
 
@@ -91,6 +96,14 @@ export const METHODS = {
   getProposer: { params: ['view'] },
   // Admission by vote (fullnode v0.6.8): which node addresses the validators admitted.
   getAdmitted: { params: [] },
+
+  // -- perps and multisig accounts (fullnode v0.8.0; genesis-gated, `{"enabled": false}` or a
+  // refusal on a chain without the section). Nothing in the wallet calls these yet.
+  getPerps: { params: [] },
+  getPerpAccount: { params: ['account'] },
+  getPerpAccounts: { params: ['page'] },
+  getPerpInputs: { params: ['height'] },
+  getMultisig: { params: ['id'] },
 
   // -- block aggregation ------------------------------------------------------------------------
   getAggregate: { params: ['hash'] },

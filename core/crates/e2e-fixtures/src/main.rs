@@ -78,6 +78,8 @@ fn bridge_config_for(emitter: [u8; 32], source_chains: &[u16]) -> BridgeConfig {
         guardian_set_index: None,
         burn_sequence: None,
         min_inbound_sequence: None,
+        fees: None,
+        rotation: None,
     }
 }
 
@@ -225,6 +227,7 @@ fn main() -> Result<()> {
                 max_tokens: None,
                 burn_registration_fee: None,
                 bound_note_value: None,
+                incremental_root: None,
             });
             // The round trip: every field the input carried must come back as it was, so what is
             // written differs from `rand-node genesis`'s file by the two sections alone.

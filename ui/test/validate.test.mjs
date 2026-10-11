@@ -379,6 +379,36 @@ test('block actions: plain, bounded objects, and nothing else', () => {
   rejects(() => checkBlockActions({ transactions: new Array(5000).fill({ action: { kind: 'a' } }) }), /transactions/);
 });
 
+// Fullnode v0.8.0's new action kinds, at their largest as its `tx_json` renders them: a perps
+// state proof pays at most `MAX_PERP_PAYOUTS` (8), a multisig pay at most 4 payouts, a price vote
+// names every voter (26 validators on chain 20), and an aggregate gains `payout_total` and `layout`.
+// Each must pass the walk's size cap untouched — a refusal here fails the whole deposit walk on
+// chain 21 — and nothing in the wallet branches on any of them.
+test('block actions: v0.8.0 kinds (perps, multisig, set_rand_price, aggregate layout) pass the cap', () => {
+  const hex = (b) => b.repeat(64);
+  // A shielded address is `rand1` and the base58 of 1 216 bytes (pk ‖ ML-KEM key): ~1 665 characters.
+  const addr = 'rand1' + 'z'.repeat(1665);
+  const payout = { asset: 4294967295, amount: '18446744073709551615', recipient: addr, time: 4294967295, r: hex('a'), cm: hex('b') };
+  const actions = [
+    { kind: 'perp_deposit', trading_key: hex('1'), account: hex('2') },
+    { kind: 'perp_order', account: hex('2'), body: { nonce: 1, market: 0, side: 0, kind: 1, tif: 0, reduce_only: false, price: '6500000000000', size: '100000' } },
+    { kind: 'perp_cancel', account: hex('2'), nonce: 2, target: 1 },
+    { kind: 'perp_withdraw', account: hex('2'), nonce: 3, amount: '100000000', recipient: addr, time: 9 },
+    { kind: 'perp_oracle', validator: '3'.repeat(44), prices: [{ market: 0, price: '6500000000000' }], nonce: 4 },
+    { kind: 'perp_state_proof', from_height: 10, to_height: 73, new_root: hex('4'),
+      payouts: new Array(8).fill({ request: hex('5'), amount: '18446744073709551615' }), fees: '0', proof_bytes: 1_900_000 },
+    { kind: 'create_multisig', salt: hex('6'), threshold: 2, signer_count: 3 },
+    { kind: 'multisig_deposit', account: hex('7') },
+    { kind: 'multisig_pay', account: hex('7'), nonce: 1, time: 5, pays: [payout, payout, payout, payout], signers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] },
+    { kind: 'multisig_rotate', account: hex('7'), nonce: 2, threshold: 2, signer_count: 4, signed_by: [0, 1] },
+    { kind: 'set_rand_price', price_micros_per_rand: '1250000', nonce: 1, voters: new Array(26).fill('8'.repeat(44)) },
+    { kind: 'aggregate', covers: 64, proof_len: 2_000_000, aggregator: '9'.repeat(44), nonce: 1, time: 1, payout_total: '0', layout: 'tree' },
+    { kind: 'a_kind_no_build_knows', anything: { nested: [1, 2, 3] } },
+  ];
+  const out = checkBlockActions({ transactions: actions.map((action) => ({ hash: hex('c'), action })) });
+  assert.deepEqual(out, actions);
+});
+
 test('a transaction record yields only a validated height', () => {
   assert.equal(checkTransaction(null), null);
   assert.deepEqual(checkTransaction({ height: 7, tx: { anything: true } }), { height: 7 });
@@ -399,6 +429,19 @@ test('limits: envelope_bytes, max_proof_bytes and the chain-18 bundle_gas_limit,
   rejects(() => checkLimits({ bundle_gas_limit: -1 }), /bundle_gas_limit/);
   rejects(() => checkLimits({ envelope_bytes: 0 }), /envelope_bytes is zero/);
   rejects(() => checkLimits(null), /not an object/);
+});
+
+test('limits: fullnode v0.8.0’s new sections are tolerated, present (chain 21) or null (chain 20)', async () => {
+  const { checkLimits } = await import('../engine/validate.js');
+  const base = { envelope_bytes: 1860, max_proof_bytes: 8388608, bundle_gas_limit: 20479, proof_window_blocks: 1024 };
+  const want = { envelopeBytes: 1860, maxProofBytes: 8388608, bundleGasLimit: 20479, programState: null, proofWindowBlocks: 1024 };
+  assert.deepEqual(checkLimits({ ...base, perps: null, multisig: null, fee_rules: { proposer_share_bps: null, prove_base: null, usd_subsidy: null } }), want);
+  assert.deepEqual(checkLimits({
+    ...base,
+    perps: { markets: [{ id: 0, symbol: 'BTC-PERP', collateral: 1 }], max_tier: 18, max_block_inputs: 24, max_window_blocks: 64, min_deposit: '100000000' },
+    multisig: { create_fee: '100000000', max_signers: 16, max_payouts: 4 },
+    fee_rules: { proposer_share_bps: 4000, prove_base: '600000', usd_subsidy: { usd_micros_per_sealed_block: '1000', max_subsidy_per_block: '1', price_max_age_blocks: 100, initial_price_micros: '1' } },
+  }), want);
 });
 
 test('limits: program_state is read when the chain has the section, null when it has not', async () => {

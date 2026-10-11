@@ -30,6 +30,9 @@ import { makeWasmBackend, CANNOT_PROVE_REASON } from '../../../ui/engine/backend
 const CORE_JS = new URL('../../../extension/shared/core/rand_wallet.js', import.meta.url);
 const CORE_WASM = new URL('../../../extension/shared/core/rand_wallet_bg.wasm', import.meta.url);
 const NODE_BIN = process.env.RAND_NODE_BIN || '';
+// A release `rand-node` (fullnode v0.6.8 and later, #94) refuses a Test-profile genesis at `init`
+// and `run` unless told it is a test harness; the child processes inherit this. Older nodes ignore it.
+process.env.RAND_ALLOW_TEST_FRI_PROFILE ??= '1';
 
 /**
  * What chain 18's genesis has beyond the defaults (fullnode v0.6.7): the `gas` section — the
@@ -51,7 +54,10 @@ function chainArgs(nodeBin) {
   // BIND-1: a chain after 19 binds its genesis hash, and this wallet builds every transaction for
   // one that way — so the test chain must say so, or its node expects the chain-id binding.
   const bind = help.includes('--binding-domain') ? ['--binding-domain', '1'] : [];
-  return [...gas, ...auth, ...bind];
+  // Extra `rand-node genesis` arguments, to run the same send on a chain with more sections — say
+  // chain 21's `--fees F.json --multisig M.json` (fullnode v0.8.0). Space-separated; none by default.
+  const extra = (process.env.RAND_E2E_GENESIS_ARGS || '').split(/\s+/).filter(Boolean);
+  return [...gas, ...auth, ...bind, ...extra];
 }
 /** Whether the node cuts a split-authorisation chain (see `chainArgs`). */
 function splitAuthorisation(nodeBin) {
@@ -285,7 +291,10 @@ test('the e2e either runs or says why not', (t) => {
 });
 
 test('with no prover running, a wasm wallet cannot prove and says how to', { skip }, async () => {
-  // Nothing is paired: the wasm sentence, which names the prover option.
+  // Nothing is paired: the wasm sentence, which names the prover option. Since wallet 0.6.8 a
+  // build with no choice made proves through the RandProtocol provers (the public pool), so the
+  // user's "no prover" is chosen first — this test must not reach the public provers.
+  await env.a.backend.prover.useNone();
   const unpaired = await env.a.backend.send.canProve();
   assert.equal(unpaired.ok, false);
   assert.equal(unpaired.reason, CANNOT_PROVE_REASON);
