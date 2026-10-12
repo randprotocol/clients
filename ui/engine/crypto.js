@@ -105,13 +105,36 @@ async function deriveKey(password, salt, iterations, usage) {
   );
 }
 
-/** Returns a vault object safe to persist. */
-export async function encryptSecret(password, plaintext) {
+/**
+ * Returns a vault object safe to persist, over raw bytes (a signer seed). Same format as
+ * `encryptSecret`: a string record is just these bytes UTF-8 encoded.
+ */
+export async function encryptBytes(password, bytes) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveKey(password, salt, ITERATIONS, ['encrypt']);
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext)));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes));
   return { v: VAULT_VERSION, kdf: 'pbkdf2-sha256', iter: ITERATIONS, salt: b64(salt), iv: b64(iv), ct: b64(ct) };
+}
+
+/** Returns a vault object safe to persist. */
+export async function encryptSecret(password, plaintext) {
+  return encryptBytes(password, enc.encode(plaintext));
+}
+
+/**
+ * Opens a byte record into a fresh `Uint8Array` the caller must `fill(0)` when done: a typed array
+ * is the one buffer JavaScript can overwrite (a string cannot be wiped). That is all this offers;
+ * copies the engine makes elsewhere are not tracked. Same refusals as `decryptSecret`.
+ */
+export async function decryptBytes(password, vault) {
+  const iterations = checkVault(vault);
+  const key = await deriveKey(password, unb64(vault.salt), iterations, ['decrypt']);
+  try {
+    return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(vault.iv) }, key, unb64(vault.ct)));
+  } catch {
+    throw new Error('wrong password');
+  }
 }
 
 /**
@@ -124,13 +147,11 @@ export async function encryptSecret(password, plaintext) {
  * the storage it sits in is, and `{"iter": 1}` would otherwise turn the KDF off.
  */
 export async function decryptSecret(password, vault) {
-  const iterations = checkVault(vault);
-  const key = await deriveKey(password, unb64(vault.salt), iterations, ['decrypt']);
+  const bytes = await decryptBytes(password, vault);
   try {
-    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(vault.iv) }, key, unb64(vault.ct));
-    return dec.decode(pt);
-  } catch {
-    throw new Error('wrong password');
+    return dec.decode(bytes);
+  } finally {
+    bytes.fill(0);
   }
 }
 

@@ -93,3 +93,29 @@ test('coreApi rejects with the translated message', async (t) => {
   await assert.rejects(coreApi(core).call('parse_amount', { text: '1.0000000001', decimals: 9 }),
     { message: 'DE: zu viele Nachkommastellen (höchstens 9)' });
 });
+
+test('the private-multisig refusals are translated, values kept', async (t) => {
+  await setLocale('de', { dictionary: {
+    'output {slot} does not open as this account\'s: refusing to sign value it cannot see': 'DE: Ausgabe {slot} öffnet nicht',
+    'this key is not one of the policy\'s signers': 'DE: kein Unterzeichner',
+  } });
+  t.after(() => setLocale('en'));
+  assert.equal(translateCoreError('output 2 does not open as this account\'s: refusing to sign value it cannot see'), 'DE: Ausgabe 2 öffnet nicht');
+  assert.equal(translateCoreError('this key is not one of the policy\'s signers'), 'DE: kein Unterzeichner');
+});
+
+test('coreApi names the five msauth methods', async () => {
+  const seen = [];
+  const api = coreApi({ async call(m, p) { seen.push([m, p]); return true; } });
+  await api.msauthCheck('P', 'Q', ['rand1a']);
+  await api.msauthSign('P', 'Q', 'S');
+  await api.msauthVerifyShare('P', 'Q', '0:aa');
+  await api.msauthSignerImport('K', 'Q');
+  await api.msauthSignerImport('K');
+  await api.msauthPolicyInfo('Q');
+  assert.deepEqual(seen, [
+    ['msauth_check', { proposal: 'P', policy: 'Q', expected_recipients: ['rand1a'] }], ['msauth_sign', { proposal: 'P', policy: 'Q', seed: 'S' }],
+    ['msauth_verify_share', { proposal: 'P', policy: 'Q', share: '0:aa' }], ['msauth_signer_import', { input: 'K', policy: 'Q' }],
+    ['msauth_signer_import', { input: 'K' }], ['msauth_policy_info', { policy: 'Q' }],
+  ]);
+});
