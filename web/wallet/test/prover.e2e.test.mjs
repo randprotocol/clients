@@ -20,49 +20,17 @@
 // the prover's CORS answers, which are tested on the fullnode side.
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer } from 'node:net';
-import { makeWasmBackend, CANNOT_PROVE_REASON } from '../../../ui/engine/backend-wasm.js';
+import { CANNOT_PROVE_REASON } from '../../../ui/engine/backend-wasm.js';
+import {
+  CORE_JS, CORE_WASM, realCore, wallet, freePort, rpc, until, launch, stop, stopAndWait,
+  chainArgs, splitAuthorisation, spendableRand,
+} from './node-harness.mjs';
 
-const CORE_JS = new URL('../../../extension/shared/core/rand_wallet.js', import.meta.url);
-const CORE_WASM = new URL('../../../extension/shared/core/rand_wallet_bg.wasm', import.meta.url);
 const NODE_BIN = process.env.RAND_NODE_BIN || '';
-// A release `rand-node` (fullnode v0.6.8 and later, #94) refuses a Test-profile genesis at `init`
-// and `run` unless told it is a test harness; the child processes inherit this. Older nodes ignore it.
-process.env.RAND_ALLOW_TEST_FRI_PROFILE ??= '1';
-
-/**
- * What chain 18's genesis has beyond the defaults (fullnode v0.6.7): the `gas` section — the
- * prices, the bundle guest's pinned gas (20 479, the one value genesis accepts) and the in-circuit
- * meter (constraint set 8, spec 2026-09-28 §4.2) — and **split authorisation** (v0.6.3): bundle
- * guest v3 with the auth guest, which needs a block cap of at least three proof caps plus a MiB
- * (chain 18's 4 MiB proofs and 20 MiB blocks). So the node holds every transaction this wallet
- * makes to the live rules: the bundle proof to the gas pin, and an auth proof beside it made by
- * the wallet from its spend key. Only when the node knows the flags: an older `rand-node` (a
- * v0.6.2 build, say, passed as RAND_NODE_BIN) cuts a plain chain and the test still runs against
- * it — on a spend-key job, which then needs a prover started with --accept-spend-key.
- */
-function chainArgs(nodeBin) {
-  const help = execFileSync(nodeBin, ['genesis', '--help'], { stdio: 'pipe' }).toString();
-  const gas = help.includes('--bundle-gas-limit') ? ['--gas-price', '100', '--byte-price', '800', '--bundle-gas-limit', '20479'] : [];
-  const auth = help.includes('--auth-guest')
-    ? ['--bundle-guest', 'v3', '--auth-guest', '--max-proof-bytes', '4194304', '--max-block-bytes', '20971520']
-    : [];
-  // BIND-1: a chain after 19 binds its genesis hash, and this wallet builds every transaction for
-  // one that way — so the test chain must say so, or its node expects the chain-id binding.
-  const bind = help.includes('--binding-domain') ? ['--binding-domain', '1'] : [];
-  // Extra `rand-node genesis` arguments, to run the same send on a chain with more sections — say
-  // chain 21's `--fees F.json --multisig M.json` (fullnode v0.8.0). Space-separated; none by default.
-  const extra = (process.env.RAND_E2E_GENESIS_ARGS || '').split(/\s+/).filter(Boolean);
-  return [...gas, ...auth, ...bind, ...extra];
-}
-/** Whether the node cuts a split-authorisation chain (see `chainArgs`). */
-function splitAuthorisation(nodeBin) {
-  return chainArgs(nodeBin).includes('--auth-guest');
-}
 const PROVER_BIN = process.env.RAND_PROVER_BIN || '';
 const PASSWORD = 'an-e2e-password-for-a-real-vault';
 const CHAIN_ID = 21; // the chain this build's core was made for (`version.default_chain_id`)
@@ -78,142 +46,6 @@ const missing = [
 const skip = missing.length
   ? `delegated-proving e2e skipped: ${missing.join('; ')} — run scripts/e2e-prover.sh`
   : false;
-
-// ------------------------------------------------------------------------------ the pieces ----
-
-async function realCore() {
-  const mod = await import(CORE_JS.href);
-  mod.initSync({ module: readFileSync(CORE_WASM) });
-  return {
-    async call(method, params = {}) {
-      const reply = JSON.parse(mod.call(method, JSON.stringify(params)));
-      if (!reply.ok) throw new Error(reply.error);
-      return reply.value;
-    },
-  };
-}
-
-function mapStorage() {
-  const local = new Map();
-  const session = new Map();
-  const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
-  return {
-    local,
-    sessionMap: session,
-    async get(k) { return clone(local.get(k)); },
-    async set(k, v) { local.set(k, clone(v)); },
-    async remove(k) { local.delete(k); },
-    async clear() { local.clear(); session.clear(); },
-    session: {
-      async get(k) { return session.get(k); },
-      async set(k, v) { session.set(k, v); },
-      async remove(k) { session.delete(k); },
-    },
-  };
-}
-
-/** Real `fetch`, with every request's URL and body kept for the key-leak scan. */
-function recordingFetch() {
-  const requests = [];
-  const wrapped = async (url, init = {}) => {
-    requests.push({ url: String(url), body: typeof init.body === 'string' ? init.body : JSON.stringify(init.body ?? null) });
-    return fetch(url, init);
-  };
-  wrapped.requests = requests;
-  return wrapped;
-}
-
-async function wallet(core) {
-  const storage = mapStorage();
-  const fetchImpl = recordingFetch();
-  const backend = makeWasmBackend({
-    core, storage, fetch: fetchImpl,
-    platform: { name: 'node-e2e', openExternal() {}, copy() {} },
-    locks: null, broadcast: null,
-  });
-  return { backend, storage, fetch: fetchImpl };
-}
-
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const srv = createServer();
-    srv.unref();
-    srv.on('error', reject);
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address();
-      srv.close(() => resolve(port));
-    });
-  });
-}
-
-async function rpc(url, method, params = []) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  });
-  const reply = await res.json();
-  if (reply.error) throw Object.assign(new Error(reply.error.message), { code: reply.error.code });
-  return reply.result;
-}
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function until(what, check, { timeoutMs, everyMs = 1000 }) {
-  const deadline = Date.now() + timeoutMs;
-  let last;
-  while (Date.now() < deadline) {
-    try {
-      const value = await check();
-      if (value) return value;
-    } catch (err) {
-      last = err;
-    }
-    await sleep(everyMs);
-  }
-  throw new Error(`timed out waiting for ${what}${last ? ` (last error: ${last.message})` : ''}`);
-}
-
-/** A child process whose output is kept (and printed if the test fails), killed in `after`. */
-function launch(bin, args, label) {
-  const child = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-  child.log = [];
-  const keep = (chunk) => {
-    child.log.push(chunk.toString());
-    if (child.log.length > 400) child.log.splice(0, child.log.length - 400);
-  };
-  child.stdout.on('data', keep);
-  child.stderr.on('data', keep);
-  child.label = label;
-  return child;
-}
-
-function stop(child) {
-  if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
-}
-
-const running = (child) => !!child && child.exitCode === null && child.signalCode === null;
-
-/** Resolves when `child` has exited, or after `ms` — whichever is first; `true` if it exited. */
-function exited(child, ms) {
-  if (!running(child)) return Promise.resolve(true);
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => { child.off('exit', done); resolve(false); }, ms);
-    function done() { clearTimeout(timer); resolve(true); }
-    child.once('exit', done);
-  });
-}
-
-/** SIGTERM, wait up to `ms` for the exit, then SIGKILL and wait for that exit too. */
-async function stopAndWait(child, ms = 10_000) {
-  if (!running(child)) return;
-  stop(child);
-  if (await exited(child, ms)) return;
-  child.kill('SIGKILL');
-  await exited(child, 5_000);
-}
-
-const spendableRand = (scan) => (scan.notes || []).filter((n) => !n.spent && !n.pending && Number(n.asset) === 0);
 
 // ------------------------------------------------------------------------------ the fixture ---
 
