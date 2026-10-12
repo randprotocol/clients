@@ -294,6 +294,8 @@
  *    browser's side panel (Chrome `sidePanel`, Firefox `sidebarAction`). Must be called straight
  *    from the user's click — both browsers open a panel only inside a gesture — and closes the
  *    popup on success. Home offers it only in `mode: 'popup'` and only where it exists.
+ *  - `platform.saveText?({name, text})` → Promise<string|void>. Saves a small non-secret text (a multisig
+ *    share) as a file: a download on web and extension, the Downloads folder on desktop (the path).
  *  - `platform.paste?()` → string. Reads the clipboard, for the send screen's Paste affordance
  *    (a shielded address is pasted, never typed). Optional because reading the clipboard needs a
  *    permission some shells will not have: where it is missing, no Paste button is offered at all
