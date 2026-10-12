@@ -63,12 +63,13 @@ export function verdict({ summary, head, chainId, genesis, url, recipients }) {
   if (summary === null || typeof summary !== 'object') return malformed();
   // Spec §4 step 3: never sign on an unchecked payee (a coordinator could pay its own key).
   const unchecked = () => ({ signable: false, refusal: { code: 'unchecked-recipient', message: t('Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.') } });
-  if (!Array.isArray(summary.lines) || !summary.lines.every((l) => typeof l === 'string')) return malformed();
   if (summary.recipients_checked !== true) return unchecked();
   // A field the rule reads that is missing or malformed fails closed: NaN compares false.
   const outs = summary.outputs;
   const amountOk = (a) => (typeof a === 'string' ? /^\s*\d+\s*$/.test(a) : Number.isSafeInteger(a) && a >= 0);
   const outputOk = (o) => o !== null && typeof o === 'object' && !Array.isArray(o) && typeof o.to_account === 'boolean' && amountOk(o.amount);
+  // The review shows `lines` verbatim: missing, or anything but an array of strings, is malformed.
+  if (!Array.isArray(summary.lines) || !summary.lines.every((l) => typeof l === 'string')) return malformed();
   if (!Array.isArray(outs) || !outs.every(outputOk)) return malformed();
   // No intended payment named at all while something pays out: unchecked, whatever the core said.
   const paying = outs.filter((o) => o.to_account !== true && !isZero(o.amount));

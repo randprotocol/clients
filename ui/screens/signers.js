@@ -252,7 +252,7 @@ registerScreen('signer', {
     function paintReview(r) {
       const s = r.summary;
       // A summary the core did not shape as expected is shown as its refusal and nothing else.
-      if (!r.signable && (s === null || typeof s !== 'object' || !Array.isArray(s.lines) || !Array.isArray(s.outputs))) {
+      if (!r.signable && (s === null || typeof s !== 'object' || !Array.isArray(s.lines) || !s.lines.every((l) => typeof l === 'string') || !Array.isArray(s.outputs))) {
         review.innerHTML = '<div class="card stack" data-role="act"></div>';
         paintRefusal(review.querySelector('[data-role="act"]'), r);
         return;

@@ -167,7 +167,7 @@ test('a file over the cap is refused, not read', async (t) => {
   assert.equal(root.querySelector('textarea[data-role="policy"]').value, '');
 });
 
-for (const [name, mutate] of [['a null summary', () => null], ['non-array outputs and lines', (s) => ({ ...s, outputs: 'x', lines: {} })]]) {
+for (const [name, mutate] of [['a null summary', () => null], ['non-array outputs and lines', (s) => ({ ...s, outputs: 'x', lines: {} })], ['lines that are not all strings', (s) => ({ ...s, lines: ['ok', 1] })]]) {
   test(`${name} shows the malformed-summary refusal, with no Sign button`, async (t) => {
     const b = signerBackend();
     await b.signers.add({ label: 'treasury', policy: 'P', key: 'K', password: 'unlocked-password-1' });
