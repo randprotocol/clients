@@ -65,6 +65,7 @@
 		B1687316C1DC29FF183854FD /* CoreErrors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C582C0C2D633061866B4C6D /* CoreErrors.swift */; };
 		B22E5A9CC6A2ABA4117D4F1B /* SignProposalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 159C1BE693B93053206A69E3 /* SignProposalView.swift */; };
 		BAAEDD51953A336B162E8D48 /* amm-vectors.json in Resources */ = {isa = PBXBuildFile; fileRef = 74FF2ECA6ED57507B4930099 /* amm-vectors.json */; };
+		BB4E77440A6361ED64BE14C3 /* LiveMsauthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35025A8CB3E22690DF9731F2 /* LiveMsauthTests.swift */; };
 		C1BA6A704D0A4F562E6E5A4D /* SignersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AB5F6B1A04E1129ED660E56 /* SignersView.swift */; };
 		C9BD56CBE6E9B189E638A8C9 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = FB4A66E6F62229FCDD173613 /* Localizable.xcstrings */; };
 		CC2E8838F78355A6E1C149F7 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11EDD0B6F2E0ABC54D4BFED /* AuthService.swift */; };
@@ -113,6 +114,7 @@
 		2EFF95F847F91E6F0EED5358 /* ProverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProverTests.swift; sourceTree = "<group>"; };
 		3087D3DBD4C9075C548E170D /* proposal-unbound.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "proposal-unbound.json"; sourceTree = "<group>"; };
 		30E637DC0C8968BADF8C8789 /* proposal-expired.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "proposal-expired.json"; sourceTree = "<group>"; };
+		35025A8CB3E22690DF9731F2 /* LiveMsauthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveMsauthTests.swift; sourceTree = "<group>"; };
 		356ED987BBE644E0AA7E6C60 /* SendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendView.swift; sourceTree = "<group>"; };
 		36C4F0D6B81F1AB901EECC42 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		39129BEB2E8214E3A8C0E574 /* RandCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RandCore.swift; sourceTree = "<group>"; };
@@ -323,6 +325,7 @@
 				C54A4FC4B625FCA03BD1809F /* FakeSignerSecrets.swift */,
 				06C8AADDBA61C258B1C39CD8 /* InvokeFlowTests.swift */,
 				E39BB6F1188AB35E970520CF /* LinkHandoffTests.swift */,
+				35025A8CB3E22690DF9731F2 /* LiveMsauthTests.swift */,
 				511FB7F3639F8196E229371D /* LiveSendTests.swift */,
 				EFFC1D783C50E7F748573284 /* LiveSwapTests.swift */,
 				79984AD66809D63D1FFF9B5E /* MsauthTests.swift */,
@@ -586,6 +589,7 @@
 				95D365B9F01F58B20A5A37CE /* FakeSignerSecrets.swift in Sources */,
 				ACF8927BE6ED236F1EB1BD0A /* InvokeFlowTests.swift in Sources */,
 				71628504EFADE7B1A8B2E0A7 /* LinkHandoffTests.swift in Sources */,
+				BB4E77440A6361ED64BE14C3 /* LiveMsauthTests.swift in Sources */,
 				FC6006023AFDB0DE7A54215D /* LiveSendTests.swift in Sources */,
 				39ECD2E0F8DAC40EE6BBE9D3 /* LiveSwapTests.swift in Sources */,
 				6E48B8F2B23461EE61521E90 /* MsauthTests.swift in Sources */,
