@@ -381,6 +381,22 @@ final class MsauthTests: XCTestCase {
         XCTAssertEqual(secrets.promptedReads, ["msauth.\(p.id).seed"])
     }
 
+    func testACancelledSignStopsBeforeTheDevicePrompt() async throws {
+        let core = FakeCore(); core.summary = summary()
+        let (m, secrets, p) = try signing(core, FakeNode())
+        let task = Task { () -> Bool in
+            withUnsafeCurrentTask { $0?.cancel() }        // the screen was left
+            do {
+                _ = try await m.sign(id: p.id, proposal: "P", expectedRecipients: ["rand1payee:5"], reason: "sign")
+                return false
+            } catch is CancellationError { return true } catch { return false }
+        }
+        let stopped = await task.value
+        XCTAssertTrue(stopped)
+        XCTAssertEqual(secrets.promptedReads, [], "no Face ID prompt")
+        XCTAssertFalse(core.calls.contains { $0.0 == "sign" }, "msauth_sign never ran")
+    }
+
     func testTheRuleIsReRunAfterDeviceAuthAndARefusalThereSignsNothing() async throws {
         let core = FakeCore(); core.summary = summary()
         let node = FakeNode(); node.heads = [100, 190]

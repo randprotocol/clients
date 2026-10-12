@@ -173,15 +173,19 @@ struct CheckSession {
         return true
     }
     /// The proposal text was edited: the review no longer describes it, and a check out is dropped.
-    mutating func proposalEdited() {
-        latest += 1; inFlight = false; model = nil; reviewedProposal = nil; typed = ""
+    /// A text other than the one the payments were asked for also drops them, so rows and the
+    /// non-RAND hint never come from a different proposal.
+    mutating func proposalEdited(to text: String) {
+        latest += 1; inFlight = false; model = nil; reviewedProposal = nil; typed = ""; error = nil
+        if text != sentProposal { gate.reset(); lastSummary = nil; sentProposal = nil }
     }
     /// A signature's refusal replaces the verdict on the same summary.
     mutating func refused(_ verdict: MsauthVerdict) {
         if let m = model { model = SignProposalModel(summary: m.summary, verdict: verdict) }
     }
     mutating func clearError() { error = nil }
-    mutating func close() { self = CheckSession() }
+    /// The sequence keeps rising, so a check that lands after the screen was left is ignored.
+    mutating func close() { let n = latest + 1; self = CheckSession(); latest = n }
 
     /// Sign is armed: signable, the last four typed, the payments unchanged since the check, and the
     /// editor still holds the text that was checked.
@@ -254,7 +258,7 @@ struct SignProposalView: View {
                 Text(String(localized: "\(String(profile.threshold)) of \(String(profile.signers)) · signer \(String(profile.index))"))
             }
             Section("Proposal (proposal.json)") {
-                TextEditor(text: $proposal).font(.mono).frame(minHeight: 80).autocorrectionDisabled().textInputAutocapitalization(.never)
+                TextEditor(text: $proposal).font(.mono).disabled(signing).frame(minHeight: 80).autocorrectionDisabled().textInputAutocapitalization(.never)
                 Button("Open file") { importing = true }
                 Button(checking ? "Checking…" : "Check proposal") { startCheck() }.disabled(checking || signing || proposal.isEmpty)
                 if let e = error ?? session.error { Text(verbatim: e).foregroundColor(.red) }
@@ -276,7 +280,7 @@ struct SignProposalView: View {
         .fileExporter(isPresented: $exporting, document: ShareDocument(text: share?.share ?? ""), contentType: .plainText,
                       defaultFilename: "share-\(share?.index ?? 0)") { _ in }
         // The review describes the text that was checked: editing the text drops it until a new check.
-        .onChange(of: proposal) { _ in session.proposalEdited(); share = nil }
+        .onChange(of: proposal) { text in session.proposalEdited(to: text); share = nil }
         // The proposal carries the account's witness: it is never stored and goes with the screen.
         .onDisappear {
             signTask?.cancel(); signTask = nil

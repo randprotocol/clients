@@ -357,9 +357,12 @@ struct MsauthSigning {
         let summary = try core.check(proposal: text, policy: policy, expectedRecipients: payees)
         let first = await judge(summary, payees)
         guard first.isSignable else { throw MsauthRefusal(verdict: first) }
+        // Leaving the screen cancels this task: stop before the Face ID prompt and before signing.
+        try Task.checkCancellation()
         let share = try await store.withSeedAsync(id, reason: reason) { seed in
             let again = await judge(summary, payees)
             guard again.isSignable else { throw MsauthRefusal(verdict: again) }
+            try Task.checkCancellation()
             return try core.sign(proposal: text, policy: policy, seed: seed, expectedRecipients: payees)
         }
         guard let head = share.split(separator: ":").first, let index = Int(head.trimmingCharacters(in: .whitespaces)) else {

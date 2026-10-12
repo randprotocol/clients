@@ -234,7 +234,7 @@ final class SignScreenTests: XCTestCase {
         XCTAssertTrue(c.canSign(editor: "A"))
         XCTAssertEqual(c.reviewedProposal, "A", "what Sign signs is the checked text")
         // Paste B over A: the review is dropped, and Sign is off even though A's lines were shown.
-        c.proposalEdited()
+        c.proposalEdited(to: "B")
         XCTAssertFalse(c.canSign(editor: "B"))
         XCTAssertNil(c.model)
         XCTAssertNil(c.reviewedProposal)
@@ -266,7 +266,7 @@ final class SignScreenTests: XCTestCase {
         var c = CheckSession()
         let old = c.begin(proposal: "A")
         XCTAssertTrue(c.inFlight)
-        c.proposalEdited()                          // the text moved on: the old check is superseded
+        c.proposalEdited(to: "B")                  // the text moved on: the old check is superseded
         XCTAssertFalse(c.inFlight)
         let new = c.begin(proposal: "B")
         XCTAssertTrue(c.land(new, signable()))
@@ -297,11 +297,52 @@ final class SignScreenTests: XCTestCase {
 
     func testAStalePaymentEditThroughTheSessionDisarmsSign() {
         var c = CheckSession()
+        c.land(c.begin(proposal: "A"), signable())          // the first check of this proposal
         c.gate.rows[0] = PaymentRow(addr: "a", amount: "5"); c.gate.edited()
-        c.gate.adopt(entries: ["a:5"])
+        XCTAssertTrue(c.gate.stale)
+        c.gate.adopt(entries: ["a:5"])                      // Check payments
         c.land(c.begin(proposal: "A"), signable()); c.typed = "aak3"
+        XCTAssertEqual(c.gate.payees, ["a:5"], "the rows survived the second begin")
+        XCTAssertFalse(c.gate.stale)
         XCTAssertTrue(c.canSign(editor: "A"))
         c.gate.rows[0].amount = "6"; c.gate.edited()
         XCTAssertFalse(c.canSign(editor: "A"))
+        // Retry (the top Check) resends the old payments and cannot re-arm it.
+        c.land(c.begin(proposal: "A"), signable()); c.typed = "aak3"
+        XCTAssertFalse(c.canSign(editor: "A"))
+    }
+
+    func testEditingToAnotherProposalDropsThePaymentsAndTheOldError() {
+        var c = CheckSession()
+        c.land(c.begin(proposal: "A"), signable([rand5, token]))
+        c.gate.rows[0] = PaymentRow(addr: "a", amount: "5"); c.gate.edited(); c.gate.adopt(entries: ["a:5"])
+        c.fail(c.begin(proposal: "A"), message: "bad payee")
+        XCTAssertEqual(c.error, "bad payee")
+        c.proposalEdited(to: "A!")
+        XCTAssertNil(c.error)
+        XCTAssertNil(c.lastSummary)
+        XCTAssertEqual(c.gate.rows, [PaymentRow()])
+        XCTAssertEqual(c.gate.payees, [])
+        // Typing back the checked text keeps the payments (the text is the one they were asked for).
+        var d = CheckSession()
+        d.land(d.begin(proposal: "A"), signable([rand5, token]))
+        d.proposalEdited(to: "A")
+        XCTAssertNotNil(d.lastSummary)
+    }
+
+    func testAnOldCheckLandingAfterTheScreenWasLeftIsIgnored() {
+        var c = CheckSession()
+        let old = c.begin(proposal: "A")
+        c.close()
+        let fresh = c.begin(proposal: "A")
+        XCTAssertNotEqual(old.id, fresh.id, "the counter did not restart")
+        XCTAssertFalse(c.land(old, signable()))
+        XCTAssertNil(c.model)
+        XCTAssertTrue(c.land(fresh, signable()))
+        // Even straight after close, with no new request, the old ticket is dead.
+        var d = CheckSession()
+        let t = d.begin(proposal: "A"); d.close()
+        XCTAssertFalse(d.land(t, signable()))
+        XCTAssertFalse(d.fail(t, message: "x"))
     }
 }
