@@ -93,6 +93,23 @@ public final class CoreErrors {
         e(R.string.core_err_payout_zero, "a payout of zero creates nothing; the chain refuses it");
         e(R.string.core_err_cells_ascending, "cell keys must be strictly ascending");
 
+        // ---- private multisig signing (msauth_*, fullnode randprotocol-msig; ui/engine/core-errors.js) ----
+        e(R.string.core_err_msauth_tx_binding, "the transaction does not hash to the proposal's binding");
+        e(R.string.core_err_msauth_signing_message, "the proposal's signing_message is not its binding's");
+        e(R.string.core_err_msauth_auth_commit, "the proposal's auth_commit is not this policy's account");
+        e(R.string.core_err_msauth_expected_digest, "the proposal's expected digest is not its bundle's");
+        e(R.string.core_err_msauth_no_bundle, "the transaction carries no bundle");
+        e(R.string.core_err_msauth_action, "the transaction carries an action; a private multisig proposal is a payment from its bundle alone");
+        e(R.string.core_err_msauth_witness_unchecked, "the witness's value cannot be checked: its nk or salt is not this proposal's");
+        e(R.string.core_err_msauth_not_signer, "this key is not one of the policy's signers");
+        e(R.string.core_err_msauth_share_shape, "a share is index:hex");
+        e(R.string.core_err_msauth_signer_key_shape, "a signer key is a rand-node keygen file or 64 hex characters");
+        e(R.string.core_err_msauth_seed_shape, "a signer seed is 64 hex characters");
+        e(R.string.core_err_msauth_expected_list, "expected_recipients must be a list of addresses");
+        e(R.string.core_err_msauth_key_file_pk, "the key file's public_key is not the one its seed derives");
+        e(R.string.core_err_msauth_key_file_address, "the key file's address is not the one its seed derives");
+        e(R.string.core_err_msauth_no_payee, "no expected recipient given: the payee was NOT checked");
+
         // ---- composed: a prefix the core adds to another error ----
         p("^the RAND fee: (.+)$", R.string.core_err_rand_fee, "the RAND fee: %1$s", 1);
         p("^recipient: (.+)$", R.string.core_err_recipient, "recipient: %1$s", 1);
@@ -133,6 +150,18 @@ public final class CoreErrors {
                 R.string.core_err_no_bundle_guest, "this build does not carry the chain's bundle guest %1$s: update the wallet");
         p("^this chain's auth guest is ([0-9a-f]+); this wallet carries ([0-9a-f]+) — refusing to prove a v3 bundle it cannot authorise; update the wallet$",
                 R.string.core_err_auth_guest, "this chain's auth guest is %1$s; this wallet carries %2$s — refusing to prove a v3 bundle it cannot authorise; update the wallet");
+        // ---- private multisig signing ----
+        p("^this proposal is for another policy: it names ([0-9a-f]+), this policy is ([0-9a-f]+)$", R.string.core_err_msauth_other_policy, "this proposal is for another policy: it names %1$s, this policy is %2$s");
+        p("^output (\\d+) does not open as this account's: refusing to sign value it cannot see$", R.string.core_err_msauth_output_unopened, "output %1$s does not open as this account's: refusing to sign value it cannot see");
+        p("^the witness's value does not match the transaction: input (\\d+) does not nullify to the bundle's nullifier$", R.string.core_err_msauth_witness_nullifier, "the witness's value does not match the transaction: input %1$s does not nullify to the bundle's nullifier");
+        p("^the witness's value does not match the outputs: asset (\\d+) has (\\d+) in and (\\d+) out with the fee and burns$", R.string.core_err_msauth_witness_balance, "the witness's value does not match the outputs: asset %1$s has %2$s in and %3$s out with the fee and burns");
+        p("^the proposal expires at (\\d+), outside its bundle's window \\((\\d+), (\\d+)\\]$", R.string.core_err_msauth_expiry_window, "the proposal expires at %1$s, outside its bundle's window (%2$s, %3$s]");
+        p("^the transaction is for chain (\\d+), the proposal says chain (\\d+)$", R.string.core_err_msauth_tx_chain, "the transaction is for chain %1$s, the proposal says chain %2$s");
+        p("^signer (\\d+)'s signature does not verify over this proposal$", R.string.core_err_msauth_share_invalid, "signer %1$s's signature does not verify over this proposal");
+        p("^signer (\\d+) is not in this policy \\(it has (\\d+) signers\\)$", R.string.core_err_msauth_signer_range, "signer %1$s is not in this policy (it has %2$s signers)");
+        p("^expected recipient (\\S+): (.+)$", R.string.core_err_msauth_expected_recipient, "expected recipient %1$s: %2$s", 2);
+        p("^the policy does not parse: (.+)$", R.string.core_err_msauth_policy_parse, "the policy does not parse: %1$s");
+        p("^the proposal does not parse: (.+)$", R.string.core_err_msauth_proposal_parse, "the proposal does not parse: %1$s");
         // ---- proving on this device ----
         p("^proving failed: (.+)$", R.string.core_err_proving_failed, "proving failed: %1$s");
         p("^proving the spend authorisation failed: (.+)$", R.string.core_err_proving_auth_failed, "proving the spend authorisation failed: %1$s");
@@ -175,6 +204,14 @@ public final class CoreErrors {
             return L10n.t(p.id, p.english, args);
         }
         return message;
+    }
+
+    /** Whether {@code message} is one this table maps (exactly or by pattern). */
+    static boolean knows(String message) {
+        if (message == null) return false;
+        if (EXACT.containsKey(message)) return true;
+        for (Patterned p : PATTERNED) if (p.re.matcher(message).matches()) return true;
+        return false;
     }
 
     /** {@code e}'s message for a screen: a core message translated, anything else as it is (its class name when it has none). */

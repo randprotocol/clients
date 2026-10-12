@@ -6,15 +6,22 @@ import android.content.SharedPreferences;
 import androidx.security.crypto.EncryptedSharedPreferences;
 import androidx.security.crypto.MasterKey;
 
+import org.randprotocol.wallet.R;
+import org.randprotocol.wallet.util.L10n;
+
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * The spend key at rest: an {@link EncryptedSharedPreferences} whose AES-GCM key lives in the
  * Android Keystore. Beside it, and nothing else, a paired prover's record (delegated proving:
  * the token AND the key and URL a job is sealed and sent to, and whether the link marked the
  * prover as the user's own — the one copy a send decides by) — the viewing key and the address
- * are derived from the spend key on demand by the core.
+ * are derived from the spend key on demand by the core. And the private-multisig signer profiles
+ * ({@link SignerProfiles}, every name {@code msauth.…}): a policy and a seed sealed by the
+ * profile's own per-use Keystore key ({@link KeystoreSeedCipher}).
  */
 public final class KeyVault {
     private static final String FILE = "rand_wallet_vault";
@@ -56,8 +63,46 @@ public final class KeyVault {
         prefs.edit().putString(KEY_SPEND, spendKeyHex).commit();
     }
 
+    /**
+     * Removes the wallet: first every signer profile and every profile's Keystore key, swept by
+     * name (also those the index no longer lists); then the spend key and the prover's record.
+     * When the sweep fails, nothing else is removed and IllegalStateException says so — the
+     * wallet is kept whole and a retry finds what is left (never a half-wipe).
+     */
     public void erase() {
+        try {
+            SignerProfiles.eraseAll(signerStore(), KeystoreSeedCipher.keystoreAliases());
+        } catch (Exception e) {
+            throw new IllegalStateException(L10n.t(R.string.msauth_forget_failed,
+                    "The signer keys on this device could not all be removed, so the wallet was kept. Try again."), e);
+        }
         prefs.edit().remove(KEY_SPEND).remove(KEY_PROVER_PAIRING).remove(KEY_LEGACY_PROVER_TOKEN).commit();
+    }
+
+    /** The signer profiles' storage, in this same encrypted file (spec §3); a write that does not land throws. */
+    public SignerProfiles.KeyValue signerStore() {
+        return new SignerProfiles.KeyValue() {
+            @Override public String get(String k) {
+                return prefs.getString(k, null);
+            }
+
+            @Override public void put(String k, String v) {
+                if (!prefs.edit().putString(k, v).commit()) throw new IllegalStateException("the key vault could not be written");
+            }
+
+            @Override public void remove(String k) {
+                if (!prefs.edit().remove(k).commit()) throw new IllegalStateException("the key vault could not be written");
+            }
+
+            @Override public Set<String> keys() {
+                return new HashSet<>(prefs.getAll().keySet());
+            }
+        };
+    }
+
+    /** The signer profiles, removing a profile's Keystore key with it. */
+    public SignerProfiles signerProfiles() {
+        return new SignerProfiles(signerStore(), KeystoreSeedCipher.keystoreAliases());
     }
 
     /**
