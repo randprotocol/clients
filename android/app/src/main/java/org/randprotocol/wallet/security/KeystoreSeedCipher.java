@@ -5,6 +5,7 @@ import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 
+import androidx.annotation.ChecksSdkIntAtLeast;
 import androidx.biometric.BiometricManager;
 
 import org.randprotocol.wallet.R;
@@ -43,6 +44,7 @@ public final class KeystoreSeedCipher {
     }
 
     /** Whether the device credential can authorise a per-use key on {@code sdk}. */
+    @ChecksSdkIntAtLeast(parameter = 0)
     public static boolean credentialPerUse(int sdk) {
         return sdk >= Build.VERSION_CODES.R;
     }
@@ -80,7 +82,7 @@ public final class KeystoreSeedCipher {
                 .setKeySize(256)
                 .setUserAuthenticationRequired(true)
                 .setInvalidatedByBiometricEnrollment(true);
-        if (credentialPerUse(Build.VERSION.SDK_INT)) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) { // credentialPerUse, inlined for lint
             b.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG | KeyProperties.AUTH_DEVICE_CREDENTIAL);
         } else {
             b.setUserAuthenticationValidityDurationSeconds(-1);

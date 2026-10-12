@@ -143,7 +143,7 @@ public class SignFlowTest {
     @Test public void theListIsJudgedAsGiven() throws Exception {
         JSONObject s = summary();
         assertEquals("no payee named while one is paid", Verdict.UNCHECKED_RECIPIENT, v(s, 2007L, Collections.emptyList()));
-        for (String blank : new String[] {"", "   ", ":10", " :10", "﻿"}) {
+        for (String blank : new String[] {"", "   ", ":10", " :10", "\uFEFF"}) {
             List<String> l = payees();
             l.add(blank);
             assertEquals("entry '" + blank + "'", Verdict.UNCHECKED_RECIPIENT, v(s, 2007L, l));
@@ -282,7 +282,7 @@ public class SignFlowTest {
         assertEquals(fixture().getJSONArray("lines_expecting_recipient").getString(2), SignFlow.lines(summary()).get(2));
         assertEquals("chain 7 · genesis " + GENESIS, SignFlow.lines(summary()).get(0));
         assertTrue(SignFlow.lines(new JSONObject()).isEmpty());
-        assertEquals("{}", SignFlow.clean("﻿ {}\r\n"));
+        assertEquals("{}", SignFlow.clean("\uFEFF {}\r\n"));
         assertEquals("", SignFlow.clean(null));
         assertEquals(List.of("a:1", ""), SignFlow.payees(Arrays.asList(" a:1\n", null)));
     }
@@ -406,7 +406,7 @@ public class SignFlowTest {
         FakeNode node = new FakeNode(2000L);
         FakeSeeds seeds = new FakeSeeds();
         List<String> typed = new ArrayList<>(List.of(" " + recipient() + ":10\n"));
-        SignFlow.Share share = flow(core, node, seeds).sign("a1", "﻿" + PROPOSAL + "\n", typed, null);
+        SignFlow.Share share = flow(core, node, seeds).sign("a1", "\uFEFF" + PROPOSAL + "\n", typed, null);
         assertEquals(SHARE, share.share);
         assertEquals(2, share.index);
         assertEquals(List.of("check " + PROPOSAL + " " + POLICY, "sign " + PROPOSAL + " " + POLICY), core.calls);
@@ -577,6 +577,68 @@ public class SignFlowTest {
             assertEquals("msauth_sign returned no share", e.getMessage());
         }
         assertZeroed(seeds.handed);
+    }
+
+    @Test public void theNodesHeadAndChainAreReadStrictly() throws Exception {
+        assertEquals(2000L, SignFlow.headHeightOf(new JSONObject().put("height", 2000).put("hash", "ab")));
+        assertEquals(MAX_SAFE, SignFlow.headHeightOf(new JSONObject().put("height", MAX_SAFE)));
+        assertEquals(0L, SignFlow.headHeightOf(new JSONObject().put("height", 0)));
+        Object[] badHeads = {
+            new JSONObject(), new JSONObject().put("height", JSONObject.NULL), new JSONObject().put("height", "2000"),
+            new JSONObject().put("height", 2000.9), new JSONObject().put("height", -1), new JSONObject().put("height", MAX_SAFE + 1),
+            new JSONObject().put("height", true), null, "2000", new JSONArray(),
+        };
+        for (Object bad : badHeads) {
+            try {
+                SignFlow.headHeightOf(bad);
+                fail("head " + bad);
+            } catch (IllegalStateException expected) {
+                // no height: judged as no node
+            }
+        }
+        assertEquals(21L, SignFlow.chainIdOf(21));
+        for (Object bad : new Object[] {21.5, "21", -1, MAX_SAFE + 1, null, JSONObject.NULL, true}) {
+            try {
+                SignFlow.chainIdOf(bad);
+                fail("chain " + bad);
+            } catch (IllegalStateException expected) {
+                // not a chain id
+            }
+        }
+    }
+
+    @Test public void anRpcNodeWithAMalformedHeadIsNoNode() throws Exception {
+        for (Object height : new Object[] {null, JSONObject.NULL, "2000", 2000.9}) {
+            JSONObject head = new JSONObject().put("hash", "ab");
+            if (height != null) head.put("height", height);
+            org.randprotocol.wallet.rpc.RpcClient rpc = new org.randprotocol.wallet.rpc.RpcClient("https://rpc.example") {
+                @Override public Object call(String method, JSONArray params) {
+                    switch (method) {
+                        case "rand_chainId": return 7;
+                        case "rand_getHead": return head;
+                        case "rand_getGenesisHash": return GENESIS;
+                        default: throw new IllegalArgumentException(method);
+                    }
+                }
+            };
+            SignFlow.Check c = new SignFlow(new Profiles().store, new FakeCore(summary()), SignFlow.node(rpc), 7, new FakeSeeds()).check("a1", PROPOSAL, payees());
+            assertEquals("height " + height, Verdict.NO_NODE, c.judgement.verdict);
+        }
+        JSONObject ok = new JSONObject().put("height", 2000);
+        org.randprotocol.wallet.rpc.RpcClient fractionalChain = new org.randprotocol.wallet.rpc.RpcClient("https://rpc.example") {
+            @Override public Object call(String method, JSONArray params) {
+                return method.equals("rand_chainId") ? (Object) 7.5 : method.equals("rand_getHead") ? ok : GENESIS;
+            }
+        };
+        assertEquals(Verdict.NO_NODE, new SignFlow(new Profiles().store, new FakeCore(summary()), SignFlow.node(fractionalChain), 7, new FakeSeeds())
+                .check("a1", PROPOSAL, payees()).judgement.verdict);
+        org.randprotocol.wallet.rpc.RpcClient good = new org.randprotocol.wallet.rpc.RpcClient("https://rpc.example") {
+            @Override public Object call(String method, JSONArray params) {
+                return method.equals("rand_chainId") ? (Object) 7 : method.equals("rand_getHead") ? ok : GENESIS;
+            }
+        };
+        assertEquals(Verdict.SIGNABLE, new SignFlow(new Profiles().store, new FakeCore(summary()), SignFlow.node(good), 7, new FakeSeeds())
+                .check("a1", PROPOSAL, payees()).judgement.verdict);
     }
 
     @Test public void verifyShareCleansAndAsksTheCore() throws Exception {

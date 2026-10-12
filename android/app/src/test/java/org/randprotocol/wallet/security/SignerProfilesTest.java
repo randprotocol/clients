@@ -12,10 +12,8 @@ import androidx.biometric.BiometricManager;
 
 import org.junit.Test;
 
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -328,7 +326,23 @@ public class SignerProfilesTest {
         } catch (java.util.concurrent.CancellationException expected) {
             // no seed
         }
-        assertEquals("seed bytes are not text", 32, new String(seed, StandardCharsets.ISO_8859_1).length());
-        assertFalse(Arrays.equals(new byte[32], seed));
+        // A sealed seed that does not open under its key (another key, a tampered ct): no seed.
+        SignerProfiles other = new SignerProfiles(new MapKv());
+        Cipher enc2 = Cipher.getInstance("AES/GCM/NoPadding");
+        KeyGenerator g2 = KeyGenerator.getInstance("AES");
+        g2.init(256);
+        enc2.init(Cipher.ENCRYPT_MODE, g2.generateKey());
+        other.add(profile("a1", "treasury", 2), "{policy}", KeystoreSeedCipher.seal(enc2.getIV(), enc2.doFinal(seed)));
+        KeystoreSeedSource wrongKey = new KeystoreSeedSource(other, (id, iv) -> {
+            Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
+            c.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, iv));
+            return c;
+        }, cipher -> cipher);
+        try {
+            wrongKey.seed("a1");
+            fail();
+        } catch (javax.crypto.AEADBadTagException expected) {
+            // the tag does not verify
+        }
     }
 }

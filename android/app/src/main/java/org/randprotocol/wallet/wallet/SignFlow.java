@@ -197,7 +197,7 @@ public final class SignFlow {
     /** A pasted or opened file: a leading byte-order mark dropped, whitespace trimmed. */
     public static String clean(String s) {
         String t = s == null ? "" : s;
-        if (t.startsWith("﻿")) t = t.substring(1);
+        if (t.startsWith("\uFEFF")) t = t.substring(1);
         return jsTrim(t);
     }
 
@@ -317,7 +317,7 @@ public final class SignFlow {
 
     private static boolean jsSpace(char c) {
         if (c >= '\u001C' && c <= '\u001F') return false; // Java's whitespace, not JavaScript's
-        return Character.isWhitespace(c) || Character.isSpaceChar(c) || c == '﻿';
+        return Character.isWhitespace(c) || Character.isSpaceChar(c) || c == '\uFEFF';
     }
 
     // ------------------------------------------------------------------ the order a signature is made in
@@ -333,18 +333,37 @@ public final class SignFlow {
         String genesisHash() throws Exception;
     }
 
+    /**
+     * {@code rand_getHead}'s height, read strictly: a non-negative integer ≤ 2^53-1, never a default.
+     * Anything else (missing, null, text, a fraction) throws, which the flow judges as no node — a
+     * height read as 0 would pass both the node check and the expiry margin.
+     */
+    public static long headHeightOf(Object head) {
+        Long h = head instanceof JSONObject ? uint(((JSONObject) head).opt("height")) : null;
+        if (h == null) throw new IllegalStateException("the node's head has no height");
+        return h;
+    }
+
+    /** {@code rand_chainId}'s reply, read strictly as {@link #headHeightOf} reads a height. */
+    public static long chainIdOf(Object reply) {
+        Long c = uint(reply);
+        if (c == null) throw new IllegalStateException("the node's chain id is not a chain id");
+        return c;
+    }
+
     public static Node node(RpcClient rpc) {
         return new Node() {
             @Override public String url() {
                 return rpc.url();
             }
 
+            // Not rpc.chainId() / rpc.headHeight(): those truncate a fraction and read a missing height as 0.
             @Override public long chainId() throws Exception {
-                return rpc.chainId();
+                return chainIdOf(rpc.call("rand_chainId", null));
             }
 
             @Override public long headHeight() throws Exception {
-                return rpc.headHeight();
+                return headHeightOf(rpc.call("rand_getHead", null));
             }
 
             @Override public String genesisHash() throws Exception {
