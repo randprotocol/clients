@@ -13,6 +13,8 @@ name = "wallet_core"
 randprotocol-core = { workspace = true }
 randprotocol-zkvm = { workspace = true }
 randprotocol-prover = { workspace = true }
+# The private multisig signer checks (summary, signing message, share) every app runs.
+randprotocol-msig = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 hex = { workspace = true }

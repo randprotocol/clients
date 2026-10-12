@@ -1174,6 +1174,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dilithium-core"
+version = "0.1.0"
+
+[[package]]
 name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3932,6 +3936,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "randprotocol-msig"
+version = "0.7.1"
+dependencies = [
+ "getrandom 0.2.17",
+ "getrandom 0.4.3",
+ "hex",
+ "randprotocol-core",
+ "randprotocol-zkvm",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "randprotocol-prover"
 version = "0.7.1"
 dependencies = [
@@ -3967,6 +3985,7 @@ version = "0.7.1"
 dependencies = [
  "chacha20",
  "chacha20poly1305",
+ "dilithium-core",
  "evm-core",
  "ml-kem",
  "p3-air",
@@ -5736,6 +5755,7 @@ dependencies = [
  "getrandom 0.4.3",
  "hex",
  "randprotocol-core",
+ "randprotocol-msig",
  "randprotocol-prover",
  "randprotocol-zkvm",
  "serde",
