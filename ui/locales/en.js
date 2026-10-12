@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1032 strings.
+// 1036 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{chain} · {genesis}": "{chain} · {genesis}",
@@ -93,6 +93,7 @@ export default {
   "a share is index:hex": "a share is index:hex",
   "A shielded wallet for the Rand network. Balances and history stay private — every send is proved on this device.": "A shielded wallet for the Rand network. Balances and history stay private — every send is proved on this device.",
   "a signer key is a rand-node keygen file or 64 hex characters": "a signer key is a rand-node keygen file or 64 hex characters",
+  "a signer label is 1-64 characters": "a signer label is 1-64 characters",
   "a signer seed is 64 hex characters": "a signer seed is 64 hex characters",
   "A site": "A site",
   "a spend key is 64 hex characters, or a wallet.key.json": "a spend key is 64 hex characters, or a wallet.key.json",
@@ -401,6 +402,7 @@ export default {
   "No RAND to send yet": "No RAND to send yet",
   "No registry assets": "No registry assets",
   "no reply": "no reply",
+  "No such signer profile.": "No such signer profile.",
   "No transaction or block matches that.": "No transaction or block matches that.",
   "no wallet on this device": "no wallet on this device",
   "None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.": "None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.",
@@ -804,6 +806,7 @@ export default {
   "The request was not approved in Rand Wallet.": "The request was not approved in Rand Wallet.",
   "The rescan could not be started.": "The rescan could not be started.",
   "The rescan did not finish": "The rescan did not finish",
+  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key",
   "The scan was cancelled.": "The scan was cancelled.",
   "The side panel could not be opened.": "The side panel could not be opened.",
   "The site sent an invoke this wallet cannot read: {reason}.": "The site sent an invoke this wallet cannot read: {reason}.",
@@ -908,6 +911,7 @@ export default {
   "This removes the wallet from this device. You will need your recovery key to restore it.": "This removes the wallet from this device. You will need your recovery key to restore it.",
   "This screen could not be shown.": "This screen could not be shown.",
   "This screen ships in a later task. Your wallet is unlocked and ready.": "This screen ships in a later task. Your wallet is unlocked and ready.",
+  "this signer is already saved as {label}": "this signer is already saved as {label}",
   "This tab is showing what it has so far, and will refresh when that finishes.": "This tab is showing what it has so far, and will refresh when that finishes.",
   "This takes a few minutes; keep this window open.": "This takes a few minutes; keep this window open.",
   "This transaction was not found.": "This transaction was not found.",
