@@ -5,7 +5,9 @@
 use crate::Result;
 use randprotocol_core::notes::word8_to_hex;
 use randprotocol_msig::{self as msig, Policy, Proposal};
+use randprotocol_core::Keypair;
 use serde_json::{json, Value};
+use zeroize::Zeroizing;
 
 fn err(e: msig::MsigError) -> String {
     e.to_string()
@@ -101,6 +103,71 @@ pub fn policy_info(policy: &str) -> Result<Value> {
         "address": p.address().to_string(),
         "policy_hash": word8_to_hex(&p.policy_hash()),
     }))
+}
+
+/// What a signer key looks like, when the input is neither.
+pub const SIGNER_KEY_SHAPE: &str = "a signer key is a rand-node keygen file or 64 hex characters";
+
+/// `msauth_sign`'s refusal when no payee was named but the proposal moves value to someone: the
+/// core never makes a share whose payee nobody checked, whatever the caller did before.
+pub const NO_PAYEE_NAMED: &str = "no expected recipient given: the payee was NOT checked";
+
+const SEED_SHAPE: &str = "a signer seed is 64 hex characters";
+
+/// A seed in a buffer that is wiped when dropped. The error never repeats the input.
+fn seed_from_hex(s: &str) -> Result<Zeroizing<[u8; 32]>> {
+    let mut seed = Zeroizing::new([0u8; 32]);
+    hex::decode_to_slice(clean(s), &mut seed[..]).map_err(|_| SEED_SHAPE.to_string())?;
+    Ok(seed)
+}
+
+/// A `rand-node keygen` file (`{seed, address, public_key}`) or a bare 64-hex seed: the seed, the
+/// key it derives, and — given the policy — this key's position in it (refused if absent). A file
+/// whose `public_key` or `address` is not its seed's is refused. No error repeats the seed.
+pub fn signer_import(input: &str, policy: Option<&str>) -> Result<Value> {
+    let input = clean(input);
+    let (seed, claimed_pk, claimed_address) = if input.starts_with('{') {
+        let v: Value = serde_json::from_str(input).map_err(|_| SIGNER_KEY_SHAPE.to_string())?;
+        let s = v["seed"].as_str().ok_or(SIGNER_KEY_SHAPE)?;
+        (seed_from_hex(s).map_err(|_| SIGNER_KEY_SHAPE.to_string())?, v["public_key"].as_str().map(str::to_owned), v["address"].as_str().map(str::to_owned))
+    } else {
+        (seed_from_hex(input).map_err(|_| SIGNER_KEY_SHAPE.to_string())?, None, None)
+    };
+    let kp = Keypair::from_seed(*seed).map_err(|e| format!("the signer seed: {e}"))?;
+    let public_key = kp.public_key().to_hex();
+    if claimed_pk.is_some_and(|c| !c.trim().eq_ignore_ascii_case(&public_key)) {
+        return crate::bad("the key file's public_key is not the one its seed derives");
+    }
+    let address = kp.address().to_base58();
+    if claimed_address.is_some_and(|a| a.trim() != address) {
+        return crate::bad("the key file's address is not the one its seed derives");
+    }
+    let index = match policy {
+        None => Value::Null,
+        Some(pol) => {
+            let pks = parse_policy(pol)?.pks().map_err(err)?;
+            let i = pks.iter().position(|k| k[..] == kp.public_key().as_bytes()[..]).ok_or("this key is not one of the policy's signers")?;
+            json!(i)
+        }
+    };
+    Ok(json!({ "seed": hex::encode(&seed[..]), "public_key": public_key, "address": address, "index": index }))
+}
+
+/// `sign`: the share `"i:hex"`, through the crate's `sign_expecting` — every check [`check`]
+/// makes, the payee check included, runs first. With `expected_recipients` empty, a proposal with
+/// any paying output (not change, amount > 0) is refused ([`NO_PAYEE_NAMED`]); one paying no one
+/// (all change or zero-amount slots) signs. The seed lives in a wiped buffer.
+pub fn sign(proposal: &str, policy: &str, seed_hex: &str, expected_recipients: &[String]) -> Result<Value> {
+    let seed = seed_from_hex(seed_hex)?;
+    let (proposal, policy) = (clean(proposal), clean(policy));
+    if expected_recipients.is_empty() {
+        let s = msig::check_proposal_expecting::<&str>(proposal, policy, &[]).map_err(err)?;
+        if s.outputs.iter().any(needs_payee) {
+            return crate::bad(NO_PAYEE_NAMED);
+        }
+    }
+    let (i, sig) = msig::sign_expecting(proposal, policy, &seed, expected_recipients).map_err(err)?;
+    Ok(Value::String(format!("{i}:{}", hex::encode(sig))))
 }
 
 #[cfg(test)]
@@ -309,5 +376,90 @@ mod tests {
         let s = json!({ "proposal": fx("proposal-valid"), "policy": fx("policy"), "share": expected()["share_0"] });
         let r: Value = serde_json::from_str(&crate::call("msauth_verify_share", &s.to_string())).unwrap();
         assert_eq!(r["value"], true);
+    }
+
+    fn seeds() -> (Vec<String>, String) {
+        let v: Value = serde_json::from_str(&fx("signer-seeds")).unwrap();
+        (v["members"].as_array().unwrap().iter().map(|s| s.as_str().unwrap().to_string()).collect(), v["non_member"].as_str().unwrap().to_string())
+    }
+
+    #[test]
+    fn members_0_and_2_sign_the_expected_shares() {
+        let (m, _) = seeds();
+        for (i, want) in [(0usize, "share_0"), (2, "share_2")] {
+            for given in [vec![payee()], vec![format!("{}:10", payee())]] {
+                let share = sign(&fx("proposal-valid"), &fx("policy"), &m[i], &given).unwrap();
+                assert_eq!(share, expected()[want], "deterministic Dilithium2 reproduces the vector");
+            }
+        }
+    }
+
+    #[test]
+    fn an_outsider_a_bad_proposal_or_a_bad_seed_signs_nothing() {
+        let (m, outsider) = seeds();
+        assert!(sign(&fx("proposal-valid"), &fx("policy"), &outsider, &[payee()]).unwrap_err().contains("not one of the policy's signers"));
+        assert!(sign(&fx("proposal-unbound"), &fx("policy"), &m[0], &[payee()]).unwrap_err().contains("binding"));
+        for bad in ["zz", "", &m[0][..62], &format!("{}00", m[0])] {
+            let e = sign(&fx("proposal-valid"), &fx("policy"), bad, &[payee()]).unwrap_err();
+            assert_eq!(e, "a signer seed is 64 hex characters", "never echoes the seed");
+        }
+    }
+
+    /// The core itself checks the payee: a share is never made for a proposal paying someone the
+    /// signer did not name, nor for a paying proposal when no payee was named at all.
+    #[test]
+    fn sign_refuses_an_unnamed_or_substituted_payee() {
+        let (m, _) = seeds();
+        assert_eq!(sign(&fx("proposal-valid"), &fx("policy"), &m[0], &[]).unwrap_err(), NO_PAYEE_NAMED);
+        assert_eq!(NO_PAYEE_NAMED, "no expected recipient given: the payee was NOT checked");
+        assert_eq!(
+            sign(&fx("proposal-substituted-recipient"), &fx("policy"), &m[0], &[payee()]).unwrap_err(),
+            expected()["substituted_refusal"].as_str().unwrap()
+        );
+        assert_eq!(
+            sign(&fx("proposal-valid"), &fx("policy"), &m[0], &[format!("{}:9", payee())]).unwrap_err(),
+            "expected recipient A5SR-HRMB-SY4M-5ZYF is paid 10 RAND, not 9 RAND"
+        );
+        assert!(sign(&fx("proposal-valid"), &fx("policy"), &m[0], &["rand1nope".into()]).unwrap_err().starts_with("expected recipient 0 is not a shielded address"));
+    }
+
+    #[test]
+    fn import_reads_a_keygen_file_or_bare_hex_and_finds_the_position() {
+        let (m, outsider) = seeds();
+        let kp = randprotocol_core::Keypair::from_seed(hex::decode(&m[2]).unwrap().try_into().unwrap()).unwrap();
+        let file = json!({ "seed": m[2], "address": kp.address().to_base58(), "public_key": kp.public_key().to_hex() }).to_string();
+        let v = signer_import(&file, Some(&fx("policy"))).unwrap();
+        assert_eq!((&v["seed"], &v["index"], &v["public_key"]), (&json!(m[2]), &json!(2), &json!(kp.public_key().to_hex())));
+        assert_eq!(v["address"], json!(kp.address().to_base58()));
+        assert_eq!(signer_import(&format!("\u{feff}{file}\n"), None).unwrap()["seed"], json!(m[2]), "a BOM and whitespace are tolerated");
+        assert_eq!(signer_import(&m[0], Some(&fx("policy"))).unwrap()["index"], 0);
+        assert_eq!(signer_import(&format!(" {}\n", m[0]), None).unwrap()["index"], Value::Null);
+        assert_eq!(signer_import(&outsider, Some(&fx("policy"))).unwrap_err(), "this key is not one of the policy's signers");
+        let lying = json!({ "seed": m[2], "address": kp.address().to_base58(), "public_key": "00".repeat(1312) }).to_string();
+        assert_eq!(signer_import(&lying, None).unwrap_err(), "the key file's public_key is not the one its seed derives");
+        let lying = json!({ "seed": m[2], "address": "1111", "public_key": kp.public_key().to_hex() }).to_string();
+        assert_eq!(signer_import(&lying, None).unwrap_err(), "the key file's address is not the one its seed derives");
+        assert_eq!(signer_import("{\"spend_key\":\"aa\"}", None).unwrap_err(), SIGNER_KEY_SHAPE);
+        assert_eq!(signer_import("{\"seed\":\"zz\"}", None).unwrap_err(), SIGNER_KEY_SHAPE);
+        assert_eq!(signer_import("nope", None).unwrap_err(), SIGNER_KEY_SHAPE);
+        assert!(!signer_import(&format!("{}zz", m[0]), None).unwrap_err().contains(&m[0][..8]), "never echoes the seed");
+    }
+
+    #[test]
+    fn sign_and_import_answer_through_call() {
+        let (m, _) = seeds();
+        let p = json!({ "proposal": fx("proposal-valid"), "policy": fx("policy"), "seed": m[0], "expected_recipients": [format!("{}:10", payee())] });
+        let r: Value = serde_json::from_str(&crate::call("msauth_sign", &p.to_string())).unwrap();
+        assert_eq!(r["value"], expected()["share_0"], "{r}");
+        let p = json!({ "proposal": fx("proposal-valid"), "policy": fx("policy"), "seed": m[0] });
+        let r: Value = serde_json::from_str(&crate::call("msauth_sign", &p.to_string())).unwrap();
+        assert_eq!((&r["ok"], &r["error"]), (&json!(false), &json!(NO_PAYEE_NAMED)), "absent is empty: refused");
+        let p = json!({ "proposal": fx("proposal-valid"), "policy": fx("policy"), "seed": m[0], "expected_recipients": "rand1x" });
+        let r: Value = serde_json::from_str(&crate::call("msauth_sign", &p.to_string())).unwrap();
+        assert_eq!(r["error"], "expected_recipients must be a list of addresses");
+        let r: Value = serde_json::from_str(&crate::call("msauth_signer_import", &json!({ "input": m[2], "policy": fx("policy") }).to_string())).unwrap();
+        assert_eq!(r["value"]["index"], 2, "{r}");
+        let r: Value = serde_json::from_str(&crate::call("msauth_signer_import", &json!({ "input": m[2] }).to_string())).unwrap();
+        assert_eq!(r["value"]["index"], Value::Null, "{r}");
     }
 }

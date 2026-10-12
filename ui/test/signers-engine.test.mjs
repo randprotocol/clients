@@ -299,3 +299,14 @@ test('the core\'s payee sentences reach the caller verbatim', async () => {
     await assert.rejects(backend.signers.check(row.id, 'P', ['rand1a:5']), (e) => e.message === msg);
   }
 });
+
+test('sign hands msauth_sign the same expected-recipient list the check used', async () => {
+  const seen = [];
+  const core = signingCore({
+    msauth_check: ({ expected_recipients }) => { seen.push(['check', expected_recipients]); return { ...SUMMARY }; },
+    msauth_sign: ({ expected_recipients }) => { seen.push(['sign', expected_recipients]); return '1:ab'; },
+  });
+  const { backend, row } = await unlockedWithSigner({ core, fetch: atHead(100) });
+  await backend.signers.sign(row.id, 'P', [' rand1payee:5 ', 'rand1other:2\n'], PASSWORD);
+  assert.deepEqual(seen, [['check', ['rand1payee:5', 'rand1other:2']], ['sign', ['rand1payee:5', 'rand1other:2']]]);
+});

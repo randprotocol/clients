@@ -85,6 +85,7 @@ const EXACT = new Map([
   ['expected_recipients must be a list of addresses', () => t('expected_recipients must be a list of addresses')],
   ['the key file\'s public_key is not the one its seed derives', () => t('the key file\'s public_key is not the one its seed derives')],
   ['the key file\'s address is not the one its seed derives', () => t('the key file\'s address is not the one its seed derives')],
+  ['no expected recipient given: the payee was NOT checked', () => t('no expected recipient given: the payee was NOT checked')],
 ]);
 
 /**

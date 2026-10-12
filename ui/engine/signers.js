@@ -200,7 +200,8 @@ export function makeSigners(deps) {
         if (!again.signable) throw new SignerRefusal(again.refusal.code, again.refusal.message, { node: again.refusal.node });
         // The hex copy below cannot be wiped (a JS string); it is unreachable after this call, and
         // wallet-core holds its own copy in Zeroizing. The bytes are wiped here.
-        const share = await c.msauthSign(text, p.policy, hexOf(seed));
+        // The same list the check used: the core re-runs the payee check and refuses on its own.
+        const share = await c.msauthSign(text, p.policy, hexOf(seed), payees(expectedRecipients));
         return { share, index: Number(String(share).split(':')[0]) };
       } finally {
         seed.fill(0);

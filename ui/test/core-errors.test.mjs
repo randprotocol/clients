@@ -108,13 +108,13 @@ test('coreApi names the five msauth methods', async () => {
   const seen = [];
   const api = coreApi({ async call(m, p) { seen.push([m, p]); return true; } });
   await api.msauthCheck('P', 'Q', ['rand1a']);
-  await api.msauthSign('P', 'Q', 'S');
+  await api.msauthSign('P', 'Q', 'S', ['rand1a:5']);
   await api.msauthVerifyShare('P', 'Q', '0:aa');
   await api.msauthSignerImport('K', 'Q');
   await api.msauthSignerImport('K');
   await api.msauthPolicyInfo('Q');
   assert.deepEqual(seen, [
-    ['msauth_check', { proposal: 'P', policy: 'Q', expected_recipients: ['rand1a'] }], ['msauth_sign', { proposal: 'P', policy: 'Q', seed: 'S' }],
+    ['msauth_check', { proposal: 'P', policy: 'Q', expected_recipients: ['rand1a'] }], ['msauth_sign', { proposal: 'P', policy: 'Q', seed: 'S', expected_recipients: ['rand1a:5'] }],
     ['msauth_verify_share', { proposal: 'P', policy: 'Q', share: '0:aa' }], ['msauth_signer_import', { input: 'K', policy: 'Q' }],
     ['msauth_signer_import', { input: 'K' }], ['msauth_policy_info', { policy: 'Q' }],
   ]);

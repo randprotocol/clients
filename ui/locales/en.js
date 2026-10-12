@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1092 strings.
+// 1093 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -426,6 +426,7 @@ export default {
   "No contacts yet. Save one from Settings, or paste an address.": "No contacts yet. Save one from Settings, or paste an address.",
   "no endpoint could answer {method}": "no endpoint could answer {method}",
   "no endpoint could answer {method}; tried {endpoints}": "no endpoint could answer {method}; tried {endpoints}",
+  "no expected recipient given: the payee was NOT checked": "no expected recipient given: the payee was NOT checked",
   "No node answered at {url}, so the expiry cannot be checked and this proposal is not signed. Retry when the node is reachable.": "No node answered at {url}, so the expiry cannot be checked and this proposal is not signed. Retry when the node is reachable.",
   "No proof is pending.": "No proof is pending.",
   "No prover": "No prover",

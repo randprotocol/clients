@@ -3952,6 +3952,14 @@ pub fn constants() -> Value {
     })
 }
 
+/// `msauth_check`/`msauth_sign`'s `expected_recipients`: absent or null is the empty list.
+fn expected_recipients_param(params: &Value) -> Result<Vec<String>> {
+    match params.get("expected_recipients") {
+        None | Some(Value::Null) => Ok(vec![]),
+        Some(v) => serde_json::from_value(v.clone()).map_err(|_| "expected_recipients must be a list of addresses".to_string()),
+    }
+}
+
 fn str_param<'a>(p: &'a Value, name: &str) -> Result<&'a str> {
     p.get(name).and_then(Value::as_str).ok_or_else(|| format!("missing string parameter {name:?}"))
 }
@@ -4165,6 +4173,15 @@ fn asset_param(p: &Value) -> Result<u32> {
 ///   `expires_at` with its node's head (refuse at `head + 16 >= expires_at`)
 /// - `msauth_verify_share` `{proposal, policy, share}` → `true` when `share` (`i:hex`) verifies
 /// - `msauth_policy_info` `{policy}` → `{fingerprint, threshold, signers, address, policy_hash}`
+/// - `msauth_signer_import` `{input, policy?}` → `{seed, public_key, address, index}`: a `rand-node
+///   keygen` file or 64 hex; a file whose `public_key`/`address` is not its seed's is refused; with
+///   `policy`, a key outside it is refused ("this key is not one of the policy's signers"), and
+///   `index` is its position (null without a policy)
+/// - `msauth_sign` `{proposal, policy, seed, expected_recipients}` → `"i:hex"`: every `msauth_check`
+///   check through the crate's `sign_expecting` (the payee check included), then the deterministic
+///   Dilithium2 share. `expected_recipients` absent or empty while any output pays someone (not
+///   change, amount > 0) is refused: "no expected recipient given: the payee was NOT checked".
+///   `seed` (64 hex) is wiped here after use; the caller wipes its own copy
 /// - `fixture_prove_request` `{profile?, asset?}` → a valid `prove_transfer` request for smoke
 ///   tests: a RAND transfer at `asset: 0` (the default), a token transfer at `asset >= 1`
 /// - `fixture_burn_request` `{profile?}` → a valid `prove_burn` request for smoke tests
@@ -4354,13 +4371,14 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
         "format_amount" => Ok(Value::String(format_amount(amount_param(params, "units")?))),
         "parse_amount" => Ok(Value::String(parse_amount(str_param(params, "text")?).map_err(|e| e.to_string())?.to_string())),
         // Private multisig signing (msauth.rs).
-        "msauth_check" => {
-            let expected: Vec<String> = match params.get("expected_recipients") {
-                None | Some(Value::Null) => vec![],
-                Some(v) => serde_json::from_value(v.clone()).map_err(|_| "expected_recipients must be a list of addresses".to_string())?,
-            };
-            msauth::check(str_param(params, "proposal")?, str_param(params, "policy")?, &expected)
-        }
+        "msauth_check" => msauth::check(str_param(params, "proposal")?, str_param(params, "policy")?, &expected_recipients_param(params)?),
+        "msauth_sign" => msauth::sign(
+            str_param(params, "proposal")?,
+            str_param(params, "policy")?,
+            str_param(params, "seed")?,
+            &expected_recipients_param(params)?,
+        ),
+        "msauth_signer_import" => msauth::signer_import(str_param(params, "input")?, params.get("policy").and_then(Value::as_str)),
         "msauth_verify_share" => msauth::verify_share(str_param(params, "proposal")?, str_param(params, "policy")?, str_param(params, "share")?),
         "msauth_policy_info" => msauth::policy_info(str_param(params, "policy")?),
         other => bad(format!("unknown method {other:?}")),

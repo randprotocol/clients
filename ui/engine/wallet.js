@@ -387,7 +387,7 @@ export function coreApi(core) {
     // Private multisig signing (wallet-core msauth.rs): check, sign, verify a share, import a
     // signer key, describe a policy. `seed` is 64 hex; never log a call's params.
     msauthCheck: (proposal, policy, expected_recipients = []) => call('msauth_check', { proposal, policy, expected_recipients }),
-    msauthSign: (proposal, policy, seed) => call('msauth_sign', { proposal, policy, seed }),
+    msauthSign: (proposal, policy, seed, expected_recipients = []) => call('msauth_sign', { proposal, policy, seed, expected_recipients }),
     msauthVerifyShare: (proposal, policy, share) => call('msauth_verify_share', { proposal, policy, share }),
     msauthSignerImport: (input, policy) => call('msauth_signer_import', policy ? { input, policy } : { input }),
     msauthPolicyInfo: (policy) => call('msauth_policy_info', { policy }),
