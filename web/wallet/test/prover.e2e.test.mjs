@@ -321,6 +321,12 @@ test('a wasm wallet pairs a rand-prover that is not its own, sends through it, a
     // The chain, as the engine reads it: both guests, so the core makes the auth proof here.
     const status = await rpc(env.rpcUrl, 'rand_status');
     if (env.v3) assert.match(String(status.hc_auth), /^[0-9a-f]{64}$/, 'the node names its auth guest');
+    // A chain-21 shape (RAND_E2E_GENESIS_ARGS carries --auth-multisig-guest): the node names the
+    // msauth guest and loaded its pinned verifier key, and this wallet's single-key spend still lands.
+    if ((process.env.RAND_E2E_GENESIS_ARGS || '').includes('--auth-multisig-guest')) {
+      assert.match(String(status.hc_auth_multisig), /^[0-9a-f]{64}$/, 'the node names its multisig auth guest');
+      assert.equal(status.msauth_key, 'loaded', 'the node loaded the Test msauth key (RAND_MSAUTH_VK)');
+    }
 
     // Faucet the sender through the engine, and scan until the note is spendable.
     await env.a.backend.faucet.request();
