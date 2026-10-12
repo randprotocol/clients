@@ -27,6 +27,14 @@ export function makePlatform({ firefox = IS_FIREFOX, t } = {}) {
     // A new tab, never this popup's window: an explorer must get no handle on the wallet.
     openExternal: (url) => { ext.tabs.create({ url: String(url) }); },
     copy: (text) => navigator.clipboard.writeText(String(text ?? '')),
+    // A share (`i:hex`) or other small text as a downloaded file. Not secret.
+    saveText: ({ name, text }) => {
+      const url = URL.createObjectURL(new Blob([String(text)], { type: 'text/plain' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = String(name); a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    },
 
     /**
      * OPTIONAL in the contract, and the reason it exists: an extension may only reach a host it

@@ -91,6 +91,7 @@ fn main() {
             commands::prover_stop,
             commands::prover_pairing_link,
             commands::prover_rotate_pairing,
+            commands::save_text_to_downloads,
         ])
         .run(tauri::generate_context!())
         .expect("Rand Wallet could not start");
