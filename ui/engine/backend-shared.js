@@ -92,6 +92,7 @@ import {
 import { runPhased } from './execute.js';
 import { normalizeInvokeRequest, invokeEffects, invokeError } from './invoke.js';
 import { translateCoreError } from './core-errors.js';
+import { makeSigners } from './signers.js';
 import { t } from '../i18n.js';
 
 /**
@@ -728,6 +729,11 @@ export function makeSharedBackend({
 
   async function loadNotes() { return engine.loadStore(); }
 
+  const signers = makeSigners({
+    c, storage, requireUnlocked, openVault, passwordAttempt, requireVerifiedChain, getSettings, currentRpcUrl,
+    setSession: (record) => storage.session.set(K.unlocked, record),
+  });
+
   // ------------------------------------------------------------------------- the unlock session -
   // `storage.session` is memory only. Nothing else holds the plaintext between calls.
   async function unlockedSession() {
@@ -924,25 +930,35 @@ export function makeSharedBackend({
    * count is touched, so a user whose storage got corrupted is not also locked out by a backoff
    * that grows every time they try.
    */
-  function openVault(password) {
+  /**
+   * One password attempt through the shared throttle: queued, delayed by the failure count, counted
+   * before the KDF runs, cleared on success. `open()` resolves the plaintext or throws; a record
+   * error (`isVaultRecordError`) is rethrown and not counted. Used by the unlock and by every
+   * signer signature (signers.js).
+   */
+  function passwordAttempt(open) {
     return enqueueAttempt(async () => {
-      const vault = await storage.get(K.vault);
-      if (!vault) throw new Error(t('no wallet on this device'));
-      checkVault(vault); // VaultVersionError / VaultDamagedError — not an attempt
       const rec = await failureRecord();
       await sleep(unlockDelayMs(rec.count));
       // Persisted before the KDF runs, not after it resolves.
       await bumpFailures(rec);
-      let key;
+      let value;
       try {
-        key = await decryptSecret(password, vault);
+        value = await open();
       } catch (err) {
-        if (isVaultRecordError(err)) throw err; // cannot happen after checkVault, but do not count it
+        if (isVaultRecordError(err)) throw err; // a damaged record is not a wrong password: not counted
         return null;
       }
       await clearFailures();
-      return key;
+      return value;
     });
+  }
+
+  async function openVault(password) {
+    const vault = await storage.get(K.vault);
+    if (!vault) throw new Error(t('no wallet on this device'));
+    checkVault(vault); // VaultVersionError / VaultDamagedError — not an attempt
+    return passwordAttempt(() => decryptSecret(password, vault));
   }
 
   /**
@@ -950,10 +966,11 @@ export function makeSharedBackend({
    * the paired prover's `{token, kemEk, url, fingerprint}`, decrypted with the same password
    * (ruling R2), when there is one.
    */
-  async function startSession(info, pairing) {
+  async function startSession(info, pairing, signerProfiles = []) {
     const record = { spend_key: info.spend_key, viewing_key: info.viewing_key };
     const p = pairingOf(pairing);
     if (p) record.prover = p;
+    record.signers = signerProfiles;
     await storage.session.set(K.unlocked, record);
     // A wallet wiped and created again in the same page had no multi-tab coordination at all
     // until a reload, because `wipe()` closed the channel for good.
@@ -1005,7 +1022,7 @@ export function makeSharedBackend({
       if (!key) throw new Error('wrong password');
       const info = await c.walletInfo(key);
       await storage.set(K.wallet, { ...((await storage.get(K.wallet)) || {}), address: info.address, pk: info.pk });
-      await startSession(info, await openProverPairing(password));
+      await startSession(info, await openProverPairing(password), await signers.openOnUnlock(password));
       return { address: info.address, pk: info.pk };
     },
 
@@ -2732,7 +2749,7 @@ export function makeSharedBackend({
     closeChannel();
   }
 
-  const backend = { wallet, sync, assets, send, faucet, rpc, settings, platform, address, contacts, prover, dispose };
+  const backend = { wallet, sync, assets, send, faucet, rpc, settings, platform, address, contacts, prover, signers: signers.group, dispose };
   // `bridge` is OPTIONAL in the contract and is not in BACKEND_SHAPE: a shell that supplied no
   // `executeWithdraw` simply does not have the group, and every screen feature-detects it
   // (`ctx.backend.bridge?.canWithdraw`). Both real shells do supply one — the wasm shell's always
