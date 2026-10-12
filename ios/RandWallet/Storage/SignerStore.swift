@@ -11,8 +11,10 @@ protocol SignerSecrets {
     /// as the reason. nil when there is no such item.
     func load(account: String, prompt: String?) throws -> Data?
     func delete(account: String)
-    /// Deletes every item whose account starts with `accountPrefix`, listed or not.
-    func deleteAll(accountPrefix: String)
+    /// Deletes every item whose account starts with `accountPrefix`, listed or not, except the
+    /// accounts in `keeping`. Throws when the items cannot be listed or one cannot be deleted;
+    /// nothing to delete is success.
+    func deleteAll(accountPrefix: String, keeping: Set<String>) throws
     /// Whether this device has a passcode, without which an item cannot be kept behind user presence.
     var canRequireUserPresence: Bool { get }
 }
@@ -81,16 +83,22 @@ final class KeychainSignerSecrets: SignerSecrets {
     /// behind user presence) and deletes each one whose account has the prefix. The service is
     /// shared with the spend key and the prover pairing, so the sweep goes by account, never by
     /// service alone.
-    func deleteAll(accountPrefix: String) {
+    func deleteAll(accountPrefix: String, keeping: Set<String>) throws {
         let ctx = LAContext()
         ctx.interactionNotAllowed = true
         var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                                 kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitAll]
         q[kSecUseAuthenticationContext as String] = ctx
         var items: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &items) == errSecSuccess, let list = items as? [[String: Any]] else { return }
+        let status = SecItemCopyMatching(q as CFDictionary, &items)
+        if status == errSecItemNotFound { return }
+        guard status == errSecSuccess else { throw Keychain.KeychainError(status: status) }
+        guard let list = items as? [[String: Any]] else { throw Keychain.KeychainError(status: errSecInternalError) }
         for attrs in list {
-            if let account = attrs[kSecAttrAccount as String] as? String, account.hasPrefix(accountPrefix) { delete(account: account) }
+            guard let account = attrs[kSecAttrAccount as String] as? String, account.hasPrefix(accountPrefix),
+                  !keeping.contains(account) else { continue }
+            let deleted = SecItemDelete(base(account) as CFDictionary)
+            guard deleted == errSecSuccess || deleted == errSecItemNotFound else { throw Keychain.KeychainError(status: deleted) }
         }
     }
 }
@@ -172,17 +180,19 @@ final class SignerStore: ObservableObject {
         try? writeIndex(profiles)
     }
 
-    /// Every profile, and the list itself (forgetting the wallet).
-    func removeAll() {
+    /// Every profile, and the list itself (forgetting the wallet). The sweep comes first and also
+    /// takes an item the index does not list (an index that no longer decodes, a crash between
+    /// the seed's save and the index's). The index is deleted only after the sweep succeeded:
+    /// when the sweep fails, the index and `profiles` are kept, so a retry still finds what is
+    /// left, and the error is thrown.
+    func removeAll() throws {
         for p in profiles {
             secrets.delete(account: Self.seedAccount(p.id))
             secrets.delete(account: Self.policyAccount(p.id))
         }
-        profiles = []
+        try secrets.deleteAll(accountPrefix: "msauth.", keeping: [Self.indexAccount])
         secrets.delete(account: Self.indexAccount)
-        // An item the index does not list (an index that no longer decodes, a crash between the
-        // seed's save and the index's) goes too: forgetting the wallet removes every profile.
-        secrets.deleteAll(accountPrefix: "msauth.")
+        profiles = []
     }
 
     func policy(_ id: String) throws -> String {

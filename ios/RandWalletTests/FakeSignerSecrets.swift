@@ -23,5 +23,10 @@ final class FakeSignerSecrets: SignerSecrets {
         return items[account]?.data
     }
     func delete(account: String) { items[account] = nil }
-    func deleteAll(accountPrefix: String) { items = items.filter { !$0.key.hasPrefix(accountPrefix) } }
+    /// The Keychain listing fails (`SecItemCopyMatching` refused): the sweep throws, nothing deleted.
+    var failListing = false
+    func deleteAll(accountPrefix: String, keeping: Set<String>) throws {
+        if failListing { throw Keychain.KeychainError(status: errSecInteractionNotAllowed) }
+        items = items.filter { !$0.key.hasPrefix(accountPrefix) || keeping.contains($0.key) }
+    }
 }

@@ -289,7 +289,7 @@ final class MsauthTests: XCTestCase {
         let store = SignerStore(secrets: secrets)
         _ = try store.add(label: "a", policy: try fx("policy"), key: try seeds()[0])
         _ = try store.add(label: "b", policy: try fx("policy"), key: try seeds()[1])
-        store.removeAll()
+        try store.removeAll()
         XCTAssertTrue(store.profiles.isEmpty)
         XCTAssertTrue(secrets.items.isEmpty, "\(secrets.items.keys)")
     }
@@ -303,13 +303,29 @@ final class MsauthTests: XCTestCase {
         secrets.items["msauth.orphan.policy"] = (Data("{}".utf8), false)
         secrets.items["spend_key"] = (Data("keep".utf8), false)
         secrets.items["prover_pairing"] = (Data("keep".utf8), false)
-        store.removeAll()
+        try store.removeAll()
         XCTAssertEqual(Set(secrets.items.keys), ["spend_key", "prover_pairing"], "every msauth.* item is gone, nothing else")
         let broken = FakeSignerSecrets()
         broken.items["msauth.index"] = (Data("not json".utf8), false)
         broken.items["msauth.x.seed"] = (Data([9]), true)
-        SignerStore(secrets: broken).removeAll()
+        try SignerStore(secrets: broken).removeAll()
         XCTAssertTrue(broken.items.isEmpty, "\(broken.items.keys)")
+    }
+
+    func testAFailedSweepKeepsTheIndexAndSaysSo() throws {
+        let secrets = FakeSignerSecrets()
+        let store = SignerStore(secrets: secrets)
+        let p = try store.add(label: "a", policy: try fx("policy"), key: try seeds()[0])
+        secrets.items["msauth.orphan.seed"] = (Data([1]), true)
+        secrets.failListing = true
+        XCTAssertThrowsError(try store.removeAll())
+        XCTAssertNotNil(secrets.items["msauth.index"], "the index survives a failed sweep")
+        XCTAssertNotNil(secrets.items["msauth.orphan.seed"])
+        XCTAssertEqual(store.profiles.map(\.id), [p.id])
+        secrets.failListing = false
+        XCTAssertNoThrow(try store.removeAll(), "a retry finishes the job")
+        XCTAssertTrue(secrets.items.isEmpty, "\(secrets.items.keys)")
+        XCTAssertTrue(store.profiles.isEmpty)
     }
 
     func testTheLabelLimitCountsCodePoints() throws {
