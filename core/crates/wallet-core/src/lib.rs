@@ -46,6 +46,8 @@ use randprotocol_zkvm::machine::{Backend, FriProfile};
 use randprotocol_zkvm::notes::{Note, SpendKey, ViewingKey};
 use randprotocol_zkvm::viewing::TxKey;
 
+mod msauth;
+
 /// The RPC namespace the fullnode defines (`rand_getCommitments`, …). A wire name: it follows
 /// the node, never this wallet.
 pub const RPC_NAMESPACE: &str = "rand";
@@ -4151,6 +4153,18 @@ fn asset_param(p: &Value) -> Result<u32> {
 ///   `payment_commitment`/`payment_tx_key` from a `prove_transfer` reply — never index 0 of the
 ///   four-wide arrays, which on a RAND transfer is a dummy slot
 /// - `format_amount` `{units}` → `"1.5"`; `parse_amount` `{text}` → units string
+/// - `msauth_check` `{proposal, policy, expected_recipients?}` → the checked summary (fullnode
+///   `check_proposal_expecting`; `expected_recipients` are `rand1…` or `rand1…:AMOUNT` texts the
+///   crate parses, absent or empty meaning no payee named): each output's `owner_fingerprint`,
+///   `to_account`, `amount` (string), `asset`, `memo`, `matches` (`"<address fp> (<amount> RAND)"`
+///   or null) and `needs_payee`; `recipients_checked`; `expected` (`[{entry, fingerprint}]`, each
+///   entry's owner fingerprint or null); `fee`/`burns` (strings), `expires_at`,
+///   `signing_message` (hex), `policy_fingerprint`, `lines` (verbatim) and the proposal's
+///   `chain_id`/`genesis`/`binding_domain`. A proposal paying anyone else, or leaving a named payee
+///   unpaid or off its amount, is refused in the crate's sentence. No RPC: the caller compares
+///   `expires_at` with its node's head (refuse at `head + 16 >= expires_at`)
+/// - `msauth_verify_share` `{proposal, policy, share}` → `true` when `share` (`i:hex`) verifies
+/// - `msauth_policy_info` `{policy}` → `{fingerprint, threshold, signers, address, policy_hash}`
 /// - `fixture_prove_request` `{profile?, asset?}` → a valid `prove_transfer` request for smoke
 ///   tests: a RAND transfer at `asset: 0` (the default), a token transfer at `asset >= 1`
 /// - `fixture_burn_request` `{profile?}` → a valid `prove_burn` request for smoke tests
@@ -4339,6 +4353,16 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
         "fixture_burn_request" => Ok(fixture_burn_request(params.get("profile").and_then(Value::as_str).unwrap_or("test"))?),
         "format_amount" => Ok(Value::String(format_amount(amount_param(params, "units")?))),
         "parse_amount" => Ok(Value::String(parse_amount(str_param(params, "text")?).map_err(|e| e.to_string())?.to_string())),
+        // Private multisig signing (msauth.rs).
+        "msauth_check" => {
+            let expected: Vec<String> = match params.get("expected_recipients") {
+                None | Some(Value::Null) => vec![],
+                Some(v) => serde_json::from_value(v.clone()).map_err(|_| "expected_recipients must be a list of addresses".to_string())?,
+            };
+            msauth::check(str_param(params, "proposal")?, str_param(params, "policy")?, &expected)
+        }
+        "msauth_verify_share" => msauth::verify_share(str_param(params, "proposal")?, str_param(params, "policy")?, str_param(params, "share")?),
+        "msauth_policy_info" => msauth::policy_info(str_param(params, "policy")?),
         other => bad(format!("unknown method {other:?}")),
     }
 }

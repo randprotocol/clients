@@ -15,7 +15,8 @@
 #   2. Checks the vendored tree still carries what the wallet's builds rely on: the zkvm crate
 #      gates `dilithium-core` and `dilithium_host` off wasm32 (its `asm!` does not build there),
 #      the [patch]ed Plonky3 forks core/Cargo.toml names exist, and `randprotocol-msig` comes
-#      with its tests/fixtures/*.json (listed with their SHA-256s, to compare with the fullnode).
+#      with its tests/fixtures/*.json (listed with their SHA-256s, to compare with the fullnode),
+#      copied to ui/test/fixtures/msauth with their hash list ui/test/fixtures/msauth.sha256.
 #   3. Rewrites CHAIN_BUILD (wallet-core) and the three tests that pin it (wallet-core's
 #      `version_reports_chain_fourteen`, the web core integration test, the iOS smoke test) from
 #      the old short hash to the new one.
@@ -74,6 +75,11 @@ if [ -d "$MSIG" ]; then
   ls "$MSIG"/tests/fixtures/*.json >/dev/null 2>&1 || fail "randprotocol-msig has no tests/fixtures/*.json"
   echo "vendor-fullnode: randprotocol-msig fixtures ($(ls "$MSIG"/tests/fixtures/*.json | wc -l | tr -d ' ')):"
   ( cd "$MSIG/tests/fixtures" && shasum -a 256 *.json | sed 's/^/  /' )
+  # The apps' copies (ui/test/fixtures/msauth) and their ONE hash list, rewritten from the vendored set.
+  rm -rf ui/test/fixtures/msauth && mkdir -p ui/test/fixtures/msauth
+  cp "$MSIG"/tests/fixtures/*.json ui/test/fixtures/msauth/
+  ( cd ui/test/fixtures/msauth && shasum -a 256 *.json ) > ui/test/fixtures/msauth.sha256
+  echo "vendor-fullnode: copied to ui/test/fixtures/msauth, hashes in ui/test/fixtures/msauth.sha256"
 else
   echo "vendor-fullnode: WARNING — this commit has no crates/randprotocol-msig, which wallet-core depends on" >&2
 fi
@@ -117,5 +123,5 @@ vendor-fullnode: done. Still yours:
     non-member with dev-dependencies cannot be tested from it — so it runs in its own workspace)
   - core/scripts/build-wasm.sh                            (the wasm32 build)
   - scripts/e2e-prover.sh                                 (real node + prover; see its header)
-  - git add $SUB core/Cargo.lock desktop/src-tauri/Cargo.lock ... && git commit
+  - git add $SUB core/Cargo.lock desktop/src-tauri/Cargo.lock ui/test/fixtures/msauth ui/test/fixtures/msauth.sha256 ... && git commit
 EOF
