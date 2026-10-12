@@ -44,7 +44,7 @@ Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
 Every release is on [GitHub Releases](https://github.com/randprotocol/clients/releases/latest),
 and https://randprotocol.org/clients links the same files with their checksums. `<v>` below is
-the version, `0.7.3` today.
+the version, `0.8.0` today.
 
 | you have | download | then |
 |---|---|---|
@@ -77,7 +77,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing     # macOS
 sha256sum -c SHA256SUMS --ignore-missing         # Linux
 ```
 ```powershell
-Get-FileHash .\rand-wallet-0.7.3-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
+Get-FileHash .\rand-wallet-0.8.0-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
 ```
 
 A matching sum says the file is the one that was published. It does not say the file was built
@@ -117,7 +117,7 @@ Swift, Java and JavaScript.
 
 ## Prerequisite: an RPC endpoint
 
-The public endpoint is **`https://rpc.randprotocol.org`** — a synced chain-20 node behind a
+The public endpoint is **`https://rpc.randprotocol.org`** — a synced chain-21 node behind a
 CORS-open reverse proxy, and the default in every client. Settings keeps one editable "RPC URL"
 that replaces it while filled in (a saved URL is probed before it is kept: an unreachable or
 wrong-chain node is refused rather than saved); clearing the field goes back to the default.
@@ -199,7 +199,7 @@ The first build of any client compiles the prover and takes several minutes.
 ```bash
 git clone --recurse-submodules https://github.com/randprotocol/clients.git
 cd clients
-git checkout v0.7.3 && git submodule update --init   # a release, rather than main
+git checkout v0.8.0 && git submodule update --init   # a release, rather than main
 ```
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
