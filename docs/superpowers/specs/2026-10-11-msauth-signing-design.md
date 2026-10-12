@@ -71,7 +71,8 @@ read into memory for one signing and dropped.
    the fingerprint. A recipient is shown as `check_proposal` gives it: a fingerprint of the owner
    key only, with the caveat "owner key verified; delivery key NOT verifiable from this proposal"
    rendered as-is (a proposal cannot prove the recipient's KEM key, so the app must not show a full
-   address fingerprint as if it had checked one). `check_proposal` has no RPC, so it only checks `expires_at` against the
+   address fingerprint as if it had checked one). Each output carries `to_account` (verified: the
+   note's owner is the multisig account itself), so the review labels change apart from payments. `check_proposal` has no RPC, so it only checks `expires_at` against the
    bundle's own time; **the app compares it with the chain head** (`rand_getHead`, which every
    app already reads) and refuses to sign at or past `expires_at - 16`, the CLI `prove`'s margin.
    With no node reachable it shows the expiry height with a warning and still allows signing. Confirmation types the last four characters of the
@@ -100,14 +101,15 @@ cannot tell a consensus key file apart).
 2. Core arms + tests, using the fixtures committed with fullnode's `randprotocol-msig`
    (`crates/randprotocol-msig/tests/fixtures/`: `policy`, `proposal-valid`,
    `proposal-tampered-output`, `proposal-value-mismatch`, `proposal-fee-raised` (refused only by
-   the per-asset balance check), `proposal-unbound` (refused on the binding), `proposal-expired`,
+   the per-asset balance check), `proposal-unbound` (refused on the binding),
+   `proposal-wrong-expected`, `proposal-expired`,
    `signer-seeds` (three
    members + one outsider), `expected` (summary, signing message, shares for members 0 and 2)). They
    are deterministic, so the app tests match exact values, not only pass/fail. The tampered output is
    re-bound: it fails as "output does not open as sender", not on the binding. The zkvm re-pin
    brings `dilithium-core` gated off wasm32 (its `asm!` does not build there); the msig crate uses
-   crystals-dilithium directly. Vendor only after the private-multisig session reports its Task 6
-   complete.
+   crystals-dilithium directly. Vendor from fullnode `e34117be` (Task 6 complete; 10 fixtures,
+   SHA-256s checked 2026-10-12) or the merge that carries it.
 3. Shared UI (web, extension, desktop) + unit tests + strings in all 20 locales.
 4. iOS + XCTest; Android + JVM tests; native string parity.
 5. One end-to-end: a 2-of-3 account on a devnet, the CLI prepares, two apps sign (web and one
