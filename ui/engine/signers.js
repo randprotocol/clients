@@ -43,8 +43,31 @@ function validProfiles(v) {
     && Number.isInteger(p.index) && typeof p.policyHash === 'string');
 }
 
+/** Whether a checked proposal may be signed now, by the CLI's rule, on this wallet's chain. */
+export function verdict({ summary, head, chainId, genesis, url }) {
+  // Spec §4 step 3: never sign on an unchecked payee (a coordinator could pay its own key).
+  if (summary.recipients_checked !== true) {
+    return { signable: false, refusal: { code: 'unchecked-recipient', message: t('Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.') } };
+  }
+  if (head == null) {
+    return { signable: false, refusal: { code: 'no-node', node: url, message: t('No node answered at {url}, so the expiry cannot be checked and this proposal is not signed. Retry when the node is reachable.', { url: url || '—' }) } };
+  }
+  if (Number(summary.chain_id) !== Number(chainId)) {
+    return { signable: false, refusal: { code: 'wrong-chain', message: t('This proposal is for chain {theirs}; this wallet is on chain {ours}.', { theirs: String(summary.chain_id), ours: String(chainId) }) } };
+  }
+  if (Number(summary.binding_domain) >= 1 && String(summary.genesis).toLowerCase() !== String(genesis || '').toLowerCase()) {
+    return { signable: false, refusal: { code: 'wrong-genesis', message: t('This proposal is bound to another genesis than the one this wallet\'s node serves.') } };
+  }
+  if (head + EXPIRY_MARGIN >= Number(summary.expires_at)) {
+    return { signable: false, refusal: { code: 'expired', message: t('This proposal expires at height {expires} and the chain is at {head}: too late to sign. Ask for a new proposal.', { expires: String(summary.expires_at), head: String(head) }) } };
+  }
+  return { signable: true, head, blocksLeft: Number(summary.expires_at) - head };
+}
+
+const payees = (list) => (Array.isArray(list) ? list : []).map(cleanText).filter(Boolean);
+
 export function makeSigners(deps) {
-  const { c, storage, requireUnlocked, setSession, openVault } = deps;
+  const { c, storage, requireUnlocked, setSession, openVault, passwordAttempt, requireVerifiedChain, getSettings, currentRpcUrl } = deps;
 
   async function profiles() {
     const u = await requireUnlocked();
@@ -69,6 +92,22 @@ export function makeSigners(deps) {
   }
   async function list() {
     return Promise.all((await profiles()).map(row));
+  }
+
+  /** The head from a node that passed this wallet's chain check; any failure is "no node". */
+  async function judge(summary) {
+    const settings = await getSettings();
+    let url = '';
+    try { url = await currentRpcUrl(); } catch { /* no endpoint configured */ }
+    try {
+      const { client, url: u, identity } = await requireVerifiedChain();
+      const h = await client.head();
+      const height = Number(h && h.height);
+      if (!Number.isSafeInteger(height) || height < 0) throw new Error('no height');
+      return verdict({ summary, head: height, chainId: settings.chainId, genesis: identity && identity.genesis, url: u });
+    } catch {
+      return verdict({ summary, head: null, url });
+    }
   }
 
   const group = {
@@ -110,6 +149,36 @@ export function makeSigners(deps) {
       await writeProfiles(password, (await profiles()).filter((p) => p.id !== id));
       return list();
     },
+    // The proposal is a parameter, never stored: it carries the account's witness (§3).
+    async check(id, proposal, expectedRecipients = []) {
+      const p = await profileOf(id);
+      const summary = await c.msauthCheck(cleanText(proposal), p.policy, payees(expectedRecipients));
+      return { summary, ...(await judge(summary)) };
+    },
+    async sign(id, proposal, expectedRecipients, password) {
+      const p = await profileOf(id);
+      const text = cleanText(proposal);
+      const v = await judge(await c.msauthCheck(text, p.policy, payees(expectedRecipients)));
+      if (!v.signable) throw new SignerRefusal(v.refusal.code, v.refusal.message, { node: v.refusal.node });
+      const rec = ((await storage.get(SIGNER_SEEDS_KEY)) || {})[id];
+      if (!rec) throw new Error(t('This signer profile has no key on this device: remove it and add it again.'));
+      const seed = await passwordAttempt(() => decryptBytes(password, rec));
+      if (!seed) throw new Error('wrong password');
+      try {
+        // The hex copy below cannot be wiped (a JS string); it is unreachable after this call, and
+        // wallet-core holds its own copy in Zeroizing. The bytes are wiped here.
+        const share = await c.msauthSign(text, p.policy, hexOf(seed));
+        return { share, index: Number(String(share).split(':')[0]) };
+      } finally {
+        seed.fill(0);
+      }
+    },
+    async verifyShare(id, proposal, share) {
+      const p = await profileOf(id);
+      const s = cleanText(share);
+      await c.msauthVerifyShare(cleanText(proposal), p.policy, s);
+      return { index: Number(s.split(':')[0].trim()) };
+    },
   };
 
   /**
@@ -129,5 +198,5 @@ export function makeSigners(deps) {
     }
   }
 
-  return { group, openOnUnlock, profileOf, deps, decryptBytes };
+  return { group, openOnUnlock, profileOf, deps };
 }

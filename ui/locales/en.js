@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1036 strings.
+// 1042 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{chain} · {genesis}": "{chain} · {genesis}",
@@ -274,6 +274,7 @@ export default {
   "Enter an amount to send.": "Enter an amount to send.",
   "Enter an amount.": "Enter an amount.",
   "Enter at least 10 characters": "Enter at least 10 characters",
+  "Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.": "Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.",
   "Enter the address this should be released to.": "Enter the address this should be released to.",
   "Enter the address you are sending to.": "Enter the address you are sending to.",
   "Enter the amount as a number, for example 1.25.": "Enter the amount as a number, for example 1.25.",
@@ -396,6 +397,7 @@ export default {
   "No contacts yet. Save one from Settings, or paste an address.": "No contacts yet. Save one from Settings, or paste an address.",
   "no endpoint could answer {method}": "no endpoint could answer {method}",
   "no endpoint could answer {method}; tried {endpoints}": "no endpoint could answer {method}; tried {endpoints}",
+  "No node answered at {url}, so the expiry cannot be checked and this proposal is not signed. Retry when the node is reachable.": "No node answered at {url}, so the expiry cannot be checked and this proposal is not signed. Retry when the node is reachable.",
   "No proof is pending.": "No proof is pending.",
   "No prover": "No prover",
   "No prover is paired.": "No prover is paired.",
@@ -899,7 +901,10 @@ export default {
   "This note was not found.": "This note was not found.",
   "This passkey does not support the PRF extension.": "This passkey does not support the PRF extension.",
   "This proof was already submitted from another window. Check Activity before sending again.": "This proof was already submitted from another window. Check Activity before sending again.",
+  "This proposal expires at height {expires} and the chain is at {head}: too late to sign. Ask for a new proposal.": "This proposal expires at height {expires} and the chain is at {head}: too late to sign. Ask for a new proposal.",
+  "This proposal is bound to another genesis than the one this wallet's node serves.": "This proposal is bound to another genesis than the one this wallet's node serves.",
   "this proposal is for another policy: it names {theirs}, this policy is {ours}": "this proposal is for another policy: it names {theirs}, this policy is {ours}",
+  "This proposal is for chain {theirs}; this wallet is on chain {ours}.": "This proposal is for chain {theirs}; this wallet is on chain {ours}.",
   "this prover charges {fee} RAND per proof, and this version of the wallet does not pay a prover's fee: pair a prover that charges nothing, or prove on this device": "this prover charges {fee} RAND per proof, and this version of the wallet does not pay a prover's fee: pair a prover that charges nothing, or prove on this device",
   "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the desktop app.": "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the desktop app.",
   "This prover does not accept this kind of job ({reason}). Pair another prover in Settings, or send from the desktop app.": "This prover does not accept this kind of job ({reason}). Pair another prover in Settings, or send from the desktop app.",
@@ -912,6 +917,7 @@ export default {
   "This screen could not be shown.": "This screen could not be shown.",
   "This screen ships in a later task. Your wallet is unlocked and ready.": "This screen ships in a later task. Your wallet is unlocked and ready.",
   "this signer is already saved as {label}": "this signer is already saved as {label}",
+  "This signer profile has no key on this device: remove it and add it again.": "This signer profile has no key on this device: remove it and add it again.",
   "This tab is showing what it has so far, and will refresh when that finishes.": "This tab is showing what it has so far, and will refresh when that finishes.",
   "This takes a few minutes; keep this window open.": "This takes a few minutes; keep this window open.",
   "This transaction was not found.": "This transaction was not found.",
