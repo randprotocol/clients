@@ -25,6 +25,7 @@ struct RandWalletApp: App {
                 .environmentObject(auth)
                 .environmentObject(contacts)
                 .environmentObject(router)
+                .environmentObject(SignerStore.shared)
                 // A `randpay:` link opens Send pre-filled once the wallet is unlocked. Never sends.
                 .onOpenURL { router.open($0) }
                 .preferredColorScheme(settings.theme.colorScheme)

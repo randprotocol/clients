@@ -56,6 +56,10 @@ targets:
       # durian-core's own AMM vectors: the very file ui/test/amm.test.mjs reads (AmmTests).
       - path: ../ui/test/fixtures/amm-vectors.json
         buildPhase: resources
+      # The private-multisig vectors (fullnode 9b014927, randprotocol-msig's tests/fixtures), the
+      # files ui/test/msauth-fixtures.test.mjs pins (MsauthTests).
+      - path: ../ui/test/fixtures/msauth
+        buildPhase: resources
     dependencies:
       - target: RandWallet
     settings:

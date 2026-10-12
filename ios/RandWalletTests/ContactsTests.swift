@@ -87,7 +87,7 @@ final class ContactsTests: XCTestCase {
         let store = ContactsStore(backing: MemoryBlob())
         try store.add(name: "alice", address: a1)
         let wallet = WalletService(settings: Settings())
-        wallet.forgetWallet(contacts: store)
+        try wallet.forgetWallet(contacts: store)
         XCTAssertTrue(store.book.sorted.isEmpty)
     }
 

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One signer profile: opens its sign screen; Remove asks first, then the device's authentication. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:orientation="vertical" android:padding="16dp" android:background="@drawable/bg_surface_card">
+    <LinearLayout android:id="@+id/open" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true">
+        <TextView android:id="@+id/label" android:layout_width="match_parent" android:layout_height="wrap_content" android:textStyle="bold" android:textColor="@color/text" />
+        <TextView android:id="@+id/fingerprint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" style="@style/Text.Mono" />
+        <TextView android:id="@+id/position" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" style="@style/Text.Caption" />
+    </LinearLayout>
+    <com.google.android.material.button.MaterialButton android:id="@+id/remove" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/negative" android:text="@string/msauth_remove_signer" />
+</LinearLayout>

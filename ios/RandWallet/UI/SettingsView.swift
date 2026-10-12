@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var revealed: (title: String, value: String)?
     @State private var showReveal = false
     @State private var confirmForget = false
+    @State private var forgetError: String?
     @State private var confirmRescan = false
     // The prover (delegated proving, spec 2026-09-28 §4.4 and §5, split authorisation: the job
     // carries the viewing key and a salt, so the prover can read this wallet's history and cannot
@@ -62,6 +63,10 @@ struct SettingsView: View {
                 } header: { Text("Backup") } footer: {
                     Text("The spend key is the wallet. Anyone who sees it can spend your RAND. The key file is what the rand command-line wallet reads.")
                 }
+
+                Section {
+                    NavigationLink("Manage multisig signers") { SignersView() }
+                } header: { Text("Multisig signers") }
 
                 Section("Security") {
                     Picker("Auto-lock", selection: $settings.autoLockMinutes) {
@@ -118,11 +123,22 @@ struct SettingsView: View {
             }
             .confirmationDialog("Forget this wallet on this phone? Without your spend key backup the funds are gone.", isPresented: $confirmForget, titleVisibility: .visible) {
                 Button("Forget wallet", role: .destructive) {
-                    wallet.forgetWallet(contacts: contacts)
+                    do {
+                        try wallet.forgetWallet(contacts: contacts)
+                    } catch {
+                        forgetError = error.localizedDescription
+                        return
+                    }
                     auth.lock()
                     dismiss()
                     onForget()
                 }
+            }
+            .alert("The signer keys could not be removed, so the wallet was not forgotten. Try again.",
+                   isPresented: Binding(get: { forgetError != nil }, set: { if !$0 { forgetError = nil } })) {
+                Button("OK", role: .cancel) { forgetError = nil }
+            } message: {
+                Text(forgetError ?? "")
             }
         }
     }

@@ -73,6 +73,9 @@ android {
     testOptions {
         unitTests.returnDefaultValues = true
     }
+
+    // The private-multisig vectors (fullnode 2771be22), held to their SHA-256s by ui/test/msauth-fixtures.test.mjs.
+    sourceSets { test { resources.srcDirs += ['../../ui/test/fixtures/msauth'] } }
 }
 
 dependencies {

@@ -8,7 +8,7 @@ public final class Prefs {
     private static final String FILE = "rand_wallet_prefs";
 
     public static final String DEFAULT_RPC_URL = "https://rpc.randprotocol.org";
-    public static final long DEFAULT_CHAIN_ID = 20;
+    public static final long DEFAULT_CHAIN_ID = 21;
     public static final int DEFAULT_AUTO_LOCK_MINUTES = 15;
 
     public static final String THEME_DARK = "dark";
@@ -17,8 +17,29 @@ public final class Prefs {
 
     private final SharedPreferences p;
 
+    /** The marker of the one-time chain-id migration below; set once it has run, whatever it found. */
+    static final String CHAIN_MIGRATION_KEY = "migration_chain_id_20_to_21";
+
     public Prefs(Context c) {
-        p = c.getSharedPreferences(FILE, Context.MODE_PRIVATE);
+        this(c.getSharedPreferences(FILE, Context.MODE_PRIVATE));
+    }
+
+    Prefs(SharedPreferences prefs) {
+        p = prefs;
+        migrateChainId(p);
+    }
+
+    /**
+     * Once, on the first launch of a build that has it: a saved chain id of 20 becomes 21 (wallet
+     * v0.8.0 runs chain 21 onward; a saved 20 would refuse every proposal and transfer). Any other
+     * saved value, or none, is left alone, and nothing else is touched (the RPC URL is not). Later
+     * launches see the marker and do nothing, so a user who chooses 20 again keeps it.
+     */
+    static void migrateChainId(SharedPreferences p) {
+        if (p.getBoolean(CHAIN_MIGRATION_KEY, false)) return;
+        SharedPreferences.Editor e = p.edit();
+        if (p.contains("chain_id") && p.getLong("chain_id", DEFAULT_CHAIN_ID) == 20) e.putLong("chain_id", 21);
+        e.putBoolean(CHAIN_MIGRATION_KEY, true).commit();
     }
 
     public String rpcUrl() {

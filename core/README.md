@@ -108,8 +108,12 @@ a split-authorisation chain (any paired prover), the spend key on an older one (
 already in place, so it is ~2.8 MB of hex at the production profile. A prover that quotes a fee
 (`prover.fee`, its `prover_info.fee` passed through) is refused: this build pays none.
 
-To move to a new chain build: `cd vendor/fullnode && git fetch && git checkout <rev>`, update
-`CHAIN_BUILD`/`DEFAULT_CHAIN_ID` in `wallet-core`, run the tests (`cargo test --release`, and
+To move to a new chain build: `scripts/vendor-fullnode.sh <rev> [<fullnode clone or URL>]` (from
+`core/`, or `core/scripts/…` from the repo root) checks the submodule out at `<rev>` — fetched from a
+local clone when it is not pushed yet, the clone itself only read — checks the zkvm's wasm32 gate,
+the patched Plonky3 forks and `randprotocol-msig`'s fixtures (printing their SHA-256s), rewrites
+`CHAIN_BUILD` and the tests that pin it, and refreshes both lockfiles; then update
+`CHAIN_BUILD`'s doc comment (and `DEFAULT_CHAIN_ID` when the chain moves), run the tests (`cargo test --release`, and
 `-- --ignored` for the two real delegated-proof tests), rebuild the three targets. `version`'s
 `hc_bundle`/`hc_auth` are pinned in a test against the digests the live chain's `rand_status`
 answers: if the vendored build assembles either guest differently, that test says so first.

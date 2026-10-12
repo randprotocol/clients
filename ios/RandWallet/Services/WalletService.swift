@@ -104,7 +104,12 @@ final class WalletService: ObservableObject {
     /// Forgets the wallet on this phone. `contacts` is the store the app holds for its whole
     /// lifetime: it is emptied in memory as well as in the Keychain, so a forgotten wallet's
     /// contacts are not offered to the next one (final review, finding 2).
-    func forgetWallet(contacts: ContactsStore) {
+    ///
+    /// The signer profiles go first: when the Keychain refuses to remove them all, this throws
+    /// before anything else is forgotten, so the person can retry rather than be left with a
+    /// forgotten wallet whose signer keys are still on the phone.
+    func forgetWallet(contacts: ContactsStore) throws {
+        try SignerStore.shared.removeAll()
         lock()
         Keychain.deleteSpendKey()
         contacts.forget()

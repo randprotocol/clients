@@ -294,6 +294,8 @@
  *    browser's side panel (Chrome `sidePanel`, Firefox `sidebarAction`). Must be called straight
  *    from the user's click — both browsers open a panel only inside a gesture — and closes the
  *    popup on success. Home offers it only in `mode: 'popup'` and only where it exists.
+ *  - `platform.saveText?({name, text})` → Promise<string|void>. Saves a small non-secret text (a multisig
+ *    share) as a file: a download on web and extension, the Downloads folder on desktop (the path).
  *  - `platform.paste?()` → string. Reads the clipboard, for the send screen's Paste affordance
  *    (a shielded address is pasted, never typed). Optional because reading the clipboard needs a
  *    permission some shells will not have: where it is missing, no Paste button is offered at all
@@ -342,6 +344,11 @@
  *       exactly as `send.send`'s do, and **it refuses exactly what `estimate` refuses, before a
  *       proof starts** — the two run one shared list, because a gate on one and not the other is
  *       a proof spent on a transaction the chain was always going to refuse.
+ *  - `signers?` — private multisig signer profiles (spec 2026-10-11-msauth-signing-design.md):
+ *    `list()`, `preview({policy, key})`, `add({label, policy, key, password})`, `remove(id, password)`,
+ *    `check(id, proposal, expectedRecipients)` → `{summary, signable, refusal?, head?, blocksLeft?}`,
+ *    `sign(id, proposal, expectedRecipients, password)` → `{share, index}`, `verifyShare(id, proposal, share)` → `{index}`.
+ *    Screens offer Settings → Multisig signers only where it exists.
  *  - `prover?` — a whole OPTIONAL GROUP, delegated proving (spec 2026-09-28, Phases 1 and 2): a
  *    paired prover makes the BUNDLE proof for a device that cannot. Since split authorisation
  *    (bundle guest v3, every chain since 17) the job carries the wallet's **viewing key** and a

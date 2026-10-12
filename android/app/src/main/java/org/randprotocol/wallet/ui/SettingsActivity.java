@@ -151,6 +151,9 @@ public class SettingsActivity extends BaseActivity {
             }
         }));
 
+        // Multisig signers
+        b.signers.setOnClickListener(v -> startActivity(new Intent(this, SignersActivity.class)));
+
         // Security
         spinner(b.autolock, R.array.autolock_labels, indexOf(getResources().getIntArray(R.array.autolock_minutes), prefs.autoLockMinutes()),
                 i -> prefs.setAutoLockMinutes(getResources().getIntArray(R.array.autolock_minutes)[i]));
@@ -170,7 +173,13 @@ public class SettingsActivity extends BaseActivity {
                 .setTitle(R.string.settings_remove)
                 .setMessage(R.string.settings_remove_warning)
                 .setPositiveButton(R.string.settings_remove, (d, w) -> {
-                    wallet().removeWallet();
+                    try {
+                        wallet().removeWallet();
+                    } catch (IllegalStateException e) {
+                        // The signer keys could not all be removed: the wallet is kept, whole.
+                        new AlertDialog.Builder(this).setMessage(CoreErrors.of(e)).setPositiveButton(android.R.string.ok, null).show();
+                        return;
+                    }
                     startActivity(new Intent(this, WelcomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK));
                     finish();
                 })

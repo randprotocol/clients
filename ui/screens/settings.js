@@ -275,6 +275,12 @@ function contactsMarkup() {
     <button class="btn block" type="button" data-go="contacts">${t('Manage contacts')}</button>`);
 }
 
+// Offered only where the backend has the (optional) `signers` group.
+function signersMarkup() {
+  return raw(h`<h2 class="section-title">${t('Multisig signers')}</h2>
+    <button class="btn block" type="button" data-go="signers">${t('Manage multisig signers')}</button>`);
+}
+
 function appearanceMarkup(settings) {
   const current = settings.theme || 'system';
   const segments = THEMES.map((theme) => h`
@@ -395,6 +401,7 @@ registerScreen('settings', {
       ${raw(proverGroup ? proverMarkup(settings, platform, proverHost ? proverHostMarkup() : '')
     : proverHost ? sectionMarkup(t('Prover'), proverHostMarkup()) : '')}
       ${raw(ctx.backend.contacts && typeof ctx.backend.contacts.list === 'function' ? contactsMarkup() : '')}
+      ${raw(ctx.backend.signers && typeof ctx.backend.signers.list === 'function' ? signersMarkup() : '')}
       ${raw(appearanceMarkup(settings))}
       ${raw(securityMarkup(settings))}
       ${raw(aboutMarkup(platform, settings))}`;

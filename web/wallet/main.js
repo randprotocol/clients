@@ -67,6 +67,14 @@ function makePlatform(version) {
     // this one — the wallet's window is not something an explorer should be able to reach into.
     openExternal: (url) => { window.open(url, '_blank', 'noopener,noreferrer'); },
     copy: (text) => navigator.clipboard.writeText(String(text ?? '')),
+    // A share (`i:hex`) or other small text as a downloaded file. Not secret.
+    saveText: ({ name, text }) => {
+      const url = URL.createObjectURL(new Blob([String(text)], { type: 'text/plain' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = String(name); a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    },
   };
   if (version) platform.version = version;
   // Optional in the contract: where reading the clipboard is not available, the send screen offers

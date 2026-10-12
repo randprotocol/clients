@@ -64,6 +64,22 @@ enum CoreErrors {
         // version.prover_history_warning (ProverPairingService.warning)
         "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.":
             { String(localized: "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.") },
+        // msauth_* (private multisig signing, fullnode randprotocol-msig)
+        "the transaction does not hash to the proposal's binding": { String(localized: "the transaction does not hash to the proposal's binding") },
+        "the proposal's signing_message is not its binding's": { String(localized: "the proposal's signing_message is not its binding's") },
+        "the proposal's auth_commit is not this policy's account": { String(localized: "the proposal's auth_commit is not this policy's account") },
+        "the proposal's expected digest is not its bundle's": { String(localized: "the proposal's expected digest is not its bundle's") },
+        "the transaction carries no bundle": { String(localized: "the transaction carries no bundle") },
+        "the transaction carries an action; a private multisig proposal is a payment from its bundle alone": { String(localized: "the transaction carries an action; a private multisig proposal is a payment from its bundle alone") },
+        "the witness's value cannot be checked: its nk or salt is not this proposal's": { String(localized: "the witness's value cannot be checked: its nk or salt is not this proposal's") },
+        "this key is not one of the policy's signers": { String(localized: "this key is not one of the policy's signers") },
+        "a share is index:hex": { String(localized: "a share is index:hex") },
+        "a signer key is a rand-node keygen file or 64 hex characters": { String(localized: "a signer key is a rand-node keygen file or 64 hex characters") },
+        "a signer seed is 64 hex characters": { String(localized: "a signer seed is 64 hex characters") },
+        "expected_recipients must be a list of addresses": { String(localized: "expected_recipients must be a list of addresses") },
+        "the key file's public_key is not the one its seed derives": { String(localized: "the key file's public_key is not the one its seed derives") },
+        "the key file's address is not the one its seed derives": { String(localized: "the key file's address is not the one its seed derives") },
+        "no expected recipient given: the payee was NOT checked": { String(localized: "no expected recipient given: the payee was NOT checked") },
     ]
 
     // MARK: sentences with a variable part
@@ -125,6 +141,34 @@ enum CoreErrors {
         Rule(#"this chain names an auth guest but a v1/v2 bundle guest \(([0-9a-fA-F]+)\); the node is misconfigured or lying — refusing to prove"#) { g in
             String(localized: "this chain names an auth guest but a v1/v2 bundle guest (\(g[0])); the node is misconfigured or lying — refusing to prove")
         },
+        // msauth_* (private multisig signing)
+        Rule(#"this proposal is for another policy: it names ([0-9a-f]+), this policy is ([0-9a-f]+)"#) { g in
+            String(localized: "this proposal is for another policy: it names \(g[0]), this policy is \(g[1])")
+        },
+        Rule(#"output (\d+) does not open as this account's: refusing to sign value it cannot see"#) { g in
+            String(localized: "output \(g[0]) does not open as this account's: refusing to sign value it cannot see")
+        },
+        Rule(#"the witness's value does not match the transaction: input (\d+) does not nullify to the bundle's nullifier"#) { g in
+            String(localized: "the witness's value does not match the transaction: input \(g[0]) does not nullify to the bundle's nullifier")
+        },
+        Rule(#"the witness's value does not match the outputs: asset (\d+) has (\d+) in and (\d+) out with the fee and burns"#) { g in
+            String(localized: "the witness's value does not match the outputs: asset \(g[0]) has \(g[1]) in and \(g[2]) out with the fee and burns")
+        },
+        Rule(#"the proposal expires at (\d+), outside its bundle's window \((\d+), (\d+)\]"#) { g in
+            String(localized: "the proposal expires at \(g[0]), outside its bundle's window (\(g[1]), \(g[2])]")
+        },
+        Rule(#"the transaction is for chain (\d+), the proposal says chain (\d+)"#) { g in
+            String(localized: "the transaction is for chain \(g[0]), the proposal says chain \(g[1])")
+        },
+        Rule(#"signer (\d+)'s signature does not verify over this proposal"#) { g in
+            String(localized: "signer \(g[0])'s signature does not verify over this proposal")
+        },
+        Rule(#"signer (\d+) is not in this policy \(it has (\d+) signers\)"#) { g in
+            String(localized: "signer \(g[0]) is not in this policy (it has \(g[1]) signers)")
+        },
+        Rule(#"expected recipient (\S+): (.+)"#) { g in String(localized: "expected recipient \(g[0]): \(localized(g[1]))") },
+        Rule(#"the policy does not parse: (.+)"#) { g in String(localized: "the policy does not parse: \(g[0])") },
+        Rule(#"the proposal does not parse: (.+)"#) { g in String(localized: "the proposal does not parse: \(g[0])") },
         Rule(#"proving failed: (.+)"#) { g in String(localized: "proving failed: \(g[0])") },
         Rule(#"proving the spend authorisation failed: (.+)"#) { g in String(localized: "proving the spend authorisation failed: \(g[0])") },
         Rule(#"proving the call failed: (.+)"#) { g in String(localized: "proving the call failed: \(g[0])") },

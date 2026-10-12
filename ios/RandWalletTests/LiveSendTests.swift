@@ -16,7 +16,7 @@ final class LiveSendTests: XCTestCase {
         }
         let settings = Settings()
         settings.rpcUrl = env["RAND_LIVE_RPC"] ?? "https://rpc.randprotocol.org"
-        settings.chainId = 20
+        settings.chainId = 21
         settings.prover = nil
         settings.noProver = false
         let wallet = WalletService(settings: settings)

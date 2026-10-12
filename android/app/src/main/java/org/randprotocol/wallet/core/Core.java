@@ -166,6 +166,66 @@ public final class Core {
         return object("prepare_invoke", params);
     }
 
+    // ---- private multisig signing (wallet-core msauth.rs: msauth_check, msauth_sign, msauth_verify_share,
+    // msauth_signer_import, msauth_policy_info). A call's params carry a policy (its msk sees every
+    // note of the account) and, for msauth_sign, a seed: never log them.
+
+    /**
+     * The proposal checked against the policy and the intended payments ({@code rand1…:AMOUNT}
+     * each, passed unchanged): fullnode's summary plus {@code recipients_checked}, {@code expected},
+     * {@code chain_id}, {@code genesis}, {@code binding_domain} and {@code lines}. {@code
+     * org.randprotocol.wallet.wallet.SignFlow} judges the reply.
+     */
+    public static JSONObject msauthCheck(String proposal, String policy, java.util.List<String> expectedRecipients) throws CoreException {
+        return object("msauth_check", msauthCheckParams(proposal, policy, expectedRecipients));
+    }
+
+    /**
+     * The share {@code "i:hex"}. The core re-runs every check, the payee check with {@code
+     * expectedRecipients} included — pass the very list the check was given. {@code seedHex} is the
+     * caller's; it wipes its byte[] after (the String cannot be wiped).
+     */
+    public static String msauthSign(String proposal, String policy, String seedHex, java.util.List<String> expectedRecipients) throws CoreException {
+        Object v = call("msauth_sign", msauthSignParams(proposal, policy, seedHex, expectedRecipients));
+        if (v instanceof String) return (String) v;
+        throw new CoreException("msauth_sign returned no share");
+    }
+
+    /** Throws the core's refusal when {@code share} does not verify over this proposal. */
+    public static void msauthVerifyShare(String proposal, String policy, String share) throws CoreException {
+        call("msauth_verify_share", msauthVerifyShareParams(proposal, policy, share));
+    }
+
+    /** A keygen file or 64 hex → {@code {seed, public_key, address, index}}; {@code policy} null leaves index null. */
+    public static JSONObject msauthSignerImport(String input, String policy) throws CoreException {
+        return object("msauth_signer_import", msauthSignerImportParams(input, policy));
+    }
+
+    /** {@code {fingerprint, threshold, signers, address, policy_hash}}. */
+    public static JSONObject msauthPolicyInfo(String policy) throws CoreException {
+        return object("msauth_policy_info", msauthPolicyInfoParams(policy));
+    }
+
+    static JSONObject msauthCheckParams(String proposal, String policy, java.util.List<String> expectedRecipients) {
+        return p("proposal", proposal, "policy", policy, "expected_recipients", new JSONArray(expectedRecipients));
+    }
+
+    static JSONObject msauthSignParams(String proposal, String policy, String seedHex, java.util.List<String> expectedRecipients) {
+        return p("proposal", proposal, "policy", policy, "seed", seedHex, "expected_recipients", new JSONArray(expectedRecipients));
+    }
+
+    static JSONObject msauthVerifyShareParams(String proposal, String policy, String share) {
+        return p("proposal", proposal, "policy", policy, "share", share);
+    }
+
+    static JSONObject msauthSignerImportParams(String input, String policy) {
+        return policy == null ? p("input", input) : p("input", input, "policy", policy);
+    }
+
+    static JSONObject msauthPolicyInfoParams(String policy) {
+        return p("policy", policy);
+    }
+
     public static String formatAmount(String units) {
         try {
             return String.valueOf(call("format_amount", p("units", units)));

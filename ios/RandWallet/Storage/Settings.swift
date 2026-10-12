@@ -46,10 +46,24 @@ final class Settings: ObservableObject {
         }
     }
 
+    /// The marker of the one-time chain-id migration below; set once it has run, whatever it found.
+    static let chainMigrationKey = "migration.chainId20to21"
+
+    /// Once, on the first launch of a build that has it: a saved chain id of 20 becomes 21 (wallet
+    /// v0.8.0 runs chain 21 onward; a saved 20 would refuse every proposal and transfer). Any other
+    /// saved value, or none, is left alone, and nothing else is touched (the RPC URL is not). Later
+    /// launches see the marker and do nothing, so a user who chooses 20 again keeps it.
+    static func migrateChainId(_ defaults: UserDefaults) {
+        guard !defaults.bool(forKey: chainMigrationKey) else { return }
+        if let saved = defaults.object(forKey: "chainId") as? Int, saved == 20 { defaults.set(21, forKey: "chainId") }
+        defaults.set(true, forKey: chainMigrationKey)
+    }
+
     init() {
+        Settings.migrateChainId(defaults)
         let core = try? RandCore.constants()
         rpcUrl = defaults.string(forKey: "rpcUrl") ?? core?.defaultRpcUrl ?? "https://rpc.randprotocol.org"
-        chainId = defaults.object(forKey: "chainId") as? Int ?? Int(core?.defaultChainId ?? 20)
+        chainId = defaults.object(forKey: "chainId") as? Int ?? Int(core?.defaultChainId ?? 21)
         autoLockMinutes = defaults.object(forKey: "autoLockMinutes") as? Int ?? 15
         theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .system
         hasBackedUpKey = defaults.bool(forKey: "hasBackedUpKey")

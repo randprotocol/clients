@@ -46,6 +46,8 @@ use randprotocol_zkvm::machine::{Backend, FriProfile};
 use randprotocol_zkvm::notes::{Note, SpendKey, ViewingKey};
 use randprotocol_zkvm::viewing::TxKey;
 
+mod msauth;
+
 /// The RPC namespace the fullnode defines (`rand_getCommitments`, …). A wire name: it follows
 /// the node, never this wallet.
 pub const RPC_NAMESPACE: &str = "rand";
@@ -56,7 +58,23 @@ pub const ADDRESS_HRP: &str = randprotocol_core::notes::ADDRESS_PREFIX;
 pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode `main`
+/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode
+/// tag `v0.8.0` (`c0878c3`: private multisig, constraint set 9, chain 21 onward; over `main`
+/// `a1785c9` it adds the chain-21 cutover runbook and scripts and the release assets, with
+/// `randprotocol-msig`, the proof guests and keys unchanged). Before it: `main` `a1785c9`
+/// (origin/main: the private-multisig merge `9b01492` plus the verified fold, the
+/// admission verified set folded into the verify cache, and a cut-script change; `randprotocol-msig`
+/// and the proof guests and keys are unchanged). Before it: `main` `9b01492` (the merge of
+/// `feat/private-multisig` `2771be22`) — over `e34117be` it adds the
+/// signer's payee check to `randprotocol-msig` (`check_proposal_expecting` / `sign_expecting`
+/// with `rand1…[:AMOUNT]` expected recipients, each output's `matches`, `recipients_checked`, the
+/// summary's chain/genesis first line) and the `proposal-substituted-recipient` vector; the proof
+/// guests and keys are `e34117be`'s. Before it: fullnode `feat/private-multisig` `e34117be` —
+/// constraint set 9 (the MODQ chip: every proof key and the
+/// proof encoding move; `hc_bundle` `60af094a…` and `hc_auth` `1e4e347f…` unchanged), the `msauth`
+/// guest, `randprotocol-msig`; a node on it refuses chains 18–20, so this build is chain-21-only
+/// (chain 20 fixes go to `release/chain20`). `dilithium-core` and the zkvm's `dilithium_host` are
+/// gated off wasm32 in the vendored zkvm crate. Before it: fullnode `main`
 /// `37c4fdd` (the v0.8.0 candidate) — over `v0.7.0` it adds the new action kinds (perps 34–39,
 /// multisig 40–43, `SetRandPrice` 44), `Action::Aggregate`'s `payout_total` and `layout`, and the
 /// scan heads (`rand_getScanLeaves`); chain 20 keeps running on it with every gated action refused,
@@ -82,9 +100,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
 /// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
 /// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "37c4fdd";
-/// The chain the defaults below describe: chain 20, cut 2026-10-01 on fullnode v0.6.8 (`c9c9bd3`)
-/// from chain 19's state, with `program_state`, `binding_domain: 1` and `bridge.fees` (10 bps each
+pub const CHAIN_BUILD: &str = "c0878c3";
+/// The chain the defaults below describe: chain 21 (fullnode v0.8.0, constraint set 9; perps,
+/// multisig, the `fees` section, `hc_auth_multisig`), cut from chain 20's state. Before it, chain
+/// 20, cut 2026-10-01 on fullnode v0.6.8 (`c9c9bd3`) from chain 19's state, with `program_state`, `binding_domain: 1` and `bridge.fees` (10 bps each
 /// way) in its genesis. Before it, chain 19, the next cut (not live on 2026-09-30; the
 /// public node answered chain 18, genesis `a7cb020c…`, that day; chain 18 was the aim from
 /// 2026-09-29, 16 from 2026-09-28). Chain 19 is chain 18 re-cut on the same build (fullnode
@@ -101,7 +120,7 @@ pub const CHAIN_BUILD: &str = "37c4fdd";
 /// never built with either: without them both constants are the ones written here.
 pub const DEFAULT_CHAIN_ID: u64 = match option_env!("RAND_WALLET_CHAIN_ID") {
     Some(id) => parse_chain_id(id),
-    None => 20,
+    None => 21,
 };
 pub const DEFAULT_RPC_URL: &str = match option_env!("RAND_WALLET_RPC_URL") {
     Some(url) => url,
@@ -3939,6 +3958,14 @@ pub fn constants() -> Value {
     })
 }
 
+/// `msauth_check`/`msauth_sign`'s `expected_recipients`: absent or null is the empty list.
+fn expected_recipients_param(params: &Value) -> Result<Vec<String>> {
+    match params.get("expected_recipients") {
+        None | Some(Value::Null) => Ok(vec![]),
+        Some(v) => serde_json::from_value(v.clone()).map_err(|_| "expected_recipients must be a list of addresses".to_string()),
+    }
+}
+
 fn str_param<'a>(p: &'a Value, name: &str) -> Result<&'a str> {
     p.get(name).and_then(Value::as_str).ok_or_else(|| format!("missing string parameter {name:?}"))
 }
@@ -4140,6 +4167,27 @@ fn asset_param(p: &Value) -> Result<u32> {
 ///   `payment_commitment`/`payment_tx_key` from a `prove_transfer` reply — never index 0 of the
 ///   four-wide arrays, which on a RAND transfer is a dummy slot
 /// - `format_amount` `{units}` → `"1.5"`; `parse_amount` `{text}` → units string
+/// - `msauth_check` `{proposal, policy, expected_recipients?}` → the checked summary (fullnode
+///   `check_proposal_expecting`; `expected_recipients` are `rand1…` or `rand1…:AMOUNT` texts the
+///   crate parses, absent or empty meaning no payee named): each output's `owner_fingerprint`,
+///   `to_account`, `amount` (string), `asset`, `memo`, `matches` (`"<address fp> (<amount> RAND)"`
+///   or null) and `needs_payee`; `recipients_checked`; `expected` (`[{entry, fingerprint}]`, each
+///   entry's owner fingerprint or null); `fee`/`burns` (strings), `expires_at`,
+///   `signing_message` (hex), `policy_fingerprint`, `lines` (verbatim) and the proposal's
+///   `chain_id`/`genesis`/`binding_domain`. A proposal paying anyone else, or leaving a named payee
+///   unpaid or off its amount, is refused in the crate's sentence. No RPC: the caller compares
+///   `expires_at` with its node's head (refuse at `head + 16 >= expires_at`)
+/// - `msauth_verify_share` `{proposal, policy, share}` → `true` when `share` (`i:hex`) verifies
+/// - `msauth_policy_info` `{policy}` → `{fingerprint, threshold, signers, address, policy_hash}`
+/// - `msauth_signer_import` `{input, policy?}` → `{seed, public_key, address, index}`: a `rand-node
+///   keygen` file or 64 hex; a file whose `public_key`/`address` is not its seed's is refused; with
+///   `policy`, a key outside it is refused ("this key is not one of the policy's signers"), and
+///   `index` is its position (null without a policy)
+/// - `msauth_sign` `{proposal, policy, seed, expected_recipients}` → `"i:hex"`: every `msauth_check`
+///   check through the crate's `sign_expecting` (the payee check included), then the deterministic
+///   Dilithium2 share. `expected_recipients` absent or empty while any output pays someone (not
+///   change, amount > 0) is refused: "no expected recipient given: the payee was NOT checked".
+///   `seed` (64 hex) is wiped here after use; the caller wipes its own copy
 /// - `fixture_prove_request` `{profile?, asset?}` → a valid `prove_transfer` request for smoke
 ///   tests: a RAND transfer at `asset: 0` (the default), a token transfer at `asset >= 1`
 /// - `fixture_burn_request` `{profile?}` → a valid `prove_burn` request for smoke tests
@@ -4328,6 +4376,17 @@ pub fn dispatch(method: &str, params: &Value) -> Result<Value> {
         "fixture_burn_request" => Ok(fixture_burn_request(params.get("profile").and_then(Value::as_str).unwrap_or("test"))?),
         "format_amount" => Ok(Value::String(format_amount(amount_param(params, "units")?))),
         "parse_amount" => Ok(Value::String(parse_amount(str_param(params, "text")?).map_err(|e| e.to_string())?.to_string())),
+        // Private multisig signing (msauth.rs).
+        "msauth_check" => msauth::check(str_param(params, "proposal")?, str_param(params, "policy")?, &expected_recipients_param(params)?),
+        "msauth_sign" => msauth::sign(
+            str_param(params, "proposal")?,
+            str_param(params, "policy")?,
+            str_param(params, "seed")?,
+            &expected_recipients_param(params)?,
+        ),
+        "msauth_signer_import" => msauth::signer_import(str_param(params, "input")?, params.get("policy").and_then(Value::as_str)),
+        "msauth_verify_share" => msauth::verify_share(str_param(params, "proposal")?, str_param(params, "policy")?, str_param(params, "share")?),
+        "msauth_policy_info" => msauth::policy_info(str_param(params, "policy")?),
         other => bad(format!("unknown method {other:?}")),
     }
 }
@@ -5284,7 +5343,7 @@ mod tests {
         assert_eq!(ADDRESS_HRP, "rand1");
         // The wire names come from upstream, not from a second literal here.
         assert_eq!(ADDRESS_HRP, randprotocol_core::notes::ADDRESS_PREFIX);
-        assert_eq!(v["default_chain_id"], 20);
+        assert_eq!(v["default_chain_id"], 21);
         assert!(v.get("units_per_rand").is_some());
     }
 
@@ -5298,7 +5357,7 @@ mod tests {
     fn json_entry_point_reports_errors_as_json() {
         let v: Value = serde_json::from_str(&call("version", "{}")).unwrap();
         assert_eq!(v["ok"], true);
-        assert_eq!(v["value"]["default_chain_id"], 20);
+        assert_eq!(v["value"]["default_chain_id"], 21);
         assert_eq!(v["value"]["bundle_base_fee"], "1000000");
         let v: Value = serde_json::from_str(&call("wallet_info", r#"{"spend_key":"zz"}"#)).unwrap();
         assert_eq!(v["ok"], false);
@@ -6115,12 +6174,20 @@ mod tests {
             assert!(v["error"].as_str().unwrap().contains("decimal strings"), "{v}");
         }
 
+        /// The vendored private multisig signer checks link into the core (fullnode 9b01492).
+        #[test]
+        fn the_vendored_msig_crate_is_linked() {
+            assert_eq!(randprotocol_msig::POLICY_VERSION, 1);
+            assert_eq!(randprotocol_msig::SIG_BYTES, 2420);
+            assert_eq!(randprotocol_msig::PK_BYTES, 1312);
+        }
+
         /// `version` reports the chain-14 bundle's constants, on a build aimed at chain 19.
         #[test]
         fn version_reports_chain_fourteen() {
             let v = constants();
-            assert_eq!(v["default_chain_id"], 20);
-            assert_eq!(v["chain_build"], "37c4fdd");
+            assert_eq!(v["default_chain_id"], 21);
+            assert_eq!(v["chain_build"], "c0878c3");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
@@ -7117,12 +7184,25 @@ mod tests {
             assert!(e.contains("tier 13"), "{e}");
             // The same proof against another transaction (the chain id moved): the digest still
             // matches — it covers the bundle, not the chain — so only the verify refuses it.
+            // The fixture's chain is chain-id bound (14–19); the next one binds its genesis
+            // (BIND-1), so the moved pending names one, as a pending for that chain always does —
+            // without it `finish_proof` refuses before the verify, which is not what is tested here.
             let mut other = out.pending.clone();
             let mut tx = Transaction::decode(&hex::decode(&other.tx_hex).unwrap()).unwrap();
             tx.chain_id += 1;
             other.tx_hex = hex::encode(tx.encode());
+            if !CHAIN_ID_BINDING_CHAIN_IDS.contains(&tx.chain_id) {
+                other.genesis = Some(hex::encode([0x5a; 32]));
+            }
             let e = finish(&other, &good).err().unwrap();
             assert!(e.contains("does not verify"), "{e}");
+            // And BIND-1 still holds: the same move without a genesis is refused before any verify.
+            if !CHAIN_ID_BINDING_CHAIN_IDS.contains(&tx.chain_id) {
+                let mut bare = other.clone();
+                bare.genesis = None;
+                let e = finish(&bare, &good).err().unwrap();
+                assert!(e.contains("BIND-1"), "{e}");
+            }
         }
     }
 
@@ -7284,6 +7364,27 @@ mod tests {
             }
             fn verify_auth(&self, hc: &Word8, proof: &[u8], binding: &[u32; TX_BINDING_WORDS]) -> std::result::Result<Word8, ConfidentialError> {
                 StubExecutor.verify_auth(hc, proof, binding)
+            }
+            // Constraint set 9 (fullnode e34117be): the auth proof's shape and the msauth key, the
+            // wrapped executor's (a deploy proves no multisig authorisation; none is called).
+            fn auth_header(&self, proof: &[u8]) -> std::result::Result<(randprotocol_core::confidential::AuthShape, Word8, Option<u64>), ConfidentialError> {
+                self.0.auth_header(proof)
+            }
+            fn warm_auth_multisig(&self) {
+                self.0.warm_auth_multisig()
+            }
+            fn auth_multisig_key_ready(&self) -> bool {
+                self.0.auth_multisig_key_ready()
+            }
+            fn install_msauth_vk(&self, blob: &[u8]) -> std::result::Result<(), String> {
+                // The trait's, not ZkExecutor's inherent method of the same name (a typed error).
+                ConfidentialExecutor::install_msauth_vk(self.0, blob)
+            }
+            fn enable_auth_multisig(&self) {
+                self.0.enable_auth_multisig()
+            }
+            fn build_msauth_key(&self) -> std::result::Result<(), String> {
+                self.0.build_msauth_key()
             }
             fn verify_bundle(&self, hc: &Word8, proof: &[u8], binding: &[u32; TX_BINDING_WORDS]) -> std::result::Result<(), ConfidentialError> {
                 StubExecutor.verify_bundle(hc, proof, binding)

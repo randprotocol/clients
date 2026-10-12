@@ -55,6 +55,12 @@
             tools:replace="screenOrientation" />
         <activity android:name=".ui.DetailActivity" android:exported="false" />
         <activity android:name=".ui.SettingsActivity" android:exported="false" />
+        <!-- Private multisig signing. A turn of the phone keeps the screen (and the proposal it alone holds):
+             nothing of a proposal or a key goes into a saved-state Bundle. -->
+        <activity android:name=".ui.SignersActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
+        <activity android:name=".ui.SignProposalActivity" android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden" />
 
         <service
             android:name=".wallet.ProvingService"

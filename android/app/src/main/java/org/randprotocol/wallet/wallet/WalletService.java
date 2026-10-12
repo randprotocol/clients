@@ -197,8 +197,9 @@ public final class WalletService {
         return info;
     }
 
+    /** Throws IllegalStateException, with nothing removed, when the signer keys cannot all be removed ({@link KeyVault#erase}). */
     public void removeWallet() {
-        vault.erase(); // the prover's token with it
+        vault.erase(); // the prover's token and the signer profiles with it; throws before anything else goes
         prefs.setProver(null);
         prefs.setNoProver(false);
         prefs.setProverNoticeFor(null);

@@ -384,6 +384,13 @@ export function coreApi(core) {
     finishProof: (pending, reply_hex) => call('finish_proof', { pending, reply_hex }),
     parseProverLink: (link) => call('parse_prover_link', { link }),
     proverFingerprint: (kem_ek) => call('prover_fingerprint', { kem_ek }),
+    // Private multisig signing (wallet-core msauth.rs): check, sign, verify a share, import a
+    // signer key, describe a policy. `seed` is 64 hex; never log a call's params.
+    msauthCheck: (proposal, policy, expected_recipients = []) => call('msauth_check', { proposal, policy, expected_recipients }),
+    msauthSign: (proposal, policy, seed, expected_recipients = []) => call('msauth_sign', { proposal, policy, seed, expected_recipients }),
+    msauthVerifyShare: (proposal, policy, share) => call('msauth_verify_share', { proposal, policy, share }),
+    msauthSignerImport: (input, policy) => call('msauth_signer_import', policy ? { input, policy } : { input }),
+    msauthPolicyInfo: (policy) => call('msauth_policy_info', { policy }),
     // A bridge burn. `plan_burn` selects both groups' notes (the token to burn and the RAND to pay
     // with) and costs nothing; `prove_burn` proves the ONE bundle they share, which since chain 14
     // is a single proof of about two minutes rather than two of about three and a half.

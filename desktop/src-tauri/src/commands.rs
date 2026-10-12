@@ -148,10 +148,57 @@ pub async fn prover_rotate_pairing(state: State<'_, ProverState>, store: State<'
     prover::rotate_pairing(&state, &prover::dir(), &store, prover::DEFAULT_ADDR).await
 }
 
+/// A share file in the user's Downloads, never over an existing file. `name` is
+/// `share-<n>.txt`-shaped: letters, digits, `.`, `_`, `-`, ending `.txt`.
+pub fn save_text_in(dir: &std::path::Path, name: &str, text: &str) -> Result<std::path::PathBuf, String> {
+    let ok = name.ends_with(".txt") && name.len() <= 64 && name.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) && !name.starts_with('.');
+    if !ok {
+        return Err(format!("{name:?} is not a file name this app writes"));
+    }
+    use std::io::Write;
+    // A name that is taken becomes `share-1-2.txt`, `-3`, … up to 99: a file is never overwritten.
+    let stem = &name[..name.len() - 4];
+    for n in 1..=99u32 {
+        let path = if n == 1 { dir.join(name) } else { dir.join(format!("{stem}-{n}.txt")) };
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut f) => {
+                f.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+                return Ok(path);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("{}: {e}", path.display())),
+        }
+    }
+    Err(format!("{name:?}: 99 files of that name already exist"))
+}
+
+#[tauri::command]
+pub async fn save_text_to_downloads(app: tauri::AppHandle, name: String, text: String) -> Result<String, String> {
+    use tauri::Manager;
+    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    save_text_in(&dir, &name, &text).map(|p| p.display().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::Value;
+
+    #[test]
+    fn save_text_in_writes_once_and_refuses_a_path() {
+        let dir = std::env::temp_dir().join(format!("rand-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = save_text_in(&dir, "share-1.txt", "1:ab\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "1:ab\n");
+        let q = save_text_in(&dir, "share-1.txt", "second").unwrap();
+        assert_ne!(p, q, "a taken name gets a new file");
+        assert_eq!(q.file_name().unwrap(), "share-1-2.txt");
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "1:ab\n", "the first file is untouched");
+        assert_eq!(std::fs::read_to_string(&q).unwrap(), "second");
+        assert!(save_text_in(&dir, "../evil.txt", "x").is_err());
+        assert!(save_text_in(&dir, "a.sh", "x").is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn core_call_is_a_passthrough_to_wallet_core() {

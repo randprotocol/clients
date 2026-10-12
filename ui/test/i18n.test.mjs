@@ -124,6 +124,8 @@ const ALLOWED = new Set([
   // Settings → Prover: the `randprover:` link's scheme (the pairing field's placeholder), and the
   // fake prover pool's member fingerprints (Crockford digits, "6DYD-YDEN-6XYX-YDY5" and the like).
   'randprover', 'DYD', 'YDEN', 'XYX', 'YDY', 'FD', 'ZD', 'GHWN', 'SMN', 'HC',
+  // Multisig signers: the fake policy fingerprint ("NFYW-K8E9-E5K9-AAK3"), shown as data.
+  'NFYW', 'AAK',
   // Settings → Appearance → Language: each language listed under its own name (LOCALES[].name in
   // ui/i18n.js), never translated, so a reader who cannot read the one in force can find theirs.
   // The walk's words are ASCII runs, so Español, Français and Português arrive split at the accent.
@@ -140,6 +142,8 @@ const SCREENS = [
   ['activity', () => unlockedBackend()],
   ['explore', () => unlockedBackend()],
   ['settings', () => unlockedBackend()],
+  ['signers', () => unlockedBackend()],
+  ['signer/s1', () => { const b = unlockedBackend(); b.signers.add({ label: 'x', password: 'unlocked-password-1' }); return b; }],
   ['send', () => unlockedBackend()],
   ['receive', () => unlockedBackend()],
   ['withdraw', () => unlockedBackend()],

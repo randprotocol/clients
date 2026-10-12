@@ -238,18 +238,18 @@ test('BUNDLE_INPUTS matches what the real core will actually select', { skip }, 
 
 // ------------------------------------------------------------------------- the chain-14 core ---
 
-test('the artefact this wallet loads is built for chain 20 on the hidden-asset bundle', { skip }, async () => {
+test('the artefact this wallet loads is built for chain 21 on the hidden-asset bundle', { skip }, async () => {
   const { PROVER_WARNING } = await import('../../../ui/screens/settings.js');
   // The wasm is git-ignored build output, so "is it the current one" is a real question: a stale
   // artefact would answer every offline call above perfectly while proving against a guest the
   // chain no longer runs. These are the constants that moved, and a stale build fails here.
   const core = await realCore();
   const k = await core.call('version');
-  assert.equal(k.default_chain_id, 20, 'the core has described chain 20 since 2026-10-01 (19 from 2026-09-30, 18 from e830acc, 16 from d3e3ada before that)');
+  assert.equal(k.default_chain_id, 21, 'chain 21 from e34117b (constraint set 9); 20 from 2026-10-01 before that');
   // Fullnode v0.6.7 (constraint set 8 and split authorisation — the build chains 18 and 19 run):
   // every bundle proof declares the guest's ceiling, which the genesis pins; the chains on which a
   // memo claim is never believed; the two guests chain 18's `rand_status` names (2026-09-30).
-  assert.equal(k.chain_build, '37c4fdd');
+  assert.equal(k.chain_build, 'c0878c3');
   assert.equal(k.bundle_gas_limit, 20479);
   assert.equal(k.hc_bundle, '60af094acfe65d85fdb18fb3d06cf9085dcf28c96e59e87f1ee527226e6e3fce', 'bundle guest v3');
   assert.equal(k.hc_auth, '1e4e347f44cf86750b30a9a4bdf9ec9256efe353d4ff8017451eca7d195639c1', 'the auth guest');
@@ -434,4 +434,33 @@ test('prover: the real core parses a pairing link and fingerprints its key', { s
   assert.equal(notOwn.own, false);
   await assert.rejects(core.call('parse_prover_link', { link: 'https://127.0.0.1:8546' }));
   assert.equal((await core.call('version')).prover_wire, 1);
+});
+
+test('the wasm core checks and signs fullnode\'s private-multisig vectors exactly', { skip }, async () => {
+  const core = await realCore();
+  const fx = (n) => readFileSync(new URL(`../../../ui/test/fixtures/msauth/${n}.json`, import.meta.url), 'utf8');
+  const expected = JSON.parse(fx('expected'));
+  const seeds = JSON.parse(fx('signer-seeds'));
+  const [proposal, policy] = [fx('proposal-valid'), fx('policy')];
+  // The real payee, as fullnode's generator wrote it into the informational summary.
+  const payee = JSON.parse(proposal).summary[0].split(' ').pop();
+  assert.equal(payee, expected.recipient);
+  const expected_recipients = [`${payee}:10`];
+  const s = await core.call('msauth_check', { proposal, policy, expected_recipients });
+  assert.equal(s.recipients_checked, true);
+  assert.equal(s.policy_fingerprint, 'NFYW-K8E9-E5K9-AAK3');
+  assert.equal(s.outputs[2].amount, '10000000000');
+  assert.deepEqual(s.lines, expected.lines_expecting_recipient);
+  for (const [i, want] of [[0, expected.share_0], [2, expected.share_2]]) {
+    assert.equal(await core.call('msauth_sign', { proposal, policy, seed: seeds.members[i], expected_recipients }), want);
+    assert.equal(await core.call('msauth_verify_share', { proposal, policy, share: want }), true);
+  }
+  await assert.rejects(core.call('msauth_sign', { proposal, policy, seed: seeds.members[0] }),
+    /^Error: no expected recipient given: the payee was NOT checked$/);
+  await assert.rejects(core.call('msauth_sign', { proposal: fx('proposal-substituted-recipient'), policy, seed: seeds.members[0], expected_recipients: [payee] }),
+    (e) => e.message === expected.substituted_refusal);
+  await assert.rejects(core.call('msauth_sign', { proposal, policy, seed: seeds.non_member, expected_recipients }), /not one of the policy's signers/);
+  await assert.rejects(core.call('msauth_check', { proposal: fx('proposal-unbound'), policy }), /does not hash to the proposal's binding/);
+  const imported = await core.call('msauth_signer_import', { input: seeds.members[2], policy });
+  assert.equal(imported.index, 2);
 });
