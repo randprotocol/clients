@@ -125,6 +125,7 @@ export default {
   "amount must be greater than zero": "금액은 0보다 커야 합니다",
   "amount overflow": "금액 오버플로",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "RAND가 아닌 결제는 금액을 확인할 수 없습니다. 이 경우 금액을 비워 두세요.",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "이 수취인은 RAND와 토큰을 모두 받습니다. 한 수취인에게 보내는 RAND 결제와 토큰 결제는 별도의 제안이 필요합니다.",
   "amounts overflow": "금액 오버플로",
   "an action is {n} characters, more than {max}": "액션이 {n}자로, 최대 {max}자를 넘습니다",
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "주소(rand1…), 결제 링크(randpay:…) 또는 저장된 연락처 이름.",

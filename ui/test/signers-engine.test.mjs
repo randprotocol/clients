@@ -325,3 +325,37 @@ test('sign hands msauth_sign the same expected-recipient list the check used', a
   await backend.signers.sign(row.id, 'P', [' rand1payee:5 ', 'rand1other:2\n'], PASSWORD);
   assert.deepEqual(seen, [['check', ['rand1payee:5', 'rand1other:2']], ['sign', ['rand1payee:5', 'rand1other:2']]]);
 });
+
+// ---- final fix wave ----
+// The reviewer's probe: X is paid 900 RAND beside 1 unit of asset 5, and the signer names X with no
+// amount. The token output must not unpin X's RAND, so the verdict refuses.
+test('a dust token beside a RAND output to the same payee does not unpin that payee', () => {
+  const G = '0'.repeat(64);
+  const summary = {
+    recipients_checked: true, expires_at: 1000, chain_id: 21, binding_domain: 1, genesis: G, lines: ['x'],
+    outputs: [
+      { to_account: false, amount: '900000000000', asset: 0, owner_fingerprint: 'X', matches: 'AAAA (900 RAND)' },
+      { to_account: false, amount: '1', asset: 5, owner_fingerprint: 'X', matches: 'AAAA (0.000000001 RAND)' },
+      { to_account: true, amount: '5', asset: 0, owner_fingerprint: 'self', matches: null },
+    ],
+    expected: [{ entry: 'rand1payee', fingerprint: 'X' }],
+  };
+  const r = verdict({ summary, head: 10, chainId: 21, genesis: G, url: 'u', recipients: ['rand1payee'] });
+  assert.equal(r.signable, false);
+  assert.equal(r.refusal.code, 'unchecked-recipient');
+  // An output with no asset field counts as RAND too (fails closed).
+  const noAsset = { ...summary, outputs: [{ ...summary.outputs[0], asset: undefined }, summary.outputs[1]] };
+  assert.equal(verdict({ summary: noAsset, head: 10, chainId: 21, genesis: G, url: 'u', recipients: ['rand1payee'] }).refusal.code, 'unchecked-recipient');
+  // The same payee paid the token alone may still go unpinned.
+  const tokenOnly = { ...summary, outputs: [summary.outputs[1], summary.outputs[2]] };
+  assert.equal(verdict({ summary: tokenOnly, head: 10, chainId: 21, genesis: G, url: 'u', recipients: ['rand1payee'] }).signable, true);
+});
+
+test('a summary whose lines are missing or not all strings is malformed-summary', () => {
+  for (const lines of [undefined, null, 'x', {}, [1], ['x', null], ['x', ['y']]]) {
+    const summary = { ...SUMMARY };
+    if (lines === undefined) delete summary.lines; else summary.lines = lines;
+    assert.equal(verdict({ summary, head: 1, chainId: 13, genesis: GENESIS, url: 'u' }).refusal.code, 'malformed-summary', JSON.stringify(lines));
+  }
+  assert.equal(verdict({ summary: { ...SUMMARY, lines: [] }, head: 1, chainId: 13, genesis: GENESIS, url: 'u' }).signable, true, 'an empty array of lines is well formed');
+});

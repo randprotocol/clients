@@ -127,6 +127,7 @@ export default {
   "amount must be greater than zero": "amaun mestilah lebih daripada sifar",
   "amount overflow": "amaun melimpah",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "Amaun tidak boleh disemak untuk pembayaran bukan RAND: biarkan amaun kosong bagi pembayaran itu.",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "Penerima ini menerima RAND dan juga token: pembayaran RAND dan token kepada satu penerima memerlukan cadangan berasingan.",
   "amounts overflow": "amaun-amaun melimpah",
   "an action is {n} characters, more than {max}": "satu tindakan ialah {n} aksara, melebihi {max}",
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "Alamat (rand1…), pautan pembayaran (randpay:…), atau nama kenalan yang disimpan.",

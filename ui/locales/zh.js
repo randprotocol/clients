@@ -125,6 +125,7 @@ export default {
   "amount must be greater than zero": "金额必须大于零",
   "amount overflow": "金额溢出",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "非 RAND 付款无法核对金额：这类付款请将金额留空。",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "此收款人同时收取 RAND 和代币：向同一收款人支付 RAND 和代币需要分开的提案。",
   "amounts overflow": "金额溢出",
   "an action is {n} characters, more than {max}": "操作长度为 {n} 个字符，超过上限 {max}",
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "地址（rand1…）、收款链接（randpay:…）或已保存联系人的名称。",

@@ -384,3 +384,43 @@ test('an edit while a check is in flight leaves Sign disabled when it lands', as
   const c = root.querySelector('input[data-role="confirm"]'); c.value = 'aak3'; c.dispatchEvent(new Event('input', { bubbles: true }));
   assert.equal(root.querySelector('[data-role="sign"]').disabled, true);
 });
+
+// ---- final fix wave ----
+test('a payee paid both RAND and a token keeps its amount required, and the screen says why', async (t) => {
+  const fps = { rand1payee: 'X' };
+  const { app, root, seen } = await checked(t, null, async (payees, base) => {
+    const r = await base();
+    const outputs = [{ to_account: false, amount: '900000000000', asset: 0, owner_fingerprint: 'X', matches: 'a' }, { to_account: false, amount: '1', asset: 5, owner_fingerprint: 'X', matches: 'b' }];
+    return { ...r, summary: { ...r.summary, outputs, expected: payees.map((e) => ({ entry: e, fingerprint: fps[e.split(':')[0]] || null })) } };
+  });
+  type(root.querySelector('input[data-role="payee"]'), 'rand1payee');
+  await submit(app, root);
+  assert.deepEqual(seen.at(-1), ['rand1payee'], 'an unfingerprinted row may be sent address-only to find out');
+  assert.equal(root.querySelector('[data-role="nonrand-note"]'), null, 'no exception offered to a RAND payee');
+  assert.ok(root.querySelector('[data-role="mixed-note"]'), 'the both-RAND-and-token sentence is shown');
+  const n = seen.length;
+  await submit(app, root);
+  assert.equal(seen.length, n, 'the amount is now required');
+  assert.match(root.querySelector('[data-role="payee-error"]').textContent, /amount/i);
+});
+
+test('editing the proposal after a check clears the review and disarms Sign', async (t) => {
+  const { app, root } = await checked(t);
+  type(root.querySelector('input[data-role="payee"]'), 'rand1a');
+  type(root.querySelector('input[data-role="payee-amount"]'), '1');
+  await submit(app, root);
+  const c = root.querySelector('input[data-role="confirm"]'); c.value = 'aak3'; c.dispatchEvent(new Event('input', { bubbles: true }));
+  assert.equal(root.querySelector('[data-role="sign"]').disabled, false);
+  const ta = root.querySelector('textarea[data-role="proposal"]');
+  ta.value = `${ta.value} `; ta.dispatchEvent(new Event('input', { bubbles: true }));
+  assert.equal(root.querySelector('[data-role="sign"]'), null, 'the review is cleared');
+  assert.equal(root.querySelector('[data-role="line"]'), null);
+});
+
+test('typing the same proposal text back leaves a fresh review alone', async (t) => {
+  const { app, root } = await checked(t);
+  const ta = root.querySelector('textarea[data-role="proposal"]');
+  const before = root.querySelectorAll('[data-role="line"]').length;
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  assert.equal(root.querySelectorAll('[data-role="line"]').length, before);
+});

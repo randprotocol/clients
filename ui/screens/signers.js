@@ -8,14 +8,13 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits, parseUnits } from '../lib/format.js';
 import { t } from '../i18n.js';
-import { isZero } from '../engine/signers.js';
+import { isZero, isNonRand, payeeAssets } from '../engine/signers.js';
 
 export const MAX_FILE_BYTES = 1 << 20;
 /** An output the signer must name a payee for: it leaves the account and moves something. Decided
  * here from the output itself, not from the core's own flag. */
 export const needsPayee = (o) => o && o.to_account !== true && !isZero(o.amount);
 export const isMatched = (o) => typeof o.matches === 'string' && o.matches.trim() !== '';
-const nonRand = (o) => o != null && o.asset != null && Number.isInteger(Number(o.asset)) && Number(o.asset) !== 0;
 /**
  * One intended payment as the core's `addr:AMOUNT`. AMOUNT is RAND in display units, the wallet's
  * decimal text, as the send screen takes it (checked by `parseUnits`, passed as typed and trimmed).
@@ -65,7 +64,11 @@ function wireFiles(ctx, root, onError) {
     input.addEventListener('change', async () => {
       try {
         const text = await readPicked(input);
-        if (text != null && ctx.isCurrent()) root.querySelector(`textarea[data-role="${input.dataset.file}"]`).value = text;
+        if (text != null && ctx.isCurrent()) {
+          const ta = root.querySelector(`textarea[data-role="${input.dataset.file}"]`);
+          ta.value = text;
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+        }
       } catch (err) { onError(err.message); }
       input.value = '';
     });
@@ -203,20 +206,29 @@ registerScreen('signer', {
       // An amount may be left out only on a row whose own address owns a non-RAND paying output. A row
       // the core has not yet fingerprinted (or whose address was edited) may be sent address-only so
       // the next check can tell; the engine refuses it unless its fingerprint owns such an output.
-      const anyNonRand = !!(paying && paying.some(nonRand));
-      const owners = new Set((paying || []).filter(nonRand).map((o) => o.owner_fingerprint).filter((f) => typeof f === 'string' && f !== ''));
+      // A payee that receives RAND too never gets the exception: its RAND amount must be pinned.
+      const anyNonRand = !!(paying && paying.some(isNonRand));
+      const { tokenOwners: owners, randOwners } = payeeAssets(paying || []);
       const expected = lastSummary && Array.isArray(lastSummary.expected) ? lastSummary.expected : [];
-      const optionalFor = (row) => {
+      const knownFor = (row) => {
         const a = String(row.addr || '').trim();
-        const known = expected.find((x) => x && typeof x.entry === 'string' && (x.entry.indexOf(':') < 0 ? x.entry : x.entry.slice(0, x.entry.indexOf(':'))).trim() === a && a !== '');
-        if (known) return typeof known.fingerprint === 'string' && owners.has(known.fingerprint);
+        return expected.find((x) => x && typeof x.entry === 'string' && (x.entry.indexOf(':') < 0 ? x.entry : x.entry.slice(0, x.entry.indexOf(':'))).trim() === a && a !== '');
+      };
+      const mixedFor = (row) => {
+        const known = knownFor(row);
+        return !!known && typeof known.fingerprint === 'string' && owners.has(known.fingerprint) && randOwners.has(known.fingerprint);
+      };
+      const optionalFor = (row) => {
+        const known = knownFor(row);
+        if (known) return typeof known.fingerprint === 'string' && owners.has(known.fingerprint) && !randOwners.has(known.fingerprint);
         return anyNonRand;
       };
       const rowOptional = rows.map(optionalFor);
+      const rowMixed = rows.map(mixedFor);
       box.innerHTML = h`<div class="card stack">
         <span class="label">${t('Intended payments')}</span>
         <span class="caption">${t('Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.')}</span>
-        <div class="stack" data-role="rows">${raw(rows.map((_, i) => h`${raw(rowOptional[i] ? h`<span class="caption" data-role="nonrand-note">${t('Amounts cannot be checked for non-RAND payments: leave the amount empty for those.')}</span>` : '')}<div class="field cluster"><input data-role="payee" data-row="${i}" type="text" autocomplete="off" spellcheck="false" placeholder="rand1…" aria-label="${t('Payee address')}"><input data-role="payee-amount" data-row="${i}" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-label="${t('Amount in RAND')}"><button class="btn sm" type="button" data-role="remove-payment" data-row="${i}">${t('Remove')}</button></div>`).join(''))}</div>
+        <div class="stack" data-role="rows">${raw(rows.map((_, i) => h`${raw(rowOptional[i] ? h`<span class="caption" data-role="nonrand-note">${t('Amounts cannot be checked for non-RAND payments: leave the amount empty for those.')}</span>` : '')}${raw(rowMixed[i] ? h`<span class="caption" data-role="mixed-note">${t('This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.')}</span>` : '')}<div class="field cluster"><input data-role="payee" data-row="${i}" type="text" autocomplete="off" spellcheck="false" placeholder="rand1…" aria-label="${t('Payee address')}"><input data-role="payee-amount" data-row="${i}" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-label="${t('Amount in RAND')}"><button class="btn sm" type="button" data-role="remove-payment" data-row="${i}">${t('Remove')}</button></div>`).join(''))}</div>
         <button class="btn sm" type="button" data-role="add-payment">${t('Add payment')}</button>
         <p class="error" data-role="payee-error" role="alert" hidden></p>
         <button class="btn block" type="button" data-role="check-payees">${t('Check payments')}</button></div>`;
@@ -313,6 +325,10 @@ registerScreen('signer', {
       } catch (err) { review.textContent = ''; showError(errorEl, err.message); if (ctx.isCurrent()) paintPayments(); }
     }
     body.querySelector('[data-role="check"]').addEventListener('click', runCheck);
+    // An edit to the proposal after its check clears the review and disarms Sign, as on iOS and Android.
+    body.querySelector('textarea[data-role="proposal"]').addEventListener('input', (e) => {
+      if (proposal !== null && e.target.value !== proposal) { review.textContent = ''; stale = true; confirmed = false; }
+    });
     body.querySelector('[data-role="verify"]').addEventListener('click', async () => {
       const outEl = body.querySelector('[data-role="verify-out"]');
       try {

@@ -132,6 +132,7 @@ export default {
   "amount must be greater than zero": "يجب أن يكون المبلغ أكبر من صفر",
   "amount overflow": "تجاوز المبلغ الحد",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "لا يمكن التحقق من المبالغ في المدفوعات بغير RAND: اترك المبلغ فارغًا لها.",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "يتلقى هذا المستفيد RAND ورمزًا معًا: مدفوعات RAND والرموز إلى مستفيد واحد تحتاج إلى مقترحات منفصلة.",
   "amounts overflow": "تجاوزت المبالغ الحد",
   "an action is {n} characters, more than {max}": { zero: "الإجراء من {n} أحرف، أي أكثر من {max}", one: "الإجراء من {n} حرف، أي أكثر من {max}", two: "الإجراء من {n} حرفين، أي أكثر من {max}", few: "الإجراء من {n} أحرف، أي أكثر من {max}", many: "الإجراء من {n} حرفًا، أي أكثر من {max}", other: "الإجراء من {n} حرف، أي أكثر من {max}" },
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "عنوان (rand1…)، أو رابط دفع (randpay:…)، أو اسم جهة اتصال محفوظة.",

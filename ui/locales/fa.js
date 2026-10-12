@@ -133,6 +133,7 @@ export default {
   "amount must be greater than zero": "مقدار باید بیشتر از صفر باشد",
   "amount overflow": "سرریز مقدار",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "مقدار پرداخت‌های غیر RAND قابل بررسی نیست: مقدار را برای آن‌ها خالی بگذارید.",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "این گیرنده هم RAND و هم یک توکن دریافت می‌کند: پرداخت‌های RAND و توکن به یک گیرنده به پیشنهادهای جداگانه نیاز دارند.",
   "amounts overflow": "سرریز مقادیر",
   "an action is {n} characters, more than {max}": "یک اقدام {n} نویسه است، بیش از {max}",
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "یک آدرس (rand1…)، یک لینک پرداخت (randpay:…)، یا نام یک مخاطب ذخیره‌شده.",

@@ -132,6 +132,7 @@ export default {
   "amount must be greater than zero": "el monto debe ser mayor que cero",
   "amount overflow": "desbordamiento del monto",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "Los montos no se pueden comprobar en pagos que no son en RAND: deja el monto vacío en esos.",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "Este beneficiario recibe RAND y también un token: los pagos en RAND y en tokens a un mismo beneficiario necesitan propuestas separadas.",
   "amounts overflow": "desbordamiento de los montos",
   "an action is {n} characters, more than {max}": { one: "una acción tiene {n} carácter, más de {max}", many: "una acción tiene {n} caracteres, más de {max}", other: "una acción tiene {n} caracteres, más de {max}" },
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "Una dirección (rand1…), un enlace de pago (randpay:…) o el nombre de un contacto guardado.",

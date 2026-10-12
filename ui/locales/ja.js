@@ -125,6 +125,7 @@ export default {
   "amount must be greater than zero": "金額はゼロより大きくする必要があります",
   "amount overflow": "金額がオーバーフローしました",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "RAND 以外の支払いは金額を確認できません。その場合は金額を空欄にしてください。",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "この受取人は RAND とトークンの両方を受け取ります。同じ受取人への RAND とトークンの支払いは、別々の提案にする必要があります。",
   "amounts overflow": "金額の合計がオーバーフローしました",
   "an action is {n} characters, more than {max}": "アクションが {n} 文字あり、上限の {max} を超えています",
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "アドレス（rand1…）、支払いリンク（randpay:…）、または保存した連絡先の名前。",

@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1094 strings.
+// 1095 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -949,6 +949,7 @@ export default {
   "This node’s token registry does not list this asset, so its name and decimal places are this wallet’s guess rather than the chain’s. It cannot be sent or withdrawn until a node lists it.": "This node’s token registry does not list this asset, so its name and decimal places are this wallet’s guess rather than the chain’s. It cannot be sent or withdrawn until a node lists it.",
   "This note was not found.": "This note was not found.",
   "This passkey does not support the PRF extension.": "This passkey does not support the PRF extension.",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.",
   "This proof was already submitted from another window. Check Activity before sending again.": "This proof was already submitted from another window. Check Activity before sending again.",
   "This proposal expires at height {expires} and the chain is at {head}: too late to sign. Ask for a new proposal.": "This proposal expires at height {expires} and the chain is at {head}: too late to sign. Ask for a new proposal.",
   "This proposal is bound to another genesis than the one this wallet's node serves.": "This proposal is bound to another genesis than the one this wallet's node serves.",

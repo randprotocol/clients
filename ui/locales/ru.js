@@ -130,6 +130,7 @@ export default {
   "amount must be greater than zero": "сумма должна быть больше нуля",
   "amount overflow": "переполнение суммы",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "Суммы нельзя проверить для платежей не в RAND: оставьте для них сумму пустой.",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "Этот получатель получает и RAND, и токен: платежи в RAND и в токенах одному получателю требуют отдельных предложений.",
   "amounts overflow": "переполнение сумм",
   "an action is {n} characters, more than {max}": { one: "действие длиной {n} символ, больше чем {max}", few: "действие длиной {n} символа, больше чем {max}", many: "действие длиной {n} символов, больше чем {max}", other: "действие длиной {n} символа, больше чем {max}" },
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "Адрес (rand1…), платёжная ссылка (randpay:…) или имя сохранённого контакта.",

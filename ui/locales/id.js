@@ -125,6 +125,7 @@ export default {
   "amount must be greater than zero": "jumlah harus lebih besar dari nol",
   "amount overflow": "jumlah melebihi batas",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "Jumlah tidak dapat diperiksa untuk pembayaran non-RAND: kosongkan jumlahnya untuk pembayaran tersebut.",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "Penerima ini menerima RAND sekaligus token: pembayaran RAND dan token ke satu penerima memerlukan proposal terpisah.",
   "amounts overflow": "total jumlah melebihi batas",
   "an action is {n} characters, more than {max}": "sebuah aksi terdiri dari {n} karakter, lebih dari {max}",
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "Alamat (rand1…), tautan pembayaran (randpay:…), atau nama kontak yang tersimpan.",

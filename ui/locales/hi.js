@@ -132,6 +132,7 @@ export default {
   "amount must be greater than zero": "राशि शून्य से ज़्यादा होनी चाहिए",
   "amount overflow": "राशि की सीमा पार हो गई",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "RAND के अलावा अन्य भुगतानों की राशि जाँची नहीं जा सकती: उनके लिए राशि खाली छोड़ें।",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "यह प्राप्तकर्ता RAND और एक टोकन दोनों प्राप्त करता है: एक ही प्राप्तकर्ता को RAND और टोकन भुगतानों के लिए अलग-अलग प्रस्ताव चाहिए।",
   "amounts overflow": "राशियों की सीमा पार हो गई",
   "an action is {n} characters, more than {max}": "एक एक्शन {n} अक्षरों का है, {max} से ज़्यादा",
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "एक पता (rand1…), भुगतान लिंक (randpay:…), या सहेजे गए संपर्क का नाम।",

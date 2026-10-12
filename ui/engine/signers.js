@@ -45,6 +45,16 @@ function validProfiles(v) {
 
 export const isZero = (a) => (typeof a === 'string' ? /^0+$/.test(a.trim()) : a === 0);
 
+/** A paying output whose asset is a whole number other than 0. Anything else is RAND (fails closed). */
+export const isNonRand = (o) => o != null && o.asset != null && o.asset !== '' && Number.isInteger(Number(o.asset)) && Number(o.asset) !== 0;
+/** Of the paying outputs, the owner fingerprints that receive a non-RAND asset and those that receive RAND. */
+export function payeeAssets(paying) {
+  const fp = (o) => (typeof o.owner_fingerprint === 'string' && o.owner_fingerprint !== '' ? o.owner_fingerprint : null);
+  const tokenOwners = new Set(paying.filter(isNonRand).map(fp).filter(Boolean));
+  const randOwners = new Set(paying.filter((o) => !isNonRand(o)).map(fp).filter(Boolean));
+  return { tokenOwners, randOwners };
+}
+
 const amountless = (entry) => { const i = String(entry).indexOf(':'); return i < 0 || String(entry).slice(i + 1).trim() === ''; };
 
 /** Whether a checked proposal may be signed now, by the CLI's rule, on this wallet's chain. */
@@ -53,6 +63,7 @@ export function verdict({ summary, head, chainId, genesis, url, recipients }) {
   if (summary === null || typeof summary !== 'object') return malformed();
   // Spec §4 step 3: never sign on an unchecked payee (a coordinator could pay its own key).
   const unchecked = () => ({ signable: false, refusal: { code: 'unchecked-recipient', message: t('Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.') } });
+  if (!Array.isArray(summary.lines) || !summary.lines.every((l) => typeof l === 'string')) return malformed();
   if (summary.recipients_checked !== true) return unchecked();
   // A field the rule reads that is missing or malformed fails closed: NaN compares false.
   const outs = summary.outputs;
@@ -63,15 +74,17 @@ export function verdict({ summary, head, chainId, genesis, url, recipients }) {
   const paying = outs.filter((o) => o.to_account !== true && !isZero(o.amount));
   if (Array.isArray(recipients) && recipients.length === 0 && paying.length > 0) return unchecked();
   // An amount pin is required on every entry, except an entry whose own owner fingerprint owns a
-  // non-RAND paying output: the core refuses a pin there, so that entry is the address alone.
-  // The exception is per row, so one small non-RAND output cannot unpin the RAND rows.
+  // non-RAND paying output and NO RAND paying output: the core refuses a pin on a non-RAND output,
+  // so that entry is the address alone. The exception is per row, so one small non-RAND output
+  // cannot unpin the RAND rows, nor the RAND paid to its own payee (1 unit of a token beside an
+  // inflated RAND output to the same payee is refused).
   if (Array.isArray(recipients) && recipients.some(amountless)) {
     const exp = summary.expected;
     if (!Array.isArray(exp)) return unchecked();
-    const tokenOwners = new Set(paying.filter((o) => o.asset != null && Number.isInteger(Number(o.asset)) && Number(o.asset) !== 0
-      && typeof o.owner_fingerprint === 'string' && o.owner_fingerprint !== '').map((o) => o.owner_fingerprint));
+    const { tokenOwners, randOwners } = payeeAssets(paying);
     const allowed = (entry) => exp.some((x) => x !== null && typeof x === 'object' && x.entry === entry
-      && typeof x.fingerprint === 'string' && x.fingerprint !== '' && tokenOwners.has(x.fingerprint));
+      && typeof x.fingerprint === 'string' && x.fingerprint !== '' && tokenOwners.has(x.fingerprint)
+      && !randOwners.has(x.fingerprint));
     if (!recipients.filter(amountless).every(allowed)) return unchecked();
   }
   if (outs.some((o) => o.to_account !== true && !isZero(o.amount) && !(typeof o.matches === 'string' && o.matches.trim() !== ''))) return unchecked();

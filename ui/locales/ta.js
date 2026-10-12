@@ -132,6 +132,7 @@ export default {
   "amount must be greater than zero": "தொகை பூஜ்ஜியத்தை விட அதிகமாக இருக்க வேண்டும்",
   "amount overflow": "தொகை வரம்பை மீறியது",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "RAND அல்லாத கட்டணங்களின் தொகையைச் சரிபார்க்க முடியாது: அவற்றுக்குத் தொகையை வெறுமையாக விடுங்கள்.",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "இந்தப் பெறுநர் RAND மற்றும் ஒரு டோக்கன் இரண்டையும் பெறுகிறார்: ஒரே பெறுநருக்கான RAND மற்றும் டோக்கன் கொடுப்பனவுகளுக்குத் தனித்தனி முன்மொழிவுகள் தேவை.",
   "amounts overflow": "தொகைகள் வரம்பை மீறின",
   "an action is {n} characters, more than {max}": "ஒரு செயல் {n} எழுத்துகள் கொண்டது, இது {max} ஐ விட அதிகம்",
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "ஒரு முகவரி (rand1…), ஒரு பணம்செலுத்தல் இணைப்பு (randpay:…), அல்லது சேமித்த தொடர்பின் பெயர்.",

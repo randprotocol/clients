@@ -133,6 +133,7 @@ export default {
   "amount must be greater than zero": "رقم صفر سے زیادہ ہونی چاہیے",
   "amount overflow": "رقم حد سے بڑھ گئی",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "غیر RAND ادائیگیوں کی رقم جانچی نہیں جا سکتی: ان کے لیے رقم خالی چھوڑیں۔",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "یہ وصول کنندہ RAND اور ایک ٹوکن دونوں وصول کرتا ہے: ایک وصول کنندہ کو RAND اور ٹوکن کی ادائیگیوں کے لیے الگ الگ تجاویز درکار ہیں۔",
   "amounts overflow": "رقمیں حد سے بڑھ گئیں",
   "an action is {n} characters, more than {max}": "ایک ایکشن {n} حروف کا ہے، جو {max} سے زیادہ ہے",
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "پتہ (rand1…)، ادائیگی کا لنک (randpay:…)، یا محفوظ رابطے کا نام۔",

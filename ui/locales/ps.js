@@ -132,6 +132,7 @@ export default {
   "amount must be greater than zero": "اندازه باید له صفر څخه لویه وي",
   "amount overflow": "اندازه له حد څخه واوښته",
   "Amounts cannot be checked for non-RAND payments: leave the amount empty for those.": "د غیر RAND تادیاتو اندازه نشي څېړل کېدای: د هغوی لپاره اندازه خالي پرېږدئ.",
+  "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "دا ترلاسه کوونکی RAND او یو ټوکن دواړه ترلاسه کوي: یو ترلاسه کوونکي ته د RAND او ټوکن تادیات جلا وړاندیزونو ته اړتیا لري.",
   "amounts overflow": "اندازې له حد څخه واوښتې",
   "an action is {n} characters, more than {max}": "یوه کړنه {n} توري ده، له {max} څخه ډېره",
   "An address (rand1…), a payment link (randpay:…), or a saved contact’s name.": "یوه پته (rand1…)، د ورکړې لینک (randpay:…)، یا د خوندي شوې اړیکې نوم.",
