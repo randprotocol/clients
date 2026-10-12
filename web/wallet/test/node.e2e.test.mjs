@@ -54,7 +54,7 @@ import {
 const NODE_BIN = process.env.RAND_NODE_BIN || '';
 const PROVER_BIN = process.env.RAND_PROVER_BIN || '';
 const PASSWORD = 'an-e2e-password-for-a-real-vault';
-const CHAIN_ID = 20; // the chain this build's core was made for (`version.default_chain_id`)
+const CHAIN_ID = 21; // the chain this build's core was made for (`version.default_chain_id`)
 const FAUCET_UNITS = 100_000_000_000n; // one `rand_mint`: 100 RAND
 const SEND_UNITS = '2000000000'; // 2 RAND out of the faucet's 100
 const ZERO32 = '00'.repeat(32);
@@ -182,7 +182,7 @@ before(async () => {
   env.genesis = join(env.dir, 'genesis.json');
   env.datadir = join(env.dir, 'data');
   const help = execFileSync(NODE_BIN, ['genesis', '--help'], { stdio: 'pipe' }).toString();
-  // A memo chain, as chain 20 is: every envelope is exactly 1860 bytes, so `rand_getLimits` names it.
+  // A memo chain, as chains 20 and 21 are: every envelope is exactly 1860 bytes, so `rand_getLimits` names it.
   env.envelopeBytes = help.includes('--envelope-bytes') ? 1860 : null;
   execFileSync(NODE_BIN, ['keygen', '--out', env.key], { stdio: 'pipe' });
   const cut = execFileSync(NODE_BIN, [

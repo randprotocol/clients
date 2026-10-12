@@ -238,7 +238,7 @@ test('BUNDLE_INPUTS matches what the real core will actually select', { skip }, 
 
 // ------------------------------------------------------------------------- the chain-14 core ---
 
-test('the artefact this wallet loads is built for chain 20 on the hidden-asset bundle', { skip }, async () => {
+test('the artefact this wallet loads is built for chain 21 on the hidden-asset bundle', { skip }, async () => {
   const { PROVER_WARNING } = await import('../../../ui/screens/settings.js');
   // The wasm is git-ignored build output, so "is it the current one" is a real question: a stale
   // artefact would answer every offline call above perfectly while proving against a guest the
