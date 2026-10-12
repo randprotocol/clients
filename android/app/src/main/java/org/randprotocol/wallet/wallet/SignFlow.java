@@ -278,7 +278,7 @@ public final class SignFlow {
     }
 
     /** Zero: {@code /^0+$/} after trimming, or the number 0. */
-    static boolean isZeroAmount(Object v) {
+    public static boolean isZeroAmount(Object v) {
         if (v instanceof String) {
             String t = jsTrim((String) v);
             return digits(t) && t.chars().allMatch(c -> c == '0');
@@ -288,7 +288,7 @@ public final class SignFlow {
     }
 
     /** An asset id as the web reads it ({@code Number(o.asset)}): a number or a digit string; null otherwise. */
-    static Long assetId(Object v) {
+    public static Long assetId(Object v) {
         if (v instanceof String) {
             String t = jsTrim((String) v);
             if (!digits(t)) return null;
@@ -308,7 +308,7 @@ public final class SignFlow {
     }
 
     /** JavaScript's {@code String.prototype.trim}: white space and line terminators, the BOM included. */
-    static String jsTrim(String s) {
+    public static String jsTrim(String s) {
         int a = 0, b = s.length();
         while (a < b && jsSpace(s.charAt(a))) a++;
         while (b > a && jsSpace(s.charAt(b - 1))) b--;

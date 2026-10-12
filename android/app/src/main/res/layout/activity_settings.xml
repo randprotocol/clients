@@ -51,6 +51,10 @@
     <com.google.android.material.button.MaterialButton android:id="@+id/export_file" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="@string/settings_export_file" />
     <com.google.android.material.button.MaterialButton android:id="@+id/export_spend" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/settings_export_spend" />
 
+    <!-- Private multisig signing (spec 2026-10-11-msauth-signing-design.md §4): the signer profiles kept on this phone. -->
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/msauth_signers_title" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/signers" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/msauth_settings_manage" />
+
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/settings_security" />
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10dp" style="@style/Text.Caption" android:text="@string/settings_autolock" />
     <Spinner android:id="@+id/autolock" android:layout_width="match_parent" android:layout_height="48dp" />

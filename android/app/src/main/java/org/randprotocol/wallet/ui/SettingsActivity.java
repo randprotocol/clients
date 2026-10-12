@@ -151,6 +151,9 @@ public class SettingsActivity extends BaseActivity {
             }
         }));
 
+        // Multisig signers
+        b.signers.setOnClickListener(v -> startActivity(new Intent(this, SignersActivity.class)));
+
         // Security
         spinner(b.autolock, R.array.autolock_labels, indexOf(getResources().getIntArray(R.array.autolock_minutes), prefs.autoLockMinutes()),
                 i -> prefs.setAutoLockMinutes(getResources().getIntArray(R.array.autolock_minutes)[i]));

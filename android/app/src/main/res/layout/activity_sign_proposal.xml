@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sign a private-multisig proposal (spec 2026-10-11-msauth-signing-design.md §4): the proposal, the intended payments,
+     the core's lines verbatim, the last four of the fingerprint, the device's authentication, the share. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
+<LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Title" android:text="@string/msauth_sign_title" />
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:orientation="vertical" android:padding="16dp" android:background="@drawable/bg_surface_card">
+        <TextView android:id="@+id/profile_label" android:layout_width="match_parent" android:layout_height="wrap_content" android:textStyle="bold" android:textColor="@color/text" />
+        <TextView android:id="@+id/profile_fp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" style="@style/Text.Mono" />
+        <TextView android:id="@+id/profile_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" style="@style/Text.Caption" />
+    </LinearLayout>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="24dp" style="@style/Text.Section" android:text="@string/msauth_proposal_label" />
+    <EditText android:id="@+id/proposal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:minLines="4" android:maxLines="8" android:gravity="top" android:inputType="textMultiLine|textNoSuggestions" android:importantForAutofill="no" android:saveEnabled="false" style="@style/Text.Mono" android:textSize="12sp" android:hint="@string/msauth_proposal_label" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+        <com.google.android.material.button.MaterialButton android:id="@+id/open_file" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/msauth_open_file" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/check_proposal" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="@string/msauth_check_proposal" />
+    </LinearLayout>
+    <TextView android:id="@+id/error" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="@color/negative" android:visibility="gone" />
+
+    <LinearLayout android:id="@+id/payments" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:orientation="vertical" android:visibility="gone">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" style="@style/Text.Section" android:text="@string/msauth_payments_title" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" style="@style/Text.Caption" android:text="@string/msauth_payments_footer" />
+        <LinearLayout android:id="@+id/payment_rows" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/add_payment" style="@style/Widget.RandWallet.Button.Text" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="@string/msauth_add_payment" />
+        <TextView android:id="@+id/row_error" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/negative" android:visibility="gone" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/check_payments" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="@string/msauth_check_payments" />
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/review" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:orientation="vertical" android:visibility="gone">
+        <LinearLayout android:id="@+id/summary" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp" android:background="@drawable/bg_surface_card">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Section" android:text="@string/msauth_review_title" />
+            <!-- The core's lines, verbatim and in monospace: never translated. -->
+            <LinearLayout android:id="@+id/lines" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="vertical" />
+            <TextView android:id="@+id/fee" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Body" />
+            <TextView android:id="@+id/matched" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" style="@style/Text.Caption" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/refused" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:orientation="vertical">
+            <TextView android:id="@+id/refusal" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/negative" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/retry" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/msauth_retry" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/signable" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:orientation="vertical">
+            <TextView android:id="@+id/blocks_left" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Body" />
+            <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:hint="@string/msauth_type_last_four">
+                <com.google.android.material.textfield.TextInputEditText android:id="@+id/confirm" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text|textNoSuggestions|textVisiblePassword" android:importantForAutofill="no" android:saveEnabled="false" android:maxLength="9" android:fontFamily="@font/jetbrains_mono" />
+            </com.google.android.material.textfield.TextInputLayout>
+            <TextView android:id="@+id/stale_note" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" style="@style/Text.Caption" android:text="@string/msauth_stale" android:visibility="gone" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/sign" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="@string/msauth_sign" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/share_box" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:orientation="vertical" android:padding="16dp" android:background="@drawable/bg_surface_card" android:visibility="gone">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Section" android:text="@string/msauth_share_title" />
+        <TextView android:id="@+id/share_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Mono" android:textSize="12sp" android:textIsSelectable="true" android:maxLines="4" android:ellipsize="end" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="horizontal">
+            <com.google.android.material.button.MaterialButton android:id="@+id/copy_share" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/msauth_copy" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/send_share" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:text="@string/msauth_share" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="28dp" style="@style/Text.Section" android:text="@string/msauth_check_share_title" />
+    <EditText android:id="@+id/share_in" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:minLines="2" android:maxLines="4" android:gravity="top" android:inputType="textMultiLine|textNoSuggestions" android:importantForAutofill="no" android:saveEnabled="false" style="@style/Text.Mono" android:textSize="12sp" android:hint="@string/msauth_share_hint" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/check_share" style="@style/Widget.RandWallet.Button.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/msauth_check_share" />
+    <TextView android:id="@+id/verify_out" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" style="@style/Text.Body" />
+</LinearLayout>
+</ScrollView>
