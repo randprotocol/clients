@@ -516,7 +516,8 @@
     "Save signer": "서명자 저장",
     "That file could not be read.": "해당 파일을 읽을 수 없습니다.",
     "Remove %@?": "%@ 서명자를 제거할까요?",
-    "You need the signer's key file to add this signer back.": "이 서명자를 다시 추가하려면 서명자의 키 파일이 필요합니다."
+    "You need the signer's key file to add this signer back.": "이 서명자를 다시 추가하려면 서명자의 키 파일이 필요합니다.",
+    "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "이 수취인은 RAND와 토큰을 모두 받습니다. 한 수취인에게 보내는 RAND 결제와 토큰 결제는 별도의 제안이 필요합니다."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

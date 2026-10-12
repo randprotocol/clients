@@ -528,7 +528,8 @@
     "Save signer": "Guardar firmante",
     "That file could not be read.": "No se pudo leer ese archivo.",
     "Remove %@?": "¿Quitar %@?",
-    "You need the signer's key file to add this signer back.": "Necesitas el archivo de clave del firmante para volver a añadirlo."
+    "You need the signer's key file to add this signer back.": "Necesitas el archivo de clave del firmante para volver a añadirlo.",
+    "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "Este beneficiario recibe RAND y también un token: los pagos en RAND y en tokens a un mismo beneficiario necesitan propuestas separadas."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

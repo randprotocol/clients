@@ -519,7 +519,8 @@
     "Save signer": "دستخط کنندہ محفوظ کریں",
     "That file could not be read.": "وہ فائل پڑھی نہ جا سکی۔",
     "Remove %@?": "%@ کو ہٹائیں؟",
-    "You need the signer's key file to add this signer back.": "اس دستخط کنندہ کو دوبارہ شامل کرنے کے لیے آپ کو اس کی کلیدی فائل چاہیے ہوگی۔"
+    "You need the signer's key file to add this signer back.": "اس دستخط کنندہ کو دوبارہ شامل کرنے کے لیے آپ کو اس کی کلیدی فائل چاہیے ہوگی۔",
+    "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "یہ وصول کنندہ RAND اور ایک ٹوکن دونوں وصول کرتا ہے: ایک وصول کنندہ کو RAND اور ٹوکن کی ادائیگیوں کے لیے الگ الگ تجاویز درکار ہیں۔"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

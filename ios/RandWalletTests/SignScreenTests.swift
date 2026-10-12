@@ -21,6 +21,61 @@ final class SignScreenTests: XCTestCase {
     private let rand5: [String: Any] = ["to_account": false, "amount": "5", "asset": 0, "owner_fingerprint": "G", "matches": "GGGG (5 RAND)"]
     private let token: [String: Any] = ["to_account": false, "amount": "5", "asset": 7, "owner_fingerprint": "F", "matches": "FFFF"]
 
+    // MARK: final fix wave: a dust token does not unpin its payee's RAND
+
+    /// The reviewer's probe: X is paid 900 RAND beside 1 unit of asset 5, named with no amount.
+    func testADustTokenBesideARandOutputToTheSamePayeeIsRefused() {
+        let json: [String: Any] = ["recipients_checked": true, "expires_at": 1000, "chain_id": 21, "binding_domain": 1,
+                                   "genesis": String(repeating: "0", count: 64), "lines": ["x"],
+                                   "outputs": [["to_account": false, "amount": "900000000000", "asset": 0, "owner_fingerprint": "X", "matches": "AAAA (900 RAND)"],
+                                               ["to_account": false, "amount": "1", "asset": 5, "owner_fingerprint": "X", "matches": "AAAA (0.000000001 RAND)"],
+                                               ["to_account": true, "amount": "5", "asset": 0, "owner_fingerprint": "self", "matches": NSNull()]],
+                                   "expected": [["entry": "rand1payee", "fingerprint": "X"]]]
+        let v = MsauthRules.verdict(summary: MsauthSummary(json: json), head: 10, chainId: 21, genesis: String(repeating: "0", count: 64),
+                                    url: "u", recipients: ["rand1payee"])
+        XCTAssertEqual(v, .uncheckedRecipient)
+        // A missing asset counts as RAND (fails closed).
+        var noAsset = json
+        var outs = json["outputs"] as! [[String: Any]]
+        outs[0].removeValue(forKey: "asset")
+        noAsset["outputs"] = outs
+        XCTAssertEqual(MsauthRules.verdict(summary: MsauthSummary(json: noAsset), head: 10, chainId: 21, genesis: String(repeating: "0", count: 64),
+                                           url: "u", recipients: ["rand1payee"]), .uncheckedRecipient)
+        // The payee paid the token alone may still go unpinned.
+        var tokenOnly = json
+        tokenOnly["outputs"] = Array((json["outputs"] as! [[String: Any]])[1...])
+        XCTAssertEqual(MsauthRules.verdict(summary: MsauthSummary(json: tokenOnly), head: 10, chainId: 21, genesis: String(repeating: "0", count: 64),
+                                           url: "u", recipients: ["rand1payee"]), .signable(blocksLeft: 990))
+    }
+
+    func testAPayeePaidRandAndATokenIsNotOfferedTheExceptionAndIsToldWhy() {
+        let xRand: [String: Any] = ["to_account": false, "amount": "900", "asset": 0, "owner_fingerprint": "X", "matches": "a"]
+        let xTok: [String: Any] = ["to_account": false, "amount": "1", "asset": 5, "owner_fingerprint": "X", "matches": "b"]
+        let s = summary([xRand, xTok, token], expected: [["entry": "rand1x", "fingerprint": "X"], ["entry": "rand1f", "fingerprint": "F"]])
+        XCTAssertFalse(SignRows.amountOptional(PaymentRow(addr: "rand1x", amount: ""), summary: s))
+        XCTAssertTrue(SignRows.mixedPayee(PaymentRow(addr: "rand1x", amount: ""), summary: s))
+        XCTAssertTrue(SignRows.amountOptional(PaymentRow(addr: "rand1f", amount: ""), summary: s), "a token-only payee keeps the exception")
+        XCTAssertFalse(SignRows.mixedPayee(PaymentRow(addr: "rand1f", amount: ""), summary: s))
+        XCTAssertFalse(SignRows.mixedPayee(PaymentRow(addr: "rand1new", amount: ""), summary: s), "unknown rows are not called mixed")
+    }
+
+    func testLinesMissingOrNotAllStringsIsMalformed() {
+        for lines in [nil, "x", ["x", 1], [NSNull()], ["a": "b"]] as [Any?] {
+            var json: [String: Any] = ["expires_at": 200, "chain_id": 13, "genesis": genesis, "binding_domain": 1,
+                                       "policy_fingerprint": "NFYW-K8E9-E5K9-AAK3", "recipients_checked": true, "fee": "1000000",
+                                       "outputs": [rand5], "expected": []]
+            if let lines { json["lines"] = lines }
+            XCTAssertEqual(verdict(MsauthSummary(json: json), recipients: ["rand1g:5"]), .malformedSummary, String(describing: lines))
+        }
+        XCTAssertEqual(verdict(summary([rand5]), recipients: ["rand1g:5"]), .signable(blocksLeft: 199))
+    }
+
+    func testTheConfirmationIgnoresInnerWhitespaceAsTheWebDoes() {
+        XCTAssertTrue(MsauthRules.confirms(fingerprint: "NFYW-K8E9-E5K9-AAK3", typed: "a a k 3"))
+        XCTAssertTrue(MsauthRules.confirms(fingerprint: "NFYW-K8E9-E5K9-AAK3", typed: " A-A\tk3\n"))
+        XCTAssertFalse(MsauthRules.confirms(fingerprint: "NFYW-K8E9-E5K9-AAK3", typed: "a a k"))
+    }
+
     // MARK: rows to entries
 
     func testARowBecomesAddrColonAmountAsTyped() throws {

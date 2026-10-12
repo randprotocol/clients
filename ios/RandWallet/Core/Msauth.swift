@@ -196,6 +196,17 @@ enum MsauthRules {
         return entry[entry.index(after: i)...].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Of the paying outputs (raw JSON), the owner fingerprints paid a non-RAND asset and those paid
+    /// RAND. An output whose asset is missing or unreadable counts as RAND (fails closed).
+    static func payeeAssets(_ paying: [[String: Any]]) -> (token: Set<String>, rand: Set<String>) {
+        var token = Set<String>(), rand = Set<String>()
+        for o in paying {
+            guard let fp = o["owner_fingerprint"] as? String, !fp.isEmpty else { continue }
+            if let asset = MsauthJSON.asset(o["asset"]), asset != 0 { token.insert(fp) } else { rand.insert(fp) }
+        }
+        return (token, rand)
+    }
+
     /// Whether a checked proposal may be signed now, on this wallet's chain. `recipients` is the
     /// list the check was given (`payees`), `head` nil when no node answered.
     static func verdict(summary: MsauthSummary, head: UInt64?, chainId: UInt64, genesis: String?, url: String,
@@ -204,6 +215,8 @@ enum MsauthRules {
         // Never sign on an unchecked payee (a coordinator could pay its own key).
         guard MsauthJSON.bool(s["recipients_checked"]) == true else { return .uncheckedRecipient }
         if recipients.contains(where: isBlank) { return .uncheckedRecipient }
+        // The review shows `lines` verbatim: missing, or anything but an array of strings, is malformed.
+        guard let lines = s["lines"] as? [Any], lines.allSatisfy({ $0 is String }) else { return .malformedSummary }
         guard let outs = s["outputs"] as? [Any] else { return .malformedSummary }
         var outputs: [[String: Any]] = []
         for item in outs {
@@ -216,21 +229,18 @@ enum MsauthRules {
         // No intended payment named at all while something pays out: unchecked, whatever the core said.
         if recipients.isEmpty && !paying.isEmpty { return .uncheckedRecipient }
         // An amount is pinned on every entry, except an entry whose own owner fingerprint owns a
-        // paying non-RAND output (the core refuses a pin there). Per row: one small non-RAND output
-        // cannot unpin the RAND rows.
+        // paying non-RAND output and NO paying RAND output (the core refuses a pin on a non-RAND
+        // output). Per row: one small non-RAND output cannot unpin the RAND rows, nor the RAND paid
+        // to its own payee (1 unit of a token beside an inflated RAND output is refused).
         let amountless = recipients.filter(isAmountless)
         if !amountless.isEmpty {
             guard let exp = s["expected"] as? [Any] else { return .uncheckedRecipient }
-            let tokenOwners = Set(paying.compactMap { o -> String? in
-                guard let asset = MsauthJSON.asset(o["asset"]), asset != 0,
-                      let fp = o["owner_fingerprint"] as? String, !fp.isEmpty else { return nil }
-                return fp
-            })
+            let (tokenOwners, randOwners) = payeeAssets(paying)
             let allowed = { (entry: String) -> Bool in
                 exp.contains { item in
                     guard let x = item as? [String: Any], x["entry"] as? String == entry,
                           let fp = x["fingerprint"] as? String, !fp.isEmpty else { return false }
-                    return tokenOwners.contains(fp)
+                    return tokenOwners.contains(fp) && !randOwners.contains(fp)
                 }
             }
             if !amountless.allSatisfy(allowed) { return .uncheckedRecipient }
@@ -255,10 +265,10 @@ enum MsauthRules {
         return .signable(blocksLeft: expiresAt - head)
     }
 
-    /// The fingerprint's last four characters, typed: case, dashes and surrounding spaces ignored.
+    /// The fingerprint's last four characters, typed: case, dashes and every whitespace ignored (as JS).
     static func confirms(fingerprint: String, typed: String) -> Bool {
         let want = String(fingerprint.replacingOccurrences(of: "-", with: "").suffix(4)).lowercased()
-        let got = typed.replacingOccurrences(of: "-", with: "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let got = String(typed.unicodeScalars.filter { $0 != "-" && !CharacterSet.whitespacesAndNewlines.contains($0) }.map(Character.init)).lowercased()
         return want.count == 4 && got == want
     }
 }

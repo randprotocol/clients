@@ -61,19 +61,38 @@ enum SignRows {
     /// address owns a paying non-RAND output. A row the core has not fingerprinted yet (or whose
     /// address was edited) may be sent address-only when some paying output is non-RAND, so the
     /// next check can tell; the core refuses it unless its fingerprint owns such an output.
+    /// A payee that is also paid RAND never gets the exception: its RAND amount must be pinned.
     static func amountOptional(_ row: PaymentRow, summary: MsauthSummary?) -> Bool {
         guard let summary else { return false }
         let paying = summary.outputs.filter(needsPayee)
         let anyNonRand = paying.contains(where: isNonRand)
-        let owners = Set(paying.filter(isNonRand).map(\.ownerFingerprint).filter { !$0.isEmpty })
-        let a = row.addr.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !a.isEmpty, let known = summary.expected.first(where: { x in
-            let head = x.entry.firstIndex(of: ":").map { String(x.entry[..<$0]) } ?? x.entry
-            return head.trimmingCharacters(in: .whitespacesAndNewlines) == a
-        }) {
-            return known.fingerprint.map(owners.contains) ?? false
+        let (owners, randOwners) = payeeAssets(paying)
+        if let known = knownEntry(row, summary: summary) {
+            return known.fingerprint.map { owners.contains($0) && !randOwners.contains($0) } ?? false
         }
         return anyNonRand
+    }
+
+    /// Whether the check showed this row's payee paid both RAND and a non-RAND asset: such a payee
+    /// needs separate proposals, one per kind.
+    static func mixedPayee(_ row: PaymentRow, summary: MsauthSummary?) -> Bool {
+        guard let summary, let fp = knownEntry(row, summary: summary)?.fingerprint else { return false }
+        let (owners, randOwners) = payeeAssets(summary.outputs.filter(needsPayee))
+        return owners.contains(fp) && randOwners.contains(fp)
+    }
+
+    private static func knownEntry(_ row: PaymentRow, summary: MsauthSummary) -> MsauthExpected? {
+        let a = row.addr.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !a.isEmpty else { return nil }
+        return summary.expected.first(where: { x in
+            let head = x.entry.firstIndex(of: ":").map { String(x.entry[..<$0]) } ?? x.entry
+            return head.trimmingCharacters(in: .whitespacesAndNewlines) == a
+        })
+    }
+
+    private static func payeeAssets(_ paying: [MsauthOutput]) -> (Set<String>, Set<String>) {
+        let fps = { (list: [MsauthOutput]) in Set(list.map(\.ownerFingerprint).filter { !$0.isEmpty }) }
+        return (fps(paying.filter(isNonRand)), fps(paying.filter { !isNonRand($0) }))
     }
 }
 
@@ -115,7 +134,8 @@ struct SignProposalModel {
     /// and nothing else.
     var showsSummary: Bool {
         guard let object = summary?.json as? [String: Any] else { return false }
-        return object["lines"] is [Any] && object["outputs"] is [Any]
+        guard let lines = object["lines"] as? [Any], lines.allSatisfy({ $0 is String }) else { return false }
+        return object["outputs"] is [Any]
     }
     var refusal: String? { verdict.message }
     var isRetryable: Bool { if case .noNode = verdict { return true } else { return false } }
@@ -310,6 +330,10 @@ struct SignProposalView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     if SignRows.amountOptional(row, summary: session.lastSummary) {
                         Text("Amounts cannot be checked for non-RAND payments: leave the amount empty for those.")
+                            .font(.footnote).foregroundColor(.secondary)
+                    }
+                    if SignRows.mixedPayee(row, summary: session.lastSummary) {
+                        Text("This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.")
                             .font(.footnote).foregroundColor(.secondary)
                     }
                     TextField(text: rowBinding(row.id, \.addr), prompt: Text(verbatim: "rand1…")) { Text("Payee address") }

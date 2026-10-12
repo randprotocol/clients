@@ -516,7 +516,8 @@
     "Save signer": "Simpan penanda tangan",
     "That file could not be read.": "File itu tidak dapat dibaca.",
     "Remove %@?": "Hapus %@?",
-    "You need the signer's key file to add this signer back.": "Anda memerlukan file kunci penanda tangan untuk menambahkannya kembali."
+    "You need the signer's key file to add this signer back.": "Anda memerlukan file kunci penanda tangan untuk menambahkannya kembali.",
+    "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "Penerima ini menerima RAND sekaligus token: pembayaran RAND dan token ke satu penerima memerlukan proposal terpisah."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",
