@@ -233,3 +233,19 @@ test('a refused sign leaves the failure count alone and never calls msauth_sign'
   assert.equal(signed, 0);
   assert.equal(storage.local.get('unlockFailures'), undefined);
 });
+
+// ---- fix round 2: outputs and the summary itself fail closed ----
+test('a malformed output or summary is malformed-summary', () => {
+  const code = (summary) => verdict({ summary, head: 1, chainId: 13, genesis: GENESIS, url: 'u' }).refusal.code;
+  const out = (o) => ({ ...SUMMARY, outputs: [o] });
+  assert.equal(code(out(null)), 'malformed-summary');
+  assert.equal(code(out({ to_account: false, matches: null })), 'malformed-summary', 'no amount');
+  assert.equal(code(out({ to_account: false, amount: '', matches: null })), 'malformed-summary');
+  assert.equal(code(out({ to_account: false, amount: 'abc', matches: null })), 'malformed-summary');
+  assert.equal(code(out({ amount: '5', matches: null })), 'malformed-summary', 'to_account missing');
+  assert.equal(code(null), 'malformed-summary');
+  assert.equal(code(undefined), 'malformed-summary');
+  for (const amount of ['0', '00', ' 0', 0]) {
+    assert.equal(verdict({ summary: out({ to_account: false, amount, matches: null }), head: 1, chainId: 13, genesis: GENESIS, url: 'u' }).signable, true, `${JSON.stringify(amount)} is zero`);
+  }
+});

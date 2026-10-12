@@ -45,24 +45,23 @@ function validProfiles(v) {
 
 /** Whether a checked proposal may be signed now, by the CLI's rule, on this wallet's chain. */
 export function verdict({ summary, head, chainId, genesis, url }) {
+  const malformed = () => ({ signable: false, refusal: { code: 'malformed-summary', message: t('The proposal check returned an incomplete answer, so this proposal is not signed.') } });
+  if (summary === null || typeof summary !== 'object') return malformed();
   // Spec §4 step 3: never sign on an unchecked payee (a coordinator could pay its own key).
-  if (summary.recipients_checked !== true) {
-    return { signable: false, refusal: { code: 'unchecked-recipient', message: t('Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.') } };
-  }
+  const unchecked = () => ({ signable: false, refusal: { code: 'unchecked-recipient', message: t('Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.') } });
+  if (summary.recipients_checked !== true) return unchecked();
   // A field the rule reads that is missing or malformed fails closed: NaN compares false.
-  const nonZero = (a) => !/^0*$/.test(String(a ?? '').trim());
-  const outs = Array.isArray(summary.outputs) ? summary.outputs : null;
-  if (outs && outs.some((o) => o && o.to_account !== true && nonZero(o.amount) && o.matches == null)) {
-    return { signable: false, refusal: { code: 'unchecked-recipient', message: t('Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.') } };
-  }
+  const outs = summary.outputs;
+  const amountOk = (a) => (typeof a === 'string' ? /^\s*\d+\s*$/.test(a) : Number.isSafeInteger(a) && a >= 0);
+  const outputOk = (o) => o !== null && typeof o === 'object' && !Array.isArray(o) && typeof o.to_account === 'boolean' && amountOk(o.amount);
+  if (!Array.isArray(outs) || !outs.every(outputOk)) return malformed();
+  const isZero = (a) => (typeof a === 'string' ? /^0+$/.test(a.trim()) : a === 0);
+  if (outs.some((o) => o.to_account !== true && !isZero(o.amount) && o.matches == null)) return unchecked();
   const sound = Number.isSafeInteger(summary.expires_at) && summary.expires_at >= 0
     && Number.isSafeInteger(summary.chain_id)
     && Number.isInteger(summary.binding_domain) && summary.binding_domain >= 0
-    && typeof summary.genesis === 'string' && /^[0-9a-fA-F]+$/.test(summary.genesis)
-    && outs !== null;
-  if (!sound) {
-    return { signable: false, refusal: { code: 'malformed-summary', message: t('The proposal check returned an incomplete answer, so this proposal is not signed.') } };
-  }
+    && typeof summary.genesis === 'string' && /^[0-9a-fA-F]+$/.test(summary.genesis);
+  if (!sound) return malformed();
   if (head == null) {
     return { signable: false, refusal: { code: 'no-node', node: url, message: t('No node answered at {url}, so the expiry cannot be checked and this proposal is not signed. Retry when the node is reachable.', { url: url || '—' }) } };
   }
