@@ -68,7 +68,10 @@ read into memory for one signing and dropped.
 2. **Signers → <profile> → Sign a proposal**: paste or open `prop.json`. `msauth_check` runs; any
    failure is shown by name and nothing can be signed.
 3. **Review**: every output (recipient, amount and asset, memo), the fee, any burn, the expiry,
-   the fingerprint. `check_proposal` has no RPC, so it only checks `expires_at` against the
+   the fingerprint. A recipient is shown as `check_proposal` gives it: a fingerprint of the owner
+   key only, with the caveat "owner key verified; delivery key NOT verifiable from this proposal"
+   rendered as-is (a proposal cannot prove the recipient's KEM key, so the app must not show a full
+   address fingerprint as if it had checked one). `check_proposal` has no RPC, so it only checks `expires_at` against the
    bundle's own time; **the app compares it with the chain head** (`rand_getHead`, which every
    app already reads) and refuses to sign at or past `expires_at - 16`, the CLI `prove`'s margin.
    With no node reachable it shows the expiry height with a warning and still allows signing. Confirmation types the last four characters of the
@@ -96,7 +99,9 @@ cannot tell a consensus key file apart).
    **this makes clients main chain-21-only; chain 20 fixes go to `release/chain20`.**
 2. Core arms + tests, using the fixtures committed with fullnode's `randprotocol-msig`
    (`crates/randprotocol-msig/tests/fixtures/`: `policy`, `proposal-valid`,
-   `proposal-tampered-output`, `proposal-value-mismatch`, `proposal-expired`, `signer-seeds` (three
+   `proposal-tampered-output`, `proposal-value-mismatch`, `proposal-fee-raised` (refused only by
+   the per-asset balance check), `proposal-unbound` (refused on the binding), `proposal-expired`,
+   `signer-seeds` (three
    members + one outsider), `expected` (summary, signing message, shares for members 0 and 2)). They
    are deterministic, so the app tests match exact values, not only pass/fail. The tampered output is
    re-bound: it fails as "output does not open as sender", not on the binding. The zkvm re-pin
