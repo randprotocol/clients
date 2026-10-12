@@ -4,6 +4,24 @@
 
 const MIN_PASSWORD_LEN = 10;
 
+export const FAKE_SUMMARY = Object.freeze({
+  outputs: [
+    { owner_fingerprint: 'cb5c9747f9a2ef35', to_account: false, amount: '0', asset: 0, memo: '', matches: null, needs_payee: false },
+    { owner_fingerprint: '2c94b28813d4ce65', to_account: false, amount: '0', asset: 0, memo: '', matches: null, needs_payee: false },
+    { owner_fingerprint: '35bad5bd21a6f0f7', to_account: false, amount: '10000000000', asset: 0, memo: '', matches: 'ABCD-EFGH-JKMN-PQRS', needs_payee: true },
+    { owner_fingerprint: '4333dd507bcc4286', to_account: true, amount: '14999000000', asset: 0, memo: '', matches: null, needs_payee: false },
+  ], recipients_checked: true, fee: '1000000', burns: { burn_a: '0', burn_asset: 0, burn_r: '0' }, expires_at: 2024,
+  signing_message: '00', policy_fingerprint: 'NFYW-K8E9-E5K9-AAK3', chain_id: 21, genesis: '00'.repeat(32), binding_domain: 1,
+  lines: [
+    '0: → 0 RAND to cb5c9747f9a2ef35 memo "" (owner key verified; delivery key NOT verifiable from this proposal)',
+    '1: → 0 RAND to 2c94b28813d4ce65 memo "" (owner key verified; delivery key NOT verifiable from this proposal)',
+    '2: → 10 RAND to 35bad5bd21a6f0f7 memo "" (owner key verified; delivery key NOT verifiable from this proposal)',
+    '3: → 14.999 RAND to this account 4333dd507bcc4286 memo "" (owner key verified; delivery key NOT verifiable from this proposal)',
+    'fee 0.001 RAND', 'burn 0 of asset 0, 0 RAND',
+  ],
+});
+
+
 /**
  * `wallet-core`'s `NO_SPENDABLE_RAND`, as the real engine surfaces it. A token transfer pays its
  * fee in RAND out of the other half of the same bundle, so a wallet holding only the token cannot
@@ -120,6 +138,9 @@ function createBackend(initial = {}, overrides = {}) {
     // that carries no memo.
     envelopeBytes: 1860,
     contacts: new Map(),
+    // Private multisig signer profiles: `[{id, label, index}]`, and what `signers.check` answers.
+    signers: [],
+    signerCheck: { summary: FAKE_SUMMARY, signable: true, head: 100, blocksLeft: 1924 },
     // Delegated proving: the remote proof still in flight (`send.pending`), `{job, name, kind,
     // startedAt}` or null, and what `prover.probe` answers for a paired prover.
     pendingProof: null,
@@ -434,6 +455,24 @@ function createBackend(initial = {}, overrides = {}) {
     }
     return { key: m[1], url: String(q.url).replace(/\/+$/, ''), host: url.host, own: q.own === '1', fingerprint: fakeFingerprint(`prover:${m[1]}`) };
   };
+  const signersDefs = {
+    list: () => state.signers.map(({ id, label, index }) => ({ id, label, index, fingerprint: 'NFYW-K8E9-E5K9-AAK3', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(40) })),
+    preview: () => ({ fingerprint: 'NFYW-K8E9-E5K9-AAK3', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(40), policyHash: '33'.repeat(32), index: 1, publicKey: 'bb' }),
+    add: ({ label, password }) => {
+      if (password !== state.wallet.password) throw new Error('wrong password');
+      state.signers.push({ id: `s${state.signers.length + 1}`, label, index: 1 });
+      return signersDefs.list();
+    },
+    remove: (id) => { state.signers = state.signers.filter((s) => s.id !== id); return signersDefs.list(); },
+    check: () => state.signerCheck,
+    sign: (id, proposal, expected, password) => {
+      if (password !== state.wallet.password) throw new Error('wrong password');
+      state.signCalls = (state.signCalls || 0) + 1;
+      return { share: '1:' + 'ab'.repeat(8), index: 1 };
+    },
+    verifyShare: (id, proposal, share) => ({ index: Number(String(share).split(':')[0]) }),
+  };
+
   const proverDefs = {
     preview: (link) => {
       const r = readProverLink(link);
@@ -502,6 +541,7 @@ function createBackend(initial = {}, overrides = {}) {
     address: buildGroup('address', addressDefs, overrides.address, calls),
     contacts: buildGroup('contacts', contactsDefs, overrides.contacts, calls),
     prover: buildGroup('prover', proverDefs, overrides.prover, calls),
+    signers: buildGroup('signers', signersDefs, overrides.signers, calls),
     rpc: buildGroup('rpc', rpcDefs, overrides.rpc, calls),
     settings: buildGroup('settings', settingsDefs, overrides.settings, calls),
     platform: buildGroup('platform', platformDefs, overrides.platform, calls),

@@ -342,6 +342,11 @@
  *       exactly as `send.send`'s do, and **it refuses exactly what `estimate` refuses, before a
  *       proof starts** — the two run one shared list, because a gate on one and not the other is
  *       a proof spent on a transaction the chain was always going to refuse.
+ *  - `signers?` — private multisig signer profiles (spec 2026-10-11-msauth-signing-design.md):
+ *    `list()`, `preview({policy, key})`, `add({label, policy, key, password})`, `remove(id, password)`,
+ *    `check(id, proposal, expectedRecipients)` → `{summary, signable, refusal?, head?, blocksLeft?}`,
+ *    `sign(id, proposal, expectedRecipients, password)` → `{share, index}`, `verifyShare(id, proposal, share)` → `{index}`.
+ *    Screens offer Settings → Multisig signers only where it exists.
  *  - `prover?` — a whole OPTIONAL GROUP, delegated proving (spec 2026-09-28, Phases 1 and 2): a
  *    paired prover makes the BUNDLE proof for a device that cannot. Since split authorisation
  *    (bundle guest v3, every chain since 17) the job carries the wallet's **viewing key** and a
