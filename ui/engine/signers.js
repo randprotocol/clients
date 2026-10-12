@@ -49,6 +49,20 @@ export function verdict({ summary, head, chainId, genesis, url }) {
   if (summary.recipients_checked !== true) {
     return { signable: false, refusal: { code: 'unchecked-recipient', message: t('Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.') } };
   }
+  // A field the rule reads that is missing or malformed fails closed: NaN compares false.
+  const nonZero = (a) => !/^0*$/.test(String(a ?? '').trim());
+  const outs = Array.isArray(summary.outputs) ? summary.outputs : null;
+  if (outs && outs.some((o) => o && o.to_account !== true && nonZero(o.amount) && o.matches == null)) {
+    return { signable: false, refusal: { code: 'unchecked-recipient', message: t('Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.') } };
+  }
+  const sound = Number.isSafeInteger(summary.expires_at) && summary.expires_at >= 0
+    && Number.isSafeInteger(summary.chain_id)
+    && Number.isInteger(summary.binding_domain) && summary.binding_domain >= 0
+    && typeof summary.genesis === 'string' && /^[0-9a-fA-F]+$/.test(summary.genesis)
+    && outs !== null;
+  if (!sound) {
+    return { signable: false, refusal: { code: 'malformed-summary', message: t('The proposal check returned an incomplete answer, so this proposal is not signed.') } };
+  }
   if (head == null) {
     return { signable: false, refusal: { code: 'no-node', node: url, message: t('No node answered at {url}, so the expiry cannot be checked and this proposal is not signed. Retry when the node is reachable.', { url: url || '—' }) } };
   }
@@ -158,13 +172,17 @@ export function makeSigners(deps) {
     async sign(id, proposal, expectedRecipients, password) {
       const p = await profileOf(id);
       const text = cleanText(proposal);
-      const v = await judge(await c.msauthCheck(text, p.policy, payees(expectedRecipients)));
+      const summary = await c.msauthCheck(text, p.policy, payees(expectedRecipients));
+      const v = await judge(summary);
       if (!v.signable) throw new SignerRefusal(v.refusal.code, v.refusal.message, { node: v.refusal.node });
       const rec = ((await storage.get(SIGNER_SEEDS_KEY)) || {})[id];
       if (!rec) throw new Error(t('This signer profile has no key on this device: remove it and add it again.'));
       const seed = await passwordAttempt(() => decryptBytes(password, rec));
       if (!seed) throw new Error('wrong password');
       try {
+        // The backoff above can last up to 30 s: re-read the head and re-run the rule before signing.
+        const again = await judge(summary);
+        if (!again.signable) throw new SignerRefusal(again.refusal.code, again.refusal.message, { node: again.refusal.node });
         // The hex copy below cannot be wiped (a JS string); it is unreachable after this call, and
         // wallet-core holds its own copy in Zeroizing. The bytes are wiped here.
         const share = await c.msauthSign(text, p.policy, hexOf(seed));

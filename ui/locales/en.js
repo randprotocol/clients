@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1042 strings.
+// 1043 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{chain} · {genesis}": "{chain} · {genesis}",
@@ -742,6 +742,7 @@ export default {
   "the proof does not verify: {reason}": "the proof does not verify: {reason}",
   "the proof published a digest this wallet did not build ({published} for {expected}); not using it": "the proof published a digest this wallet did not build ({published} for {expected}); not using it",
   "The proof runs on this device. You can look at other screens — it keeps going — but closing the wallet stops it.": "The proof runs on this device. You can look at other screens — it keeps going — but closing the wallet stops it.",
+  "The proposal check returned an incomplete answer, so this proposal is not signed.": "The proposal check returned an incomplete answer, so this proposal is not signed.",
   "the proposal does not parse: {reason}": "the proposal does not parse: {reason}",
   "the proposal expires at {expires}, outside its bundle's window ({from}, {to}]": "the proposal expires at {expires}, outside its bundle's window ({from}, {to}]",
   "the proposal's auth_commit is not this policy's account": "the proposal's auth_commit is not this policy's account",
