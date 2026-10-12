@@ -185,6 +185,9 @@ registerScreen('signer', {
 
     // The Sign button signs the list as last checked: a later edit to any row disarms it.
     let stale = false;
+    const rowsKey = () => JSON.stringify(rows.map((r) => [r.addr, r.amount]));
+    let checkedKey = rowsKey(); // the rows as they were when `payees` was built
+    let landingStale = false;
     let confirmed = false;
     function applyStale() {
       const sign = review.querySelector('[data-role="sign"]');
@@ -223,8 +226,9 @@ registerScreen('signer', {
       box.querySelector('[data-role="add-payment"]').addEventListener('click', () => { rows.push({ addr: '', amount: '' }); markStale(); paintPayments(); });
       box.querySelector('[data-role="check-payees"]').addEventListener('click', () => {
         const errP = box.querySelector('[data-role="payee-error"]');
-        try { payees = rows.map((row, i) => entryOf(row, optionalFor(row))); } catch (err) { showError(errP, err.message); return; }
+        try { payees = rows.map((row) => entryOf(row, optionalFor(row))); } catch (err) { showError(errP, err.message); return; }
         showError(errP, '');
+        checkedKey = rowsKey();
         runCheck();
       });
     }
@@ -253,7 +257,7 @@ registerScreen('signer', {
         paintRefusal(act, r);
         return;
       }
-      stale = false; confirmed = false;
+      stale = landingStale; confirmed = false;
       act.innerHTML = h`
         <span>${t('{blocks} blocks left to prove it.', { blocks: String(r.blocksLeft) })}</span>
         <div class="field"><label class="label" for="sign-confirm">${t('Type the last four characters of the account fingerprint')}</label><input id="sign-confirm" data-role="confirm" type="text" autocomplete="off" spellcheck="false" maxlength="9"></div>
@@ -261,6 +265,7 @@ registerScreen('signer', {
         <p class="caption" data-role="stale-note" role="status" hidden>${t('Payments changed: check them again before signing.')}</p>
         <p class="error" data-role="sign-error" role="alert" hidden></p>
         <button class="btn btn-primary block" type="button" data-role="sign" disabled>${t('Sign')}</button><div data-role="share-out"></div>`;
+      applyStale();
       const confirm = act.querySelector('[data-role="confirm"]');
       const sign = act.querySelector('[data-role="sign"]');
       confirm.addEventListener('input', () => { confirmed = confirmsFingerprint(s.policy_fingerprint, confirm.value); applyStale(); });
@@ -295,13 +300,15 @@ registerScreen('signer', {
     async function runCheck() {
       showError(errorEl, '');
       const text = body.querySelector('textarea[data-role="proposal"]').value;
-      if (text !== proposal) { payees = []; rows = [{ addr: '', amount: '' }]; lastSummary = null; } // a new proposal: its payments are asked again
+      if (text !== proposal) { payees = []; rows = [{ addr: '', amount: '' }]; checkedKey = rowsKey(); lastSummary = null; } // a new proposal: its payments are asked again
       proposal = text;
+      const sentKey = checkedKey; // the rows these payees came from
       try {
         const r = await group.check(id, proposal, payees);
         if (!ctx.isCurrent()) return;
         lastSummary = r.summary && typeof r.summary === 'object' ? r.summary : null;
         paintPayments();
+        landingStale = sentKey !== rowsKey(); // edited since, or while in flight: stays stale
         paintReview(r);
       } catch (err) { review.textContent = ''; showError(errorEl, err.message); if (ctx.isCurrent()) paintPayments(); }
     }

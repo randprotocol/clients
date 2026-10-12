@@ -355,3 +355,32 @@ test('editing a payment after a check disarms Sign until the payments are checke
   assert.ok(root.querySelector('[data-role="payee-error"]').textContent, 'the blank new row is refused, so Sign stays off');
   assert.equal(root.querySelector('[data-role="sign"]').disabled, true);
 });
+
+test('the top Check does not re-arm Sign after a row was edited', async (t) => {
+  const { app, root } = await checked(t);
+  type(root.querySelector('input[data-role="payee"]'), 'rand1a');
+  type(root.querySelector('input[data-role="payee-amount"]'), '1');
+  await submit(app, root);
+  type(root.querySelector('input[data-role="payee-amount"]'), '2');
+  root.querySelector('[data-role="check"]').click();
+  await app.idle(); await tick();
+  const c = root.querySelector('input[data-role="confirm"]'); c.value = 'aak3'; c.dispatchEvent(new Event('input', { bubbles: true }));
+  assert.equal(root.querySelector('[data-role="sign"]').disabled, true);
+  assert.equal(root.querySelector('[data-role="stale-note"]').hasAttribute('hidden'), false);
+});
+
+test('an edit while a check is in flight leaves Sign disabled when it lands', async (t) => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let n = 0;
+  const { app, root } = await checked(t, null, async (payees, base) => { n += 1; if (n > 1) await gate; return base(); });
+  type(root.querySelector('input[data-role="payee"]'), 'rand1a');
+  type(root.querySelector('input[data-role="payee-amount"]'), '1');
+  root.querySelector('[data-role="check-payees"]').click();
+  await tick();
+  type(root.querySelector('input[data-role="payee-amount"]'), '2');
+  release();
+  await app.idle(); await tick();
+  const c = root.querySelector('input[data-role="confirm"]'); c.value = 'aak3'; c.dispatchEvent(new Event('input', { bubbles: true }));
+  assert.equal(root.querySelector('[data-role="sign"]').disabled, true);
+});
