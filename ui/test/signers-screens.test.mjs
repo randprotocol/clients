@@ -233,7 +233,7 @@ async function checked(t, summaryOver, checkFn) {
   const seen = [];
   b.signers.check = async (id, proposal, payees) => {
     seen.push(payees);
-    if (checkFn) return checkFn(payees);
+    if (checkFn) return checkFn(payees, () => original(id, proposal, payees));
     const r = await original(id, proposal, payees);
     return summaryOver ? { ...r, summary: summaryOver(r.summary) } : r;
   };
@@ -310,4 +310,48 @@ test('the core\'s three payee sentences reach the screen verbatim', async (t) =>
     assert.equal(root.querySelector('[data-role="error"]').textContent, msg);
     app.destroy(); root.remove();
   }
+});
+
+test('the optional-amount exception is per row: only a non-RAND owner\'s row may go unpinned', async (t) => {
+  const fps = { rand1tok: 'F', rand1r: 'G' };
+  const { app, root, seen } = await checked(t, null, async (payees, base) => {
+    const r = await base();
+    const outputs = [{ to_account: false, amount: '5', asset: 7, owner_fingerprint: 'F', matches: 'x' }, { to_account: false, amount: '9', asset: 0, owner_fingerprint: 'G', matches: 'y' }];
+    return { ...r, summary: { ...r.summary, outputs, expected: payees.map((e) => ({ entry: e, fingerprint: fps[e.split(':')[0]] || null })) } };
+  });
+  root.querySelector('[data-role="add-payment"]').click();
+  const [a, b] = root.querySelectorAll('input[data-role="payee"]');
+  type(a, 'rand1tok'); type(b, 'rand1r');
+  await submit(app, root);
+  assert.deepEqual(seen.at(-1), ['rand1tok', 'rand1r'], 'unfingerprinted rows may be sent address-only to find out');
+  assert.equal(root.querySelectorAll('[data-role="nonrand-note"]').length, 1, 'the note stays on the non-RAND row alone');
+  const n = seen.length;
+  await submit(app, root);
+  assert.equal(seen.length, n, 'the RAND row now needs its amount');
+  assert.match(root.querySelector('[data-role="payee-error"]').textContent, /amount/i);
+  type(root.querySelectorAll('input[data-role="payee-amount"]')[1], '9');
+  await submit(app, root);
+  assert.deepEqual(seen.at(-1), ['rand1tok', 'rand1r:9']);
+});
+
+test('editing a payment after a check disarms Sign until the payments are checked again', async (t) => {
+  const { app, root } = await checked(t);
+  type(root.querySelector('input[data-role="payee"]'), 'rand1a');
+  type(root.querySelector('input[data-role="payee-amount"]'), '1');
+  await submit(app, root);
+  const arm = () => { const c = root.querySelector('input[data-role="confirm"]'); c.value = 'aak3'; c.dispatchEvent(new Event('input', { bubbles: true })); };
+  arm();
+  assert.equal(root.querySelector('[data-role="sign"]').disabled, false);
+  assert.equal(root.querySelector('[data-role="stale-note"]').hasAttribute('hidden'), true);
+  type(root.querySelector('input[data-role="payee-amount"]'), '2');
+  assert.equal(root.querySelector('[data-role="sign"]').disabled, true);
+  assert.equal(root.querySelector('[data-role="stale-note"]').hasAttribute('hidden'), false);
+  await submit(app, root);
+  arm();
+  assert.equal(root.querySelector('[data-role="sign"]').disabled, false);
+  root.querySelector('[data-role="add-payment"]').click();
+  assert.equal(root.querySelector('[data-role="sign"]').disabled, true, 'add disarms');
+  await submit(app, root);
+  assert.ok(root.querySelector('[data-role="payee-error"]').textContent, 'the blank new row is refused, so Sign stays off');
+  assert.equal(root.querySelector('[data-role="sign"]').disabled, true);
 });

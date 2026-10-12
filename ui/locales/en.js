@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1093 strings.
+// 1094 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -523,6 +523,7 @@ export default {
   "Payment link copied": "Payment link copied",
   "Payment links cannot be read in this app; paste the address instead.": "Payment links cannot be read in this app; paste the address instead.",
   "Payment links cannot be read in this app.": "Payment links cannot be read in this app.",
+  "Payments changed: check them again before signing.": "Payments changed: check them again before signing.",
   "Peers": "Peers",
   "Pending": "Pending",
   "Permission to reach that host was not granted, so the node was left as it was.": "Permission to reach that host was not granted, so the node was left as it was.",

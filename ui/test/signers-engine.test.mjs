@@ -284,13 +284,28 @@ test('an empty intended-payments list with a paying output, or an entry without 
 });
 
 test('an address-only entry is accepted when a paying output is not RAND', async () => {
-  const token = { ...SUMMARY, recipients_checked: true, outputs: [{ to_account: false, amount: '5', asset: 7, matches: 'ABCD' }] };
+  const token = { ...SUMMARY, recipients_checked: true, outputs: [{ to_account: false, amount: '5', asset: 7, owner_fingerprint: 'F', matches: 'ABCD' }], expected: [{ entry: 'rand1a', fingerprint: 'F' }] };
   const { backend, row } = await unlockedWithSigner({ core: signingCore({ msauth_check: () => token }), fetch: atHead(100) });
   const r = await backend.signers.check(row.id, 'P', ['rand1a']);
   assert.equal(r.signable, true);
   const rand = { ...token, outputs: [{ ...token.outputs[0], asset: 0 }] };
   const b2 = await unlockedWithSigner({ core: signingCore({ msauth_check: () => rand }), fetch: atHead(100) });
   assert.equal((await b2.backend.signers.check(b2.row.id, 'P', ['rand1a'])).refusal.code, 'unchecked-recipient');
+});
+
+test('the amountless exception is per row: only the owner of a non-RAND output may leave the amount out', async () => {
+  const mixed = (expected) => ({ ...SUMMARY, recipients_checked: true, ...(expected ? { expected } : {}),
+    outputs: [{ to_account: false, amount: '5', asset: 7, owner_fingerprint: 'F', matches: 'ABCD' }, { to_account: false, amount: '9', asset: 0, owner_fingerprint: 'G', matches: 'EFGH' }] });
+  const run = async (summary, entries) => {
+    const { backend, row } = await unlockedWithSigner({ core: signingCore({ msauth_check: () => summary }), fetch: atHead(100) });
+    return backend.signers.check(row.id, 'P', entries);
+  };
+  const exp = [{ entry: 'rand1f', fingerprint: 'F' }, { entry: 'rand1g', fingerprint: 'G' }];
+  assert.equal((await run(mixed(exp), ['rand1f', 'rand1g:9'])).signable, true, 'the non-RAND owner may go unpinned');
+  assert.equal((await run(mixed(exp), ['rand1f:5', 'rand1g'])).refusal.code, 'unchecked-recipient', 'a RAND payee may not');
+  assert.equal((await run(mixed(undefined), ['rand1f'])).refusal.code, 'unchecked-recipient', 'expected missing: fail closed');
+  assert.equal((await run(mixed('nope'), ['rand1f'])).refusal.code, 'unchecked-recipient');
+  assert.equal((await run(mixed([{ entry: 'rand1f' }]), ['rand1f'])).refusal.code, 'unchecked-recipient', 'no fingerprint: fail closed');
 });
 
 test('the core\'s payee sentences reach the caller verbatim', async () => {

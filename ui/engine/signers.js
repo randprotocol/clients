@@ -62,9 +62,18 @@ export function verdict({ summary, head, chainId, genesis, url, recipients }) {
   // No intended payment named at all while something pays out: unchecked, whatever the core said.
   const paying = outs.filter((o) => o.to_account !== true && !isZero(o.amount));
   if (Array.isArray(recipients) && recipients.length === 0 && paying.length > 0) return unchecked();
-  // An amount pin is required on every entry, except where a paying output is not RAND: the core
-  // refuses a pin there, so such an entry is the address alone.
-  if (Array.isArray(recipients) && recipients.some(amountless) && !paying.some((o) => o.asset != null && Number.isInteger(Number(o.asset)) && Number(o.asset) !== 0)) return unchecked();
+  // An amount pin is required on every entry, except an entry whose own owner fingerprint owns a
+  // non-RAND paying output: the core refuses a pin there, so that entry is the address alone.
+  // The exception is per row, so one small non-RAND output cannot unpin the RAND rows.
+  if (Array.isArray(recipients) && recipients.some(amountless)) {
+    const exp = summary.expected;
+    if (!Array.isArray(exp)) return unchecked();
+    const tokenOwners = new Set(paying.filter((o) => o.asset != null && Number.isInteger(Number(o.asset)) && Number(o.asset) !== 0
+      && typeof o.owner_fingerprint === 'string' && o.owner_fingerprint !== '').map((o) => o.owner_fingerprint));
+    const allowed = (entry) => exp.some((x) => x !== null && typeof x === 'object' && x.entry === entry
+      && typeof x.fingerprint === 'string' && x.fingerprint !== '' && tokenOwners.has(x.fingerprint));
+    if (!recipients.filter(amountless).every(allowed)) return unchecked();
+  }
   if (outs.some((o) => o.to_account !== true && !isZero(o.amount) && !(typeof o.matches === 'string' && o.matches.trim() !== ''))) return unchecked();
   const sound = Number.isSafeInteger(summary.expires_at) && summary.expires_at >= 0
     && Number.isSafeInteger(summary.chain_id)

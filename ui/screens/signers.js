@@ -183,26 +183,47 @@ registerScreen('signer', {
     const review = body.querySelector('[data-role="review"]');
     wireFiles(ctx, body, (m) => showError(errorEl, m));
 
+    // The Sign button signs the list as last checked: a later edit to any row disarms it.
+    let stale = false;
+    let confirmed = false;
+    function applyStale() {
+      const sign = review.querySelector('[data-role="sign"]');
+      const note = review.querySelector('[data-role="stale-note"]');
+      if (sign) sign.disabled = stale || !confirmed;
+      if (note) { if (stale) note.removeAttribute('hidden'); else note.setAttribute('hidden', ''); }
+    }
+    function markStale() { stale = true; applyStale(); }
     function paintPayments() {
       const box = body.querySelector('[data-role="payments"]');
       const paying = lastSummary && Array.isArray(lastSummary.outputs) ? lastSummary.outputs.filter(needsPayee) : null;
       if (paying && paying.length === 0) { box.textContent = ''; return; }
-      const optional = !!(paying && paying.some(nonRand));
+      // An amount may be left out only on a row whose own address owns a non-RAND paying output. A row
+      // the core has not yet fingerprinted (or whose address was edited) may be sent address-only so
+      // the next check can tell; the engine refuses it unless its fingerprint owns such an output.
+      const anyNonRand = !!(paying && paying.some(nonRand));
+      const owners = new Set((paying || []).filter(nonRand).map((o) => o.owner_fingerprint).filter((f) => typeof f === 'string' && f !== ''));
+      const expected = lastSummary && Array.isArray(lastSummary.expected) ? lastSummary.expected : [];
+      const optionalFor = (row) => {
+        const a = String(row.addr || '').trim();
+        const known = expected.find((x) => x && typeof x.entry === 'string' && (x.entry.indexOf(':') < 0 ? x.entry : x.entry.slice(0, x.entry.indexOf(':'))).trim() === a && a !== '');
+        if (known) return typeof known.fingerprint === 'string' && owners.has(known.fingerprint);
+        return anyNonRand;
+      };
+      const rowOptional = rows.map(optionalFor);
       box.innerHTML = h`<div class="card stack">
         <span class="label">${t('Intended payments')}</span>
         <span class="caption">${t('Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.')}</span>
-        ${raw(optional ? h`<span class="caption" data-role="nonrand-note">${t('Amounts cannot be checked for non-RAND payments: leave the amount empty for those.')}</span>` : '')}
-        <div class="stack" data-role="rows">${raw(rows.map((_, i) => h`<div class="field cluster"><input data-role="payee" data-row="${i}" type="text" autocomplete="off" spellcheck="false" placeholder="rand1…" aria-label="${t('Payee address')}"><input data-role="payee-amount" data-row="${i}" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-label="${t('Amount in RAND')}"><button class="btn sm" type="button" data-role="remove-payment" data-row="${i}">${t('Remove')}</button></div>`).join(''))}</div>
+        <div class="stack" data-role="rows">${raw(rows.map((_, i) => h`${raw(rowOptional[i] ? h`<span class="caption" data-role="nonrand-note">${t('Amounts cannot be checked for non-RAND payments: leave the amount empty for those.')}</span>` : '')}<div class="field cluster"><input data-role="payee" data-row="${i}" type="text" autocomplete="off" spellcheck="false" placeholder="rand1…" aria-label="${t('Payee address')}"><input data-role="payee-amount" data-row="${i}" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-label="${t('Amount in RAND')}"><button class="btn sm" type="button" data-role="remove-payment" data-row="${i}">${t('Remove')}</button></div>`).join(''))}</div>
         <button class="btn sm" type="button" data-role="add-payment">${t('Add payment')}</button>
         <p class="error" data-role="payee-error" role="alert" hidden></p>
         <button class="btn block" type="button" data-role="check-payees">${t('Check payments')}</button></div>`;
-      box.querySelectorAll('input[data-role="payee"]').forEach((n, i) => { n.value = rows[i].addr; n.addEventListener('input', () => { rows[i].addr = n.value; }); });
-      box.querySelectorAll('input[data-role="payee-amount"]').forEach((n, i) => { n.value = rows[i].amount; n.addEventListener('input', () => { rows[i].amount = n.value; }); });
-      box.querySelectorAll('[data-role="remove-payment"]').forEach((n, i) => n.addEventListener('click', () => { rows.splice(i, 1); paintPayments(); }));
-      box.querySelector('[data-role="add-payment"]').addEventListener('click', () => { rows.push({ addr: '', amount: '' }); paintPayments(); });
+      box.querySelectorAll('input[data-role="payee"]').forEach((n, i) => { n.value = rows[i].addr; n.addEventListener('input', () => { rows[i].addr = n.value; markStale(); }); });
+      box.querySelectorAll('input[data-role="payee-amount"]').forEach((n, i) => { n.value = rows[i].amount; n.addEventListener('input', () => { rows[i].amount = n.value; markStale(); }); });
+      box.querySelectorAll('[data-role="remove-payment"]').forEach((n, i) => n.addEventListener('click', () => { rows.splice(i, 1); markStale(); paintPayments(); }));
+      box.querySelector('[data-role="add-payment"]').addEventListener('click', () => { rows.push({ addr: '', amount: '' }); markStale(); paintPayments(); });
       box.querySelector('[data-role="check-payees"]').addEventListener('click', () => {
         const errP = box.querySelector('[data-role="payee-error"]');
-        try { payees = rows.map((row) => entryOf(row, optional)); } catch (err) { showError(errP, err.message); return; }
+        try { payees = rows.map((row, i) => entryOf(row, optionalFor(row))); } catch (err) { showError(errP, err.message); return; }
         showError(errP, '');
         runCheck();
       });
@@ -232,15 +253,17 @@ registerScreen('signer', {
         paintRefusal(act, r);
         return;
       }
+      stale = false; confirmed = false;
       act.innerHTML = h`
         <span>${t('{blocks} blocks left to prove it.', { blocks: String(r.blocksLeft) })}</span>
         <div class="field"><label class="label" for="sign-confirm">${t('Type the last four characters of the account fingerprint')}</label><input id="sign-confirm" data-role="confirm" type="text" autocomplete="off" spellcheck="false" maxlength="9"></div>
         <div class="field"><label class="label" for="sign-password">${t('Password')}</label><input id="sign-password" data-role="password" type="password" autocomplete="current-password"></div>
+        <p class="caption" data-role="stale-note" role="status" hidden>${t('Payments changed: check them again before signing.')}</p>
         <p class="error" data-role="sign-error" role="alert" hidden></p>
         <button class="btn btn-primary block" type="button" data-role="sign" disabled>${t('Sign')}</button><div data-role="share-out"></div>`;
       const confirm = act.querySelector('[data-role="confirm"]');
       const sign = act.querySelector('[data-role="sign"]');
-      confirm.addEventListener('input', () => { sign.disabled = !confirmsFingerprint(s.policy_fingerprint, confirm.value); });
+      confirm.addEventListener('input', () => { confirmed = confirmsFingerprint(s.policy_fingerprint, confirm.value); applyStale(); });
       sign.addEventListener('click', async () => {
         const pw = act.querySelector('[data-role="password"]');
         const errEl = act.querySelector('[data-role="sign-error"]');
