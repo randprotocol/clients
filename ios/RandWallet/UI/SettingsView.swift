@@ -64,6 +64,10 @@ struct SettingsView: View {
                     Text("The spend key is the wallet. Anyone who sees it can spend your RAND. The key file is what the rand command-line wallet reads.")
                 }
 
+                Section {
+                    NavigationLink("Manage multisig signers") { SignersView() }
+                } header: { Text("Multisig signers") }
+
                 Section("Security") {
                     Picker("Auto-lock", selection: $settings.autoLockMinutes) {
                         Text("Immediately").tag(0)

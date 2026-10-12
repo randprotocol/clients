@@ -60,6 +60,19 @@ def ios_keys(name):
     d = json.load(open(CAT[name]))
     return {k: v for k, v in d['strings'].items() if v.get('shouldTranslate', True) is not False}
 
+def ios_ph_ok(key, s):
+    # Same placeholders in the same order; or, where a language reorders them, every placeholder
+    # positional (%2$@ ...) so that argument n has the type key's n-th placeholder has.
+    want = [m.group(0) for m in I_PH.finditer(key)]
+    got = [m.group(0) for m in I_PH.finditer(s)]
+    if got == want: return True
+    if '%%' in key or not got or not all(re.match(r'%\d+\$', g) for g in got): return False
+    kinds = {}
+    for g in got:
+        n, kind = re.match(r'%(\d+)\$(.*)', g).groups()
+        if kinds.setdefault(int(n), kind) != kind: return False
+    return sorted(kinds) == list(range(1, len(want) + 1)) and [kinds[i + 1] for i in range(len(want))] == [w[1:] for w in want] and len(got) == len(want)
+
 def check_ios(code):
     p = os.path.join(ROOT, 'ios', 'l10n', f'{code}.json')
     t = json.load(open(p))
@@ -72,7 +85,7 @@ def check_ios(code):
             vals = v.values() if isinstance(v, dict) else [v]
             for s in vals:
                 if not isinstance(s, str) or not s.strip(): errs.append(f'empty {k!r}'); continue
-                if [m.group(0) for m in I_PH.finditer(s)] != [m.group(0) for m in I_PH.finditer(k)] and name == 'Localizable':
+                if not ios_ph_ok(k, s) and name == 'Localizable':
                     if not (isinstance(v, dict)): errs.append(f'placeholders {k!r} -> {s!r}')
     return errs
 
