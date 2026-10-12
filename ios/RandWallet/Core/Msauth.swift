@@ -323,6 +323,10 @@ struct MsauthSigning {
                 return MsauthRules.verdict(summary: summary, head: nil, chainId: chainId, genesis: nil, url: url, recipients: payees)
             }
             let head = try await node.headHeight()
+            // A height past 2^53-1 is no answer a node gives honestly (the JS rule's safe-integer bound).
+            guard head <= 9_007_199_254_740_991 else {
+                return MsauthRules.verdict(summary: summary, head: nil, chainId: chainId, genesis: nil, url: url, recipients: payees)
+            }
             let genesis = try await node.genesisHash()
             return MsauthRules.verdict(summary: summary, head: head, chainId: chainId, genesis: genesis, url: url, recipients: payees)
         } catch {

@@ -11,6 +11,8 @@ protocol SignerSecrets {
     /// as the reason. nil when there is no such item.
     func load(account: String, prompt: String?) throws -> Data?
     func delete(account: String)
+    /// Deletes every item whose account starts with `accountPrefix`, listed or not.
+    func deleteAll(accountPrefix: String)
     /// Whether this device has a passcode, without which an item cannot be kept behind user presence.
     var canRequireUserPresence: Bool { get }
 }
@@ -61,12 +63,35 @@ final class KeychainSignerSecrets: SignerSecrets {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(q as CFDictionary, &item)
         if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess else { throw Keychain.KeychainError(status: status) }
-        return item as? Data
+        guard status == errSecSuccess, let cf = item as? Data else {
+            if status == errSecSuccess { return nil }
+            throw Keychain.KeychainError(status: status)
+        }
+        // `cf` wraps the Security framework's immutable CFData; zeroing it through `Data` would
+        // copy-on-write and free the original unzeroed. The caller gets its own buffer, which it
+        // can zero in place; the framework's copy is outside its reach.
+        return cf.withUnsafeBytes { raw in Data(raw) }
     }
 
     func delete(account: String) {
         SecItemDelete(base(account) as CFDictionary)
+    }
+
+    /// Lists this service's items by attributes only (no data, so no prompt even for an item
+    /// behind user presence) and deletes each one whose account has the prefix. The service is
+    /// shared with the spend key and the prover pairing, so the sweep goes by account, never by
+    /// service alone.
+    func deleteAll(accountPrefix: String) {
+        let ctx = LAContext()
+        ctx.interactionNotAllowed = true
+        var q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitAll]
+        q[kSecUseAuthenticationContext as String] = ctx
+        var items: CFTypeRef?
+        guard SecItemCopyMatching(q as CFDictionary, &items) == errSecSuccess, let list = items as? [[String: Any]] else { return }
+        for attrs in list {
+            if let account = attrs[kSecAttrAccount as String] as? String, account.hasPrefix(accountPrefix) { delete(account: account) }
+        }
     }
 }
 
@@ -112,7 +137,7 @@ final class SignerStore: ObservableObject {
             throw StoreError(errorDescription: String(localized: "Set a device passcode first: a signer key is read only after Face ID, Touch ID or the passcode."))
         }
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 64 else { throw StoreError(errorDescription: String(localized: "a signer label is 1-64 characters")) }
+        guard !name.isEmpty, name.unicodeScalars.count <= 64 else { throw StoreError(errorDescription: String(localized: "a signer label is 1-64 characters")) }
         let pol = MsauthRules.clean(policy)
         let info = try RandCore.msauthPolicyInfo(pol)
         // The core's reply carries the seed as a hex String, which cannot be wiped; only the Data
@@ -155,6 +180,9 @@ final class SignerStore: ObservableObject {
         }
         profiles = []
         secrets.delete(account: Self.indexAccount)
+        // An item the index does not list (an index that no longer decodes, a crash between the
+        // seed's save and the index's) goes too: forgetting the wallet removes every profile.
+        secrets.deleteAll(accountPrefix: "msauth.")
     }
 
     func policy(_ id: String) throws -> String {
@@ -171,9 +199,10 @@ final class SignerStore: ObservableObject {
         return seed
     }
 
-    /// One prompted read of the seed for `body`. This function's copy is zeroed with `resetBytes`
-    /// when `body` returns or throws. `Data` is a value type: a copy `body` makes and keeps, and
-    /// whatever the Security framework and the core hold internally, are outside that wipe.
+    /// One prompted read of the seed for `body`. The seed is in a buffer this store owns (copied
+    /// once out of the Keychain's reply), zeroed in place with `resetBytes` when `body` returns or
+    /// throws. The Security framework's own copy cannot be wiped from here; nor can a copy `body`
+    /// makes and keeps (the core path makes a hex String, see `RandCore.msauthSign`).
     func withSeed<T>(_ id: String, reason: String, _ body: (Data) throws -> T) throws -> T {
         var seed = try readSeed(id, reason: reason)
         defer { seed.resetBytes(in: 0..<seed.count) }

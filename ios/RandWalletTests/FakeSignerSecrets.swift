@@ -23,4 +23,5 @@ final class FakeSignerSecrets: SignerSecrets {
         return items[account]?.data
     }
     func delete(account: String) { items[account] = nil }
+    func deleteAll(accountPrefix: String) { items = items.filter { !$0.key.hasPrefix(accountPrefix) } }
 }

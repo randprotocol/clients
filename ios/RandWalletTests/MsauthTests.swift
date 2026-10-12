@@ -294,6 +294,31 @@ final class MsauthTests: XCTestCase {
         XCTAssertTrue(secrets.items.isEmpty, "\(secrets.items.keys)")
     }
 
+    func testRemoveAllSweepsOrphansTheIndexDoesNotList() throws {
+        let secrets = FakeSignerSecrets()
+        let store = SignerStore(secrets: secrets)
+        _ = try store.add(label: "a", policy: try fx("policy"), key: try seeds()[0])
+        // A crash between the seed and the index, or an index that no longer decodes.
+        secrets.items["msauth.orphan.seed"] = (Data([1, 2, 3]), true)
+        secrets.items["msauth.orphan.policy"] = (Data("{}".utf8), false)
+        secrets.items["spend_key"] = (Data("keep".utf8), false)
+        secrets.items["prover_pairing"] = (Data("keep".utf8), false)
+        store.removeAll()
+        XCTAssertEqual(Set(secrets.items.keys), ["spend_key", "prover_pairing"], "every msauth.* item is gone, nothing else")
+        let broken = FakeSignerSecrets()
+        broken.items["msauth.index"] = (Data("not json".utf8), false)
+        broken.items["msauth.x.seed"] = (Data([9]), true)
+        SignerStore(secrets: broken).removeAll()
+        XCTAssertTrue(broken.items.isEmpty, "\(broken.items.keys)")
+    }
+
+    func testTheLabelLimitCountsCodePoints() throws {
+        let store = SignerStore(secrets: FakeSignerSecrets())
+        // 33 characters, 66 code points (e + combining acute): over the limit, as in the JS.
+        XCTAssertThrowsError(try store.add(label: String(repeating: "e\u{301}", count: 33), policy: try fx("policy"), key: try seeds()[0]))
+        XCTAssertNoThrow(try store.add(label: String(repeating: "e\u{301}", count: 32), policy: try fx("policy"), key: try seeds()[0]))
+    }
+
     // MARK: MsauthSigning: check, then sign, in the order the rules need
 
     private final class FakeNode: MsauthNode {
@@ -419,6 +444,17 @@ final class MsauthTests: XCTestCase {
         } catch let e as MsauthRefusal { XCTAssertEqual(e.verdict, .uncheckedRecipient) }
         XCTAssertTrue(core.calls.isEmpty, "nothing was passed on with the blanks removed")
         XCTAssertTrue(secrets.promptedReads.isEmpty)
+    }
+
+    func testAHeadPastTheSafeIntegerRangeIsNoNode() async throws {
+        let core = FakeCore(); core.summary = summary(["expires_at": 9_007_199_254_740_991])
+        let node = FakeNode(); node.heads = [9_007_199_254_740_992]
+        let (m, _, p) = try signing(core, node)
+        let r = try await m.check(id: p.id, proposal: "P", expectedRecipients: ["rand1payee:5"])
+        XCTAssertEqual(r.verdict, .noNode(url: "https://node.test"))
+        node.heads = [9_007_199_254_740_991 - 17]
+        let ok = try await m.check(id: p.id, proposal: "P", expectedRecipients: ["rand1payee:5"])
+        XCTAssertEqual(ok.verdict, .signable(blocksLeft: 17))
     }
 
     func testWithNoNodeTheCheckStillShowsTheSummary() async throws {
