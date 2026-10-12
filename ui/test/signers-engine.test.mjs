@@ -111,8 +111,8 @@ test('an unmatched or unchecked payee refuses signing, before anything else', as
   assert.equal(verdict({ summary: unchecked, head: null, chainId: 13, genesis: GENESIS, url: 'u' }).refusal.code, 'unchecked-recipient');
   const seen = [];
   const { backend, row } = await unlockedWithSigner({ core: signingCore({ msauth_check: ({ expected_recipients }) => { seen.push(expected_recipients); return unchecked; } }), fetch: atHead(100) });
-  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee'], PASSWORD), (e) => e.code === 'unchecked-recipient');
-  assert.deepEqual(seen, [['rand1payee']], 'the payees reach the core');
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee:5'], PASSWORD), (e) => e.code === 'unchecked-recipient');
+  assert.deepEqual(seen, [['rand1payee:5']], 'the payees reach the core');
 });
 
 test('the expiry rule is the CLI\'s: refuse at head + 16 >= expires_at', () => {
@@ -126,30 +126,30 @@ test('a proposal for another chain or genesis is refused', async () => {
   assert.equal(verdict({ summary: { ...SUMMARY, genesis: 'bb'.repeat(32) }, head: 1, chainId: 13, genesis: GENESIS, url: 'u' }).refusal.code, 'wrong-genesis');
   assert.equal(verdict({ summary: { ...SUMMARY, binding_domain: 0, genesis: 'bb'.repeat(32) }, head: 1, chainId: 13, genesis: GENESIS, url: 'u' }).signable, true, 'a chain-id-bound proposal binds no genesis');
   const { backend, row } = await unlockedWithSigner({ core: signingCore({ msauth_check: () => ({ ...SUMMARY, chain_id: 21 }) }), fetch: atHead(100) });
-  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee'], PASSWORD), (e) => e.code === 'wrong-chain');
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee:5'], PASSWORD), (e) => e.code === 'wrong-chain');
 });
 
 test('with no node the proposal is shown but not signed, naming the node', async () => {
   const dead = async () => { throw new TypeError('fetch failed'); };
   const { backend, row } = await unlockedWithSigner({ core: signingCore(), fetch: dead });
-  const r = await backend.signers.check(row.id, 'P', ['rand1payee']);
+  const r = await backend.signers.check(row.id, 'P', ['rand1payee:5']);
   assert.equal(r.signable, false);
   assert.equal(r.refusal.code, 'no-node');
   assert.match(r.refusal.message, /rpc\.randprotocol\.org/);
   assert.deepEqual(r.summary.lines, ['x'], 'the review still shows what was checked');
-  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee'], PASSWORD), (e) => e.code === 'no-node');
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee:5'], PASSWORD), (e) => e.code === 'no-node');
 });
 
 test('a node that cannot give a head is no node', async () => {
   const { backend, row } = await unlockedWithSigner({ core: signingCore(), fetch: stubFetch({ rand_getHead: () => { throw new Error('busy'); } }) });
-  assert.equal((await backend.signers.check(row.id, 'P', ['rand1payee'])).refusal.code, 'no-node');
+  assert.equal((await backend.signers.check(row.id, 'P', ['rand1payee:5'])).refusal.code, 'no-node');
 });
 
 test('every signature asks for the password and caches nothing', async () => {
   const { backend, storage, row } = await unlockedWithSigner({ core: signingCore(), fetch: atHead(100) });
   const before = JSON.stringify([...storage.sessionMap.entries()]);
-  assert.deepEqual(await backend.signers.sign(row.id, 'P', ['rand1payee'], PASSWORD), { share: '1:' + 'ab'.repeat(8), index: 1 });
-  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee'], ''), /wrong password/, 'the second signature asks again');
+  assert.deepEqual(await backend.signers.sign(row.id, 'P', ['rand1payee:5'], PASSWORD), { share: '1:' + 'ab'.repeat(8), index: 1 });
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee:5'], ''), /wrong password/, 'the second signature asks again');
   assert.equal(JSON.stringify([...storage.sessionMap.entries()]), before, 'the session gained nothing');
   assert.ok(!JSON.stringify([...storage.local.entries()]).includes(SEED_HEX));
   assert.ok(!JSON.stringify([...storage.local.entries()]).includes('"P"'), 'the proposal is never stored');
@@ -157,9 +157,9 @@ test('every signature asks for the password and caches nothing', async () => {
 
 test('a wrong password at signing is throttled like an unlock', async () => {
   const { backend, storage, row } = await unlockedWithSigner({ core: signingCore(), fetch: atHead(100) });
-  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee'], 'wrong-password-here'), /wrong password/);
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee:5'], 'wrong-password-here'), /wrong password/);
   assert.equal(storage.local.get('unlockFailures').count, 1);
-  await backend.signers.sign(row.id, 'P', ['rand1payee'], PASSWORD);
+  await backend.signers.sign(row.id, 'P', ['rand1payee:5'], PASSWORD);
   assert.equal(storage.local.get('unlockFailures'), undefined, 'a right password clears the count');
 });
 
@@ -198,19 +198,19 @@ test('the rule is re-run after the password backoff, and a refusal there signs n
   let heads = [100, 190]; let signed = 0;
   const fetch = stubFetch({ rand_getHead: () => ({ height: heads.length > 1 ? heads.shift() : heads[0], hash: 'ff'.repeat(32), view: 1 }) });
   const { backend, storage, row } = await unlockedWithSigner({ core: signingCore({ msauth_sign: () => { signed += 1; return '1:ab'; } }), fetch });
-  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee'], PASSWORD), (e) => e.code === 'expired');
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee:5'], PASSWORD), (e) => e.code === 'expired');
   assert.equal(signed, 0);
   assert.equal(storage.local.get('unlockFailures'), undefined);
 });
 
 test('a node on another chain is no node, naming the URL', async () => {
   const { backend, row } = await unlockedWithSigner({ core: signingCore(), fetch: atHead(100, { rand_chainId: () => 21 }) });
-  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee'], PASSWORD), (e) => e.code === 'no-node' && /rpc\.randprotocol\.org/.test(e.message));
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee:5'], PASSWORD), (e) => e.code === 'no-node' && /rpc\.randprotocol\.org/.test(e.message));
 });
 
 test('a proposal bound to another genesis is refused through sign()', async () => {
   const { backend, row } = await unlockedWithSigner({ core: signingCore({ msauth_check: () => ({ ...SUMMARY, genesis: 'bb'.repeat(32) }) }), fetch: atHead(100) });
-  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee'], PASSWORD), (e) => e.code === 'wrong-genesis');
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee:5'], PASSWORD), (e) => e.code === 'wrong-genesis');
 });
 
 test('BOM-prefixed proposal and share reach the core trimmed', async () => {
@@ -221,7 +221,7 @@ test('BOM-prefixed proposal and share reach the core trimmed', async () => {
     msauth_verify_share: ({ proposal, share }) => { seen.push(['verify', proposal, share]); return true; },
   });
   const { backend, row } = await unlockedWithSigner({ core, fetch: atHead(100) });
-  await backend.signers.sign(row.id, '﻿PROP\n', ['rand1payee'], PASSWORD);
+  await backend.signers.sign(row.id, '﻿PROP\n', ['rand1payee:5'], PASSWORD);
   assert.deepEqual(await backend.signers.verifyShare(row.id, '﻿PROP\n', '﻿0:abcd\n'), { index: 0 });
   assert.deepEqual(seen, [['check', 'PROP'], ['sign', 'PROP'], ['verify', 'PROP', '0:abcd']]);
 });
@@ -229,7 +229,7 @@ test('BOM-prefixed proposal and share reach the core trimmed', async () => {
 test('a refused sign leaves the failure count alone and never calls msauth_sign', async () => {
   let signed = 0;
   const { backend, storage, row } = await unlockedWithSigner({ core: signingCore({ msauth_sign: () => { signed += 1; return '1:ab'; } }), fetch: atHead(190) });
-  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee'], 'wrong-password-here'), (e) => e.code === 'expired');
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee:5'], 'wrong-password-here'), (e) => e.code === 'expired');
   assert.equal(signed, 0);
   assert.equal(storage.local.get('unlockFailures'), undefined);
 });
@@ -254,5 +254,48 @@ test('only a non-empty string match counts as matched', () => {
   for (const matches of [false, '', '  ', 0, {}, null, undefined, true]) {
     const r = verdict({ summary: { ...SUMMARY, outputs: [{ to_account: false, amount: '5', matches }] }, head: 1, chainId: 13, genesis: GENESIS, url: 'u' });
     assert.equal(r.refusal && r.refusal.code, 'unchecked-recipient', JSON.stringify(matches));
+  }
+});
+
+test('a blank expected recipient is refused by check and sign, and never reaches the core', async () => {
+  const seen = [];
+  const { backend, row } = await unlockedWithSigner({ core: signingCore({ msauth_check: ({ expected_recipients }) => { seen.push(expected_recipients); return { ...SUMMARY }; } }), fetch: atHead(100) });
+  const r = await backend.signers.check(row.id, 'P', ['rand1a:1', '  ']);
+  assert.equal(r.signable, false);
+  assert.equal(r.refusal.code, 'unchecked-recipient');
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['', 'rand1b:1'], PASSWORD), (e) => e.code === 'unchecked-recipient');
+  assert.deepEqual(seen, [], 'nothing was passed on with the blanks removed');
+});
+
+test('an empty intended-payments list with a paying output, or an entry without an amount, is refused', async () => {
+  const paying = { ...SUMMARY, recipients_checked: true, outputs: [{ to_account: false, amount: '5', matches: 'ABCD' }] };
+  const seen = [];
+  const { backend, row } = await unlockedWithSigner({ core: signingCore({ msauth_check: ({ expected_recipients }) => { seen.push(expected_recipients); return paying; } }), fetch: atHead(100) });
+  const r = await backend.signers.check(row.id, 'P', []);
+  assert.equal(r.refusal.code, 'unchecked-recipient', 'a matches string alone does not make an empty list pass');
+  await assert.rejects(backend.signers.sign(row.id, 'P', [], PASSWORD), (e) => e.code === 'unchecked-recipient');
+  const noAmount = await backend.signers.check(row.id, 'P', ['rand1a']);
+  assert.equal(noAmount.refusal.code, 'unchecked-recipient', 'a RAND-only summary needs the amount on every entry');
+  assert.equal((await backend.signers.check(row.id, 'P', ['rand1a:'])).refusal.code, 'unchecked-recipient');
+  assert.equal((await backend.signers.check(row.id, 'P', [':5'])).refusal.code, 'unchecked-recipient');
+  assert.deepEqual(seen, [[], [], ['rand1a'], ['rand1a:']], 'an empty address never reaches the core');
+  const ok = await backend.signers.check(row.id, 'P', [' rand1a:5 ']);
+  assert.deepEqual(seen.at(-1), ['rand1a:5']);
+});
+
+test('an address-only entry is accepted when a paying output is not RAND', async () => {
+  const token = { ...SUMMARY, recipients_checked: true, outputs: [{ to_account: false, amount: '5', asset: 7, matches: 'ABCD' }] };
+  const { backend, row } = await unlockedWithSigner({ core: signingCore({ msauth_check: () => token }), fetch: atHead(100) });
+  const r = await backend.signers.check(row.id, 'P', ['rand1a']);
+  assert.equal(r.signable, true);
+  const rand = { ...token, outputs: [{ ...token.outputs[0], asset: 0 }] };
+  const b2 = await unlockedWithSigner({ core: signingCore({ msauth_check: () => rand }), fetch: atHead(100) });
+  assert.equal((await b2.backend.signers.check(b2.row.id, 'P', ['rand1a'])).refusal.code, 'unchecked-recipient');
+});
+
+test('the core\'s payee sentences reach the caller verbatim', async () => {
+  for (const msg of ['expected recipient AB12-CD34 is paid 3, not 5', 'expected recipient AB12-CD34 is not paid', 'output 2 pays AB12-CD34, not an expected recipient']) {
+    const { backend, row } = await unlockedWithSigner({ core: signingCore({ msauth_check: () => { throw new Error(msg); } }), fetch: atHead(100) });
+    await assert.rejects(backend.signers.check(row.id, 'P', ['rand1a:5']), (e) => e.message === msg);
   }
 });

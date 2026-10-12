@@ -73,7 +73,7 @@ async function makePlatform() {
     openExternal: (url) => invoke('plugin:opener|open_url', { url: String(url ?? '') }),
     copy: (text) => navigator.clipboard.writeText(String(text ?? '')),
     paste: () => navigator.clipboard.readText(),
-    // A share file into the user's Downloads (never over an existing file); resolves to its path.
+    // A share file into the user's Downloads (never over an existing file: a taken name gets -2, -3, …); resolves to its path.
     saveText: ({ name, text }) => invoke('save_text_to_downloads', { name: String(name), text: String(text) }),
   };
   try { platform.version = String(await invoke('app_version')); } catch { /* the Settings line is then simply absent */ }

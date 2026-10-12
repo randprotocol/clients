@@ -6,15 +6,35 @@
 import { h, raw } from '../lib/dom.js';
 import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
-import { formatUnits } from '../lib/format.js';
+import { formatUnits, parseUnits } from '../lib/format.js';
 import { t } from '../i18n.js';
+import { isZero } from '../engine/signers.js';
 
 export const MAX_FILE_BYTES = 1 << 20;
-const isZeroAmount = (a) => (typeof a === 'string' ? /^\s*0*\s*$/.test(a) : Number(a) === 0);
 /** An output the signer must name a payee for: it leaves the account and moves something. Decided
  * here from the output itself, not from the core's own flag. */
-export const needsPayee = (o) => o && o.to_account !== true && !isZeroAmount(o.amount);
+export const needsPayee = (o) => o && o.to_account !== true && !isZero(o.amount);
 export const isMatched = (o) => typeof o.matches === 'string' && o.matches.trim() !== '';
+const nonRand = (o) => o != null && o.asset != null && Number.isInteger(Number(o.asset)) && Number(o.asset) !== 0;
+/**
+ * One intended payment as the core's `addr:AMOUNT`. AMOUNT is RAND in display units, the wallet's
+ * decimal text, as the send screen takes it (checked by `parseUnits`, passed as typed and trimmed).
+ * The amount is required unless `amountOptional` (a non-RAND paying output: the core refuses a pin
+ * there, so that payee is the address alone). Throws an Error whose message is for the user.
+ */
+export function entryOf({ addr, amount }, amountOptional = false) {
+  const a = String(addr || '').trim();
+  const v = String(amount || '').trim();
+  if (a === '') throw new Error(t('Enter the address of every payment.'));
+  if (v === '') {
+    if (amountOptional) return a;
+    throw new Error(t('Enter the amount of every payment: it is what stops a split or an inflated payment.'));
+  }
+  let units;
+  try { units = parseUnits(v); } catch { throw new Error(t('An amount is a number of RAND, such as 1.5.')); }
+  if (units <= 0n) throw new Error(t('An amount is a number of RAND, such as 1.5.'));
+  return `${a}:${v}`;
+}
 const unitsOf = (a) => { try { return formatUnits(BigInt(String(a).trim() || '0')); } catch { return String(a); } };
 
 export function lastFourOf(fingerprint) {
@@ -140,7 +160,9 @@ registerScreen('signer', {
     if (!ctx.isCurrent()) return;
     if (!profile) { body.textContent = t('No such signer profile.'); return; }
     let proposal = null; // this screen's only copy; never stored
-    let payees = []; // the addresses the signer typed, in the order of the outputs that need one
+    let payees = []; // the `addr:amount` entries last sent to check
+    let rows = [{ addr: '', amount: '' }]; // the intended payments being edited
+    let lastSummary = null;
     const inHand = new Set();
     body.innerHTML = h`
       <div class="card stack"><span class="row-title" data-role="p-label"></span><span class="mono" data-role="p-fp"></span>
@@ -148,6 +170,7 @@ registerScreen('signer', {
       <div class="card stack">${raw(sidebarOffer(ctx))}${raw(fileField(ctx, { role: 'proposal', label: t('Proposal (proposal.json)') }))}
         <p class="error field-error" data-role="error" role="alert" hidden></p>
         <button class="btn btn-primary block" type="button" data-role="check">${t('Check proposal')}</button></div>
+      <div data-role="payments"></div>
       <div data-role="review"></div>
       <h2 class="section-title">${t('Check a share')}</h2>
       <div class="card stack"><textarea data-role="share-in" rows="2" spellcheck="false" autocomplete="off" placeholder="${t('index:hex')}"></textarea>
@@ -160,27 +183,53 @@ registerScreen('signer', {
     const review = body.querySelector('[data-role="review"]');
     wireFiles(ctx, body, (m) => showError(errorEl, m));
 
+    function paintPayments() {
+      const box = body.querySelector('[data-role="payments"]');
+      const paying = lastSummary && Array.isArray(lastSummary.outputs) ? lastSummary.outputs.filter(needsPayee) : null;
+      if (paying && paying.length === 0) { box.textContent = ''; return; }
+      const optional = !!(paying && paying.some(nonRand));
+      box.innerHTML = h`<div class="card stack">
+        <span class="label">${t('Intended payments')}</span>
+        <span class="caption">${t('Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.')}</span>
+        ${raw(optional ? h`<span class="caption" data-role="nonrand-note">${t('Amounts cannot be checked for non-RAND payments: leave the amount empty for those.')}</span>` : '')}
+        <div class="stack" data-role="rows">${raw(rows.map((_, i) => h`<div class="field cluster"><input data-role="payee" data-row="${i}" type="text" autocomplete="off" spellcheck="false" placeholder="rand1…" aria-label="${t('Payee address')}"><input data-role="payee-amount" data-row="${i}" type="text" inputmode="decimal" autocomplete="off" placeholder="0.0" aria-label="${t('Amount in RAND')}"><button class="btn sm" type="button" data-role="remove-payment" data-row="${i}">${t('Remove')}</button></div>`).join(''))}</div>
+        <button class="btn sm" type="button" data-role="add-payment">${t('Add payment')}</button>
+        <p class="error" data-role="payee-error" role="alert" hidden></p>
+        <button class="btn block" type="button" data-role="check-payees">${t('Check payments')}</button></div>`;
+      box.querySelectorAll('input[data-role="payee"]').forEach((n, i) => { n.value = rows[i].addr; n.addEventListener('input', () => { rows[i].addr = n.value; }); });
+      box.querySelectorAll('input[data-role="payee-amount"]').forEach((n, i) => { n.value = rows[i].amount; n.addEventListener('input', () => { rows[i].amount = n.value; }); });
+      box.querySelectorAll('[data-role="remove-payment"]').forEach((n, i) => n.addEventListener('click', () => { rows.splice(i, 1); paintPayments(); }));
+      box.querySelector('[data-role="add-payment"]').addEventListener('click', () => { rows.push({ addr: '', amount: '' }); paintPayments(); });
+      box.querySelector('[data-role="check-payees"]').addEventListener('click', () => {
+        const errP = box.querySelector('[data-role="payee-error"]');
+        try { payees = rows.map((row) => entryOf(row, optional)); } catch (err) { showError(errP, err.message); return; }
+        showError(errP, '');
+        runCheck();
+      });
+    }
+    function paintRefusal(act, r) {
+      act.innerHTML = h`<p class="error" data-role="refusal" role="alert"></p><button class="btn block" type="button" data-role="retry">${t('Retry')}</button>`;
+      act.querySelector('[data-role="refusal"]').textContent = r.refusal.message;
+      act.querySelector('[data-role="retry"]').addEventListener('click', runCheck);
+    }
     function paintReview(r) {
       const s = r.summary;
+      // A summary the core did not shape as expected is shown as its refusal and nothing else.
+      if (!r.signable && (s === null || typeof s !== 'object' || !Array.isArray(s.lines) || !Array.isArray(s.outputs))) {
+        review.innerHTML = '<div class="card stack" data-role="act"></div>';
+        paintRefusal(review.querySelector('[data-role="act"]'), r);
+        return;
+      }
       review.innerHTML = h`<div class="card stack">
         <span class="label">${t('What this proposal does, as checked against your policy')}</span>
         <div class="stack mono" data-role="lines">${raw(s.lines.map(() => '<div data-role="line"></div>').join(''))}</div>
         <span>${t('Fee: {fee} RAND · expires at height {height}', { fee: unitsOf(s.fee), height: String(s.expires_at) })}</span>
-        <span class="caption">${t('Enter the address you mean to pay for each payment below. An output that does not match it cannot be signed.')}</span>
-        <div class="stack" data-role="payees">${raw(s.outputs.filter(needsPayee).map((o, i) => h`<div class="field"><label class="label" for="payee-${i}">${t('Payee address for {amount} (owner key {key})', { amount: o.asset === 0 ? `${unitsOf(o.amount)} RAND` : t('{units} units of asset {asset}', { units: o.amount, asset: String(o.asset) }), key: o.owner_fingerprint })}</label><input id="payee-${i}" data-role="payee" type="text" autocomplete="off" spellcheck="false" placeholder="rand1…"><span class="caption" data-role="matched">${isMatched(o) ? t('Matches the address you entered.') : ''}</span></div>`).join(''))}
-          <button class="btn block" type="button" data-role="check-payees">${t('Check payees')}</button></div>
+        <span class="caption" data-role="matched">${t('{matched} of {total} payments matched.', { matched: String(s.outputs.filter((o) => needsPayee(o) && isMatched(o)).length), total: String(s.outputs.filter(needsPayee).length) })}</span>
         <div data-role="act"></div></div>`;
       review.querySelectorAll('[data-role="line"]').forEach((n, i) => { n.textContent = s.lines[i]; });
-      review.querySelectorAll('input[data-role="payee"]').forEach((n, i) => { n.value = payees[i] || ''; });
-      review.querySelector('[data-role="check-payees"]').addEventListener('click', () => {
-        payees = [...review.querySelectorAll('input[data-role="payee"]')].map((n) => n.value.trim());
-        runCheck();
-      });
       const act = review.querySelector('[data-role="act"]');
       if (!r.signable) {
-        act.innerHTML = h`<p class="error" data-role="refusal" role="alert"></p><button class="btn block" type="button" data-role="retry">${t('Retry')}</button>`;
-        act.querySelector('[data-role="refusal"]').textContent = r.refusal.message;
-        act.querySelector('[data-role="retry"]').addEventListener('click', runCheck);
+        paintRefusal(act, r);
         return;
       }
       act.innerHTML = h`
@@ -209,21 +258,29 @@ registerScreen('signer', {
         <textarea id="share-text" data-role="share" class="mono" rows="3" readonly></textarea>
         <span class="cluster"><button class="btn sm" type="button" data-role="copy">${t('Copy')}</button>
         ${raw(typeof p.saveText === 'function' ? h`<button class="btn sm" type="button" data-role="save-share">${t('Save as file')}</button>` : '')}
-        ${raw(typeof p.share === 'function' ? h`<button class="btn sm" type="button" data-role="share-sheet">${t('Share')}</button>` : '')}</span></div>`;
+        ${raw(typeof p.share === 'function' ? h`<button class="btn sm" type="button" data-role="share-sheet">${t('Share')}</button>` : '')}</span><p data-role="share-note" role="status" hidden></p></div>`;
       el.querySelector('[data-role="share"]').value = share;
-      el.querySelector('[data-role="copy"]').addEventListener('click', () => p.copy(share));
-      el.querySelector('[data-role="save-share"]')?.addEventListener('click', () => p.saveText({ name: `share-${index}.txt`, text: `${share}\n` }));
-      el.querySelector('[data-role="share-sheet"]')?.addEventListener('click', () => p.share({ title: t('Multisig share'), text: share }));
+      const note = el.querySelector('[data-role="share-note"]');
+      const run = (fn, okText) => async () => {
+        note.removeAttribute('hidden');
+        try { const r = await fn(); note.textContent = okText ? okText(r) : ''; } catch (err) { note.textContent = (err && err.message) || String(err); }
+      };
+      el.querySelector('[data-role="copy"]').addEventListener('click', run(() => p.copy(share)));
+      el.querySelector('[data-role="save-share"]')?.addEventListener('click', run(() => p.saveText({ name: `share-${index}.txt`, text: `${share}\n` }), (path) => (path ? t('Saved to {path}', { path: String(path) }) : t('Saved.'))));
+      el.querySelector('[data-role="share-sheet"]')?.addEventListener('click', run(() => p.share({ title: t('Multisig share'), text: share })));
     }
     async function runCheck() {
       showError(errorEl, '');
       const text = body.querySelector('textarea[data-role="proposal"]').value;
-      if (text !== proposal) payees = []; // a new proposal: its payees are asked again
+      if (text !== proposal) { payees = []; rows = [{ addr: '', amount: '' }]; lastSummary = null; } // a new proposal: its payments are asked again
       proposal = text;
       try {
         const r = await group.check(id, proposal, payees);
-        if (ctx.isCurrent()) paintReview(r);
-      } catch (err) { review.textContent = ''; showError(errorEl, err.message); }
+        if (!ctx.isCurrent()) return;
+        lastSummary = r.summary && typeof r.summary === 'object' ? r.summary : null;
+        paintPayments();
+        paintReview(r);
+      } catch (err) { review.textContent = ''; showError(errorEl, err.message); if (ctx.isCurrent()) paintPayments(); }
     }
     body.querySelector('[data-role="check"]').addEventListener('click', runCheck);
     body.querySelector('[data-role="verify"]').addEventListener('click', async () => {

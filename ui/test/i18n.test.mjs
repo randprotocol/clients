@@ -125,7 +125,7 @@ const ALLOWED = new Set([
   // fake prover pool's member fingerprints (Crockford digits, "6DYD-YDEN-6XYX-YDY5" and the like).
   'randprover', 'DYD', 'YDEN', 'XYX', 'YDY', 'FD', 'ZD', 'GHWN', 'SMN', 'HC',
   // Multisig signers: the fake policy fingerprint ("NFYW-K8E9-E5K9-AAK3"), shown as data.
-  'NFYW', 'K8E', 'E5K', 'AAK',
+  'NFYW', 'AAK',
   // Settings → Appearance → Language: each language listed under its own name (LOCALES[].name in
   // ui/i18n.js), never translated, so a reader who cannot read the one in force can find theirs.
   // The walk's words are ASCII runs, so Español, Français and Português arrive split at the accent.

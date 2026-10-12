@@ -155,11 +155,21 @@ pub fn save_text_in(dir: &std::path::Path, name: &str, text: &str) -> Result<std
     if !ok {
         return Err(format!("{name:?} is not a file name this app writes"));
     }
-    let path = dir.join(name);
     use std::io::Write;
-    let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    f.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
-    Ok(path)
+    // A name that is taken becomes `share-1-2.txt`, `-3`, … up to 99: a file is never overwritten.
+    let stem = &name[..name.len() - 4];
+    for n in 1..=99u32 {
+        let path = if n == 1 { dir.join(name) } else { dir.join(format!("{stem}-{n}.txt")) };
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut f) => {
+                f.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
+                return Ok(path);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("{}: {e}", path.display())),
+        }
+    }
+    Err(format!("{name:?}: 99 files of that name already exist"))
 }
 
 #[tauri::command]
@@ -180,7 +190,11 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let p = save_text_in(&dir, "share-1.txt", "1:ab\n").unwrap();
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "1:ab\n");
-        assert!(save_text_in(&dir, "share-1.txt", "x").is_err(), "never overwrites");
+        let q = save_text_in(&dir, "share-1.txt", "second").unwrap();
+        assert_ne!(p, q, "a taken name gets a new file");
+        assert_eq!(q.file_name().unwrap(), "share-1-2.txt");
+        assert_eq!(std::fs::read_to_string(&p).unwrap(), "1:ab\n", "the first file is untouched");
+        assert_eq!(std::fs::read_to_string(&q).unwrap(), "second");
         assert!(save_text_in(&dir, "../evil.txt", "x").is_err());
         assert!(save_text_in(&dir, "a.sh", "x").is_err());
         std::fs::remove_dir_all(&dir).unwrap();

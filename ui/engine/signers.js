@@ -43,8 +43,12 @@ function validProfiles(v) {
     && Number.isInteger(p.index) && typeof p.policyHash === 'string');
 }
 
+export const isZero = (a) => (typeof a === 'string' ? /^0+$/.test(a.trim()) : a === 0);
+
+const amountless = (entry) => { const i = String(entry).indexOf(':'); return i < 0 || String(entry).slice(i + 1).trim() === ''; };
+
 /** Whether a checked proposal may be signed now, by the CLI's rule, on this wallet's chain. */
-export function verdict({ summary, head, chainId, genesis, url }) {
+export function verdict({ summary, head, chainId, genesis, url, recipients }) {
   const malformed = () => ({ signable: false, refusal: { code: 'malformed-summary', message: t('The proposal check returned an incomplete answer, so this proposal is not signed.') } });
   if (summary === null || typeof summary !== 'object') return malformed();
   // Spec §4 step 3: never sign on an unchecked payee (a coordinator could pay its own key).
@@ -55,7 +59,12 @@ export function verdict({ summary, head, chainId, genesis, url }) {
   const amountOk = (a) => (typeof a === 'string' ? /^\s*\d+\s*$/.test(a) : Number.isSafeInteger(a) && a >= 0);
   const outputOk = (o) => o !== null && typeof o === 'object' && !Array.isArray(o) && typeof o.to_account === 'boolean' && amountOk(o.amount);
   if (!Array.isArray(outs) || !outs.every(outputOk)) return malformed();
-  const isZero = (a) => (typeof a === 'string' ? /^0+$/.test(a.trim()) : a === 0);
+  // No intended payment named at all while something pays out: unchecked, whatever the core said.
+  const paying = outs.filter((o) => o.to_account !== true && !isZero(o.amount));
+  if (Array.isArray(recipients) && recipients.length === 0 && paying.length > 0) return unchecked();
+  // An amount pin is required on every entry, except where a paying output is not RAND: the core
+  // refuses a pin there, so such an entry is the address alone.
+  if (Array.isArray(recipients) && recipients.some(amountless) && !paying.some((o) => o.asset != null && Number.isInteger(Number(o.asset)) && Number(o.asset) !== 0)) return unchecked();
   if (outs.some((o) => o.to_account !== true && !isZero(o.amount) && !(typeof o.matches === 'string' && o.matches.trim() !== ''))) return unchecked();
   const sound = Number.isSafeInteger(summary.expires_at) && summary.expires_at >= 0
     && Number.isSafeInteger(summary.chain_id)
@@ -77,7 +86,12 @@ export function verdict({ summary, head, chainId, genesis, url }) {
   return { signable: true, head, blocksLeft: Number(summary.expires_at) - head };
 }
 
-const payees = (list) => (Array.isArray(list) ? list : []).map(cleanText).filter(Boolean);
+// Intended payments, `addr:amount` each, passed in full and unchanged but for cleanText: an entry
+// that is blank or lacks its address or its amount is never dropped, it is refused.
+const payees = (list) => (Array.isArray(list) ? list : []).map(cleanText);
+// An empty address is always refused; a missing amount only once the summary shows no non-RAND output.
+const blankPayee = (list) => payees(list).some((a) => a === '' || a.startsWith(':'));
+const blankRefusal = () => new SignerRefusal('unchecked-recipient', t('Enter the address of every payee: an output that does not match the address you entered, or whose address is empty, cannot be signed.'));
 
 export function makeSigners(deps) {
   const { c, storage, requireUnlocked, setSession, openVault, passwordAttempt, requireVerifiedChain, getSettings, currentRpcUrl } = deps;
@@ -108,7 +122,7 @@ export function makeSigners(deps) {
   }
 
   /** The head from a node that passed this wallet's chain check; any failure is "no node". */
-  async function judge(summary) {
+  async function judge(summary, recipients) {
     const settings = await getSettings();
     let url = '';
     try { url = await currentRpcUrl(); } catch { /* no endpoint configured */ }
@@ -117,9 +131,9 @@ export function makeSigners(deps) {
       const h = await client.head();
       const height = Number(h && h.height);
       if (!Number.isSafeInteger(height) || height < 0) throw new Error('no height');
-      return verdict({ summary, head: height, chainId: settings.chainId, genesis: identity && identity.genesis, url: u });
+      return verdict({ summary, head: height, chainId: settings.chainId, genesis: identity && identity.genesis, url: u, recipients });
     } catch {
-      return verdict({ summary, head: null, url });
+      return verdict({ summary, head: null, url, recipients });
     }
   }
 
@@ -165,14 +179,16 @@ export function makeSigners(deps) {
     // The proposal is a parameter, never stored: it carries the account's witness (§3).
     async check(id, proposal, expectedRecipients = []) {
       const p = await profileOf(id);
+      if (blankPayee(expectedRecipients)) { const r = blankRefusal(); return { summary: null, signable: false, refusal: { code: r.code, message: r.message } }; }
       const summary = await c.msauthCheck(cleanText(proposal), p.policy, payees(expectedRecipients));
-      return { summary, ...(await judge(summary)) };
+      return { summary, ...(await judge(summary, payees(expectedRecipients))) };
     },
     async sign(id, proposal, expectedRecipients, password) {
       const p = await profileOf(id);
       const text = cleanText(proposal);
+      if (blankPayee(expectedRecipients)) throw blankRefusal();
       const summary = await c.msauthCheck(text, p.policy, payees(expectedRecipients));
-      const v = await judge(summary);
+      const v = await judge(summary, payees(expectedRecipients));
       if (!v.signable) throw new SignerRefusal(v.refusal.code, v.refusal.message, { node: v.refusal.node });
       const rec = ((await storage.get(SIGNER_SEEDS_KEY)) || {})[id];
       if (!rec) throw new Error(t('This signer profile has no key on this device: remove it and add it again.'));
@@ -180,7 +196,7 @@ export function makeSigners(deps) {
       if (!seed) throw new Error('wrong password');
       try {
         // The backoff above can last up to 30 s: re-read the head and re-run the rule before signing.
-        const again = await judge(summary);
+        const again = await judge(summary, payees(expectedRecipients));
         if (!again.signable) throw new SignerRefusal(again.refusal.code, again.refusal.message, { node: again.refusal.node });
         // The hex copy below cannot be wiped (a JS string); it is unreachable after this call, and
         // wallet-core holds its own copy in Zeroizing. The bytes are wiped here.

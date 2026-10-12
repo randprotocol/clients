@@ -69,11 +69,13 @@ test('every paying output asks for its payee, and the typed addresses reach chec
   root.querySelector('[data-role="check"]').click();
   await app.idle(); await tick();
   const inputs = root.querySelectorAll('input[data-role="payee"]');
-  assert.equal(inputs.length, 1, 'only output 2 pays someone: dummies and change ask nothing');
-  inputs[0].value = 'rand1payee';
+  assert.equal(inputs.length, 1, 'the list starts with one empty row');
+  inputs[0].value = 'rand1payee'; inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+  const amt = root.querySelector('input[data-role="payee-amount"]');
+  amt.value = ' 10.5 '; amt.dispatchEvent(new Event('input', { bubbles: true }));
   root.querySelector('[data-role="check-payees"]').click();
   await app.idle(); await tick();
-  assert.deepEqual(seen.at(-1), ['rand1payee']);
+  assert.deepEqual(seen.at(-1), ['rand1payee:10.5']);
 });
 
 test('a refused check names the node and offers Retry, and nothing can be signed', async (t) => {
@@ -163,4 +165,149 @@ test('a file over the cap is refused, not read', async (t) => {
   await tick();
   assert.match(root.querySelector('[data-role="error"]').textContent, /larger/);
   assert.equal(root.querySelector('textarea[data-role="policy"]').value, '');
+});
+
+for (const [name, mutate] of [['a null summary', () => null], ['non-array outputs and lines', (s) => ({ ...s, outputs: 'x', lines: {} })]]) {
+  test(`${name} shows the malformed-summary refusal, with no Sign button`, async (t) => {
+    const b = signerBackend();
+    await b.signers.add({ label: 'treasury', policy: 'P', key: 'K', password: 'unlocked-password-1' });
+    const base = (await b.signers.check('s1', '{}', [])).summary;
+    b.signers.check = async () => ({ summary: mutate(base), signable: false, refusal: { code: 'malformed-summary', message: 'incomplete answer' } });
+    const { app, root } = await mountApp(t, b, { hash: '#signer/s1' });
+    await app.idle();
+    root.querySelector('textarea[data-role="proposal"]').value = '{}';
+    root.querySelector('[data-role="check"]').click();
+    await app.idle(); await tick();
+    assert.equal(root.querySelector('[data-role="refusal"]').textContent, 'incomplete answer');
+    assert.equal(root.querySelector('[data-role="sign"]'), null);
+  });
+}
+
+test('a blank payee field is refused on the screen and nothing is sent to check', async (t) => {
+  const b = signerBackend();
+  await b.signers.add({ label: 'treasury', policy: 'P', key: 'K', password: 'unlocked-password-1' });
+  const original = b.signers.check;
+  let calls = 0;
+  b.signers.check = async (...a) => { calls += 1; return original(...a); };
+  const { app, root } = await mountApp(t, b, { hash: '#signer/s1' });
+  await app.idle();
+  root.querySelector('textarea[data-role="proposal"]').value = '{}';
+  root.querySelector('[data-role="check"]').click();
+  await app.idle(); await tick();
+  assert.equal(calls, 1);
+  root.querySelector('[data-role="check-payees"]').click();
+  await app.idle(); await tick();
+  assert.equal(calls, 1, 'a blank payee never reaches check');
+  assert.ok(root.querySelector('[data-role="payee-error"]').textContent.length > 0);
+  assert.equal(root.querySelector('[data-role="payee-error"]').hasAttribute('hidden'), false);
+});
+
+test('a failing save shows the error and a good one shows the path', async (t) => {
+  const b = signerBackend();
+  await b.signers.add({ label: 'treasury', policy: 'P', key: 'K', password: 'unlocked-password-1' });
+  let fail = true;
+  b.platform.saveText = async () => { if (fail) throw new Error('disk full'); return '/Downloads/share-1-2.txt'; };
+  const { app, root } = await mountApp(t, b, { hash: '#signer/s1' });
+  await app.idle();
+  root.querySelector('textarea[data-role="proposal"]').value = '{}';
+  root.querySelector('[data-role="check"]').click();
+  await app.idle(); await tick();
+  const confirm = root.querySelector('input[data-role="confirm"]');
+  confirm.value = 'aak3'; confirm.dispatchEvent(new Event('input', { bubbles: true }));
+  root.querySelector('input[data-role="password"]').value = 'unlocked-password-1';
+  root.querySelector('[data-role="sign"]').click();
+  await app.idle(); await tick();
+  root.querySelector('[data-role="save-share"]').click();
+  await tick();
+  assert.match(root.querySelector('[data-role="share-note"]').textContent, /disk full/);
+  fail = false;
+  root.querySelector('[data-role="save-share"]').click();
+  await tick();
+  assert.match(root.querySelector('[data-role="share-note"]').textContent, /share-1-2\.txt/);
+});
+
+async function checked(t, summaryOver, checkFn) {
+  const b = signerBackend();
+  await b.signers.add({ label: 'treasury', policy: 'P', key: 'K', password: 'unlocked-password-1' });
+  const original = b.signers.check;
+  const seen = [];
+  b.signers.check = async (id, proposal, payees) => {
+    seen.push(payees);
+    if (checkFn) return checkFn(payees);
+    const r = await original(id, proposal, payees);
+    return summaryOver ? { ...r, summary: summaryOver(r.summary) } : r;
+  };
+  const { app, root } = await mountApp(t, b, { hash: '#signer/s1' });
+  await app.idle();
+  root.querySelector('textarea[data-role="proposal"]').value = '{}';
+  root.querySelector('[data-role="check"]').click();
+  await app.idle(); await tick();
+  return { app, root, seen };
+}
+const type = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+const submit = async (app, root) => { root.querySelector('[data-role="check-payees"]').click(); await app.idle(); await tick(); };
+
+test('two rows send two addr:amount entries, rows can be added and removed', async (t) => {
+  const { app, root, seen } = await checked(t);
+  root.querySelector('[data-role="add-payment"]').click();
+  root.querySelector('[data-role="add-payment"]').click();
+  assert.equal(root.querySelectorAll('input[data-role="payee"]').length, 3);
+  root.querySelectorAll('[data-role="remove-payment"]')[2].click();
+  const [a, b] = root.querySelectorAll('input[data-role="payee"]');
+  const [x, y] = root.querySelectorAll('input[data-role="payee-amount"]');
+  type(a, 'rand1a'); type(x, '1'); type(b, ' rand1b '); type(y, '2.25');
+  await submit(app, root);
+  assert.deepEqual(seen.at(-1), ['rand1a:1', 'rand1b:2.25']);
+});
+
+test('an empty row, a row without an amount or a bad amount refuses on the screen', async (t) => {
+  const { app, root, seen } = await checked(t);
+  const n = seen.length;
+  await submit(app, root);
+  const err = () => root.querySelector('[data-role="payee-error"]');
+  assert.ok(err().textContent && !err().hasAttribute('hidden'));
+  type(root.querySelector('input[data-role="payee"]'), 'rand1a');
+  await submit(app, root);
+  assert.match(err().textContent, /amount/i);
+  type(root.querySelector('input[data-role="payee-amount"]'), 'abc');
+  await submit(app, root);
+  assert.ok(!err().hasAttribute('hidden'));
+  assert.equal(seen.length, n, 'nothing reached check');
+});
+
+test('with a non-RAND paying output a row may leave its amount empty, and a note says why', async (t) => {
+  const { app, root, seen } = await checked(t, (s) => ({ ...s, outputs: s.outputs.map((o) => (o.amount === '10000000000' ? { ...o, asset: 7 } : o)) }));
+  assert.ok(root.querySelector('[data-role="nonrand-note"]'));
+  type(root.querySelector('input[data-role="payee"]'), 'rand1tok');
+  await submit(app, root);
+  assert.deepEqual(seen.at(-1), ['rand1tok']);
+});
+
+test('a RAND-only summary shows no non-RAND note and needs the amount', async (t) => {
+  const { app, root, seen } = await checked(t);
+  assert.equal(root.querySelector('[data-role="nonrand-note"]'), null);
+  const n = seen.length;
+  type(root.querySelector('input[data-role="payee"]'), 'rand1a');
+  await submit(app, root);
+  assert.equal(seen.length, n);
+});
+
+test('the core\'s three payee sentences reach the screen verbatim', async (t) => {
+  for (const msg of ['expected recipient AB12-CD34 is paid 3, not 5', 'expected recipient AB12-CD34 is not paid', 'output 2 pays AB12-CD34, not an expected recipient']) {
+    const b = signerBackend();
+    await b.signers.add({ label: 'treasury', policy: 'P', key: 'K', password: 'unlocked-password-1' });
+    const original = b.signers.check;
+    let first = true;
+    b.signers.check = async (...a) => { if (first) { first = false; return original(...a); } throw new Error(msg); };
+    const { app, root } = await mountApp(t, b, { hash: '#signer/s1' });
+    await app.idle();
+    root.querySelector('textarea[data-role="proposal"]').value = '{}';
+    root.querySelector('[data-role="check"]').click();
+    await app.idle(); await tick();
+    type(root.querySelector('input[data-role="payee"]'), 'rand1a');
+    type(root.querySelector('input[data-role="payee-amount"]'), '5');
+    await submit(app, root);
+    assert.equal(root.querySelector('[data-role="error"]').textContent, msg);
+    app.destroy(); root.remove();
+  }
 });
