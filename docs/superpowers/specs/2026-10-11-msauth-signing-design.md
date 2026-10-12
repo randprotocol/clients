@@ -79,7 +79,15 @@ read into memory for one signing and dropped.
    the fingerprint. A recipient is shown as `check_proposal` gives it: a fingerprint of the owner
    key only, with the caveat "owner key verified; delivery key NOT verifiable from this proposal"
    rendered as-is (a proposal cannot prove the recipient's KEM key, so the app must not show a full
-   address fingerprint as if it had checked one). Each output carries `to_account` (verified: the
+   address fingerprint as if it had checked one).
+   **The signer must enter each payee's address** (2026-10-12, from the private-multisig review: a
+   proposal alone cannot tell the signer that an output pays the payee they meant, so a dishonest
+   coordinator could pay its own key with every check passing). Before review, the app asks for
+   the expected recipient address of every output that is not `to_account` (change), and passes
+   them to `check_proposal`'s expected-recipients input. Each output then shows "matches <address
+   fingerprint>"; an output with no match, or a recipient left empty, refuses signing (the app
+   never signs on "no expected recipient given: the payee was NOT checked"). The chain-id and
+   genesis line is shown and compared with the node's `rand_getHead`/status. Each output carries `to_account` (verified: the
    note's owner is the multisig account itself), so the review labels change apart from payments. `check_proposal` has no RPC, so it only checks `expires_at` against the
    bundle's own time; **the app compares it with the chain head** (`rand_getHead`, which every
    app already reads) and refuses to sign at or past `expires_at - 16`, the CLI `prove`'s margin.
