@@ -152,6 +152,41 @@ enum RandCore {
         try call("finish_proof", ["pending": pending, "reply_hex": replyHex], as: InvokeResult.self)
     }
 
+    // MARK: private multisig signing (wallet-core msauth.rs)
+
+    /// The proposal checked against the policy and the intended payments (`rand1…:AMOUNT` each,
+    /// AMOUNT in RAND display text; address alone only for a non-RAND payment). Empty means no
+    /// payee named: the reply then says `recipients_checked: false` and must not be signed.
+    /// `MsauthRules.verdict` judges the reply; nothing here decides whether to sign.
+    static func msauthCheck(proposal: String, policy: String, expectedRecipients: [String] = []) throws -> MsauthSummary {
+        MsauthSummary(json: try call("msauth_check", ["proposal": proposal, "policy": policy, "expected_recipients": expectedRecipients]))
+    }
+    /// The share `"i:hex"`. The core re-runs every check with `expectedRecipients` (pass the list
+    /// the check used) and refuses an empty list when an output pays someone. `seed` is sent as a
+    /// hex String inside the JSON parameters, which cannot be wiped; the core wipes its own copy,
+    /// and the caller wipes `seed` (SignerStore.withSeed does).
+    static func msauthSign(proposal: String, policy: String, seed: Data, expectedRecipients: [String]) throws -> String {
+        let params: [String: Any] = ["proposal": proposal, "policy": policy, "seed": seed.hexString, "expected_recipients": expectedRecipients]
+        guard let share = try call("msauth_sign", params) as? String else {
+            throw CoreError(message: "msauth_sign returned no share")
+        }
+        return share
+    }
+    /// Returns when `share` (`i:hex`) verifies over the proposal; throws the core's refusal.
+    static func msauthVerifyShare(proposal: String, policy: String, share: String) throws {
+        _ = try call("msauth_verify_share", ["proposal": proposal, "policy": policy, "share": share])
+    }
+    /// A `rand-node keygen` file or 64 hex: its seed, key, address and — with `policy` — its
+    /// position there (a key outside the policy is refused). The reply carries the seed.
+    static func msauthSignerImport(_ input: String, policy: String?) throws -> MsauthSigner {
+        var params: [String: Any] = ["input": input]
+        if let policy { params["policy"] = policy }
+        return try call("msauth_signer_import", params, as: MsauthSigner.self)
+    }
+    static func msauthPolicyInfo(_ policy: String) throws -> MsauthPolicyInfo {
+        try call("msauth_policy_info", ["policy": policy], as: MsauthPolicyInfo.self)
+    }
+
     static func formatAmount(units: String) throws -> String {
         try call("format_amount", ["units": units]) as? String ?? units
     }

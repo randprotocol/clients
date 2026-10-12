@@ -116,6 +116,8 @@ final class WalletService: ObservableObject {
         NoteStore.delete()
         store = NoteStore()
         settings.hasBackedUpKey = false
+        // Signer profiles were added to this wallet: they go with it.
+        SignerStore.shared.removeAll()
     }
 
     /// The spend key for export; the caller has already authenticated.
