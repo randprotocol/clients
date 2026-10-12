@@ -48,6 +48,7 @@ export function makeSigners(deps) {
 
   async function profiles() {
     const u = await requireUnlocked();
+    if (u.signersUnreadable) throw new SignerRefusal('signers-unreadable', t('the saved signer profiles could not be opened; nothing was changed. Restore this device\'s storage or wipe the wallet and restore it from its key'));
     return validProfiles(u.signers);
   }
   async function profileOf(id) {
@@ -111,11 +112,21 @@ export function makeSigners(deps) {
     },
   };
 
-  /** The profiles, opened with the password that just opened the vault; `[]` if none or unreadable. */
+  /**
+   * The profiles, opened with the password that just opened the vault: `{profiles, unreadable}`.
+   * A record that exists but does not open (damaged, or from a newer build) is `unreadable: true`
+   * and is never overwritten — unlock must not fail on it, but add/remove/list refuse.
+   */
   async function openOnUnlock(password) {
     const rec = await storage.get(SIGNER_POLICIES_KEY);
-    if (!rec) return [];
-    try { return validProfiles(JSON.parse(await decryptSecret(password, rec))); } catch { return []; }
+    if (!rec) return { profiles: [], unreadable: false };
+    try {
+      const list = JSON.parse(await decryptSecret(password, rec));
+      if (!Array.isArray(list)) throw new Error('not a list');
+      return { profiles: validProfiles(list), unreadable: false };
+    } catch {
+      return { profiles: [], unreadable: true };
+    }
   }
 
   return { group, openOnUnlock, profileOf, deps, decryptBytes };

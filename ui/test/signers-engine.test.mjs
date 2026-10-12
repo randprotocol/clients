@@ -60,6 +60,7 @@ test('add refuses a wrong password, a key outside the policy and a duplicate', a
 test('remove deletes both halves, and only with the password', async () => {
   const { backend, storage, row } = await unlockedWithSigner();
   await assert.rejects(backend.signers.remove(row.id, 'wrong-password-here'), /wrong password/);
+  assert.ok(storage.local.get('signerSeeds')[row.id].ct, 'the seed record survived the wrong password');
   assert.deepEqual(await backend.signers.remove(row.id, PASSWORD), []);
   assert.equal(storage.local.get('signerSeeds')[row.id], undefined);
 });
@@ -74,4 +75,20 @@ test('a wipe removes every profile', async () => {
   const { backend, storage } = await unlockedWithSigner();
   await backend.wallet.wipe();
   assert.equal(storage.local.get('signerPolicies'), undefined);
+  assert.equal(storage.local.get('signerSeeds'), undefined);
+});
+
+test('a damaged policies record is never overwritten: unlock works, list/add/remove refuse', async () => {
+  const { backend, storage, row } = await unlockedWithSigner();
+  await backend.wallet.lock();
+  const rec = storage.local.get('signerPolicies');
+  storage.local.set('signerPolicies', { ...rec, ct: 'AAAA' });
+  const before = JSON.stringify(storage.local.get('signerPolicies'));
+  const seedsBefore = JSON.stringify(storage.local.get('signerSeeds'));
+  await backend.wallet.unlock(PASSWORD); // unlock itself does not fail
+  await assert.rejects(backend.signers.list(), /could not be opened/);
+  await assert.rejects(backend.signers.add({ label: 'again', policy: POLICY, key: KEY, password: PASSWORD }), /could not be opened/);
+  await assert.rejects(backend.signers.remove(row.id, PASSWORD), /could not be opened/);
+  assert.equal(JSON.stringify(storage.local.get('signerPolicies')), before, 'record byte-identical');
+  assert.equal(JSON.stringify(storage.local.get('signerSeeds')), seedsBefore, 'seeds untouched');
 });

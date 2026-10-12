@@ -966,11 +966,12 @@ export function makeSharedBackend({
    * the paired prover's `{token, kemEk, url, fingerprint}`, decrypted with the same password
    * (ruling R2), when there is one.
    */
-  async function startSession(info, pairing, signerProfiles = []) {
+  async function startSession(info, pairing, signerState = { profiles: [], unreadable: false }) {
     const record = { spend_key: info.spend_key, viewing_key: info.viewing_key };
     const p = pairingOf(pairing);
     if (p) record.prover = p;
-    record.signers = signerProfiles;
+    record.signers = signerState.profiles;
+    if (signerState.unreadable) record.signersUnreadable = true;
     await storage.session.set(K.unlocked, record);
     // A wallet wiped and created again in the same page had no multi-tab coordination at all
     // until a reload, because `wipe()` closed the channel for good.
