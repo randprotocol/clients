@@ -522,7 +522,10 @@
     "Label": "Bezeichnung",
     "Check": "Prüfen",
     "%@ of %@ · this key is signer %@": "%@ von %@ · dieser Schlüssel ist Unterzeichner %@",
-    "Save signer": "Unterzeichner speichern"
+    "Save signer": "Unterzeichner speichern",
+    "That file could not be read.": "Diese Datei konnte nicht gelesen werden.",
+    "Remove %@?": "%@ entfernen?",
+    "You need the signer's key file to add this signer back.": "Du brauchst die Schlüsseldatei des Unterzeichners, um ihn wieder hinzuzufügen."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

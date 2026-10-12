@@ -537,7 +537,10 @@
     "Label": "Etichetta",
     "Check": "Verifica",
     "%@ of %@ · this key is signer %@": "%@ di %@ · questa chiave è il firmatario %@",
-    "Save signer": "Salva firmatario"
+    "Save signer": "Salva firmatario",
+    "That file could not be read.": "Impossibile leggere quel file.",
+    "Remove %@?": "Rimuovere %@?",
+    "You need the signer's key file to add this signer back.": "Serve il file della chiave del firmatario per aggiungerlo di nuovo."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

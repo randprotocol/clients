@@ -11,9 +11,13 @@ import UniformTypeIdentifiers
 let msauthMaxFileBytes = 1 << 20
 
 /// One intended payment as the signer is typing it: the address and the amount in RAND text.
-struct PaymentRow: Equatable {
+struct PaymentRow: Equatable, Identifiable {
+    let id = UUID()
     var addr = ""
     var amount = ""
+    init(addr: String = "", amount: String = "") { self.addr = addr; self.amount = amount }
+    /// Rows are equal by what was typed; the id only keeps a list row's identity.
+    static func == (a: PaymentRow, b: PaymentRow) -> Bool { a.addr == b.addr && a.amount == b.amount }
 }
 
 /// An error whose text is for the signer.
@@ -124,6 +128,69 @@ struct SignProposalModel {
     var payingMatched: Int { summary?.outputs.filter { SignRows.needsPayee($0) && SignRows.isMatched($0) }.count ?? 0 }
 }
 
+/// One screen's checking state, apart from SwiftUI so its ordering can be tested: which text the
+/// review is of, which check is the latest, the payments, and the last good summary the payment rows
+/// are drawn from.
+struct CheckSession {
+    struct Ticket: Equatable { let id: Int; let proposal: String; let sentKey: String }
+
+    var gate = PaymentsGate()
+    private(set) var model: SignProposalModel?
+    /// The last summary the core gave, kept when a later check is refused so the rows stay editable.
+    private(set) var lastSummary: MsauthSummary?
+    var typed = ""
+    private(set) var error: String?
+    private(set) var inFlight = false
+    /// The exact text the displayed review was checked on: the only text Sign signs.
+    private(set) var reviewedProposal: String?
+    private var sentProposal: String?
+    private var latest = 0
+
+    /// A check starts for `proposal` with the payments last adopted. A new proposal text starts the
+    /// payments over. Any older check still out is ignored when it lands.
+    mutating func begin(proposal: String) -> Ticket {
+        if proposal != sentProposal { gate.reset(); lastSummary = nil; sentProposal = proposal }
+        latest += 1; inFlight = true; error = nil
+        return Ticket(id: latest, proposal: proposal, sentKey: gate.sentKey)
+    }
+    /// A result lands; false when a newer request has superseded it.
+    @discardableResult
+    mutating func land(_ t: Ticket, _ check: MsauthCheck) -> Bool {
+        guard t.id == latest else { return false }
+        inFlight = false
+        if let s = check.summary { lastSummary = s }
+        gate.landed(sentKey: t.sentKey)
+        model = SignProposalModel(check)
+        reviewedProposal = t.proposal
+        typed = ""
+        return true
+    }
+    /// The check threw (the core refused, e.g. a mistyped payee): no review, but the payments stay.
+    @discardableResult
+    mutating func fail(_ t: Ticket, message: String) -> Bool {
+        guard t.id == latest else { return false }
+        inFlight = false; model = nil; reviewedProposal = nil; typed = ""; error = message
+        return true
+    }
+    /// The proposal text was edited: the review no longer describes it, and a check out is dropped.
+    mutating func proposalEdited() {
+        latest += 1; inFlight = false; model = nil; reviewedProposal = nil; typed = ""
+    }
+    /// A signature's refusal replaces the verdict on the same summary.
+    mutating func refused(_ verdict: MsauthVerdict) {
+        if let m = model { model = SignProposalModel(summary: m.summary, verdict: verdict) }
+    }
+    mutating func clearError() { error = nil }
+    mutating func close() { self = CheckSession() }
+
+    /// Sign is armed: signable, the last four typed, the payments unchanged since the check, and the
+    /// editor still holds the text that was checked.
+    func canSign(editor: String) -> Bool {
+        guard let m = model, let reviewed = reviewedProposal, reviewed == editor else { return false }
+        return m.canSign(typed: typed, stale: gate.stale)
+    }
+}
+
 /// A share as a text file for `.fileExporter`.
 struct ShareDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.plainText] }
@@ -137,6 +204,23 @@ struct ShareDocument: FileDocument {
     }
 }
 
+/// Reads a picked file: refused by its size before it is read, and a read failure has its own
+/// message. Shared by the proposal, policy and key pickers.
+func readPickedFile(_ url: URL) throws -> String {
+    let scoped = url.startAccessingSecurityScopedResource()
+    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+    if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > msauthMaxFileBytes {
+        throw PaymentEntryError(errorDescription: String(localized: "That file is larger than a proposal, a policy or a key file can be."))
+    }
+    guard let d = try? Data(contentsOf: url) else {
+        throw PaymentEntryError(errorDescription: String(localized: "That file could not be read."))
+    }
+    guard d.count <= msauthMaxFileBytes else {
+        throw PaymentEntryError(errorDescription: String(localized: "That file is larger than a proposal, a policy or a key file can be."))
+    }
+    return String(decoding: d, as: UTF8.self)
+}
+
 /// Paste or open proposal.json, enter the payments, review what the core checked, type the last
 /// four, authenticate, share.
 struct SignProposalView: View {
@@ -145,24 +229,23 @@ struct SignProposalView: View {
     @EnvironmentObject var settings: Settings
 
     @State private var proposal = ""
-    @State private var gate = PaymentsGate()
-    @State private var model: SignProposalModel?
-    @State private var typed = ""
+    @State private var session = CheckSession()
     @State private var share: MsauthShare?
     @State private var error: String?
     @State private var rowError: String?
     @State private var importing = false
     @State private var exporting = false
-    @State private var checking = false
     @State private var signing = false
+    @State private var signTask: Task<Void, Never>?
     @State private var shareToVerify = ""
     @State private var verifyNote: String?
     @State private var inHand = Set<Int>()
 
-    private var signing_: MsauthSigning {
+    private var signer: MsauthSigning {
         MsauthSigning(store: store, core: RandMsauthCore(), node: settings.rpcURL.map { RpcClient(url: $0) },
                       chainId: UInt64(max(settings.chainId, 0)))
     }
+    private var checking: Bool { session.inFlight }
 
     var body: some View {
         Form {
@@ -173,11 +256,11 @@ struct SignProposalView: View {
             Section("Proposal (proposal.json)") {
                 TextEditor(text: $proposal).font(.mono).frame(minHeight: 80).autocorrectionDisabled().textInputAutocapitalization(.never)
                 Button("Open file") { importing = true }
-                Button(checking ? "Checking…" : "Check proposal") { Task { await check() } }.disabled(checking || proposal.isEmpty)
-                if let error { Text(verbatim: error).foregroundColor(.red) }
+                Button(checking ? "Checking…" : "Check proposal") { startCheck() }.disabled(checking || signing || proposal.isEmpty)
+                if let e = error ?? session.error { Text(verbatim: e).foregroundColor(.red) }
             }
             if showsPayments { paymentsSection }
-            if let m = model { reviewSections(m) }
+            if let m = session.model { reviewSections(m) }
             if let share { shareSection(share) }
             Section("Check a share") {
                 TextField("index:hex", text: $shareToVerify).font(.mono).autocorrectionDisabled().textInputAutocapitalization(.never)
@@ -187,46 +270,58 @@ struct SignProposalView: View {
         }
         .navigationTitle("Sign a proposal")
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json, .plainText]) { result in
-            if case .success(let url) = result { importProposal(url) }
+            guard case .success(let url) = result else { return }
+            do { proposal = try readPickedFile(url); error = nil } catch { self.error = error.localizedDescription }
         }
         .fileExporter(isPresented: $exporting, document: ShareDocument(text: share?.share ?? ""), contentType: .plainText,
                       defaultFilename: "share-\(share?.index ?? 0)") { _ in }
+        // The review describes the text that was checked: editing the text drops it until a new check.
+        .onChange(of: proposal) { _ in session.proposalEdited(); share = nil }
         // The proposal carries the account's witness: it is never stored and goes with the screen.
-        .onDisappear { proposal = ""; model = nil; share = nil; typed = ""; gate.reset() }
+        .onDisappear {
+            signTask?.cancel(); signTask = nil
+            proposal = ""; share = nil; session.close(); signing = false
+        }
     }
 
     // MARK: sections
 
-    /// The payments section shows once a check has run and there is something to pay for.
+    /// The payments section shows while the last good summary has something to pay for.
     private var showsPayments: Bool {
-        guard let m = model, let s = m.summary else { return false }
+        guard let s = session.lastSummary else { return false }
         return !s.outputs.filter(SignRows.needsPayee).isEmpty
+    }
+
+    private func rowBinding(_ id: UUID, _ key: WritableKeyPath<PaymentRow, String>) -> Binding<String> {
+        Binding(get: { session.gate.rows.first { $0.id == id }?[keyPath: key] ?? "" },
+                set: { v in
+                    guard let i = session.gate.rows.firstIndex(where: { $0.id == id }) else { return }
+                    session.gate.rows[i][keyPath: key] = v; session.gate.edited()
+                })
     }
 
     private var paymentsSection: some View {
         Section {
-            ForEach(gate.rows.indices, id: \.self) { i in
+            ForEach(session.gate.rows) { row in
                 VStack(alignment: .leading, spacing: 6) {
-                    if SignRows.amountOptional(gate.rows[i], summary: model?.summary) {
+                    if SignRows.amountOptional(row, summary: session.lastSummary) {
                         Text("Amounts cannot be checked for non-RAND payments: leave the amount empty for those.")
                             .font(.footnote).foregroundColor(.secondary)
                     }
-                    TextField(text: Binding(get: { gate.rows[safe: i]?.addr ?? "" },
-                                            set: { if gate.rows.indices.contains(i) { gate.rows[i].addr = $0; gate.edited() } }),
-                              prompt: Text(verbatim: "rand1…")) { Text("Payee address") }
+                    TextField(text: rowBinding(row.id, \.addr), prompt: Text(verbatim: "rand1…")) { Text("Payee address") }
                         .font(.mono).autocorrectionDisabled().textInputAutocapitalization(.never)
                     HStack {
-                        TextField(text: Binding(get: { gate.rows[safe: i]?.amount ?? "" },
-                                                set: { if gate.rows.indices.contains(i) { gate.rows[i].amount = $0; gate.edited() } }),
-                                  prompt: Text(verbatim: "0.0")) { Text("Amount in RAND") }
+                        TextField(text: rowBinding(row.id, \.amount), prompt: Text(verbatim: "0.0")) { Text("Amount in RAND") }
                             .font(.mono).keyboardType(.decimalPad).autocorrectionDisabled()
-                        Button("Remove", role: .destructive) { gate.rows.remove(at: i); gate.edited() }.buttonStyle(.borderless)
+                        Button("Remove", role: .destructive) {
+                            session.gate.rows.removeAll { $0.id == row.id }; session.gate.edited()
+                        }.buttonStyle(.borderless)
                     }
                 }
             }
-            Button("Add payment") { gate.rows.append(PaymentRow()); gate.edited() }
+            Button("Add payment") { session.gate.rows.append(PaymentRow()); session.gate.edited() }
             if let rowError { Text(verbatim: rowError).foregroundColor(.red) }
-            Button("Check payments") { checkPayments() }.disabled(checking)
+            Button("Check payments") { checkPayments() }.disabled(checking || signing)
         } header: { Text("Intended payments") } footer: {
             Text("Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.")
         }
@@ -244,17 +339,17 @@ struct SignProposalView: View {
         if let r = m.refusal {
             Section {
                 Text(verbatim: r).foregroundColor(.red)
-                Button("Retry") { Task { await check() } }
+                Button("Retry") { startCheck() }.disabled(checking || signing)
             }
         } else {
             Section {
                 if let left = m.blocksLeft { Text(String(localized: "\(String(left)) blocks left to prove it.")) }
-                TextField(text: $typed) { Text("Type the last four characters of the account fingerprint") }
+                TextField(text: $session.typed) { Text("Type the last four characters of the account fingerprint") }
                     .font(.mono).autocorrectionDisabled().textInputAutocapitalization(.never)
-                if gate.stale {
+                if session.gate.stale {
                     Text("Payments changed: check them again before signing.").font(.footnote).foregroundColor(.secondary)
                 }
-                Button(signing ? "Signing…" : "Sign") { sign() }.disabled(signing || !m.canSign(typed: typed, stale: gate.stale))
+                Button(signing ? "Signing…" : "Sign") { sign() }.disabled(signing || checking || !session.canSign(editor: proposal))
             } header: { Text("Type the last four characters of the account fingerprint") }
         }
     }
@@ -270,62 +365,59 @@ struct SignProposalView: View {
 
     // MARK: actions
 
-    private func importProposal(_ url: URL) {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let d = try? Data(contentsOf: url), d.count <= msauthMaxFileBytes else {
-            error = String(localized: "That file is larger than a proposal, a policy or a key file can be.")
-            return
-        }
-        proposal = String(decoding: d, as: UTF8.self)
-    }
-
     /// "Check payments": build the entries from the rows, then check.
     private func checkPayments() {
         do {
-            let entries = try gate.rows.map { try SignRows.entry($0, amountOptional: SignRows.amountOptional($0, summary: model?.summary)) }
+            let entries = try session.gate.rows.map {
+                try SignRows.entry($0, amountOptional: SignRows.amountOptional($0, summary: session.lastSummary))
+            }
             rowError = nil
-            gate.adopt(entries: entries)
+            session.gate.adopt(entries: entries)
         } catch { rowError = error.localizedDescription; return }
-        Task { await check() }
+        startCheck()
     }
 
     /// The top Check and Retry send the payments last adopted; edits made since keep Sign disarmed.
-    private func check() async {
-        checking = true; defer { checking = false }
+    /// Only the latest request's result is shown.
+    private func startCheck() {
+        guard !session.inFlight else { return }
         error = nil; share = nil
-        if proposal != lastProposal { gate.reset(); model = nil; lastProposal = proposal }
-        let sent = gate.sentKey
-        do {
-            let r = try await signing_.check(id: profile.id, proposal: proposal, expectedRecipients: gate.payees)
-            gate.landed(sentKey: sent)
-            model = SignProposalModel(r)
-        } catch { model = nil; self.error = error.localizedDescription }
+        let ticket = session.begin(proposal: proposal)
+        let payees = session.gate.payees
+        Task {
+            do {
+                let r = try await signer.check(id: profile.id, proposal: ticket.proposal, expectedRecipients: payees)
+                session.land(ticket, r)
+            } catch { session.fail(ticket, message: error.localizedDescription) }
+        }
     }
-    @State private var lastProposal = ""
 
     private func sign() {
-        guard let m = model, m.canSign(typed: typed, stale: gate.stale) else { return }
+        guard session.canSign(editor: proposal), let text = session.reviewedProposal else { return }
         signing = true; error = nil
-        let payees = gate.payees, text = proposal
-        Task {
+        let payees = session.gate.payees
+        signTask = Task {
             defer { signing = false }
+            if Task.isCancelled { return }
             do {
-                // The core's check and the head are redone right before and again after the device
-                // asks for Face ID (MsauthSigning.sign), so a refusal comes back as its message.
-                share = try await signing_.sign(id: profile.id, proposal: text, expectedRecipients: payees,
-                                                reason: String(localized: "Sign a multisig proposal"))
-                typed = ""
+                // The text signed is the text that was checked, never the editor's current text. The
+                // core's check and the head are redone right before and again after the device asks
+                // for Face ID (MsauthSigning.sign), so a refusal comes back as its message.
+                let result = try await signer.sign(id: profile.id, proposal: text, expectedRecipients: payees,
+                                                   reason: String(localized: "Sign a multisig proposal"))
+                if Task.isCancelled { return }
+                share = result
+                session.typed = ""
             } catch let refusal as MsauthRefusal {
-                model = SignProposalModel(summary: m.summary, verdict: refusal.verdict)
-            } catch { self.error = error.localizedDescription }
+                if !Task.isCancelled { session.refused(refusal.verdict) }
+            } catch { if !Task.isCancelled { self.error = error.localizedDescription } }
         }
     }
 
     private func verifyShare() {
         do {
             let s = MsauthRules.clean(shareToVerify)
-            try signing_.verifyShare(id: profile.id, proposal: proposal, share: s)
+            try signer.verifyShare(id: profile.id, proposal: session.reviewedProposal ?? proposal, share: s)
             guard let i = Int(s.split(separator: ":").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? "") else { return }
             inHand.insert(i)
             verifyNote = String(localized: "Signer \(String(i))'s share verifies. \(String(inHand.count)) of \(String(profile.threshold)) in hand: signers \(inHand.sorted().map(String.init).joined(separator: ", ")).")

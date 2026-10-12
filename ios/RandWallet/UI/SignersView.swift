@@ -8,6 +8,7 @@ struct SignersView: View {
     @EnvironmentObject var store: SignerStore
     @State private var adding = false
     @State private var removeError: String?
+    @State private var pendingRemove: SignerProfile?
 
     var body: some View {
         List {
@@ -27,8 +28,8 @@ struct SignersView: View {
                                     .font(.footnote).foregroundColor(.secondary)
                             }
                         }
-                        .swipeActions {
-                            Button("Remove this signer", role: .destructive) { Task { await remove(p) } }
+                        .swipeActions(allowsFullSwipe: false) {
+                            Button("Remove this signer", role: .destructive) { pendingRemove = p }
                         }
                     }
                 }
@@ -41,6 +42,12 @@ struct SignersView: View {
             }
         }
         .navigationTitle("Multisig signers")
+        .confirmationDialog(String(localized: "Remove \(pendingRemove?.label ?? "")?"), isPresented: Binding(get: { pendingRemove != nil }, set: { if !$0 { pendingRemove = nil } }),
+                            titleVisibility: .visible, presenting: pendingRemove) { p in
+            Button("Remove this signer", role: .destructive) { Task { await remove(p) } }
+        } message: { _ in
+            Text("You need the signer's key file to add this signer back.")
+        }
         .sheet(isPresented: $adding) { NavigationStack { AddSignerView() } }
     }
 
@@ -110,14 +117,11 @@ struct AddSignerView: View {
                       allowedContentTypes: [.json, .plainText]) { result in
             let t = target; target = nil
             guard case .success(let url) = result else { return }
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard let d = try? Data(contentsOf: url), d.count <= msauthMaxFileBytes else {
-                error = String(localized: "That file is larger than a proposal, a policy or a key file can be."); return
-            }
-            let text = String(decoding: d, as: UTF8.self)
-            if t == .policy { policy = text } else { key = text }
-            preview = nil
+            do {
+                let text = try readPickedFile(url)
+                if t == .policy { policy = text } else { key = text }
+                preview = nil; error = nil
+            } catch { self.error = error.localizedDescription }
         }
     }
 

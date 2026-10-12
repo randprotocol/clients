@@ -513,7 +513,10 @@
     "Label": "برچسب",
     "Check": "بررسی",
     "%@ of %@ · this key is signer %@": "%@ از %@ · این کلید امضاکننده %@ است",
-    "Save signer": "ذخیره امضاکننده"
+    "Save signer": "ذخیره امضاکننده",
+    "That file could not be read.": "این فایل خوانده نشد.",
+    "Remove %@?": "%@ حذف شود؟",
+    "You need the signer's key file to add this signer back.": "برای افزودن دوبارهٔ این امضاکننده به فایل کلید او نیاز دارید."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

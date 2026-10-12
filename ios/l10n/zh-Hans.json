@@ -513,7 +513,10 @@
     "Label": "标签",
     "Check": "核对",
     "%@ of %@ · this key is signer %@": "%@/%@ · 此密钥是签名人 %@",
-    "Save signer": "保存签名人"
+    "Save signer": "保存签名人",
+    "That file could not be read.": "无法读取该文件。",
+    "Remove %@?": "移除%@？",
+    "You need the signer's key file to add this signer back.": "要重新添加此签名人，需要他的密钥文件。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

@@ -218,4 +218,90 @@ final class SignScreenTests: XCTestCase {
         XCTAssertEqual(m.payingTotal, 2)
         XCTAssertEqual(m.payingMatched, 1)
     }
+
+    // MARK: CheckSession (fix round 1)
+
+    private func signable(_ outs: [[String: Any]]? = nil) -> MsauthCheck {
+        let s = summary(outs ?? [rand5])
+        return MsauthCheck(summary: s, verdict: .signable(blocksLeft: 100))
+    }
+
+    func testSignIsDisabledOnceTheEditorTextDiffersFromTheCheckedProposalAndSignsTheCheckedText() {
+        var c = CheckSession()
+        let t = c.begin(proposal: "A")
+        c.land(t, signable())
+        c.typed = "aak3"
+        XCTAssertTrue(c.canSign(editor: "A"))
+        XCTAssertEqual(c.reviewedProposal, "A", "what Sign signs is the checked text")
+        // Paste B over A: the review is dropped, and Sign is off even though A's lines were shown.
+        c.proposalEdited()
+        XCTAssertFalse(c.canSign(editor: "B"))
+        XCTAssertNil(c.model)
+        XCTAssertNil(c.reviewedProposal)
+        XCTAssertEqual(c.typed, "")
+        // Even a model that survived would not arm Sign for a different editor text.
+        var d = CheckSession()
+        d.land(d.begin(proposal: "A"), signable()); d.typed = "aak3"
+        XCTAssertFalse(d.canSign(editor: "B"))
+    }
+
+    func testARefusedCheckKeepsThePaymentRowsEditable() {
+        var c = CheckSession()
+        c.land(c.begin(proposal: "A"), signable([rand5, token]))
+        XCTAssertEqual(c.lastSummary?.outputs.count, 2)
+        c.gate.rows = [PaymentRow(addr: "typo", amount: "5")]; c.gate.edited()
+        let t = c.begin(proposal: "A")
+        XCTAssertEqual(c.gate.rows, [PaymentRow(addr: "typo", amount: "5")], "rows kept for the same proposal")
+        c.fail(t, message: "expected recipient typo: bad address")
+        XCTAssertNil(c.model)
+        XCTAssertEqual(c.error, "expected recipient typo: bad address")
+        XCTAssertEqual(c.lastSummary?.outputs.count, 2, "the last good summary still draws the rows")
+        // A new proposal text starts over.
+        _ = c.begin(proposal: "B")
+        XCTAssertNil(c.lastSummary)
+        XCTAssertEqual(c.gate.rows, [PaymentRow()])
+    }
+
+    func testAnOlderResultLandingLastIsIgnored() {
+        var c = CheckSession()
+        let old = c.begin(proposal: "A")
+        XCTAssertTrue(c.inFlight)
+        c.proposalEdited()                          // the text moved on: the old check is superseded
+        XCTAssertFalse(c.inFlight)
+        let new = c.begin(proposal: "B")
+        XCTAssertTrue(c.land(new, signable()))
+        XCTAssertFalse(c.land(old, MsauthCheck(summary: summary([rand5]), verdict: .wrongGenesis)), "older result ignored")
+        XCTAssertFalse(c.fail(old, message: "x"))
+        XCTAssertEqual(c.model?.verdict, .signable(blocksLeft: 100))
+        XCTAssertEqual(c.reviewedProposal, "B")
+        // A result landing while a later request is out does not clear inFlight.
+        let a = c.begin(proposal: "B"); let b = c.begin(proposal: "B")
+        XCTAssertFalse(c.land(a, signable()))
+        XCTAssertTrue(c.inFlight)
+        XCTAssertTrue(c.land(b, signable()))
+        XCTAssertFalse(c.inFlight)
+    }
+
+    func testANewCheckClearsTheTypedConfirmation() {
+        var c = CheckSession()
+        c.land(c.begin(proposal: "A"), signable()); c.typed = "aak3"
+        c.land(c.begin(proposal: "A"), signable())
+        XCTAssertEqual(c.typed, "")
+    }
+
+    func testRowsKeepIdentityAndCompareByContent() {
+        let a = PaymentRow(addr: "x", amount: "1"), b = PaymentRow(addr: "x", amount: "1")
+        XCTAssertNotEqual(a.id, b.id)
+        XCTAssertEqual(a, b)
+    }
+
+    func testAStalePaymentEditThroughTheSessionDisarmsSign() {
+        var c = CheckSession()
+        c.gate.rows[0] = PaymentRow(addr: "a", amount: "5"); c.gate.edited()
+        c.gate.adopt(entries: ["a:5"])
+        c.land(c.begin(proposal: "A"), signable()); c.typed = "aak3"
+        XCTAssertTrue(c.canSign(editor: "A"))
+        c.gate.rows[0].amount = "6"; c.gate.edited()
+        XCTAssertFalse(c.canSign(editor: "A"))
+    }
 }

@@ -513,7 +513,10 @@
     "Label": "Label",
     "Check": "Semak",
     "%@ of %@ · this key is signer %@": "%@ daripada %@ · kunci ini ialah penandatangan %@",
-    "Save signer": "Simpan penandatangan"
+    "Save signer": "Simpan penandatangan",
+    "That file could not be read.": "Fail itu tidak dapat dibaca.",
+    "Remove %@?": "Buang %@?",
+    "You need the signer's key file to add this signer back.": "Anda memerlukan fail kunci penandatangan untuk menambahnya semula."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

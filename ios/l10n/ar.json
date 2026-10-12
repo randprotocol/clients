@@ -534,7 +534,10 @@
     "Label": "التسمية",
     "Check": "تحقق",
     "%@ of %@ · this key is signer %@": "%@ من %@ · هذا المفتاح هو الموقّع %@",
-    "Save signer": "حفظ الموقّع"
+    "Save signer": "حفظ الموقّع",
+    "That file could not be read.": "تعذّرت قراءة هذا الملف.",
+    "Remove %@?": "إزالة %@؟",
+    "You need the signer's key file to add this signer back.": "تحتاج إلى ملف مفتاح الموقّع لإضافته مرة أخرى."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

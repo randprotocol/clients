@@ -528,7 +528,10 @@
     "Label": "Метка",
     "Check": "Проверить",
     "%@ of %@ · this key is signer %@": "%@ из %@ · этот ключ — подписант %@",
-    "Save signer": "Сохранить подписанта"
+    "Save signer": "Сохранить подписанта",
+    "That file could not be read.": "Не удалось прочитать этот файл.",
+    "Remove %@?": "Удалить %@?",
+    "You need the signer's key file to add this signer back.": "Чтобы снова добавить этого подписанта, нужен его файл ключа."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

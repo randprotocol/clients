@@ -516,7 +516,10 @@
     "Label": "لیبل",
     "Check": "جانچیں",
     "%@ of %@ · this key is signer %@": "%2$@ میں سے %1$@ · یہ کی دستخط کنندہ %3$@ ہے",
-    "Save signer": "دستخط کنندہ محفوظ کریں"
+    "Save signer": "دستخط کنندہ محفوظ کریں",
+    "That file could not be read.": "وہ فائل پڑھی نہ جا سکی۔",
+    "Remove %@?": "%@ کو ہٹائیں؟",
+    "You need the signer's key file to add this signer back.": "اس دستخط کنندہ کو دوبارہ شامل کرنے کے لیے آپ کو اس کی کلیدی فائل چاہیے ہوگی۔"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

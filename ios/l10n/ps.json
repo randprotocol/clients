@@ -534,7 +534,10 @@
     "Label": "نښه",
     "Check": "وڅېړئ",
     "%@ of %@ · this key is signer %@": "د %2$@ څخه %1$@ · دا کیلي لاسلیک کوونکی %3$@ دی",
-    "Save signer": "لاسلیک کوونکی خوندي کړئ"
+    "Save signer": "لاسلیک کوونکی خوندي کړئ",
+    "That file could not be read.": "دا فایل ونه لوستل شو.",
+    "Remove %@?": "%@ لرې کړئ؟",
+    "You need the signer's key file to add this signer back.": "د دې لاسلیک کوونکي د بیا زیاتولو لپاره ستاسو د هغه د کلیځ فایل ته اړتیا ده."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

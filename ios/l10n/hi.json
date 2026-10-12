@@ -522,7 +522,10 @@
     "Label": "लेबल",
     "Check": "जाँचें",
     "%@ of %@ · this key is signer %@": "%2$@ में से %1$@ · यह की हस्ताक्षरकर्ता %3$@ है",
-    "Save signer": "हस्ताक्षरकर्ता सहेजें"
+    "Save signer": "हस्ताक्षरकर्ता सहेजें",
+    "That file could not be read.": "वह फ़ाइल पढ़ी नहीं जा सकी।",
+    "Remove %@?": "%@ को हटाएँ?",
+    "You need the signer's key file to add this signer back.": "इस हस्ताक्षरकर्ता को दोबारा जोड़ने के लिए आपको उसकी कुंजी फ़ाइल चाहिए होगी।"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

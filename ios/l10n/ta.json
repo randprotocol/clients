@@ -531,7 +531,10 @@
     "Label": "லேபிள்",
     "Check": "சரிபார்",
     "%@ of %@ · this key is signer %@": "%2$@-இல் %1$@ · இந்த விசை கையொப்பமிடுபவர் %3$@",
-    "Save signer": "கையொப்பமிடுபவரைச் சேமி"
+    "Save signer": "கையொப்பமிடுபவரைச் சேமி",
+    "That file could not be read.": "அந்தக் கோப்பைப் படிக்க முடியவில்லை.",
+    "Remove %@?": "%@ ஐ நீக்கவா?",
+    "You need the signer's key file to add this signer back.": "இந்தக் கையொப்பமிடுபவரை மீண்டும் சேர்க்க அவருடைய விசைக் கோப்பு தேவை."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

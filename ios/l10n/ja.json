@@ -513,7 +513,10 @@
     "Label": "ラベル",
     "Check": "確認",
     "%@ of %@ · this key is signer %@": "%@/%@ · このキーは署名者 %@ です",
-    "Save signer": "署名者を保存"
+    "Save signer": "署名者を保存",
+    "That file could not be read.": "そのファイルを読み込めませんでした。",
+    "Remove %@?": "%@を削除しますか?",
+    "You need the signer's key file to add this signer back.": "この署名者を再び追加するには、署名者の鍵ファイルが必要です。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",
