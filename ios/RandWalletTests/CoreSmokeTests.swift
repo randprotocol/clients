@@ -6,7 +6,7 @@ final class CoreSmokeTests: XCTestCase {
     func testVersionReportsChainDefaults() throws {
         let c = try RandCore.constants()
         XCTAssertEqual(c.defaultChainId, 20)
-        XCTAssertEqual(c.chainBuild, "37c4fdd", "fullnode main 37c4fdd (the v0.8.0 candidate), on chain 20 (cut on v0.6.8, c9c9bd3)")
+        XCTAssertEqual(c.chainBuild, "e34117b", "fullnode feat/private-multisig (constraint set 9, chain 21 onward)")
         XCTAssertEqual(c.tokenSymbol, "RAND")
         XCTAssertEqual(c.bundleBaseFee, "1000000")
         // Constraint set 8: the gas every bundle proof declares — chain 18's genesis pin.

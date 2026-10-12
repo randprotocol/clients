@@ -56,7 +56,12 @@ pub const ADDRESS_HRP: &str = randprotocol_core::notes::ADDRESS_PREFIX;
 pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode `main`
+/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode
+/// `feat/private-multisig` `e34117b` — over `37c4fdd` it adds **constraint set 9** (the MODQ chip,
+/// the msauth guest and genesis `hc_auth_multisig`, chain 21 onward) and the signer-check crate
+/// `randprotocol-msig` (the signer checks; its fixtures are vendored with it). A wallet on
+/// this build is chain-21-only; chain 20 stays on `release/chain20`. `dilithium-core` and the zkvm's
+/// `dilithium_host` are gated off wasm32 in the vendored zkvm crate. Before it: fullnode `main`
 /// `37c4fdd` (the v0.8.0 candidate) — over `v0.7.0` it adds the new action kinds (perps 34–39,
 /// multisig 40–43, `SetRandPrice` 44), `Action::Aggregate`'s `payout_total` and `layout`, and the
 /// scan heads (`rand_getScanLeaves`); chain 20 keeps running on it with every gated action refused,
@@ -82,7 +87,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
 /// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
 /// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "37c4fdd";
+pub const CHAIN_BUILD: &str = "e34117b";
 /// The chain the defaults below describe: chain 20, cut 2026-10-01 on fullnode v0.6.8 (`c9c9bd3`)
 /// from chain 19's state, with `program_state`, `binding_domain: 1` and `bridge.fees` (10 bps each
 /// way) in its genesis. Before it, chain 19, the next cut (not live on 2026-09-30; the
@@ -6120,7 +6125,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 20);
-            assert_eq!(v["chain_build"], "37c4fdd");
+            assert_eq!(v["chain_build"], "e34117b");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
@@ -7284,6 +7289,26 @@ mod tests {
             }
             fn verify_auth(&self, hc: &Word8, proof: &[u8], binding: &[u32; TX_BINDING_WORDS]) -> std::result::Result<Word8, ConfidentialError> {
                 StubExecutor.verify_auth(hc, proof, binding)
+            }
+            // Constraint set 9 (fullnode e34117b): the auth proof's shape and the msauth key, the
+            // stub's like the rest of the auth path — a deploy proves no multisig authorisation.
+            fn auth_header(&self, proof: &[u8]) -> std::result::Result<(randprotocol_core::confidential::AuthShape, Word8, Option<u64>), ConfidentialError> {
+                StubExecutor.auth_header(proof)
+            }
+            fn warm_auth_multisig(&self) {
+                StubExecutor.warm_auth_multisig()
+            }
+            fn auth_multisig_key_ready(&self) -> bool {
+                StubExecutor.auth_multisig_key_ready()
+            }
+            fn install_msauth_vk(&self, blob: &[u8]) -> std::result::Result<(), String> {
+                StubExecutor.install_msauth_vk(blob)
+            }
+            fn enable_auth_multisig(&self) {
+                StubExecutor.enable_auth_multisig()
+            }
+            fn build_msauth_key(&self) -> std::result::Result<(), String> {
+                StubExecutor.build_msauth_key()
             }
             fn verify_bundle(&self, hc: &Word8, proof: &[u8], binding: &[u32; TX_BINDING_WORDS]) -> std::result::Result<(), ConfidentialError> {
                 StubExecutor.verify_bundle(hc, proof, binding)

@@ -1174,6 +1174,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "dilithium-core"
+version = "0.1.0"
+
+[[package]]
 name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3967,6 +3971,7 @@ version = "0.7.1"
 dependencies = [
  "chacha20",
  "chacha20poly1305",
+ "dilithium-core",
  "evm-core",
  "ml-kem",
  "p3-air",
