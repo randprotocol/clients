@@ -21,7 +21,7 @@ final class LiveSwapTests: XCTestCase {
         let dx = UInt64(env["RAND_LIVE_SWAP_UNITS"] ?? "") ?? 200_000_000
         let settings = Settings()
         settings.rpcUrl = env["RAND_LIVE_RPC"] ?? "https://rpc.randprotocol.org"
-        settings.chainId = 20
+        settings.chainId = 21
         settings.prover = nil
         settings.noProver = false
         let wallet = WalletService(settings: settings)
