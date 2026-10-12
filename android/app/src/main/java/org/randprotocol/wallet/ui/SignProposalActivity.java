@@ -130,6 +130,7 @@ public class SignProposalActivity extends BaseActivity {
         b.checkProposal.setOnClickListener(v -> startCheck());
         b.retry.setOnClickListener(v -> startCheck());
         b.addPayment.setOnClickListener(v -> {
+            if (signing) return;
             session.gate().addRow();
             paintRows();
             paint();
@@ -153,6 +154,13 @@ public class SignProposalActivity extends BaseActivity {
         b.checkShare.setOnClickListener(v -> verifyShare());
         paintRows();
         paint();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        CryptoPrompt p = prompt;
+        if (p != null) p.windowFocus(hasFocus);
     }
 
     @Override
@@ -264,11 +272,9 @@ public class SignProposalActivity extends BaseActivity {
         if (session.inFlight() || signing || flow == null || editor().isEmpty()) return;
         share = null;
         note = null;
-        int rowsBefore = session.gate().rows().size();
-        String rowsKey = SignRows.key(session.gate().rows());
         CheckSession.Ticket t = session.begin(editor());
         // A new proposal text started the payments over.
-        if (rowsBefore != session.gate().rows().size() || !rowsKey.equals(SignRows.key(session.gate().rows()))) paintRows();
+        paintRows();
         paint();
         work.execute(() -> {
             try {
@@ -298,6 +304,7 @@ public class SignProposalActivity extends BaseActivity {
         if (signing || session.inFlight() || text == null || !session.canSign(editor())) return;
         List<String> payees = session.reviewedPayees();
         signing = true;
+        paintRows();
         AtomicBoolean cancel = new AtomicBoolean();
         signCancel = cancel;
         prompt = new CryptoPrompt(this, getString(R.string.msauth_sign_reason), up -> promptUp = up);
@@ -328,6 +335,7 @@ public class SignProposalActivity extends BaseActivity {
                 signThread = null;
                 signing = false;
                 prompt = null;
+                if (!isDestroyed()) paintRows();
                 if (isFinishing() || isDestroyed() || cancel.get()) {
                     paintIfAlive();
                     return;
@@ -389,33 +397,55 @@ public class SignProposalActivity extends BaseActivity {
         paint();
     }
 
-    /** Rebuilds the payment rows' fields from the gate (after a check lands, a row is added or removed, or the payments start over). */
+    /** The row objects the views below were built for, and their views, in order. */
+    private final List<SignRows.Row> paintedRows = new ArrayList<>();
+    private final List<ItemPaymentRowBinding> rowViews = new ArrayList<>();
+
+    /**
+     * The payment rows' fields: rebuilt only when the gate's rows are other row objects than those
+     * drawn (a row added or removed, the payments started over), so a landing check never
+     * interrupts typing; otherwise only each row's note and enabled state are refreshed.
+     */
     private void paintRows() {
-        b.paymentRows.removeAllViews();
-        for (SignRows.Row row : session.gate().rows()) {
-            ItemPaymentRowBinding r = ItemPaymentRowBinding.inflate(getLayoutInflater(), b.paymentRows, false);
-            writing = true;
-            r.addr.setText(row.addr);
-            r.amount.setText(row.amount);
-            writing = false;
-            r.nonrandNote.setVisibility(SignRows.amountOptional(row, session.lastSummary()) ? View.VISIBLE : View.GONE);
-            r.addr.addTextChangedListener(watcher(() -> {
-                row.addr = String.valueOf(r.addr.getText());
-                session.gate().edited();
-                r.nonrandNote.setVisibility(SignRows.amountOptional(row, session.lastSummary()) ? View.VISIBLE : View.GONE);
-                paint();
-            }));
-            r.amount.addTextChangedListener(watcher(() -> {
-                row.amount = String.valueOf(r.amount.getText());
-                session.gate().edited();
-                paint();
-            }));
-            r.remove.setOnClickListener(v -> {
-                session.gate().removeRow(row);
-                paintRows();
-                paint();
-            });
-            b.paymentRows.addView(r.getRoot());
+        List<SignRows.Row> rows = session.gate().rows();
+        boolean same = rows.size() == paintedRows.size();
+        for (int k = 0; same && k < rows.size(); k++) same = rows.get(k) == paintedRows.get(k);
+        if (!same) {
+            b.paymentRows.removeAllViews();
+            paintedRows.clear();
+            rowViews.clear();
+            for (SignRows.Row row : rows) {
+                ItemPaymentRowBinding r = ItemPaymentRowBinding.inflate(getLayoutInflater(), b.paymentRows, false);
+                r.addr.setText(row.addr);
+                r.amount.setText(row.amount);
+                r.addr.addTextChangedListener(watcher(() -> {
+                    row.addr = String.valueOf(r.addr.getText());
+                    session.gate().edited();
+                    r.nonrandNote.setVisibility(SignRows.amountOptional(row, session.lastSummary()) ? View.VISIBLE : View.GONE);
+                    paint();
+                }));
+                r.amount.addTextChangedListener(watcher(() -> {
+                    row.amount = String.valueOf(r.amount.getText());
+                    session.gate().edited();
+                    paint();
+                }));
+                r.remove.setOnClickListener(v -> {
+                    if (signing) return;
+                    session.gate().removeRow(row);
+                    paintRows();
+                    paint();
+                });
+                b.paymentRows.addView(r.getRoot());
+                paintedRows.add(row);
+                rowViews.add(r);
+            }
+        }
+        for (int k = 0; k < rows.size(); k++) {
+            ItemPaymentRowBinding r = rowViews.get(k);
+            r.nonrandNote.setVisibility(SignRows.amountOptional(rows.get(k), session.lastSummary()) ? View.VISIBLE : View.GONE);
+            r.addr.setEnabled(!signing);
+            r.amount.setEnabled(!signing);
+            r.remove.setEnabled(!signing);
         }
     }
 

@@ -1,8 +1,10 @@
 package org.randprotocol.wallet.ui;
 
+import android.app.KeyguardManager;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.text.Editable;
@@ -17,6 +19,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
+import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
 import androidx.core.content.ContextCompat;
 
@@ -26,7 +29,6 @@ import org.randprotocol.wallet.databinding.ActivitySignersBinding;
 import org.randprotocol.wallet.databinding.ItemSignerBinding;
 import org.randprotocol.wallet.security.KeystoreSeedCipher;
 import org.randprotocol.wallet.security.SignerProfiles;
-import org.randprotocol.wallet.security.Unlock;
 import org.randprotocol.wallet.util.L10n;
 import org.randprotocol.wallet.wallet.MsauthCore;
 import org.randprotocol.wallet.wallet.NativeMsauthCore;
@@ -57,6 +59,9 @@ public class SignersActivity extends BaseActivity {
     /** One add at a time (the prompt is up, or the seed is being sealed). */
     private boolean saving;
     private int listRun;
+    /** The profile whose removal waits on the confirm-credential screen. */
+    private SignerProfiles.Profile pendingRemove;
+    private ActivityResultLauncher<Intent> confirmCredential;
 
     /** What Check found: shown for comparison, and the texts it was found in (Save re-reads them). */
     private static final class Preview {
@@ -89,6 +94,11 @@ public class SignersActivity extends BaseActivity {
         openPolicy = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> picked(uri, b.policy));
         openKey = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> picked(uri, b.key));
         b.openPolicy.setOnClickListener(v -> openPolicy.launch(new String[] {"application/json", "text/plain"}));
+        confirmCredential = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), r -> {
+            SignerProfiles.Profile p = pendingRemove;
+            pendingRemove = null;
+            if (p != null && r.getResultCode() == RESULT_OK) remove(p);
+        });
         b.openKey.setOnClickListener(v -> openKey.launch(new String[] {"application/json", "text/plain"}));
 
         TextWatcher dropPreview = new TextWatcher() {
@@ -184,11 +194,32 @@ public class SignersActivity extends BaseActivity {
                 .show();
     }
 
+    /**
+     * The device's authentication, then the removal ({@link RemoveAuth}): skipped only when the
+     * device has no secure lock at all; otherwise BiometricPrompt where it can ask, else the
+     * system's confirm-credential screen. Any other failure removes nothing.
+     */
     private void authenticateThenRemove(SignerProfiles.Profile p) {
-        if (!Unlock.deviceCanAuthenticate(this)) {
-            // No screen lock at all: Unlock treats such a device as unlocked, and its signer keys no longer open anyway.
-            remove(p);
-            return;
+        int sdk = Build.VERSION.SDK_INT;
+        KeyguardManager km = getSystemService(KeyguardManager.class);
+        boolean secure = km != null && km.isDeviceSecure();
+        RemoveAuth how = RemoveAuth.choose(sdk, secure, BiometricManager.from(this).canAuthenticate(RemoveAuth.authenticators(sdk)));
+        switch (how.kind) {
+            case NONE:
+                // No screen lock at all: there is nothing to ask, and its signer keys no longer open anyway.
+                remove(p);
+                return;
+            case CONFIRM_CREDENTIAL:
+                Intent confirm = km == null ? null : km.createConfirmDeviceCredentialIntent(getString(R.string.msauth_remove_reason), null);
+                if (confirm == null) {
+                    show(b.listError, KeystoreSeedCipher.refusal(sdk, false, false));
+                    return;
+                }
+                pendingRemove = p;
+                confirmCredential.launch(confirm);
+                return;
+            default:
+                break;
         }
         BiometricPrompt prompt = new BiometricPrompt(this, ContextCompat.getMainExecutor(this), new BiometricPrompt.AuthenticationCallback() {
             @Override
@@ -203,14 +234,16 @@ public class SignersActivity extends BaseActivity {
                 }
             }
         });
-        prompt.authenticate(new BiometricPrompt.PromptInfo.Builder()
+        BiometricPrompt.PromptInfo.Builder info = new BiometricPrompt.PromptInfo.Builder()
                 .setTitle(getString(R.string.msauth_remove_reason))
-                .setAllowedAuthenticators(Unlock.authenticators())
-                .build());
+                .setAllowedAuthenticators(how.authenticators);
+        if (how.negativeButton) info.setNegativeButtonText(getString(R.string.cancel));
+        prompt.authenticate(info.build());
     }
 
     private void remove(SignerProfiles.Profile p) {
         show(b.listError, null);
+        if (isDestroyed() || work.isShutdown()) return;
         work.execute(() -> {
             String err = null;
             try {
@@ -365,6 +398,10 @@ public class SignersActivity extends BaseActivity {
                 if (authed == null) {
                     KeystoreSeedCipher.deleteKey(id);
                     done(null);
+                    return;
+                }
+                if (isFinishing() || isDestroyed() || work.isShutdown()) {
+                    KeystoreSeedCipher.deleteKey(id);
                     return;
                 }
                 work.execute(() -> seal(id, label, p, authed));

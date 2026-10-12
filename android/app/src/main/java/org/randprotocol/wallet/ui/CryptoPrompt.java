@@ -52,6 +52,8 @@ final class CryptoPrompt implements KeystoreSeedSource.Authenticator {
     private final Handler main = new Handler(Looper.getMainLooper());
     private BiometricPrompt prompt; // main thread only
     private CountDownLatch pending; // the call waiting, if any
+    /** The prompt was asked for and has not yet covered the screen (main thread only). */
+    private boolean awaitingUp;
     private volatile boolean cancelled;
 
     CryptoPrompt(FragmentActivity activity, String title, Showing showing) {
@@ -100,8 +102,15 @@ final class CryptoPrompt implements KeystoreSeedSource.Authenticator {
                 }
                 // onAuthenticationFailed (a finger not recognised): the prompt stays up and asks again.
             });
-            showing.showing(true);
-            prompt.authenticate(info(title, activity.getString(R.string.cancel)), new BiometricPrompt.CryptoObject(cipher));
+            try {
+                prompt.authenticate(info(title, activity.getString(R.string.cancel)), new BiometricPrompt.CryptoObject(cipher));
+                // "Showing" only once the prompt has actually taken the window's focus (windowFocus):
+                // a prompt that never appears never marks the screen as covered.
+                awaitingUp = true;
+            } catch (RuntimeException e) {
+                failure[0] = e;
+                end(done);
+            }
         });
         try {
             done.await();
@@ -115,7 +124,16 @@ final class CryptoPrompt implements KeystoreSeedSource.Authenticator {
         return result[0];
     }
 
+    /** The activity's window focus (onWindowFocusChanged): losing it while the prompt is asked for means the prompt is up. */
+    void windowFocus(boolean hasFocus) {
+        if (!hasFocus && awaitingUp && pending != null) {
+            awaitingUp = false;
+            showing.showing(true);
+        }
+    }
+
     private void end(CountDownLatch done) {
+        awaitingUp = false;
         prompt = null;
         pending = null;
         showing.showing(false);
@@ -130,6 +148,7 @@ final class CryptoPrompt implements KeystoreSeedSource.Authenticator {
             CountDownLatch p = pending;
             prompt = null;
             pending = null;
+            awaitingUp = false;
             showing.showing(false);
             if (p != null) p.countDown();
         });
