@@ -49,6 +49,14 @@ app stores its spend key today, never in plain storage:
 - **web, extension, desktop** (shared engine): inside the existing vault, encrypted with the same
   AES-256-GCM / PBKDF2 key (`ui/engine/crypto.js`, `backend-shared.js`), readable only while
   unlocked. The vault gains a `signers` list beside the spend key.
+
+**Every signature re-authenticates** (user's decision 2026-10-12). Unlocking the app does not
+unlock signer seeds: each `msauth_sign` first asks for the password (web, extension, desktop:
+the seed is decrypted from the vault for that one call and the buffer is zeroed after) or device
+auth (iOS: Keychain item with `.userPresence` access control, read per signature; Android:
+a Keystore key with `setUserAuthenticationRequired(true)` and a per-use BiometricPrompt /
+device credential). The seed is never cached between signatures. Viewing a profile's policy
+(fingerprint, T of N) needs only the normal unlock.
 - **iOS**: Keychain items `msauth.<id>.seed` and `msauth.<id>.policy`, `WhenUnlockedThisDeviceOnly`,
   as `spend_key` is (`Storage/Keychain.swift`).
 - **Android**: `KeyVault` entries of the same names (EncryptedSharedPreferences, Keystore master key).
@@ -75,7 +83,9 @@ read into memory for one signing and dropped.
    note's owner is the multisig account itself), so the review labels change apart from payments. `check_proposal` has no RPC, so it only checks `expires_at` against the
    bundle's own time; **the app compares it with the chain head** (`rand_getHead`, which every
    app already reads) and refuses to sign at or past `expires_at - 16`, the CLI `prove`'s margin.
-   With no node reachable it shows the expiry height with a warning and still allows signing. Confirmation types the last four characters of the
+   **With no node reachable it refuses to sign** (user's decision 2026-10-12): the expiry cannot be
+   checked, so the share is not made; the screen says which node it tried and offers retry.
+   Confirmation types the last four characters of the
    fingerprint, the withdraw flow's pattern (`ui/screens/withdraw.js`).
 4. **Share**: `msauth_sign` → the share string. Copy, share sheet (iOS `ShareLink`, Android
    `ACTION_SEND`), or save as a file. The share is not secret (a signature over a public message).
