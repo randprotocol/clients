@@ -583,6 +583,7 @@
     <string name="msauth_add_payment">Add payment</string>
     <string name="msauth_check_payments">Check payments</string>
     <string name="msauth_nonrand_note">Amounts cannot be checked for non-RAND payments: leave the amount empty for those.</string>
+    <string name="msauth_mixed_note">This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.</string>
     <string name="msauth_row_no_address">Enter the address of every payment.</string>
     <string name="msauth_row_no_amount">Enter the amount of every payment: it is what stops a split or an inflated payment.</string>
     <string name="msauth_row_bad_amount">An amount is a number of RAND, such as 1.5.</string>

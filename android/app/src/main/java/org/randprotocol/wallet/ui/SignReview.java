@@ -29,7 +29,10 @@ public final class SignReview {
 
     /** A summary the core did not shape as expected (no list of lines, no list of outputs) is shown as its refusal alone. */
     public boolean showsSummary() {
-        return summary != null && summary.opt("lines") instanceof JSONArray && summary.opt("outputs") instanceof JSONArray;
+        if (summary == null || !(summary.opt("lines") instanceof JSONArray) || !(summary.opt("outputs") instanceof JSONArray)) return false;
+        JSONArray lines = (JSONArray) summary.opt("lines");
+        for (int i = 0; i < lines.length(); i++) if (!(lines.opt(i) instanceof String)) return false;
+        return true;
     }
 
     /** The refusal's sentence in the user's language; null when signable. */

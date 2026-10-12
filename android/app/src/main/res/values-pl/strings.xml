@@ -545,6 +545,7 @@
     <string name="msauth_add_payment">Dodaj płatność</string>
     <string name="msauth_check_payments">Sprawdź płatności</string>
     <string name="msauth_nonrand_note">Kwot nie można sprawdzić dla płatności innych niż w RAND: zostaw dla nich kwotę pustą.</string>
+    <string name="msauth_mixed_note">Ten odbiorca otrzymuje zarówno RAND, jak i token: płatności w RAND i w tokenach do jednego odbiorcy wymagają osobnych propozycji.</string>
     <string name="msauth_row_no_address">Wpisz adres każdej płatności.</string>
     <string name="msauth_row_no_amount">Wpisz kwotę każdej płatności: to ona chroni przed podziałem lub zawyżoną płatnością.</string>
     <string name="msauth_row_bad_amount">Kwota to liczba RAND, na przykład 1.5.</string>

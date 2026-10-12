@@ -561,6 +561,7 @@
     <string name="msauth_add_payment">إضافة دفعة</string>
     <string name="msauth_check_payments">التحقق من المدفوعات</string>
     <string name="msauth_nonrand_note">لا يمكن التحقق من المبالغ في المدفوعات بغير RAND: اترك المبلغ فارغًا لها.</string>
+    <string name="msauth_mixed_note">يتلقى هذا المستفيد RAND ورمزًا معًا: مدفوعات RAND والرموز إلى مستفيد واحد تحتاج إلى مقترحات منفصلة.</string>
     <string name="msauth_row_no_address">أدخل عنوان كل دفعة.</string>
     <string name="msauth_row_no_amount">أدخل مبلغ كل دفعة: فهو ما يمنع التجزئة أو تضخيم الدفعة.</string>
     <string name="msauth_row_bad_amount">المبلغ هو عدد من RAND، مثل 1.5.</string>

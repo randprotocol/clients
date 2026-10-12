@@ -121,6 +121,10 @@ public final class SignFlow {
         if (!Boolean.TRUE.equals(strictBool(s.opt("recipients_checked")))) return unchecked;
         List<String> rec = recipients == null ? Collections.emptyList() : recipients;
         for (String r : rec) if (isBlank(r)) return unchecked;
+        // The review shows `lines` verbatim: missing, or anything but an array of strings, is malformed.
+        Object linesV = s.opt("lines");
+        if (!(linesV instanceof JSONArray)) return malformed;
+        for (int i = 0; i < ((JSONArray) linesV).length(); i++) if (!(((JSONArray) linesV).opt(i) instanceof String)) return malformed;
         Object outsV = s.opt("outputs");
         if (!(outsV instanceof JSONArray)) return malformed;
         JSONArray outs = (JSONArray) outsV;
@@ -137,8 +141,9 @@ public final class SignFlow {
         // No intended payment named at all while something pays out: unchecked, whatever the core said.
         if (rec.isEmpty() && !paying.isEmpty()) return unchecked;
         // An amount is pinned on every entry, except an entry whose own owner fingerprint owns a
-        // paying non-RAND output (the core refuses a pin there). Per row: one small non-RAND output
-        // cannot unpin the RAND rows.
+        // paying non-RAND output and NO paying RAND output (the core refuses a pin on a non-RAND
+        // output). Per row: one small non-RAND output cannot unpin the RAND rows, nor the RAND paid
+        // to its own payee (1 unit of a token beside an inflated RAND output is refused).
         List<String> amountless = new ArrayList<>();
         for (String r : rec) if (isAmountless(r)) amountless.add(r);
         if (!amountless.isEmpty()) {
@@ -146,11 +151,8 @@ public final class SignFlow {
             if (!(expV instanceof JSONArray)) return unchecked;
             JSONArray exp = (JSONArray) expV;
             Set<String> tokenOwners = new HashSet<>();
-            for (JSONObject o : paying) {
-                Long asset = assetId(o.opt("asset"));
-                Object fp = o.opt("owner_fingerprint");
-                if (asset != null && asset != 0 && fp instanceof String && !((String) fp).isEmpty()) tokenOwners.add((String) fp);
-            }
+            Set<String> randOwners = new HashSet<>();
+            payeeAssets(paying, tokenOwners, randOwners);
             for (String entry : amountless) {
                 boolean allowed = false;
                 for (int i = 0; i < exp.length() && !allowed; i++) {
@@ -159,7 +161,7 @@ public final class SignFlow {
                     JSONObject x = (JSONObject) item;
                     Object e = x.opt("entry");
                     Object fp = x.opt("fingerprint");
-                    allowed = e instanceof String && e.equals(entry) && fp instanceof String && !((String) fp).isEmpty() && tokenOwners.contains(fp);
+                    allowed = e instanceof String && e.equals(entry) && fp instanceof String && !((String) fp).isEmpty() && tokenOwners.contains(fp) && !randOwners.contains(fp);
                 }
                 if (!allowed) return unchecked;
             }
@@ -186,12 +188,30 @@ public final class SignFlow {
         return new Judgement(Verdict.SIGNABLE, head, expiresAt, proposalChain, chainId, url);
     }
 
-    /** The fingerprint's last four characters, typed: case, dashes and surrounding spaces ignored. */
+    /**
+     * Of the paying outputs, the owner fingerprints paid a non-RAND asset ({@code token}) and those
+     * paid RAND ({@code rand}). An output whose asset is missing or unreadable counts as RAND.
+     */
+    public static void payeeAssets(List<JSONObject> paying, Set<String> token, Set<String> rand) {
+        for (JSONObject o : paying) {
+            Object fp = o.opt("owner_fingerprint");
+            if (!(fp instanceof String) || ((String) fp).isEmpty()) continue;
+            Long asset = assetId(o.opt("asset"));
+            if (asset != null && asset != 0) token.add((String) fp); else rand.add((String) fp);
+        }
+    }
+
+    /** The fingerprint's last four characters, typed: case, dashes and every whitespace ignored (as JS). */
     public static boolean confirms(String fingerprint, String typed) {
         String fp = fingerprint == null ? "" : fingerprint.replace("-", "");
         if (fp.length() < 4 || typed == null) return false;
         String want = fp.substring(fp.length() - 4).toLowerCase(Locale.ROOT);
-        return jsTrim(typed.replace("-", "")).toLowerCase(Locale.ROOT).equals(want);
+        StringBuilder got = new StringBuilder();
+        for (int i = 0; i < typed.length(); i++) {
+            char c = typed.charAt(i);
+            if (c != '-' && !jsSpace(c)) got.append(c);
+        }
+        return got.toString().toLowerCase(Locale.ROOT).equals(want);
     }
 
     /** A pasted or opened file: a leading byte-order mark dropped, whitespace trimmed. */

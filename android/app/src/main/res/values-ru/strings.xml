@@ -545,6 +545,7 @@
     <string name="msauth_add_payment">Добавить платёж</string>
     <string name="msauth_check_payments">Проверить платежи</string>
     <string name="msauth_nonrand_note">Суммы нельзя проверить для платежей не в RAND: оставьте для них сумму пустой.</string>
+    <string name="msauth_mixed_note">Этот получатель получает и RAND, и токен: платежи в RAND и в токенах одному получателю требуют отдельных предложений.</string>
     <string name="msauth_row_no_address">Введите адрес каждого платежа.</string>
     <string name="msauth_row_no_amount">Введите сумму каждого платежа: именно она не даёт разбить платёж или завысить его.</string>
     <string name="msauth_row_bad_amount">Сумма — это число RAND, например 1.5.</string>

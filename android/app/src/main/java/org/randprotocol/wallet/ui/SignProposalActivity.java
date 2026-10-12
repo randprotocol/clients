@@ -422,6 +422,7 @@ public class SignProposalActivity extends BaseActivity {
                     row.addr = String.valueOf(r.addr.getText());
                     session.gate().edited();
                     r.nonrandNote.setVisibility(SignRows.amountOptional(row, session.lastSummary()) ? View.VISIBLE : View.GONE);
+                    r.mixedNote.setVisibility(SignRows.mixedPayee(row, session.lastSummary()) ? View.VISIBLE : View.GONE);
                     paint();
                 }));
                 r.amount.addTextChangedListener(watcher(() -> {
@@ -443,6 +444,7 @@ public class SignProposalActivity extends BaseActivity {
         for (int k = 0; k < rows.size(); k++) {
             ItemPaymentRowBinding r = rowViews.get(k);
             r.nonrandNote.setVisibility(SignRows.amountOptional(rows.get(k), session.lastSummary()) ? View.VISIBLE : View.GONE);
+            r.mixedNote.setVisibility(SignRows.mixedPayee(rows.get(k), session.lastSummary()) ? View.VISIBLE : View.GONE);
             r.addr.setEnabled(!signing);
             r.amount.setEnabled(!signing);
             r.remove.setEnabled(!signing);

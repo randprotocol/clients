@@ -646,4 +646,51 @@ public class SignFlowTest {
         assertEquals(0, flow(core, null, new FakeSeeds()).verifyShare("a1", PROPOSAL, " 0:aa\n"));
         assertEquals(List.of("verify 0:aa"), core.calls);
     }
+
+    // ---- final fix wave ----
+
+    private static JSONObject probe() throws Exception {
+        String g = "0".repeat(64);
+        return new JSONObject().put("recipients_checked", true).put("expires_at", 1000).put("chain_id", 21).put("binding_domain", 1)
+                .put("genesis", g).put("lines", new JSONArray().put("x"))
+                .put("outputs", new JSONArray()
+                        .put(new JSONObject().put("to_account", false).put("amount", "900000000000").put("asset", 0).put("owner_fingerprint", "X").put("matches", "AAAA (900 RAND)"))
+                        .put(new JSONObject().put("to_account", false).put("amount", "1").put("asset", 5).put("owner_fingerprint", "X").put("matches", "AAAA (0.000000001 RAND)"))
+                        .put(new JSONObject().put("to_account", true).put("amount", "5").put("asset", 0).put("owner_fingerprint", "self").put("matches", JSONObject.NULL)))
+                .put("expected", new JSONArray().put(new JSONObject().put("entry", "rand1payee").put("fingerprint", "X")));
+    }
+
+    /** The reviewer's probe: X is paid 900 RAND beside 1 unit of asset 5, named with no amount. */
+    @Test public void aDustTokenBesideARandOutputToTheSamePayeeIsRefused() throws Exception {
+        String g = "0".repeat(64);
+        assertEquals(Verdict.UNCHECKED_RECIPIENT, SignFlow.verdict(probe(), 10L, 21, g, List.of("rand1payee")));
+        JSONObject noAsset = probe();
+        noAsset.getJSONArray("outputs").getJSONObject(0).remove("asset");
+        assertEquals("a missing asset counts as RAND", Verdict.UNCHECKED_RECIPIENT, SignFlow.verdict(noAsset, 10L, 21, g, List.of("rand1payee")));
+        JSONObject tokenOnly = probe();
+        tokenOnly.getJSONArray("outputs").remove(0);
+        assertEquals("the token-only payee may still go unpinned", Verdict.SIGNABLE, SignFlow.verdict(tokenOnly, 10L, 21, g, List.of("rand1payee")));
+    }
+
+    @Test public void linesMissingOrNotAllStringsIsMalformed() throws Exception {
+        String g = "0".repeat(64);
+        List<String> r = List.of("rand1payee:900");
+        Object[] bad = { null, "x", new JSONObject(), new JSONArray().put(1), new JSONArray().put("x").put(JSONObject.NULL), new JSONArray().put(new JSONArray().put("y")) };
+        for (Object lines : bad) {
+            JSONObject s = probe();
+            s.remove("lines");
+            if (lines != null) s.put("lines", lines);
+            assertEquals(String.valueOf(lines), Verdict.MALFORMED_SUMMARY, SignFlow.verdict(s, 10L, 21, g, r));
+        }
+        JSONObject empty = probe().put("lines", new JSONArray());
+        empty.getJSONArray("outputs").remove(1);
+        assertEquals("an empty array of lines is well formed", Verdict.SIGNABLE, SignFlow.verdict(empty, 10L, 21, g, r));
+    }
+
+    @Test public void theConfirmationIgnoresInnerWhitespaceAsTheWebDoes() {
+        assertTrue(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", "a a k 3"));
+        assertTrue(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", " A-A\tk3\n"));
+        assertTrue(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", "aa\u00A0k3"));
+        assertFalse(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", "a a k"));
+    }
 }

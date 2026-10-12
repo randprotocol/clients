@@ -537,6 +537,7 @@
     <string name="msauth_add_payment">Ajouter un paiement</string>
     <string name="msauth_check_payments">Vérifier les paiements</string>
     <string name="msauth_nonrand_note">Les montants ne peuvent pas être vérifiés pour les paiements hors RAND : laissez le montant vide pour ceux-là.</string>
+    <string name="msauth_mixed_note">Ce bénéficiaire reçoit à la fois des RAND et un jeton : les paiements en RAND et en jetons à un même bénéficiaire exigent des propositions séparées.</string>
     <string name="msauth_row_no_address">Saisissez l\'adresse de chaque paiement.</string>
     <string name="msauth_row_no_amount">Saisissez le montant de chaque paiement : c\'est ce qui empêche un fractionnement ou un paiement gonflé.</string>
     <string name="msauth_row_bad_amount">Un montant est un nombre de RAND, comme 1.5.</string>

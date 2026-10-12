@@ -521,6 +521,7 @@
     <string name="msauth_add_payment">支払いを追加</string>
     <string name="msauth_check_payments">支払いを確認</string>
     <string name="msauth_nonrand_note">RAND 以外の支払いは金額を確認できません。その場合は金額を空欄にしてください。</string>
+    <string name="msauth_mixed_note">この受取人は RAND とトークンの両方を受け取ります。同じ受取人への RAND とトークンの支払いは、別々の提案にする必要があります。</string>
     <string name="msauth_row_no_address">すべての支払いのアドレスを入力してください。</string>
     <string name="msauth_row_no_amount">すべての支払いの金額を入力してください。支払いの分割や水増しを防ぐのは金額です。</string>
     <string name="msauth_row_bad_amount">金額は RAND の数値です。例: 1.5</string>

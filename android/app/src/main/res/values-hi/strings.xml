@@ -529,6 +529,7 @@
     <string name="msauth_add_payment">भुगतान जोड़ें</string>
     <string name="msauth_check_payments">भुगतान जाँचें</string>
     <string name="msauth_nonrand_note">RAND के अलावा अन्य भुगतानों की राशि जाँची नहीं जा सकती: उनके लिए राशि खाली छोड़ें।</string>
+    <string name="msauth_mixed_note">यह प्राप्तकर्ता RAND और एक टोकन दोनों प्राप्त करता है: एक ही प्राप्तकर्ता को RAND और टोकन भुगतानों के लिए अलग-अलग प्रस्ताव चाहिए।</string>
     <string name="msauth_row_no_address">हर भुगतान का पता दर्ज करें।</string>
     <string name="msauth_row_no_amount">हर भुगतान की राशि दर्ज करें: यही भुगतान को बाँटने या बढ़ाए जाने से रोकती है।</string>
     <string name="msauth_row_bad_amount">राशि RAND की एक संख्या होती है, जैसे 1.5।</string>

@@ -529,6 +529,7 @@
     <string name="msauth_add_payment">Zahlung hinzufügen</string>
     <string name="msauth_check_payments">Zahlungen prüfen</string>
     <string name="msauth_nonrand_note">Beträge können bei Zahlungen, die nicht in RAND erfolgen, nicht geprüft werden: Lass den Betrag dort leer.</string>
+    <string name="msauth_mixed_note">Dieser Empfänger erhält sowohl RAND als auch einen Token: RAND- und Token-Zahlungen an einen Empfänger brauchen getrennte Vorschläge.</string>
     <string name="msauth_row_no_address">Gib die Adresse jeder Zahlung ein.</string>
     <string name="msauth_row_no_amount">Gib den Betrag jeder Zahlung ein: Er verhindert eine Aufteilung oder eine überhöhte Zahlung.</string>
     <string name="msauth_row_bad_amount">Ein Betrag ist eine Anzahl RAND, zum Beispiel 1.5.</string>

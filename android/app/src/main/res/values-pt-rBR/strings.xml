@@ -537,6 +537,7 @@
     <string name="msauth_add_payment">Adicionar pagamento</string>
     <string name="msauth_check_payments">Verificar pagamentos</string>
     <string name="msauth_nonrand_note">Os valores não podem ser verificados em pagamentos que não são em RAND: deixe o valor vazio nesses.</string>
+    <string name="msauth_mixed_note">Este beneficiário recebe RAND e também um token: pagamentos em RAND e em tokens a um mesmo beneficiário precisam de propostas separadas.</string>
     <string name="msauth_row_no_address">Informe o endereço de cada pagamento.</string>
     <string name="msauth_row_no_amount">Informe o valor de cada pagamento: é o que impede uma divisão ou um pagamento inflado.</string>
     <string name="msauth_row_bad_amount">Um valor é um número de RAND, como 1.5.</string>

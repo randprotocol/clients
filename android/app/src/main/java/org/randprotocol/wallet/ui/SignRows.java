@@ -121,38 +121,56 @@ public final class SignRows {
 
     /**
      * Whether this row may go without an amount: only when the check's {@code expected} shows the
-     * row's address owns a paying non-RAND output. A row the core has not fingerprinted yet (or
-     * whose address was edited) may be sent address-only when some paying output is non-RAND, so
-     * the next check can tell; the rule ({@link SignFlow#judge}) refuses it unless its fingerprint
-     * owns such an output.
+     * row's address owns a paying non-RAND output and no paying RAND output (a payee also paid RAND
+     * keeps its RAND amount pinned). A row the core has not fingerprinted yet (or whose address was
+     * edited) may be sent address-only when some paying output is non-RAND, so the next check can
+     * tell; the rule ({@link SignFlow#judge}) refuses it unless its fingerprint owns only such outputs.
      */
     public static boolean amountOptional(Row row, JSONObject summary) {
         if (summary == null) return false;
         List<JSONObject> paying = paying(summary);
         boolean anyNonRand = false;
+        for (JSONObject o : paying) if (isNonRand(o)) anyNonRand = true;
         Set<String> owners = new HashSet<>();
-        for (JSONObject o : paying) {
-            if (!isNonRand(o)) continue;
-            anyNonRand = true;
-            Object fp = o.opt("owner_fingerprint");
-            if (fp instanceof String && !((String) fp).isEmpty()) owners.add((String) fp);
-        }
-        String a = SignFlow.jsTrim(row.addr);
-        JSONArray expected = summary.optJSONArray("expected");
-        if (!a.isEmpty() && expected != null) {
-            for (int i = 0; i < expected.length(); i++) {
-                Object item = expected.opt(i);
-                if (!(item instanceof JSONObject)) continue;
-                Object entry = ((JSONObject) item).opt("entry");
-                if (!(entry instanceof String)) continue;
-                String e = (String) entry;
-                int colon = e.indexOf(':');
-                String head = SignFlow.jsTrim(colon < 0 ? e : e.substring(0, colon));
-                if (!head.equals(a)) continue;
-                Object fp = ((JSONObject) item).opt("fingerprint");
-                return fp instanceof String && owners.contains(fp);
-            }
+        Set<String> randOwners = new HashSet<>();
+        SignFlow.payeeAssets(paying, owners, randOwners);
+        JSONObject known = knownEntry(row, summary);
+        if (known != null) {
+            Object fp = known.opt("fingerprint");
+            return fp instanceof String && owners.contains(fp) && !randOwners.contains(fp);
         }
         return anyNonRand;
+    }
+
+    /**
+     * Whether the check showed this row's payee paid both RAND and a non-RAND asset: such a payee
+     * needs separate proposals, one per kind.
+     */
+    public static boolean mixedPayee(Row row, JSONObject summary) {
+        if (summary == null) return false;
+        JSONObject known = knownEntry(row, summary);
+        Object fp = known == null ? null : known.opt("fingerprint");
+        if (!(fp instanceof String) || ((String) fp).isEmpty()) return false;
+        Set<String> owners = new HashSet<>();
+        Set<String> randOwners = new HashSet<>();
+        SignFlow.payeeAssets(paying(summary), owners, randOwners);
+        return owners.contains(fp) && randOwners.contains(fp);
+    }
+
+    /** The check's {@code expected} item whose entry's address is this row's, or null. */
+    private static JSONObject knownEntry(Row row, JSONObject summary) {
+        String a = SignFlow.jsTrim(row.addr);
+        JSONArray expected = summary.optJSONArray("expected");
+        if (a.isEmpty() || expected == null) return null;
+        for (int i = 0; i < expected.length(); i++) {
+            Object item = expected.opt(i);
+            if (!(item instanceof JSONObject)) continue;
+            Object entry = ((JSONObject) item).opt("entry");
+            if (!(entry instanceof String)) continue;
+            String e = (String) entry;
+            int colon = e.indexOf(':');
+            if (SignFlow.jsTrim(colon < 0 ? e : e.substring(0, colon)).equals(a)) return (JSONObject) item;
+        }
+        return null;
     }
 }

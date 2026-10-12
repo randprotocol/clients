@@ -521,6 +521,7 @@
     <string name="msauth_add_payment">新增付款</string>
     <string name="msauth_check_payments">核對付款</string>
     <string name="msauth_nonrand_note">非 RAND 付款無法核對金額：該類付款請將金額留空。</string>
+    <string name="msauth_mixed_note">此收款人同時收取 RAND 及代幣：向同一收款人支付 RAND 及代幣，需要分開的提案。</string>
     <string name="msauth_row_no_address">請輸入每筆付款的地址。</string>
     <string name="msauth_row_no_amount">請輸入每筆付款的金額：它可防止拆分或虛增付款。</string>
     <string name="msauth_row_bad_amount">金額是 RAND 的數值，例如 1.5。</string>

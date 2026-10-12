@@ -529,6 +529,7 @@
     <string name="msauth_add_payment">Tambah pembayaran</string>
     <string name="msauth_check_payments">Semak pembayaran</string>
     <string name="msauth_nonrand_note">Amaun tidak boleh disemak untuk pembayaran bukan RAND: biarkan amaun kosong bagi pembayaran itu.</string>
+    <string name="msauth_mixed_note">Penerima ini menerima RAND dan juga token: pembayaran RAND dan token kepada satu penerima memerlukan cadangan berasingan.</string>
     <string name="msauth_row_no_address">Masukkan alamat setiap pembayaran.</string>
     <string name="msauth_row_no_amount">Masukkan amaun setiap pembayaran: ia menghalang pemecahan atau pembayaran yang dibengkakkan.</string>
     <string name="msauth_row_bad_amount">Amaun ialah bilangan RAND, seperti 1.5.</string>

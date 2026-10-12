@@ -521,6 +521,7 @@
     <string name="msauth_add_payment">결제 추가</string>
     <string name="msauth_check_payments">결제 확인</string>
     <string name="msauth_nonrand_note">RAND가 아닌 결제는 금액을 확인할 수 없습니다. 이 경우 금액을 비워 두세요.</string>
+    <string name="msauth_mixed_note">이 수취인은 RAND와 토큰을 모두 받습니다. 한 수취인에게 보내는 RAND 결제와 토큰 결제는 별도의 제안이 필요합니다.</string>
     <string name="msauth_row_no_address">모든 결제의 주소를 입력하세요.</string>
     <string name="msauth_row_no_amount">모든 결제의 금액을 입력하세요. 결제를 쪼개거나 부풀리는 것을 막아 주는 것이 금액입니다.</string>
     <string name="msauth_row_bad_amount">금액은 RAND 단위의 숫자입니다. 예: 1.5</string>

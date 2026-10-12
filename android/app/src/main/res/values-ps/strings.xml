@@ -529,6 +529,7 @@
     <string name="msauth_add_payment">تادیه زیاته کړئ</string>
     <string name="msauth_check_payments">تادیات وڅېړئ</string>
     <string name="msauth_nonrand_note">د غیر RAND تادیاتو اندازه نشي څېړل کېدای: د هغوی لپاره اندازه خالي پرېږدئ.</string>
+    <string name="msauth_mixed_note">دا ترلاسه کوونکی RAND او یو ټوکن دواړه ترلاسه کوي: یو ترلاسه کوونکي ته د RAND او ټوکن تادیات جلا وړاندیزونو ته اړتیا لري.</string>
     <string name="msauth_row_no_address">د هرې تادیې پته ولیکئ.</string>
     <string name="msauth_row_no_amount">د هرې تادیې اندازه ولیکئ: همدا هغه څه دي چې ویش یا پړسول شوې تادیه ځنډوي.</string>
     <string name="msauth_row_bad_amount">اندازه د RAND شمېره ده، لکه 1.5.</string>

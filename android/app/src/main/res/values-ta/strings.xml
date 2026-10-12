@@ -554,6 +554,7 @@
     <string name="msauth_add_payment">கட்டணத்தைச் சேர்</string>
     <string name="msauth_check_payments">கட்டணங்களைச் சரிபார்</string>
     <string name="msauth_nonrand_note">RAND அல்லாத கட்டணங்களின் தொகையைச் சரிபார்க்க முடியாது: அவற்றுக்குத் தொகையை வெறுமையாக விடுங்கள்.</string>
+    <string name="msauth_mixed_note">இந்தப் பெறுநர் RAND மற்றும் ஒரு டோக்கன் இரண்டையும் பெறுகிறார்: ஒரே பெறுநருக்கான RAND மற்றும் டோக்கன் கொடுப்பனவுகளுக்குத் தனித்தனி முன்மொழிவுகள் தேவை.</string>
     <string name="msauth_row_no_address">ஒவ்வொரு கட்டணத்தின் முகவரியையும் உள்ளிடுங்கள்.</string>
     <string name="msauth_row_no_amount">ஒவ்வொரு கட்டணத்தின் தொகையையும் உள்ளிடுங்கள்: பிரித்தலையோ பெருக்கிய கட்டணத்தையோ தடுப்பது இதுவே.</string>
     <string name="msauth_row_bad_amount">தொகை என்பது RAND-இன் எண், எடுத்துக்காட்டாக 1.5.</string>

@@ -529,6 +529,7 @@
     <string name="msauth_add_payment">ادائیگی شامل کریں</string>
     <string name="msauth_check_payments">ادائیگیاں جانچیں</string>
     <string name="msauth_nonrand_note">غیر RAND ادائیگیوں کی رقم جانچی نہیں جا سکتی: ان کے لیے رقم خالی چھوڑیں۔</string>
+    <string name="msauth_mixed_note">یہ وصول کنندہ RAND اور ایک ٹوکن دونوں وصول کرتا ہے: ایک وصول کنندہ کو RAND اور ٹوکن کی ادائیگیوں کے لیے الگ الگ تجاویز درکار ہیں۔</string>
     <string name="msauth_row_no_address">ہر ادائیگی کا پتہ درج کریں۔</string>
     <string name="msauth_row_no_amount">ہر ادائیگی کی رقم درج کریں: یہی ادائیگی کو بانٹنے یا پھلانے سے روکتی ہے۔</string>
     <string name="msauth_row_bad_amount">رقم RAND کی ایک عددی مقدار ہے، جیسے 1.5۔</string>

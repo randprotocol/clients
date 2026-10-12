@@ -521,6 +521,7 @@
     <string name="msauth_add_payment">Tambah pembayaran</string>
     <string name="msauth_check_payments">Periksa pembayaran</string>
     <string name="msauth_nonrand_note">Jumlah tidak dapat diperiksa untuk pembayaran non-RAND: kosongkan jumlahnya untuk pembayaran tersebut.</string>
+    <string name="msauth_mixed_note">Penerima ini menerima RAND sekaligus token: pembayaran RAND dan token ke satu penerima memerlukan proposal terpisah.</string>
     <string name="msauth_row_no_address">Masukkan alamat setiap pembayaran.</string>
     <string name="msauth_row_no_amount">Masukkan jumlah setiap pembayaran: inilah yang mencegah pemecahan atau pembayaran yang digelembungkan.</string>
     <string name="msauth_row_bad_amount">Jumlah adalah bilangan RAND, misalnya 1.5.</string>

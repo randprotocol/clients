@@ -409,9 +409,12 @@ public class SignScreenTest {
             r.payingMatched();
             assertEquals(0, r.blocksLeft());
         }
+        // Lines that are not all strings: malformed, shown as the refusal alone (final fix wave).
         SignReview half = new SignReview(new JSONObject().put("lines", new JSONArray().put(1).put("ok")).put("outputs", new JSONArray()), judge("x", 1L));
-        assertTrue(half.showsSummary());
-        assertEquals(List.of("ok"), half.lines());
+        assertFalse(half.showsSummary());
+        SignReview whole = new SignReview(new JSONObject().put("lines", new JSONArray().put("ok")).put("outputs", new JSONArray()), judge("x", 1L));
+        assertTrue(whole.showsSummary());
+        assertEquals(List.of("ok"), whole.lines());
         assertFalse(new SignReview(new JSONObject().put("lines", new JSONArray()), judge("x", 1L)).showsSummary());
     }
 
@@ -458,5 +461,29 @@ public class SignScreenTest {
         assertEquals("", g.rows().get(0).addr);
         assertEquals("", g.rows().get(0).amount);
         assertEquals(new ArrayList<String>(), g.payees());
+    }
+
+    // ---- final fix wave ----
+
+    /** A payee paid RAND and a token is not offered the exception, and the screen says why. */
+    @Test public void aPayeePaidRandAndATokenIsNotOfferedTheExceptionAndIsToldWhy() throws Exception {
+        JSONObject s = new JSONObject()
+                .put("outputs", new JSONArray()
+                        .put(new JSONObject().put("to_account", false).put("amount", "900").put("asset", 0).put("owner_fingerprint", "X").put("matches", "a"))
+                        .put(new JSONObject().put("to_account", false).put("amount", "1").put("asset", 5).put("owner_fingerprint", "X").put("matches", "b"))
+                        .put(new JSONObject().put("to_account", false).put("amount", "5").put("asset", 7).put("owner_fingerprint", "F").put("matches", "c")))
+                .put("expected", new JSONArray()
+                        .put(new JSONObject().put("entry", "rand1x").put("fingerprint", "X"))
+                        .put(new JSONObject().put("entry", "rand1f").put("fingerprint", "F")));
+        assertFalse(SignRows.amountOptional(new Row("rand1x", ""), s));
+        assertTrue(SignRows.mixedPayee(new Row("rand1x", ""), s));
+        assertTrue("a token-only payee keeps the exception", SignRows.amountOptional(new Row("rand1f", ""), s));
+        assertFalse(SignRows.mixedPayee(new Row("rand1f", ""), s));
+        assertFalse("unknown rows are not called mixed", SignRows.mixedPayee(new Row("rand1new", ""), s));
+        assertFalse(SignRows.mixedPayee(new Row("rand1x", ""), null));
+        try {
+            SignRows.entries(List.of(new Row("rand1x", "")), s);
+            fail("the mixed payee's row needs its amount");
+        } catch (IllegalArgumentException expected) { /* refused on the screen */ }
     }
 }

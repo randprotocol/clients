@@ -529,6 +529,7 @@
     <string name="msauth_add_payment">افزودن پرداخت</string>
     <string name="msauth_check_payments">بررسی پرداخت‌ها</string>
     <string name="msauth_nonrand_note">مقدار پرداخت‌های غیر RAND قابل بررسی نیست: مقدار را برای آن‌ها خالی بگذارید.</string>
+    <string name="msauth_mixed_note">این گیرنده هم RAND و هم یک توکن دریافت می‌کند: پرداخت‌های RAND و توکن به یک گیرنده به پیشنهادهای جداگانه نیاز دارند.</string>
     <string name="msauth_row_no_address">آدرس هر پرداخت را وارد کنید.</string>
     <string name="msauth_row_no_amount">مقدار هر پرداخت را وارد کنید: همین است که جلوی تقسیم یا پرداخت باد‌شده را می‌گیرد.</string>
     <string name="msauth_row_bad_amount">مقدار یک عدد RAND است، مانند 1.5.</string>

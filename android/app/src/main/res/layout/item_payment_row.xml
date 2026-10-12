@@ -2,6 +2,7 @@
 <!-- One intended payment: the payee's address and the amount in RAND. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:orientation="vertical">
     <TextView android:id="@+id/nonrand_note" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Caption" android:text="@string/msauth_nonrand_note" android:visibility="gone" />
+    <TextView android:id="@+id/mixed_note" android:layout_width="match_parent" android:layout_height="wrap_content" style="@style/Text.Caption" android:text="@string/msauth_mixed_note" android:visibility="gone" />
     <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="@string/msauth_payee_address">
         <com.google.android.material.textfield.TextInputEditText android:id="@+id/addr" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="text|textNoSuggestions" android:importantForAutofill="no" android:saveEnabled="false" android:fontFamily="@font/jetbrains_mono" android:textSize="13sp" />
     </com.google.android.material.textfield.TextInputLayout>
