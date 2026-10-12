@@ -82,9 +82,12 @@ read into memory for one signing and dropped.
    address fingerprint as if it had checked one).
    **The signer must enter each payee's address** (2026-10-12, from the private-multisig review: a
    proposal alone cannot tell the signer that an output pays the payee they meant, so a dishonest
-   coordinator could pay its own key with every check passing). Before review, the app asks for
-   the expected recipient address of every output that is not `to_account` (change), and passes
-   them to `check_proposal`'s expected-recipients input. Each output then shows "matches <address
+   coordinator could pay its own key with every check passing). Before review, the signer enters
+   the **intended payments**: one row per payee, address and amount, both required (a payee paid
+   twice is one row with the total). The app passes them as `address:amount` to
+   `check_proposal`'s expected-recipients input. The crate (2026-10-12 ruling) matches by set,
+   refuses a paying output whose owner is in no row, a row no output pays, and a row whose amount
+   differs from the sum paid to that address. Each output then shows "matches <address
    fingerprint>"; an output with no match, or a recipient left empty, refuses signing (the app
    never signs on "no expected recipient given: the payee was NOT checked"). The chain-id and
    genesis line is shown and compared with the node's `rand_getHead`/status. Each output carries `to_account` (verified: the
