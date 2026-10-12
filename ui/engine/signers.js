@@ -56,7 +56,7 @@ export function verdict({ summary, head, chainId, genesis, url }) {
   const outputOk = (o) => o !== null && typeof o === 'object' && !Array.isArray(o) && typeof o.to_account === 'boolean' && amountOk(o.amount);
   if (!Array.isArray(outs) || !outs.every(outputOk)) return malformed();
   const isZero = (a) => (typeof a === 'string' ? /^0+$/.test(a.trim()) : a === 0);
-  if (outs.some((o) => o.to_account !== true && !isZero(o.amount) && o.matches == null)) return unchecked();
+  if (outs.some((o) => o.to_account !== true && !isZero(o.amount) && !(typeof o.matches === 'string' && o.matches.trim() !== ''))) return unchecked();
   const sound = Number.isSafeInteger(summary.expires_at) && summary.expires_at >= 0
     && Number.isSafeInteger(summary.chain_id)
     && Number.isInteger(summary.binding_domain) && summary.binding_domain >= 0

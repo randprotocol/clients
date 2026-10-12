@@ -249,3 +249,10 @@ test('a malformed output or summary is malformed-summary', () => {
     assert.equal(verdict({ summary: out({ to_account: false, amount, matches: null }), head: 1, chainId: 13, genesis: GENESIS, url: 'u' }).signable, true, `${JSON.stringify(amount)} is zero`);
   }
 });
+
+test('only a non-empty string match counts as matched', () => {
+  for (const matches of [false, '', '  ', 0, {}, null, undefined, true]) {
+    const r = verdict({ summary: { ...SUMMARY, outputs: [{ to_account: false, amount: '5', matches }] }, head: 1, chainId: 13, genesis: GENESIS, url: 'u' });
+    assert.equal(r.refusal && r.refusal.code, 'unchecked-recipient', JSON.stringify(matches));
+  }
+});
