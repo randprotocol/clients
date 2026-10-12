@@ -59,7 +59,10 @@ pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode
-/// `main` `9b01492` (the merge of `feat/private-multisig` `2771be22`) — over `e34117be` it adds the
+/// `main` `a1785c9` (origin/main: the private-multisig merge `9b01492` plus the verified fold, the
+/// admission verified set folded into the verify cache, and a cut-script change; `randprotocol-msig`
+/// and the proof guests and keys are unchanged). Before it: `main` `9b01492` (the merge of
+/// `feat/private-multisig` `2771be22`) — over `e34117be` it adds the
 /// signer's payee check to `randprotocol-msig` (`check_proposal_expecting` / `sign_expecting`
 /// with `rand1…[:AMOUNT]` expected recipients, each output's `matches`, `recipients_checked`, the
 /// summary's chain/genesis first line) and the `proposal-substituted-recipient` vector; the proof
@@ -94,7 +97,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
 /// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
 /// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "9b01492";
+pub const CHAIN_BUILD: &str = "a1785c9";
 /// The chain the defaults below describe: chain 21 (fullnode v0.8.0, constraint set 9; perps,
 /// multisig, the `fees` section, `hc_auth_multisig`), cut from chain 20's state. Before it, chain
 /// 20, cut 2026-10-01 on fullnode v0.6.8 (`c9c9bd3`) from chain 19's state, with `program_state`, `binding_domain: 1` and `bridge.fees` (10 bps each
@@ -6181,7 +6184,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 21);
-            assert_eq!(v["chain_build"], "9b01492");
+            assert_eq!(v["chain_build"], "a1785c9");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
