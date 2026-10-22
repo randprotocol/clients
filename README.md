@@ -28,8 +28,8 @@ and per-transaction keys that [randscan.org](https://randscan.org) opens confide
 transactions with. The shells that can fit a proof in memory — the desktop app and the mobile
 apps — also prove and submit shielded transfers of RAND and of any listed RPL token; the browser
 extension and the web wallet build, authorise and submit the same transfers but have the bundle
-proof made by a prover: by default **the RandProtocol provers** (four machines run by the
-validators under `prover.randprotocol.org`, each with its own key pinned in the wallet, no fee;
+proof made by a prover: by default **the RandProtocol provers** (run by the validators
+under `prover.randprotocol.org`, each member's own key pinned in the wallet, no fee;
 the wallet says what they see before the first send), or one you pair for privacy — the desktop
 app on the same machine, or your own `rand-prover` (see the known limitation below and
 [`docs/prover.md`](docs/prover.md)). A phone without the memory does the same. The extensions
@@ -44,7 +44,7 @@ Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
 Every release is on [GitHub Releases](https://github.com/randprotocol/clients/releases/latest),
 and https://randprotocol.org/clients links the same files with their checksums. `<v>` below is
-the version, `0.8.0` today.
+the version, `0.8.1` today.
 
 | you have | download | then |
 |---|---|---|
@@ -77,7 +77,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing     # macOS
 sha256sum -c SHA256SUMS --ignore-missing         # Linux
 ```
 ```powershell
-Get-FileHash .\rand-wallet-0.8.0-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
+Get-FileHash .\rand-wallet-0.8.1-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
 ```
 
 A matching sum says the file is the one that was published. It does not say the file was built
@@ -199,7 +199,7 @@ The first build of any client compiles the prover and takes several minutes.
 ```bash
 git clone --recurse-submodules https://github.com/randprotocol/clients.git
 cd clients
-git checkout v0.8.0 && git submodule update --init   # a release, rather than main
+git checkout v0.8.1 && git submodule update --init   # a release, rather than main
 ```
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
