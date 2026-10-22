@@ -3873,7 +3873,7 @@ dependencies = [
 
 [[package]]
 name = "rand-wallet-desktop"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "dirs 6.0.0",
  "randprotocol-prover",

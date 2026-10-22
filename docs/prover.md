@@ -216,10 +216,14 @@ member has **its own key** at its own URL:
 
 | member | fingerprint | URL |
 |---|---|---|
-| a | `ZEXQ-1JHV-ZT60-KFB5` | `https://prover.randprotocol.org/m/a` |
-| archive2 | `D2XV-WXVT-PZRC-D7G8` | `https://prover.randprotocol.org/m/archive2` |
-| nyc3 | `SR28-MYT0-GR6A-03DE` | `https://prover.randprotocol.org/m/nyc3` |
-| sfo3 | `GMNX-Q1QD-FEXG-JHJM` | `https://prover.randprotocol.org/m/sfo3` |
+| a | `4SK4-P64N-XWEN-ZSZZ` | `https://prover.randprotocol.org/m/a` |
+| b | `0XZX-NZ1J-SPMB-GWZN` | `https://prover.randprotocol.org/m/b` |
+
+Wallet 0.8.1 pins these two. Until 0.8.0 the pool had four (a `ZEXQ-1JHV-ZT60-KFB5`, archive2,
+nyc3, sfo3); their hosts were lost on 2026-10-22 with the hosting account. Member a was rebuilt and
+b added, each with a new key made on its own host like the first. A 0.8.0 wallet still pins the
+four old keys, so it finds no member it trusts and has to prove locally or use a prover the user
+pairs.
 
 The wallet pins it from data (`core/crates/wallet-core/src/trusted-prover-pool.json`, copied from
 the operators' `pool.json`; the same descriptor is served at
