@@ -23,7 +23,7 @@
 // `{holes}` filled.
 
 /** `t` when none is given: English, holes filled (ui/i18n.js's `fill`). */
-const plain = (s, vars) => (vars ? String(s).replace(/\{(\w+)\}/g, (hole, name) => (name in vars ? String(vars[name]) : hole)) : String(s));
+export const plain = (s, vars) => (vars ? String(s).replace(/\{(\w+)\}/g, (hole, name) => (name in vars ? String(vars[name]) : hole)) : String(s));
 
 /** Firefox did not let the wallet send its viewing key to the RandProtocol provers. */
 export function consentDeclined(t = plain) {
@@ -50,16 +50,16 @@ export function proverNotice(n, t = plain) {
 }
 
 /** What the site sees for an error with no code of its own. */
-const FALLBACK_CODE = 'UNKNOWN';
+export const FALLBACK_CODE = 'UNKNOWN';
 
 // This file's own sentences, each a function of `t` so the window can show it translated and the
 // site be answered with it in English (`text(plain)`).
-const NOT_OPENED = (t) => t('This window was not opened by a site.');
-const NO_LONGER_WAITING = (t) => t('That request is no longer waiting.');
+export const NOT_OPENED = (t) => t('This window was not opened by a site.');
+export const NO_LONGER_WAITING = (t) => t('That request is no longer waiting.');
 const NO_PROGRAMS = (t) => t('This Rand Wallet cannot run programs.');
-const CANNOT_SEND_HERE = (t) => t('Rand Wallet cannot send this here.');
-const NOT_APPROVED = (t) => t('The request was not approved in Rand Wallet.');
-const NOT_COMPLETED = (t) => t('Rand Wallet could not complete the request.');
+export const CANNOT_SEND_HERE = (t) => t('Rand Wallet cannot send this here.');
+export const NOT_APPROVED = (t) => t('The request was not approved in Rand Wallet.');
+export const NOT_COMPLETED = (t) => t('Rand Wallet could not complete the request.');
 
 /**
  * `makeInvokeFlow({id, send, backend, onChange, t})` → `{state, start, acknowledge, approve, reject}`.
