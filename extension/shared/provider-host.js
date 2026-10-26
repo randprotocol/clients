@@ -2,7 +2,7 @@
 // background.js can load it in both browsers (Chrome's service worker via importScripts, Firefox's
 // event page from the manifest's `scripts` list). It puts one factory on the global:
 //
-//     makeRandProviderHost({ ext, openConsent }) → { handle(msg, sender) }
+//     makeRandProviderHost({ ext, openConsent, openInvoke, openWithdraw }) → { handle(msg, sender), windowClosed(id) }
 //
 // What a site can learn, and when:
 //   * `connect`      — the address, once the user has approved THIS origin in the consent window
@@ -20,8 +20,16 @@
 //                      as `rand:invokeResult` — the hash, or a refusal with a `code` — and goes to
 //                      the tab that asked, never to one the message names. A window closed
 //                      before it answered answers for itself (`windowClosed`).
+//   * `withdraw`     — a bridge burn (randbridge.org's one-click withdraw), asked the same way and
+//                      with the same preconditions, but approved in its own window (withdraw.html)
+//                      and answered by `rand:withdrawResult`. It is the same kind of parked
+//                      request — one record store, `kind` telling the two apart — so one origin
+//                      has one request at a time whichever it is: a page cannot stack a swap and a
+//                      burn on the user. The window's proof phases are also forwarded to the
+//                      asking tab (`rand:phase`), display only, for the site's progress view.
+//                      A window of one kind cannot read or answer the other kind's record.
 // The origin is always `sender`'s — the page's own message carries no parameters at all except an
-// invoke's request, which is the thing the user is asked to approve and nothing else. An
+// invoke's or a withdraw's request, which is the thing the user is asked to approve and nothing else. An
 // approval is tied to the address it was given for: import a different wallet and every site is
 // disconnected until it asks again. Approvals live in storage.local under `sites`, so a wipe
 // clears them with the rest.
@@ -32,7 +40,9 @@
   const SITES_KEY = 'sites';
   const WALLET_KEY = 'wallet';     // ui/engine/backend-shared.js K.wallet: {address, pk}
   const UNLOCKED_KEY = 'unlocked'; // its UNLOCKED_SESSION_KEY, in storage.session
-  const INVOKES_KEY = 'invokes';   // storage.session: id → {origin, tabId, request, windowId, phase, at}
+  const INVOKES_KEY = 'invokes';   // storage.session: id → {kind, origin, tabId, request, windowId, phase, at}; no kind reads as 'invoke'
+  const HEX32_RE = /^[0-9a-fA-F]{64}$/;
+  const AMOUNT_RE = /^[1-9][0-9]{0,29}$/;
   const WORD8_RE = /^(0x)?[0-9a-fA-F]{64}$/;
   /** Phases after which the transaction may have reached the node (ui/engine/execute.js). */
   const ON_THE_WIRE = new Set(['submitting', 'confirming']);
@@ -40,7 +50,7 @@
   const fail = (code, message) => ({ ok: false, error: { code, message } });
   const one = (bag, key) => (bag && Object.prototype.hasOwnProperty.call(bag, key) ? bag[key] : undefined);
 
-  function makeRandProviderHost({ ext, openConsent, openInvoke, newId }) {
+  function makeRandProviderHost({ ext, openConsent, openInvoke, openWithdraw, newId }) {
     const local = ext.storage.local;
     const session = ext.storage.session;
     const id = newId || (() => (globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`));
@@ -99,6 +109,7 @@
       const rootUrl = extensionRoot();
       return !!rootUrl && !!sender && typeof sender.url === 'string' && sender.url.startsWith(rootUrl);
     };
+    const kindOf = (rec) => (rec && rec.kind === 'withdraw' ? 'withdraw' : 'invoke');
     /** Answer the tab that asked, and forget the request. Idempotent: a second answer finds nothing. */
     async function settle(invokeId, verdict) {
       const all = await invokes();
@@ -112,28 +123,45 @@
       return true;
     }
 
-    async function startInvoke(origin, sender, params) {
+    /**
+     * The shape a page's withdraw must have to be worth a window: the cheap, structural half. The
+     * flow in withdraw.js reads the rest (the wallet's chain, the asset, the destination) and
+     * refuses what it cannot burn, with the reason in the window.
+     */
+    function withdrawShapeOk(p) {
+      return !!p && typeof p === 'object' && !Array.isArray(p)
+        && Number.isInteger(p.asset) && p.asset >= 0
+        && typeof p.amount === 'string' && AMOUNT_RE.test(p.amount)
+        && typeof p.token === 'string' && HEX32_RE.test(p.token)
+        && typeof p.to === 'string' && HEX32_RE.test(p.to);
+    }
+    function invokeShapeOk(p) {
+      // The shape is checked in full by the window's engine (ui/engine/invoke.js); here only enough
+      // to refuse junk without opening a window for it.
+      return !!p && typeof p === 'object' && !Array.isArray(p) && typeof p.program === 'string' && WORD8_RE.test(p.program);
+    }
+
+    /** Park a request of `kind` and open its window; the shared body of `invoke` and `withdraw`. */
+    async function start(kind, origin, sender, params) {
       const w = await wallet();
       if (!w || !w.address) return fail('NO_WALLET', 'Rand Wallet has no wallet yet.');
       if (!(await unlocked())) return fail('LOCKED', 'Rand Wallet is locked.');
       if (!(await grant(origin))) return fail('NOT_CONNECTED', 'Rand Wallet is not connected to this site.');
-      // The shape is checked in full by the window's engine (ui/engine/invoke.js); here only enough
-      // to refuse junk without opening a window for it.
-      if (!params || typeof params !== 'object' || Array.isArray(params) || typeof params.program !== 'string' || !WORD8_RE.test(params.program)) {
+      if (!(kind === 'withdraw' ? withdrawShapeOk(params) : invokeShapeOk(params))) {
         return fail('BAD_REQUEST', 'Rand Wallet could not read that request.');
       }
       const all = await invokes();
-      // One request per site at a time: a page cannot stack windows on the user.
+      // One request per site at a time, of either kind: a page cannot stack windows on the user.
       if (Object.values(all).some((r) => r && r.origin === origin)) {
         return fail('BUSY', 'Rand Wallet is already showing a request from this site. Finish or cancel it first.');
       }
       const invokeId = id();
       const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : undefined;
-      all[invokeId] = { origin, tabId, request: params, windowId: null, phase: null, at: Date.now() };
+      all[invokeId] = { kind, origin, tabId, request: params, windowId: null, phase: null, at: Date.now() };
       await saveInvokes(all);
       let windowId = null;
       try {
-        windowId = await openInvoke({ id: invokeId, origin });
+        windowId = await (kind === 'withdraw' ? openWithdraw : openInvoke)({ id: invokeId, origin });
       } catch (err) {
         delete all[invokeId];
         await saveInvokes(all);
@@ -146,21 +174,39 @@
       return { pending: invokeId };
     }
 
-    /** From the approval window only: the request it is showing, the phases it reaches, its result. */
+    /**
+     * From the approval window only: the request it is showing, the phases it reaches, its result.
+     * `rand:invoke*` and `rand:withdraw*` are one protocol in two spellings; each reaches only the
+     * records of its own kind, so a window cannot be pointed at (or answer for) the other's.
+     */
     async function fromWindow(msg, sender) {
       if (!fromExtensionPage(sender)) return fail('FORBIDDEN', 'not the approval window');
       const invokeId = msg.id;
       if (typeof invokeId !== 'string') return fail('BAD_REQUEST', 'malformed invoke message');
-      if (msg.type === 'rand:invokeRequest') {
+      const m = /^rand:(invoke|withdraw)(Request|Progress|Result)$/.exec(msg.type);
+      const kind = m[1];
+      const gone = () => fail('GONE', 'That request is no longer waiting.');
+      if (m[2] === 'Request') {
         const rec = (await invokes())[invokeId];
-        return rec ? { ok: true, result: { origin: rec.origin, request: rec.request } } : fail('GONE', 'That request is no longer waiting.');
+        return rec && kindOf(rec) === kind ? { ok: true, result: { origin: rec.origin, request: rec.request } } : gone();
       }
-      if (msg.type === 'rand:invokeProgress') {
+      if (m[2] === 'Progress') {
         const all = await invokes();
-        if (all[invokeId] && typeof msg.phase === 'string') { all[invokeId].phase = msg.phase.slice(0, 32); await saveInvokes(all); }
+        const rec = all[invokeId];
+        if (!rec || kindOf(rec) !== kind) return gone();
+        if (typeof msg.phase === 'string') {
+          rec.phase = msg.phase.slice(0, 32);
+          await saveInvokes(all);
+          // The site's progress view; display only. The tab is the record's, not the message's.
+          if (kind === 'withdraw' && Number.isInteger(rec.tabId)) {
+            try { await ext.tabs.sendMessage(rec.tabId, { type: 'rand:phase', id: invokeId, phase: rec.phase }); } catch { /* the tab is gone */ }
+          }
+        }
         return { ok: true };
       }
-      // rand:invokeResult
+      // Result
+      const rec = (await invokes())[invokeId];
+      if (rec && kindOf(rec) !== kind) return gone();
       let verdict;
       if (msg.ok === true && msg.result && typeof msg.result.tx === 'string' && WORD8_RE.test(msg.result.tx)) {
         verdict = { ok: true, result: { tx: msg.result.tx.replace(/^0x/, '').toLowerCase() } };
@@ -191,7 +237,11 @@
         const verdict = ON_THE_WIRE.has(rec.phase)
           ? { ok: false, error: { code: 'UNKNOWN_OUTCOME', message: 'The Rand Wallet window was closed while the transaction was being sent; it may still arrive. Check the chain before trying again.' } }
           : rec.phase
-            ? { ok: false, error: { code: 'INTERRUPTED', message: 'The Rand Wallet window was closed before the transaction was sent. Nothing was sent.' } }
+            ? { ok: false, error: { code: 'INTERRUPTED', message: kindOf(rec) === 'withdraw'
+              // A burn's remote proof outlives its window: the wallet keeps the job, and its own
+              // Withdraw screen finishes or cancels it.
+              ? 'The Rand Wallet window was closed before the withdrawal was sent. Nothing was sent yet; open Rand Wallet, then zUSD, then Withdraw to finish or cancel it.'
+              : 'The Rand Wallet window was closed before the transaction was sent. Nothing was sent.' } }
             : { ok: false, error: { code: 'USER_REJECTED', message: 'The request was not approved in Rand Wallet.' } };
         // eslint-disable-next-line no-await-in-loop -- one window, one request
         await settle(invokeId, verdict);
@@ -201,7 +251,7 @@
     async function handle(msg, sender) {
       if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('rand:')) return undefined;
       if (msg.type === 'rand:decision') return decide(msg, sender);
-      if (msg.type === 'rand:invokeRequest' || msg.type === 'rand:invokeProgress' || msg.type === 'rand:invokeResult') return fromWindow(msg, sender);
+      if (/^rand:(invoke|withdraw)(Request|Progress|Result)$/.test(msg.type)) return fromWindow(msg, sender);
       const origin = originOf(sender);
       if (!origin) return fail('UNSUPPORTED_ORIGIN', 'This page cannot connect to Rand Wallet.');
       switch (msg.type) {
@@ -225,7 +275,10 @@
         }
         case 'rand:invoke':
           if (typeof openInvoke !== 'function') return fail('UNKNOWN_METHOD', 'This Rand Wallet does not support invoke.');
-          return startInvoke(origin, sender, msg.params);
+          return start('invoke', origin, sender, msg.params);
+        case 'rand:withdraw':
+          if (typeof openWithdraw !== 'function') return fail('UNKNOWN_METHOD', 'This Rand Wallet does not support withdraw.');
+          return start('withdraw', origin, sender, msg.params);
         case 'rand:disconnect': {
           const all = await sites();
           if (all[origin]) { delete all[origin]; await local.set({ [SITES_KEY]: all }); }

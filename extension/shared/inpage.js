@@ -5,17 +5,19 @@
 // expects — `isRandWallet`, `connect`, `getAddress`, `getRecipientHash`, `disconnect`, `on`, and
 // the rand:announceProvider / rand:requestProvider handshake for a page that ran first — plus
 // `invoke(request) → {tx}`, an RPL-2 program call (durian.market's `web/lib/rand/provider.ts`),
-// which the user approves in the wallet's own window before anything is proved.
+// which the user approves in the wallet's own window before anything is proved, and
+// `withdraw(request) → {tx}`, a bridge burn (randbridge.org), approved the same way, whose proof
+// phases arrive as `withdrawPhase` events while it works.
 //
 // What is never here: keys, balances, notes, signing. The extension answers with the address and
-// its bridge recipient hash, after the user has said yes to this origin, and — for an `invoke` the
-// user approved — the transaction hash; nothing else.
+// its bridge recipient hash, after the user has said yes to this origin, and — for an `invoke` or `withdraw` the
+// user approved — the transaction hash and the phase it has reached; nothing else.
 (() => {
   if (window.rand && window.rand.isRandWallet) return;
   const TO_CONTENT = 'rand-wallet:page';
   const FROM_CONTENT = 'rand-wallet:content';
   const pending = new Map();
-  const listeners = { accountChanged: new Set(), disconnect: new Set() };
+  const listeners = { accountChanged: new Set(), disconnect: new Set(), withdrawPhase: new Set() };
   let seq = 0;
 
   const request = (method, params) => new Promise((resolve, reject) => {
@@ -60,6 +62,13 @@
         return Promise.reject(refused('BAD_REQUEST', 'Rand Wallet could not read that request.'));
       }
       return request('invoke', params);
+    },
+    withdraw: (req) => {
+      const params = plain(req);
+      if (!params || typeof params !== 'object' || Array.isArray(params)) {
+        return Promise.reject(refused('BAD_REQUEST', 'Rand Wallet could not read that request.'));
+      }
+      return request('withdraw', params);
     },
     disconnect: () => request('disconnect').then(() => { emit('disconnect', null); }),
     on(event, cb) {

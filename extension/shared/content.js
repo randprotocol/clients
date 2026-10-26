@@ -1,11 +1,12 @@
 // The relay between the page's `window.rand` (inpage.js, in the page's world) and the extension
-// (background.js). Isolated world, classic script, no imports. It forwards exactly five method
-// names, and nothing the page put in the message except `invoke`'s request: the background decides
-// everything else from who is asking (`sender`), never from what they said, and the invoke request
+// (background.js). Isolated world, classic script, no imports. It forwards exactly six method
+// names, and nothing the page put in the message except the request of `invoke` or `withdraw`: the background decides
+// everything else from who is asking (`sender`), never from what they said, and that request
 // is data the user is shown and approves in the wallet's own window, capped here at
 // `MAX_INVOKE_CHARS` of JSON. A connect or an invoke that needs the user comes back as
 // `{pending: id}`; the verdict arrives later as a `rand:decision` message and is handed to the page
-// then.
+// then. While a withdraw waits, `rand:phase` messages (the approval window's proof phases) are
+// handed to the page as `withdrawPhase` events; they never settle the request.
 //
 // ---- two relays on one page ----
 //
@@ -25,8 +26,8 @@
   const FROM_PAGE = 'rand-wallet:page';
   const TO_PAGE = 'rand-wallet:content';
   const TAKEOVER = 'rand-wallet:content-takeover';
-  const METHODS = new Set(['connect', 'getAddress', 'getRecipientHash', 'disconnect', 'invoke']);
-  /** An invoke request is a few kilobytes (eight cells, a few dozen input words); 256 KiB of JSON
+  const METHODS = new Set(['connect', 'getAddress', 'getRecipientHash', 'disconnect', 'invoke', 'withdraw']);
+  /** An invoke request (a withdraw's is smaller still) is a few kilobytes (eight cells, a few dozen input words); 256 KiB of JSON
    *  is far past any real one and well short of a page using the relay to push megabytes. */
   const MAX_INVOKE_CHARS = 256 * 1024;
   const waiting = new Map(); // consent id → the page's request id
@@ -50,7 +51,7 @@
     const d = e.data;
     if (d.target !== FROM_PAGE || typeof d.id !== 'string' || !METHODS.has(d.method)) return;
     const msg = { type: `rand:${d.method}` };
-    if (d.method === 'invoke') {
+    if (d.method === 'invoke' || d.method === 'withdraw') {
       let size = Infinity;
       try { size = JSON.stringify(d.params).length; } catch { /* not JSON: refused below */ }
       if (!d.params || typeof d.params !== 'object' || !(size <= MAX_INVOKE_CHARS)) {
@@ -74,17 +75,24 @@
     reply(pageId, msg.ok ? { ok: true, result: msg.result } : { ok: false, error: msg.error });
   };
 
+  const onPhase = (msg) => {
+    if (!msg || msg.type !== 'rand:phase' || typeof msg.id !== 'string' || typeof msg.phase !== 'string') return;
+    if (!waiting.has(msg.id)) return; // not ours, or already answered: the page hears nothing
+    window.postMessage({ target: TO_PAGE, event: 'withdrawPhase', payload: { phase: msg.phase } }, window.location.origin);
+  };
+
   const onTakeover = (e) => {
     if (!fromThisPage(e)) return;
     const d = e.data;
     if (d.target !== TAKEOVER || typeof d.born !== 'number' || d.born <= born) return;
     window.removeEventListener('message', onPage);
     window.removeEventListener('message', onTakeover);
-    try { ext.runtime.onMessage.removeListener(onDecision); } catch { /* an orphan has no runtime to unhook from */ }
+    try { ext.runtime.onMessage.removeListener(onDecision); ext.runtime.onMessage.removeListener(onPhase); } catch { /* an orphan has no runtime to unhook from */ }
   };
 
   window.addEventListener('message', onPage);
   window.addEventListener('message', onTakeover);
   ext.runtime.onMessage.addListener(onDecision);
+  ext.runtime.onMessage.addListener(onPhase);
   window.postMessage({ target: TAKEOVER, born }, window.location.origin);
 })();

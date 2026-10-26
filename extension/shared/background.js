@@ -135,6 +135,13 @@ const providerHost = globalThis.makeRandProviderHost({
     const win = await ext.windows.create({ url: ext.runtime.getURL(`invoke.html?${query}`), type: 'popup', width: 400, height: 660 });
     return win && Number.isInteger(win.id) ? win.id : null;
   },
+  // The approval window for a site's `withdraw` (withdraw.html): the same kind of window for the
+  // same reason — a burn's proof takes minutes — and likewise its id is kept for `windowClosed`.
+  openWithdraw: async ({ id, origin }) => {
+    const query = new URLSearchParams({ id, origin });
+    const win = await ext.windows.create({ url: ext.runtime.getURL(`withdraw.html?${query}`), type: 'popup', width: 400, height: 660 });
+    return win && Number.isInteger(win.id) ? win.id : null;
+  },
 });
 
 ext.windows?.onRemoved?.addListener((windowId) => { void providerHost.windowClosed(windowId); });

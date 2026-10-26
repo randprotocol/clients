@@ -135,3 +135,35 @@ test('invoke is the one method whose request is forwarded, and an oversized one 
   assert.equal(replies(win, 'v3')[0].error.code, 'BAD_REQUEST');
   assert.equal(replies(win, 'v4')[0].error.code, 'BAD_REQUEST');
 });
+
+test('withdraw is relayed with its params, and a rand:phase for a waiting request reaches the page as a withdrawPhase event', async () => {
+  const win = fakeWindow();
+  const chrome = fakeChrome({ answer: (msg) => ({ pending: msg.type === 'rand:withdraw' ? 'w1' : 'c1' }) });
+  inject(win, chrome);
+  const params = { asset: 1, amount: '1500000', toChain: 1, token: 'cd'.repeat(32), to: 'ef'.repeat(32), chainId: 21 };
+  win.postMessage({ target: 'rand-wallet:page', id: 'w1', method: 'withdraw', params }, ORIGIN);
+  await tick();
+  assert.deepEqual(plain(chrome.sent), [{ type: 'rand:withdraw', params }]);
+  // A phase for a request that is waiting is an event on the page, and the request keeps waiting.
+  for (const fn of chrome.decisions) fn({ type: 'rand:phase', id: 'w1', phase: 'proving' });
+  // A phase for nothing this relay is waiting on is not shown to the page.
+  for (const fn of chrome.decisions) fn({ type: 'rand:phase', id: 'nobody', phase: 'proving' });
+  await tick();
+  assert.deepEqual(plain(win.seen.filter((m) => m.event)), [{ target: 'rand-wallet:content', event: 'withdrawPhase', payload: { phase: 'proving' } }]);
+  for (const fn of chrome.decisions) fn({ type: 'rand:phase', id: 'w1', phase: 'submitting' });
+  for (const fn of chrome.decisions) fn({ type: 'rand:decision', id: 'w1', ok: true, result: { tx: 'cd'.repeat(32) } });
+  await tick();
+  assert.deepEqual(replies(win, 'w1'), [{ target: 'rand-wallet:content', id: 'w1', ok: true, result: { tx: 'cd'.repeat(32) } }]);
+  assert.equal(win.seen.filter((m) => m.event).length, 2, 'the phase before the verdict was delivered too');
+  // After the verdict the request is forgotten, so a late phase is dropped.
+  for (const fn of chrome.decisions) fn({ type: 'rand:phase', id: 'w1', phase: 'confirming' });
+  await tick();
+  assert.equal(win.seen.filter((m) => m.event).length, 2);
+  // An oversized or missing request never reaches the background.
+  win.postMessage({ target: 'rand-wallet:page', id: 'w2', method: 'withdraw' }, ORIGIN);
+  win.postMessage({ target: 'rand-wallet:page', id: 'w3', method: 'withdraw', params: { ...params, title: 'x'.repeat(300000) } }, ORIGIN);
+  await tick();
+  assert.equal(chrome.sent.length, 1);
+  assert.equal(replies(win, 'w2')[0].error.code, 'BAD_REQUEST');
+  assert.equal(replies(win, 'w3')[0].error.code, 'BAD_REQUEST');
+});
