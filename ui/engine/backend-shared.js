@@ -2396,15 +2396,15 @@ export function makeSharedBackend({
     async canWithdraw() {
       const prove = (await proveRoute()).answer;
       if (!prove || !prove.ok) {
-        return { ok: false, reason: (prove && prove.reason) || t('Proving is not available here.') };
+        return { ok: false, code: 'PROVER_UNAVAILABLE', reason: (prove && prove.reason) || t('Proving is not available here.') };
       }
       let state;
       try {
         ({ state } = await bridgeStateFull());
       } catch (err) {
-        return { ok: false, reason: (err && err.message) || t('The bridge could not be asked.') };
+        return { ok: false, code: 'UNAVAILABLE', reason: (err && err.message) || t('The bridge could not be asked.') };
       }
-      if (!state.enabled) return { ok: false, reason: bridgeDisabledText() };
+      if (!state.enabled) return { ok: false, code: 'BRIDGE_DISABLED', reason: bridgeDisabledText() };
       // `via` exactly as `canProve` reports it: a burn through a paired prover is proved there,
       // and the withdraw screen says so the way the send screen does.
       return prove.via

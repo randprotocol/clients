@@ -96,8 +96,19 @@ test('the wallet\'s own estimate refusing answers the site at once with the wall
   assert.equal(h.calls.withdraw, 0);
 });
 
+test('the bridge being off keeps its own code and the wallet\'s sentence; an uncoded refusal is UNAVAILABLE', async () => {
+  const reason = 'This chain has no bridge, so there is nothing to withdraw to.';
+  const off = harness({ bridge: { canWithdraw: async () => ({ ok: false, code: 'BRIDGE_DISABLED', reason }) } });
+  await off.flow.start();
+  assert.deepEqual(off.results()[0].error, { code: 'BRIDGE_DISABLED', message: reason });
+  assert.equal(off.calls.estimate, 0);
+  const bare = harness({ bridge: { canWithdraw: async () => ({ ok: false, reason: 'No.' }) } });
+  await bare.flow.start();
+  assert.equal(bare.results()[0].error.code, 'UNAVAILABLE');
+});
+
 test('no proof route: PROVER_UNAVAILABLE with the wallet\'s reason, and no estimate', async () => {
-  const h = harness({ bridge: { canWithdraw: async () => ({ ok: false, reason: 'Your paired prover is not available: busy.' }) } });
+  const h = harness({ bridge: { canWithdraw: async () => ({ ok: false, code: 'PROVER_UNAVAILABLE', reason: 'Your paired prover is not available: busy.' }) } });
   await h.flow.start();
   assert.deepEqual(h.results()[0].error, { code: 'PROVER_UNAVAILABLE', message: 'Your paired prover is not available: busy.' });
   assert.equal(h.calls.estimate, 0);

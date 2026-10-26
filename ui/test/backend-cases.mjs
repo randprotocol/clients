@@ -442,6 +442,8 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.deepEqual(await backend.bridge.state(), { enabled: false, chains: [], mintPaused: false });
     const can = await backend.bridge.canWithdraw();
     assert.equal(can.ok, false);
+    // The proof route is asked first, so a shell that cannot prove says that instead.
+    assert.ok(['BRIDGE_DISABLED', 'PROVER_UNAVAILABLE'].includes(can.code), `a coded refusal, got ${can.code}`);
     assert.ok(can.reason, 'and says why, in words meant for the user');
   });
 

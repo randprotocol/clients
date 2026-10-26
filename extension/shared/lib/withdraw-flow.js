@@ -134,7 +134,7 @@ export function makeWithdrawFlow({ id, send, backend, onChange = () => {}, t = p
       const request = normalizeWithdrawRequest(parked.result.request, settings && settings.chainId, t);
       const can = await bridge.canWithdraw();
       if (!can || !can.ok) {
-        throw can && can.reason ? Object.assign(new Error(can.reason), { code: can.code || 'PROVER_UNAVAILABLE' }) : refusal(CANNOT_SEND_HERE, 'PROVER_UNAVAILABLE');
+        throw can && can.reason ? Object.assign(new Error(can.reason), { code: can.code || 'UNAVAILABLE' }) : refusal(CANNOT_SEND_HERE, 'UNAVAILABLE');
       }
       const estimate = await bridge.estimate(burnOf(request));
       set({ step: 'review', request, estimate, via: can.via || null, prover: can.prover || null, provers: can.provers || 0, notice: can.notice === true });

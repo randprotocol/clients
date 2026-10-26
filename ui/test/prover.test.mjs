@@ -458,7 +458,7 @@ test('the_wasm_reason_names_the_prover_option', async () => {
   assert.match(answer.reason, /Pair a prover in Settings/);
   assert.match(answer.reason, /desktop app/);
   assert.match(answer.reason, /6\.2 GB/);
-  assert.deepEqual(await env.backend.bridge.canWithdraw(), { ok: false, reason: CANNOT_PROVE_REASON });
+  assert.deepEqual(await env.backend.bridge.canWithdraw(), { ok: false, code: 'PROVER_UNAVAILABLE', reason: CANNOT_PROVE_REASON });
 });
 
 test('a_viewing_key_job_goes_to_a_prover_that_is_not_the_users_own', async () => {
