@@ -582,7 +582,7 @@ TESTING. No account is needed. Click the toolbar button → "Create a new wallet
 
 NETWORK. JSON-RPC POSTs to the node URL in Settings (default https://rpc.randprotocol.org; rpc1–rpc3.randprotocol.org are failover hosts). When the user sends, a proving job goes to the prover: by default one of the RandProtocol provers under https://prover.randprotocol.org (two machines operated by RandProtocol, each with its own key pinned in the extension; the user is told before the first send), or the prover the user chose in Settings → Prover. A proving job contains the wallet's viewing key and a one-time salt, encrypted to that prover (enough to read the wallet's history, not to spend; the spend key never leaves the device, which makes the authorisation proof itself). No analytics, no telemetry, no remote code.
 
-CONTENT SCRIPTS run only on randbridge.org and durian.market (and localhost, for a locally served copy) and expose a provider object, window.rand. A page learns the wallet address only after the user approves that site, and a transaction a page asks for (window.rand.invoke) is shown in the wallet's own window and sent only on the user's approval.
+CONTENT SCRIPTS run only on randbridge.org and durian.market (and localhost, for a locally served copy) and expose a provider object, window.rand. A page learns the wallet address only after the user approves that site, and a transaction a page asks for (window.rand.invoke, or window.rand.withdraw for a bridge burn) is shown in the wallet's own window and sent only on the user's approval; the page learns the hash of the transaction and nothing else.
 
 'wasm-unsafe-eval' in the CSP is required to instantiate the bundled WebAssembly module.
 

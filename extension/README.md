@@ -99,14 +99,17 @@ A Rand site — randbridge.org, and a local build of it — sees this wallet as 
 contract in randbridge.org/web/lib/rand/provider.ts. Three files, each in its own world:
 
 - `inpage.js` runs in the page's own world (`world: "MAIN"`, document_start) and defines the
-  object: `connect`, `getAddress`, `getRecipientHash`, `disconnect`, `on`, plus the
+  object: `connect`, `getAddress`, `getRecipientHash`, `invoke`, `withdraw`, `disconnect`, `on`, plus the
   `rand:announceProvider` / `rand:requestProvider` handshake. It knows nothing and can reach nothing.
 - `content.js` relays those four method names — and none of the page's data — to the background.
 - `provider-host.js`, loaded by `background.js`, decides from the *sender's* origin: `connect`
   needs a wallet, unlocked, and the user's yes in `connect.html` for that origin; the approval
   (address plus its bridge recipient hash, `lib/recipient-hash.js`) is stored under `sites` in
-  storage.local, tied to the address it was given for. A site never learns more than the address
-  and that hash. `node --test extension/test/provider-host.test.mjs` is the policy's suite;
+  storage.local, tied to the address it was given for. What a site can learn is the address
+  and that hash, and, for a transaction it asked for, one thing more: the hash of the transaction
+  the wallet sent (`invoke` and `withdraw` both answer `{tx}`), and the phase names of a
+  withdrawal while it works. The wallet's balance, notes, history and keys stay in the wallet;
+  a refusal or a closed window tells the site only that nothing was sent. `node --test extension/test/provider-host.test.mjs` is the policy's suite;
   `recipient-hash.test.mjs` pins the hash to the bridge's own fixture.
 
 When the extension itself is reloaded — a store update, or Reload at chrome://extensions on an
