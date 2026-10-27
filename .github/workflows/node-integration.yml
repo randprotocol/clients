@@ -8,13 +8,26 @@
 # a minute of tests with `rand-prover`'s one real bundle proof on top (a few minutes on a shared
 # runner). To test against another release set FULLNODE_TAG; nothing the suite asserts may depend on
 # a node feature newer than v0.8.0.
+#
+# `fullnode-main` is the other half: the same suites against `rand-node`/`rand-prover` BUILT from
+# fullnode main (or `fullnode_ref` by hand), every night and on demand, so a change on the node that
+# breaks this wallet turns this repository red within a day even when no fullnode pull request ran
+# fullnode's own `clients` job (fullnode .github/workflows/clients.yml, which runs these suites on
+# every fullnode pull request).
 name: node-integration
 
 on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # 19:00 UTC daily: an hour after fullnode's nightly.
+    - cron: "0 19 * * *"
   workflow_dispatch:
+    inputs:
+      fullnode_ref:
+        description: "randprotocol/fullnode ref for the fullnode-main job (default: main)"
+        required: false
 
 permissions:
   contents: read
@@ -31,6 +44,7 @@ env:
 jobs:
   real-node:
     name: real-node
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -76,4 +90,61 @@ jobs:
             echo "RAND_PROVER_BIN=$RUNNER_TEMP/fullnode/rand-prover"
           } >> "$GITHUB_ENV"
       - name: The wallet against the real node
+        run: scripts/e2e-node.sh
+
+  fullnode-main:
+    name: fullnode-main
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/checkout@v4
+        with:
+          repository: randprotocol/fullnode
+          ref: ${{ inputs.fullnode_ref || 'main' }}
+          path: .fullnode
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Rust ${{ env.RUST_TOOLCHAIN }}
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown
+          rustup default "$RUST_TOOLCHAIN"
+      - name: System dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev
+      - name: Cache cargo registry and wasm-bindgen
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/bin/wasm-bindgen*
+          key: cargo-wasm-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('core/Cargo.lock') }}
+      - name: Cache the wasm core's build
+        uses: actions/cache@v4
+        with:
+          path: core/target
+          key: core-target-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('core/Cargo.lock') }}
+          restore-keys: core-target-${{ env.RUST_TOOLCHAIN }}-
+      - name: Cache the fullnode build
+        uses: actions/cache@v4
+        with:
+          path: .fullnode/target
+          key: fullnode-target-${{ hashFiles('.fullnode/Cargo.lock') }}
+          restore-keys: fullnode-target-
+      - name: The wasm core
+        run: core/scripts/build-wasm.sh
+      - name: rand-node and rand-prover from fullnode ${{ inputs.fullnode_ref || 'main' }}
+        working-directory: .fullnode
+        run: |
+          cargo build --release --locked -p randprotocol-node -p randprotocol-prover
+          target/release/rand-node --version
+          {
+            echo "RAND_NODE_BIN=$PWD/target/release/rand-node"
+            echo "RAND_PROVER_BIN=$PWD/target/release/rand-prover"
+          } >> "$GITHUB_ENV"
+      - name: The wallet against fullnode ${{ inputs.fullnode_ref || 'main' }}
         run: scripts/e2e-node.sh
