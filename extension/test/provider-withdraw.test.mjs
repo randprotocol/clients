@@ -143,6 +143,19 @@ test('result answers the tab once', async () => {
   assert.equal(ext.sent.length, 1, 'a second answer finds nothing to answer');
 });
 
+test('a refusal from the window reaches the site as a listed code with its fixed sentence, never the window\'s words', async () => {
+  const SAY = globalThis.RAND_SITE_ERRORS.withdraw;
+  for (const [code, heard] of [['CANNOT_WITHDRAW', 'CANNOT_WITHDRAW'], ['UNKNOWN', 'CANNOT_WITHDRAW'], ['INSUFFICIENT_FUNDS', 'CANNOT_WITHDRAW'], [undefined, 'CANNOT_WITHDRAW'],
+    ['PROVER_UNAVAILABLE', 'PROVER_UNAVAILABLE'], ['BRIDGE_DISABLED', 'BRIDGE_DISABLED'], ['PROOF_PENDING', 'PROOF_PENDING'], ['UNKNOWN_OUTCOME', 'UNKNOWN_OUTCOME']]) {
+    const ext = fakeExt();
+    const { host } = hostWith(ext);
+    await host.handle({ type: 'rand:withdraw', params: REQ }, site());
+    await host.handle({ type: 'rand:withdrawResult', id: 'w1', ok: false, error: { code, message: 'insufficient balance: have 3000000, need 99999999999999' } }, win());
+    assert.deepEqual(ext.sent[0][1].error, { code: heard, message: SAY[heard] }, String(code));
+    assert.doesNotMatch(ext.sent[0][1].error.message, /[0-9]/);
+  }
+});
+
 test('closing the window', async () => {
   for (const [phase, code] of [[null, 'USER_REJECTED'], ['proving', 'INTERRUPTED'], ['submitting', 'UNKNOWN_OUTCOME']]) {
     const ext = fakeExt();

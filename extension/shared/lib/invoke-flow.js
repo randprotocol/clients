@@ -6,21 +6,22 @@
 //   1. `rand:invokeRequest` — the request this window was opened for, by id. Nothing in the URL is
 //      trusted beyond the id: the origin shown is the one the background recorded from `sender`.
 //   2. `program.canInvoke()` then `program.quote()` — every refusal that needs no proof. A refusal
-//      here is answered to the site AT ONCE (a stale read is re-quoted by the site, and a window
-//      that sat on it would only make the pool move further), and the window says why.
+//      here is answered to the site AT ONCE, with its code and a fixed sentence (a stale read is
+//      re-quoted by the site, and a window that sat on it would only make the pool move further),
+//      and the window says why.
 //   3. Approve → `program.invoke()`, its phases reported to the background as they happen
 //      (`rand:invokeProgress`), so a window closed mid-way is answered for correctly: refused before
 //      anything left the device, unknown once it may have reached the node.
 //   4. `rand:invokeResult` — `{tx}` or `{code, message}` — exactly once.
+
+import { siteError } from './site-errors.js';
 //
-// The text here is shown twice: in the window under "Not sent", in the wallet's language, and as
-// the `message` beside the error code the site is answered with, in English (the code is the
-// contract; a dapp's logs and its own UI expect the provider's English, as provider-host.js,
-// content.js and inpage.js answer). Each of this file's refusals is therefore an Error whose
-// `message` is translated through `t` and whose `siteMessage` is the same sentence untranslated
-// (`refusal` below). `t` is passed in from ui/i18n.js by the window — this file imports nothing,
-// so it stays loadable under plain Node for its test, where `t` defaults to English with its
-// `{holes}` filled.
+// The window shows the full reason under "Not sent", in the wallet's language. The site is told
+// only the code and lib/site-errors.js's fixed English sentence for it: the wallet's own reason
+// can carry a balance or a note's value ("have 3, need 5"), and none of that is the site's. A code
+// that table does not list for an invoke reaches the site as CANNOT_INVOKE. `t` is passed in from
+// ui/i18n.js by the window — this file imports nothing from the UI, so it stays loadable under
+// plain Node for its test, where `t` defaults to English with its `{holes}` filled.
 
 /** `t` when none is given: English, holes filled (ui/i18n.js's `fill`). */
 export const plain = (s, vars) => (vars ? String(s).replace(/\{(\w+)\}/g, (hole, name) => (name in vars ? String(vars[name]) : hole)) : String(s));
@@ -52,8 +53,8 @@ export function proverNotice(n, t = plain) {
 /** What the site sees for an error with no code of its own. */
 export const FALLBACK_CODE = 'UNKNOWN';
 
-// This file's own sentences, each a function of `t` so the window can show it translated and the
-// site be answered with it in English (`text(plain)`).
+// This file's own sentences, each a function of `t` so the window can show it translated (the
+// site never sees them: it gets lib/site-errors.js's sentence for the code).
 export const NOT_OPENED = (t) => t('This window was not opened by a site.');
 export const NO_LONGER_WAITING = (t) => t('That request is no longer waiting.');
 const NO_PROGRAMS = (t) => t('This Rand Wallet cannot run programs.');
@@ -82,13 +83,10 @@ export function makeInvokeFlow({ id, send, backend, onChange = () => {}, t = pla
     const message = (err && err.message) || NOT_COMPLETED(t);
     return { code: codeOf(err), message: String(message).slice(0, 300) };
   };
-  /** What the site is answered with: the same, in English. */
-  const siteErrorOf = (err) => {
-    const message = (err && (err.siteMessage || err.message)) || NOT_COMPLETED(plain);
-    return { code: codeOf(err), message: String(message).slice(0, 300) };
-  };
-  /** One of this file's refusals: `text(t)` for the window, `text(plain)` for the site. */
-  const refusal = (text, code) => Object.assign(new Error(text(t)), { code, siteMessage: text(plain) });
+  /** What the site is answered with: the code and its fixed sentence, never the reason. */
+  const siteErrorOf = (err) => siteError('invoke', codeOf(err));
+  /** One of this file's refusals, in the window's language. */
+  const refusal = (text, code) => Object.assign(new Error(text(t)), { code });
   let request = null;
   let answered = false;
   const set = (patch) => { Object.assign(state, patch); onChange(state); };

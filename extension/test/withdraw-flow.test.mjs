@@ -5,6 +5,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeWithdrawFlow, normalizeWithdrawRequest } from '../shared/lib/withdraw-flow.js';
+import { SITE_ERRORS } from '../shared/lib/site-errors.js';
+
+const SAY = SITE_ERRORS.withdraw;
+/** The site's answer holds none of the digits of the wallet's own reason, nor the reason itself. */
+function private_(siteError, reason) {
+  assert.ok(!siteError.message.includes(reason), `the wallet's reason reached the site: ${siteError.message}`);
+  for (const n of reason.match(/[0-9]+/g) || []) assert.ok(!siteError.message.includes(n), `"${n}" from the wallet's reason reached the site`);
+  assert.equal(siteError.message, SAY[siteError.code], 'not the fixed sentence for its code');
+}
 
 const ADDR = 'ab'.repeat(20);
 const EVM = { asset: 1, amount: '1500000000', toChain: 2, token: `0x${'11'.repeat(32).toUpperCase()}`, to: `${'0'.repeat(24)}${ADDR}`, chainId: 21, title: '  Withdraw to Ethereum ' };
@@ -86,31 +95,47 @@ test('normalizeWithdrawRequest: lowercases, strips 0x, caps the title, and refus
   bad({ chainId: 20 }, 'WRONG_CHAIN');
 });
 
-test('the wallet\'s own estimate refusing answers the site at once with the wallet\'s sentence', async () => {
-  const h = harness({ bridge: { estimate: async () => { throw Object.assign(new Error('You hold 3 zUSD.'), { definite: true }); } } });
+test('the wallet\'s own estimate refusing answers the site at once with CANNOT_WITHDRAW and no figures; the window keeps the reason', async () => {
+  const reason = 'insufficient balance: have 3000000, need 99999999999999';
+  const h = harness({ bridge: { estimate: async () => { throw Object.assign(new Error(reason), { definite: true }); } } });
   await h.flow.start();
   assert.equal(h.flow.state.step, 'failed');
-  assert.deepEqual(h.results()[0], { type: 'rand:withdrawResult', id: 'w1', ok: false, error: { code: 'UNKNOWN', message: 'You hold 3 zUSD.' } });
+  assert.equal(h.flow.state.error.message, reason, 'the window shows the full reason');
+  assert.deepEqual(h.results()[0], { type: 'rand:withdrawResult', id: 'w1', ok: false, error: { code: 'CANNOT_WITHDRAW', message: 'Rand Wallet cannot make this withdrawal. Open Rand Wallet to see why.' } });
+  private_(h.results()[0].error, reason);
+  for (const why of ['the largest two hold 12 and 7', 'not enough RAND for the fee: have 4, need 9']) {
+    const k = harness({ bridge: { estimate: async () => { throw Object.assign(new Error(why), { code: 'INSUFFICIENT_FUNDS' }); } } });
+    await k.flow.start();
+    assert.equal(k.results()[0].error.code, 'CANNOT_WITHDRAW', 'a code a withdraw does not list becomes CANNOT_WITHDRAW');
+    private_(k.results()[0].error, why);
+  }
   assert.equal(h.calls.withdraw, 0);
   await h.flow.approve();
   assert.equal(h.calls.withdraw, 0);
 });
 
-test('the bridge being off keeps its own code and the wallet\'s sentence; an uncoded refusal is UNAVAILABLE', async () => {
+test('the bridge being off keeps its own code with the fixed sentence; an uncoded refusal is UNAVAILABLE', async () => {
   const reason = 'This chain has no bridge, so there is nothing to withdraw to.';
   const off = harness({ bridge: { canWithdraw: async () => ({ ok: false, code: 'BRIDGE_DISABLED', reason }) } });
   await off.flow.start();
-  assert.deepEqual(off.results()[0].error, { code: 'BRIDGE_DISABLED', message: reason });
+  assert.deepEqual(off.results()[0].error, { code: 'BRIDGE_DISABLED', message: SAY.BRIDGE_DISABLED });
+  assert.equal(off.flow.state.error.message, reason);
   assert.equal(off.calls.estimate, 0);
   const bare = harness({ bridge: { canWithdraw: async () => ({ ok: false, reason: 'No.' }) } });
   await bare.flow.start();
   assert.equal(bare.results()[0].error.code, 'UNAVAILABLE');
+  const asked = harness({ bridge: { canWithdraw: async () => ({ ok: false, code: 'UNAVAILABLE', reason: 'fetch http://10.0.0.7:8545 failed' }) } });
+  await asked.flow.start();
+  private_(asked.results()[0].error, 'fetch http://10.0.0.7:8545 failed');
 });
 
-test('no proof route: PROVER_UNAVAILABLE with the wallet\'s reason, and no estimate', async () => {
-  const h = harness({ bridge: { canWithdraw: async () => ({ ok: false, code: 'PROVER_UNAVAILABLE', reason: 'Your paired prover is not available: busy.' }) } });
+test('no proof route: PROVER_UNAVAILABLE with the fixed sentence (not the paired prover\'s own error), and no estimate', async () => {
+  const reason = 'Your paired prover is not available: connect ECONNREFUSED 192.168.1.20:8600';
+  const h = harness({ bridge: { canWithdraw: async () => ({ ok: false, code: 'PROVER_UNAVAILABLE', reason }) } });
   await h.flow.start();
-  assert.deepEqual(h.results()[0].error, { code: 'PROVER_UNAVAILABLE', message: 'Your paired prover is not available: busy.' });
+  assert.deepEqual(h.results()[0].error, { code: 'PROVER_UNAVAILABLE', message: SAY.PROVER_UNAVAILABLE });
+  private_(h.results()[0].error, reason);
+  assert.equal(h.flow.state.error.message, reason);
   assert.equal(h.calls.estimate, 0);
 });
 
@@ -136,7 +161,8 @@ test('the one-time notice comes before Approve; Firefox consent declined is PROV
       assert.deepEqual(order, ['request']);
       assert.equal(h.flow.state.step, 'failed');
       assert.equal(h.results()[0].error.code, 'PROVER_UNAVAILABLE');
-      assert.match(h.results()[0].error.message, /Firefox did not allow/);
+      assert.equal(h.results()[0].error.message, SAY.PROVER_UNAVAILABLE);
+      assert.match(h.flow.state.error.message, /Firefox did not allow/, 'the window says why');
       continue;
     }
     assert.equal(h.flow.state.notice, false);
@@ -163,13 +189,13 @@ test('another chain is refused before any estimate', async () => {
   assert.equal(h.calls.estimate, 0);
 });
 
-test('an earlier proof still waiting is PROOF_PENDING, with the wallet\'s sentence', async () => {
+test('an earlier proof still waiting is PROOF_PENDING, with the fixed sentence', async () => {
   const pending = Object.assign(new Error('A proof is still pending — resume or cancel it.'), { definite: true, pending: true });
   const h = harness({ bridge: { withdraw: async () => { throw pending; } } });
   await h.flow.start();
   await h.flow.approve();
   assert.equal(h.flow.state.step, 'failed');
-  assert.deepEqual(h.results()[0].error, { code: 'PROOF_PENDING', message: 'A proof is still pending — resume or cancel it.' });
+  assert.deepEqual(h.results()[0].error, { code: 'PROOF_PENDING', message: SAY.PROOF_PENDING });
   // …and the same refusal at estimate time (the backend may refuse there too).
   const early = harness({ bridge: { estimate: async () => { throw pending; } } });
   await early.flow.start();
@@ -198,11 +224,13 @@ test('a failure once the burn may have been sent is UNKNOWN_OUTCOME unless the e
     await h.flow.approve();
     return h.results()[0].error;
   };
-  assert.deepEqual(await run('submitting', new Error('socket closed')), { code: 'UNKNOWN_OUTCOME', message: 'socket closed' });
-  assert.deepEqual(await run('confirming', new Error('socket closed')), { code: 'UNKNOWN_OUTCOME', message: 'socket closed' });
-  assert.deepEqual(await run('submitting', Object.assign(new Error(''), {})), { code: 'UNKNOWN_OUTCOME', message: 'Rand Wallet could not tell whether the burn was sent. Check its activity before trying again.' });
-  assert.deepEqual(await run('submitting', Object.assign(new Error('The node refused it.'), { definite: true, code: 'REFUSED' })), { code: 'REFUSED', message: 'The node refused it.' });
-  assert.deepEqual(await run('proving', new Error('prover went away')), { code: 'UNKNOWN', message: 'prover went away' });
+  const unknown = { code: 'UNKNOWN_OUTCOME', message: SAY.UNKNOWN_OUTCOME };
+  assert.deepEqual(await run('submitting', new Error('socket closed')), unknown);
+  assert.deepEqual(await run('confirming', new Error('socket closed')), unknown);
+  assert.deepEqual(await run('submitting', Object.assign(new Error(''), {})), unknown);
+  const cannot = { code: 'CANNOT_WITHDRAW', message: SAY.CANNOT_WITHDRAW };
+  assert.deepEqual(await run('submitting', Object.assign(new Error('The node refused it: note 17 spent.'), { definite: true, code: 'REFUSED' })), cannot);
+  assert.deepEqual(await run('proving', new Error('prover went away')), cannot);
 });
 
 test('a second click on the notice\'s button while the first is pending does nothing', async () => {

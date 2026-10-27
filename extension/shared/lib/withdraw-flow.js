@@ -15,14 +15,18 @@
 //      what the user sees is what is proved.
 //   3. `bridge.canWithdraw()` then `bridge.estimate()` — every refusal that needs no proof (no
 //      route, bridge off, not enough zUSD or RAND, a selection that cannot be built). Each is
-//      answered to the site AT ONCE, with the wallet's own sentence: the window does not sit on a
-//      burn the chain would refuse, and the site is not left waiting for a click that cannot help.
+//      answered to the site AT ONCE: the window does not sit on a burn the chain would refuse,
+//      and the site is not left waiting for a click that cannot help. The site hears only a code
+//      and lib/site-errors.js's fixed sentence for it — the wallet's reason ("have 3, need 5", the
+//      largest notes' values, a paired prover's own error) stays in the window. Anything that
+//      table does not list for a withdraw reaches the site as CANNOT_WITHDRAW.
 //   4. Approve → `bridge.withdraw()`, its phases reported (`rand:withdrawProgress`) as they
 //      happen, so a window closed mid-way is answered for correctly: not sent yet before the
 //      submit, unknown once it may have reached the node. A remote proof stays in the wallet's
 //      pending record when the window closes; the next burn is refused as `PROOF_PENDING`.
 //   5. `rand:withdrawResult` — `{tx}` or `{code, message}` — exactly once.
 
+import { siteError } from './site-errors.js';
 import {
   plain, FALLBACK_CODE, NOT_OPENED, NO_LONGER_WAITING, NOT_APPROVED, NOT_COMPLETED, CANNOT_SEND_HERE, consentDeclined,
 } from './invoke-flow.js';
@@ -40,7 +44,7 @@ const WRONG_CHAIN_TEXT = (t) => t('This request is for a different Rand chain th
 const UNKNOWN_OUTCOME_TEXT = (t) => t('Rand Wallet could not tell whether the burn was sent. Check its activity before trying again.');
 const BAD_REQUEST_TEXT = (t) => t('Rand Wallet could not read this withdrawal request.');
 
-const coded = (text, code, t = plain) => Object.assign(new Error(text(t)), { code, siteMessage: text(plain) });
+const coded = (text, code, t = plain) => Object.assign(new Error(text(t)), { code });
 
 const isUint = (n) => Number.isSafeInteger(n) && n >= 0;
 const hex64 = (v) => {
@@ -97,7 +101,8 @@ export function makeWithdrawFlow({ id, send, backend, onChange = () => {}, t = p
     return err && err.pending ? 'PROOF_PENDING' : FALLBACK_CODE;
   };
   const errorOf = (err) => ({ code: codeOf(err), message: String((err && err.message) || NOT_COMPLETED(t)).slice(0, 300) });
-  const siteErrorOf = (err) => ({ code: codeOf(err), message: String((err && (err.siteMessage || err.message)) || NOT_COMPLETED(plain)).slice(0, 300) });
+  /** What the site is answered with: the code and its fixed sentence, never the reason. */
+  const siteErrorOf = (err) => siteError('withdraw', codeOf(err));
   const refusal = (text, code) => coded(text, code, t);
   let answered = false;
   const set = (patch) => { Object.assign(state, patch); onChange(state); };
@@ -192,7 +197,7 @@ export function makeWithdrawFlow({ id, send, backend, onChange = () => {}, t = p
       const maybeSent = (state.phase === 'submitting' || state.phase === 'confirming') && !(err && err.definite === true);
       if (!maybeSent) { await refuse(err); return; }
       const message = err && err.message;
-      const unknown = Object.assign(new Error(message || UNKNOWN_OUTCOME_TEXT(t)), { code: 'UNKNOWN_OUTCOME', siteMessage: message || UNKNOWN_OUTCOME_TEXT(plain) });
+      const unknown = Object.assign(new Error(message || UNKNOWN_OUTCOME_TEXT(t)), { code: 'UNKNOWN_OUTCOME' });
       await refuse(unknown);
     }
   }

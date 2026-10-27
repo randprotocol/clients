@@ -4,6 +4,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeInvokeFlow } from '../shared/lib/invoke-flow.js';
+import { SITE_ERRORS } from '../shared/lib/site-errors.js';
+
+const SAY = SITE_ERRORS.invoke;
+/** The site's answer holds none of the digits of the wallet's own reason, nor the reason itself. */
+function private_(siteError, reason) {
+  assert.ok(!siteError.message.includes(reason), `the wallet's reason reached the site: ${siteError.message}`);
+  for (const n of reason.match(/[0-9]+/g) || []) assert.ok(!siteError.message.includes(n), `"${n}" from the wallet's reason reached the site`);
+  assert.equal(siteError.message, SAY[siteError.code], 'not the fixed sentence for its code');
+}
 
 const REQUEST = { program: 'ab'.repeat(32) };
 const QUOTE = { title: 'Swap', program: 'ab'.repeat(32), spend: [{ asset: 0, amount: '1' }], receive: [{ asset: 1, amount: '2' }], fee: '3', cells: 0, tier: 12 };
@@ -41,20 +50,38 @@ test('review, approve, and the site hears the hash once, with every phase report
   assert.equal(h.results().length, 1, 'one answer, whatever is pressed afterwards');
 });
 
-test('a refusal before any proof is answered to the site at once, with its code', async () => {
+test('a refusal before any proof is answered to the site at once, with its code and the fixed sentence', async () => {
   const stale = harness({ program: { quote: async () => { throw Object.assign(new Error('The pool changed'), { code: 'STALE_READ' }); } } });
   await stale.flow.start();
   assert.equal(stale.flow.state.step, 'failed');
-  assert.deepEqual(stale.results()[0].error, { code: 'STALE_READ', message: 'The pool changed' });
+  assert.deepEqual(stale.results()[0].error, { code: 'STALE_READ', message: SAY.STALE_READ });
   const noProver = harness({ program: { canInvoke: async () => ({ ok: false, code: 'PROVER_UNAVAILABLE', reason: 'Pair a prover.' }) } });
   await noProver.flow.start();
-  assert.equal(noProver.results()[0].error.code, 'PROVER_UNAVAILABLE');
+  assert.deepEqual(noProver.results()[0].error, { code: 'PROVER_UNAVAILABLE', message: SAY.PROVER_UNAVAILABLE });
   const old = harness({ program: null });
   await old.flow.start();
   assert.equal(old.results()[0].error.code, 'UNSUPPORTED');
 });
 
-test('reject is USER_REJECTED; a failure mid-proof keeps its code, and an uncoded one is UNKNOWN', async () => {
+test('the wallet\'s balance never reaches the site: INSUFFICIENT_FUNDS and a refused program read as CANNOT_INVOKE / PROGRAM_REFUSED with fixed sentences', async () => {
+  const funds = 'Rand Wallet does not hold enough to cover this and its network fee: insufficient balance: have 4100, need 9000';
+  const poor = harness({ program: { quote: async () => { throw Object.assign(new Error(funds), { code: 'INSUFFICIENT_FUNDS', definite: true }); } } });
+  await poor.flow.start();
+  assert.deepEqual(poor.results()[0].error, { code: 'CANNOT_INVOKE', message: SAY.CANNOT_INVOKE });
+  private_(poor.results()[0].error, funds);
+  assert.equal(poor.flow.state.error.message, funds, 'the window keeps the full reason');
+  const refused = 'The program would not accept this request, so nothing was sent: note 77 holds 31 RAND';
+  const no = harness({ program: { quote: async () => { throw Object.assign(new Error(refused), { code: 'PROGRAM_REFUSED' }); } } });
+  await no.flow.start();
+  assert.equal(no.results()[0].error.code, 'PROGRAM_REFUSED');
+  private_(no.results()[0].error, refused);
+  const late = harness({ program: { invoke: async () => { throw Object.assign(new Error(funds), { code: 'INSUFFICIENT_FUNDS' }); } } });
+  await late.flow.start();
+  await late.flow.approve();
+  private_(late.results()[0].error, funds);
+});
+
+test('reject is USER_REJECTED; a failure mid-proof with no listed code is CANNOT_INVOKE', async () => {
   const no = harness();
   await no.flow.start();
   await no.flow.reject();
@@ -62,7 +89,7 @@ test('reject is USER_REJECTED; a failure mid-proof keeps its code, and an uncode
   const broken = harness({ program: { invoke: async () => { throw new Error('the prover went away'); } } });
   await broken.flow.start();
   await broken.flow.approve();
-  assert.deepEqual(broken.results()[0].error, { code: 'UNKNOWN', message: 'the prover went away' });
+  assert.deepEqual(broken.results()[0].error, { code: 'CANNOT_INVOKE', message: SAY.CANNOT_INVOKE });
 });
 
 test('a request that is no longer waiting tells nobody and shows why', async () => {
@@ -93,7 +120,8 @@ test('the RandProtocol prover\'s notice stands in Approve\'s place; read (Firefo
       assert.deepEqual(order, ['request']);
       assert.equal(h.flow.state.step, 'failed');
       assert.equal(h.results()[0].error.code, 'PROVER_UNAVAILABLE');
-      assert.match(h.results()[0].error.message, /Firefox did not allow/);
+      assert.equal(h.results()[0].error.message, SAY.PROVER_UNAVAILABLE);
+      assert.match(h.flow.state.error.message, /Firefox did not allow/, 'the window says why');
       continue;
     }
     assert.deepEqual(order, granted ? ['request', 'acknowledge'] : ['acknowledge']);

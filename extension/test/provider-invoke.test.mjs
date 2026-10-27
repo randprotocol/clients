@@ -94,7 +94,7 @@ test('the window\'s result goes to the tab that asked, once, and the request is 
   assert.equal(ext.sent.length, 1, 'a second answer finds nothing to answer');
 });
 
-test('only an extension page may answer, and a refusal\'s code and message are bounded', async () => {
+test('only an extension page may answer, and a refusal reaches the site as a listed code with its fixed sentence', async () => {
   const ext = fakeExt();
   const { host } = hostWith(ext);
   await host.handle({ type: 'rand:invoke', params: request() }, page());
@@ -102,8 +102,16 @@ test('only an extension page may answer, and a refusal\'s code and message are b
   assert.equal(ext.sent.length, 0);
   await host.handle({ type: 'rand:invokeResult', id: 'i1', ok: false, error: { code: '<script>', message: 'x'.repeat(1000) } }, win());
   const [, msg] = ext.sent[0];
-  assert.equal(msg.error.code, 'UNKNOWN');
-  assert.equal(msg.error.message.length, 300);
+  assert.deepEqual(msg.error, { code: 'CANNOT_INVOKE', message: globalThis.RAND_SITE_ERRORS.invoke.CANNOT_INVOKE });
+  // Whatever the window says, the site hears the code's own sentence: no balance, no figures.
+  for (const [code, heard] of [['INSUFFICIENT_FUNDS', 'CANNOT_INVOKE'], ['STALE_READ', 'STALE_READ'], ['PROVER_UNAVAILABLE', 'PROVER_UNAVAILABLE']]) {
+    const e = fakeExt();
+    const h = hostWith(e).host;
+    await h.handle({ type: 'rand:invoke', params: request() }, page());
+    await h.handle({ type: 'rand:invokeResult', id: 'i1', ok: false, error: { code, message: 'insufficient balance: have 4100, need 9000' } }, win());
+    assert.deepEqual(e.sent[0][1].error, { code: heard, message: globalThis.RAND_SITE_ERRORS.invoke[heard] });
+    assert.doesNotMatch(e.sent[0][1].error.message, /[0-9]/);
+  }
   const ext2 = fakeExt();
   const h2 = hostWith(ext2).host;
   await h2.handle({ type: 'rand:invoke', params: request() }, page());

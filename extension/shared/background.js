@@ -150,6 +150,6 @@ ext.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('rand:')) return false;
   providerHost.handle(msg, sender).then(
     (res) => sendResponse(res ?? { ok: false, error: { code: 'UNKNOWN_METHOD', message: 'Rand Wallet does not know that request.' } }),
-    (err) => sendResponse({ ok: false, error: { code: 'INTERNAL', message: (err && err.message) || String(err) } }));
+    () => sendResponse({ ok: false, error: { code: 'INTERNAL', message: 'Rand Wallet could not handle that request.' } }));
   return true; // the answer is asynchronous
 });

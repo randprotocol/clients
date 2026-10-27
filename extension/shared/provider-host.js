@@ -28,6 +28,10 @@
 //                      burn on the user. The window's proof phases are also forwarded to the
 //                      asking tab (`rand:phase`), display only, for the site's progress view.
 //                      A window of one kind cannot read or answer the other kind's record.
+// What a site is told when the wallet refuses: a code and a FIXED sentence for that code
+// (`SITE_ERRORS`, the same table as lib/site-errors.js), never the window's own reason, which can
+// name a balance, a note's value or the user's own prover host. A window's answer is re-worded
+// here whatever it says, so nothing the window computed but the code and the hash reaches a page.
 // The origin is always `sender`'s — the page's own message carries no parameters at all except an
 // invoke's or a withdraw's request, which is the thing the user is asked to approve and nothing else. An
 // approval is tied to the address it was given for: import a different wallet and every site is
@@ -46,6 +50,45 @@
   const WORD8_RE = /^(0x)?[0-9a-fA-F]{64}$/;
   /** Phases after which the transaction may have reached the node (ui/engine/execute.js). */
   const ON_THE_WIRE = new Set(['submitting', 'confirming']);
+
+  // lib/site-errors.js `SITE_ERRORS`, copied: this classic script cannot import a module, and
+  // extension/test/site-errors.test.mjs checks the two are equal.
+  const SHARED = {
+    USER_REJECTED: 'The request was not approved in Rand Wallet.',
+    GONE: 'That request is no longer waiting.',
+    LOCKED: 'Rand Wallet is locked.',
+    BAD_REQUEST: 'Rand Wallet could not read that request.',
+    PROVER_UNAVAILABLE: 'Rand Wallet has no prover it can use for this right now, so nothing was sent. Open Rand Wallet to see why.',
+  };
+  const SITE_ERRORS = Object.freeze({
+    withdraw: Object.freeze({
+      ...SHARED,
+      CANNOT_WITHDRAW: 'Rand Wallet cannot make this withdrawal. Open Rand Wallet to see why.',
+      WRONG_CHAIN: 'This request is for a different Rand chain than this wallet is on.',
+      UNAVAILABLE: 'Rand Wallet cannot reach or use the bridge right now. Nothing was sent.',
+      BRIDGE_DISABLED: 'The bridge is off on this Rand chain. Nothing was sent.',
+      PROOF_PENDING: 'An earlier proof is still waiting in Rand Wallet. Open Rand Wallet to resume or cancel it.',
+      UNKNOWN_OUTCOME: 'Rand Wallet could not tell whether the burn was sent. Check its activity before trying again.',
+    }),
+    invoke: Object.freeze({
+      ...SHARED,
+      CANNOT_INVOKE: 'Rand Wallet cannot make this transaction. Open Rand Wallet to see why.',
+      UNSUPPORTED: 'This Rand Wallet cannot run programs.',
+      PROGRAMS_UNSUPPORTED: 'This chain does not run programs yet, so Rand Wallet cannot send this. Nothing was sent.',
+      NO_PROGRAM: 'There is no such program on this chain. Nothing was sent.',
+      STALE_READ: 'The pool changed since this page read it. Nothing was sent; the site can quote again.',
+      PROGRAM_REFUSED: 'The program would not accept this request, so nothing was sent.',
+      VAULT_SHORT: 'The pool does not hold enough to pay this out. Nothing was sent; the site can quote again.',
+      UNKNOWN_OUTCOME: 'Rand Wallet could not tell whether the transaction was sent. Check its activity before trying again.',
+    }),
+  });
+  const CANNOT = { withdraw: 'CANNOT_WITHDRAW', invoke: 'CANNOT_INVOKE' };
+  /** A window's refusal as the site may hear it: a listed code and its sentence, or the catch-all. */
+  function siteError(kind, code) {
+    const table = SITE_ERRORS[kind];
+    const c = typeof code === 'string' && Object.prototype.hasOwnProperty.call(table, code) ? code : CANNOT[kind];
+    return { code: c, message: table[c] };
+  }
 
   const fail = (code, message) => ({ ok: false, error: { code, message } });
   const one = (bag, key) => (bag && Object.prototype.hasOwnProperty.call(bag, key) ? bag[key] : undefined);
@@ -165,7 +208,7 @@
       } catch (err) {
         delete all[invokeId];
         await saveInvokes(all);
-        return fail('UNAVAILABLE', `Rand Wallet could not open its window: ${(err && err.message) || err}`);
+        return fail('UNAVAILABLE', 'Rand Wallet could not open its window. Nothing was sent.');
       }
       if (Number.isInteger(windowId)) {
         const now = await invokes();
@@ -211,14 +254,9 @@
       if (msg.ok === true && msg.result && typeof msg.result.tx === 'string' && WORD8_RE.test(msg.result.tx)) {
         verdict = { ok: true, result: { tx: msg.result.tx.replace(/^0x/, '').toLowerCase() } };
       } else {
-        const e = msg.error || {};
-        verdict = {
-          ok: false,
-          error: {
-            code: typeof e.code === 'string' && /^[A-Z_]{2,32}$/.test(e.code) ? e.code : 'UNKNOWN',
-            message: typeof e.message === 'string' && e.message ? e.message.slice(0, 300) : 'Rand Wallet did not complete the request.',
-          },
-        };
+        // The code, if this kind lists it, and the fixed sentence for it; the window's message is
+        // dropped (see SITE_ERRORS).
+        verdict = { ok: false, error: siteError(kind, (msg.error || {}).code) };
       }
       await settle(invokeId, verdict);
       return { ok: true };
@@ -293,4 +331,5 @@
   }
 
   root.makeRandProviderHost = makeRandProviderHost;
+  root.RAND_SITE_ERRORS = SITE_ERRORS;
 })(globalThis);
