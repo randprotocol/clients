@@ -455,19 +455,30 @@ export function checkGenesisHash(reply) {
  * `rand_getBlockByHeight`, as `rebuildableDeposits` needs it: the *actions* of the block's
  * transactions, each a plain object of bounded size, because every one of them is handed to the
  * wasm core (`rebuilt_deposit`). Nothing raw from a node reaches the core.
+ *
+ * `kinds`, when given, names the only action kinds the caller will read: every other action is
+ * dropped BEFORE its size is measured, so a large action of a kind the wallet never opens cannot
+ * fail the block. Without it (CLI-201) one block holding any action over the cap — a PQ
+ * guardian rotation prints 10 585 to 21 093 characters, no attacker needed — stopped the deposit
+ * walk at that height for good: the walk read the refusal as "the node would not answer", kept
+ * the cursor under the block, and asked for the same block on every scan after. Only an oversize
+ * action of a kind that IS read still refuses, and that cap is the caller's to size for what the
+ * core can take.
  */
-export function checkBlockActions(reply, { maxTransactions = 4096, maxActionChars = 8192 } = {}) {
+export function checkBlockActions(reply, { maxTransactions = 4096, maxActionChars = 8192, kinds = null } = {}) {
   const m = 'rand_getBlockByHeight';
   if (reply === null || reply === undefined) return [];
   if (typeof reply !== 'object' || Array.isArray(reply)) fail(m, t('the reply is not an object'), reply);
   const list = Array.isArray(reply.transactions) ? reply.transactions : [];
   if (list.length > maxTransactions) fail(m, t('the block has {n} transactions', { n: list.length }));
+  const wanted = Array.isArray(kinds) ? new Set(kinds) : null;
   const actions = [];
   for (const tx of list) {
     if (!tx || typeof tx !== 'object') continue;
     const action = tx.action;
     if (!action || typeof action !== 'object' || Array.isArray(action)) continue;
     if (typeof action.kind !== 'string' || action.kind.length > 64) continue;
+    if (wanted && !wanted.has(action.kind)) continue;
     let encoded;
     try { encoded = JSON.stringify(action); } catch { continue; } // a cycle, or something unserialisable
     if (typeof encoded !== 'string' || encoded.length > maxActionChars) {

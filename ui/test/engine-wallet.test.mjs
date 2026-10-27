@@ -441,8 +441,9 @@ test('a block action is size-bounded and re-parsed before it reaches the core', 
     assert.equal(Object.getPrototypeOf(action), Object.prototype, 'the core was handed a non-plain object');
   }
 
-  // An action larger than the cap fails the scan rather than being passed on.
-  const huge = { kind: 'bridge_attest', blob: 'x'.repeat(20000) };
+  // An action of a kind the walk reads that is larger than its cap (DEPOSIT_ACTIONS: 65 536
+  // characters) fails the scan rather than being passed on.
+  const huge = { kind: 'bridge_attest', blob: 'x'.repeat(70000) };
   const big = stubClient({
     head: () => ({ height: 1, hash: HEX64('ab') }),
     bridgeState: () => ({ enabled: true }),
@@ -452,6 +453,23 @@ test('a block action is size-bounded and re-parsed before it reaches the core', 
     () => makeWallet({ core, store: memoryStore(), rpc: () => big, settings: async () => ({}) }).scan(SPEND_KEY, {}),
     (err) => err.name === 'NodeReplyError',
   );
+
+  // CLI-201: an action of any OTHER kind is dropped unread whatever its size — a 21 093-character
+  // guardian rotation in a block used to stop the deposit walk at that height for good.
+  const rotation = { kind: 'bridge_rotate_guardians', keys: new Array(8).fill('k'.repeat(2600)) };
+  assert.ok(JSON.stringify(rotation).length > 8192 && JSON.stringify(rotation).length < 65536);
+  const handed = [];
+  const reading = stubCore({ rebuilt_deposit: ({ action }) => { handed.push(action.kind); return null; } });
+  const withRotation = stubClient({
+    head: () => ({ height: 1, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    blockByHeight: () => ({ height: 0, transactions: [{ action: rotation }, { action: { kind: 'bridge_attest', amount: 5 } }, { action: { kind: 'bridge_attest', blob: 'x'.repeat(20000) } }] }),
+  });
+  const walked = memoryStore();
+  await makeWallet({ core: reading, store: walked, rpc: () => withRotation, settings: async () => ({}), annotate: false }).scan(SPEND_KEY, {});
+  // The stub serves the same block at heights 0 and 1, so the walk reads it twice: two attests each time.
+  assert.deepEqual(handed, ['bridge_attest', 'bridge_attest', 'bridge_attest', 'bridge_attest'], 'the rotation reached the core, or an attest did not');
+  assert.equal(walked.current.scanned_attest_height, 2, 'the walk did not get past the block (the cursor names the next height)');
 });
 
 // =============================================================== fix round 3 ====================

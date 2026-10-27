@@ -257,6 +257,14 @@ const ATTEST_HEADER_PAGE = 1024;
  * several scans, the cursor saved at each.
  */
 const MAX_ATTEST_REQUESTS_PER_SCAN = 96;
+/**
+ * What the deposit walk reads out of a block: the two action kinds `notesOf` opens, and the size
+ * one of them may be before the wallet refuses it. Every other kind is dropped unread, whatever
+ * its size (CLI-201: a 21 093-character guardian rotation stopped the walk for good). The cap is
+ * generous for the two that are read — an attest names one deposit and a burn one payout, a few
+ * hundred characters — and still a bound: the action is handed to the core as JSON.
+ */
+export const DEPOSIT_ACTIONS = Object.freeze({ kinds: Object.freeze(['bridge_attest', 'bridge_burn']), maxActionChars: 65536 });
 
 export function emptyNoteStore() {
   return {
@@ -638,7 +646,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     for (let h = start; h <= last; h++) {
       throwIfAborted(signal);
       // Every action is re-parsed into a plain, size-bounded object before it reaches the core.
-      for (const action of checkBlockActions(await client.blockByHeight(h, { signal }))) {
+      for (const action of checkBlockActions(await client.blockByHeight(h, { signal }), DEPOSIT_ACTIONS)) {
         for (const note of await notesOf(spendKey, action, feeRecipient)) out.set(note.cm, note);
       }
       examined = h;
@@ -700,7 +708,7 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
           throwIfAborted(signal);
           budget -= 1;
           // Every action is re-parsed into a plain, size-bounded object before it reaches the core.
-          const block = await ask(async () => checkBlockActions(await client.blockByHeight(header.height, { signal })));
+          const block = await ask(async () => checkBlockActions(await client.blockByHeight(header.height, { signal }), DEPOSIT_ACTIONS));
           if (block.failed) return { deposits: out, through: examined, unknown: true };
           for (const action of block.value) {
             for (const note of await notesOf(spendKey, action, feeRecipient)) out.set(note.cm, note);

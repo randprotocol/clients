@@ -409,6 +409,25 @@ test('block actions: v0.8.0 kinds (perps, multisig, set_rand_price, aggregate la
   assert.deepEqual(out, actions);
 });
 
+// CLI-201: one action over the cap, of a kind the wallet never reads, stopped the deposit
+// walk at that block for good. With `kinds` the walk drops every other kind unread, whatever its
+// size, and the two it does read get a cap sized for them.
+test('block actions: with `kinds`, a large action of another kind is dropped, not a refusal', () => {
+  const rotation = { kind: 'bridge_rotate_guardians', keys: new Array(8).fill('k'.repeat(2600)) }; // ~21 000 characters
+  const attest = { kind: 'bridge_attest', amount: 5 };
+  const burn = { kind: 'bridge_burn', amount: 7 };
+  const reply = { transactions: [{ action: rotation }, { action: attest }, { action: { kind: 'perp_order', x: 1 } }, { action: burn }] };
+  assert.ok(JSON.stringify(rotation).length > 8192, 'the fixture is not over the default cap');
+  rejects(() => checkBlockActions(reply), /an action is \d+ characters/); // the old reading, still the default without `kinds`
+  assert.deepEqual(checkBlockActions(reply, { kinds: ['bridge_attest', 'bridge_burn'] }), [attest, burn]);
+  // A read kind is still held to the cap it is given.
+  rejects(
+    () => checkBlockActions({ transactions: [{ action: { kind: 'bridge_attest', blob: 'x'.repeat(70000) } }] }, { kinds: ['bridge_attest'], maxActionChars: 65536 }),
+    /an action is 7\d{4} characters, more than 65536/,
+  );
+  assert.equal(checkBlockActions({ transactions: [{ action: { kind: 'bridge_attest', blob: 'x'.repeat(20000) } }] }, { kinds: ['bridge_attest'], maxActionChars: 65536 }).length, 1);
+});
+
 test('a transaction record yields only a validated height', () => {
   assert.equal(checkTransaction(null), null);
   assert.deepEqual(checkTransaction({ height: 7, tx: { anything: true } }), { height: 7 });
