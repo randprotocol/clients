@@ -177,24 +177,30 @@ final class ProverTests: XCTestCase {
     /// The route: the first member that answers with ITS key, no fee, viewing-key jobs and room in
     /// its queue leads; the rest follow. A device that can prove asks nobody; a paired prover wins.
     func testWithNothingPairedTheRouteIsTheFirstMemberThatCanTakeAJob() async throws {
+        // The pinned pool has two members (a and b, since wallet 0.8.1): index no further.
         let members = try ProverPairingService.builtInPool(pool: Self.realPool())
-        let (a, b, c) = (members[0], members[1], members[2])
+        XCTAssertEqual(members.count, 2, "the pinned pool is two members")
+        let (a, b) = (members[0], members[1])
         var asked: [String] = []
+        // a answers with another key (the probe holds a member to its key: unavailable), b can take the job.
         let probe: (ProverPairing) async -> ProverPairingService.Probe = { p in
             asked.append(p.url)
-            // The probe holds a member to its key (ProverPairingService.probe): another key is unavailable.
             if p.url == a.pairing.url { return .unavailable("the prover at that address now has a different key; pair it again") }
-            if p.url == b.pairing.url { return Self.answer(b, depth: 1, max: 1) }
             return Self.answer(members.first { $0.pairing.url == p.url }!)
         }
         let r = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: probe, secret: { nil },
                                                      defaultProver: { members })
         let route = try XCTUnwrap(r, "a fresh wallet that cannot prove had no route")
         XCTAssertTrue(route.isDefault)
-        XCTAssertEqual(route.pairing.url, c.pairing.url)
-        XCTAssertEqual(route.token, c.token)
+        XCTAssertEqual(route.pairing.url, b.pairing.url)
+        XCTAssertEqual(route.token, b.token)
         XCTAssertEqual(route.poolName, "RandProtocol")
-        XCTAssertEqual(route.members.map { $0.pairing.url }, [c, a, b].map { $0.pairing.url } + members.dropFirst(3).map { $0.pairing.url })
+        XCTAssertEqual(route.members.map { $0.pairing.url }, [b, a].map { $0.pairing.url })
+        // a's queue full: skipped the same way, b leads.
+        let full = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: { p in
+            p.url == a.pairing.url ? Self.answer(a, depth: 1, max: 1) : Self.answer(b)
+        }, secret: { nil }, defaultProver: { members })
+        XCTAssertEqual(full?.pairing.url, b.pairing.url)
         asked = []
         let device = try await ProverPairingService.route(deviceCanProve: true, pairing: nil, probe: probe, secret: { nil }, defaultProver: { members })
         XCTAssertNil(device)
