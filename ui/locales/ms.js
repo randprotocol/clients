@@ -1112,4 +1112,5 @@ export default {
   "Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app.": "Hidupkan pembukti RandProtocol dalam Tetapan, pasangkan pembukti anda sendiri, atau hantar dari aplikasi desktop.",
   "Turn the RandProtocol provers on in Settings, or pair your own prover.": "Hidupkan pembukti RandProtocol dalam Tetapan, atau pasangkan pembukti anda sendiri.",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "Peranti ini kehabisan memori semasa membuat bukti. Bukti pemindahan memerlukan kira-kira 6.2 GB dan pelayar memberikan WebAssembly paling banyak 4 GB. Nota anda tidak terjejas.",
+  "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "Tiada satu pun pembukti {pool} yang ditetapkan oleh versi Rand Wallet ini menjawab seperti yang ditetapkan ({reasons}). Kemas kini Rand Wallet ke versi terkini, atau pasangkan pembukti anda sendiri dalam Tetapan.",
 };

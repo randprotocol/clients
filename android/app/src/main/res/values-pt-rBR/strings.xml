@@ -348,6 +348,7 @@
     <string name="pool_member_other_key">%1$s respondeu com uma chave diferente da que esta carteira fixou</string>
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">Não é possível acessar os provadores %1$s agora (%2$s). Tente de novo mais tarde ou pareie seu próprio provador em Configurações.</string>
+    <string name="pool_outdated">Nenhum dos provadores %1$s fixados nesta versão do Rand Wallet respondeu como esperado (%2$s). Atualize o Rand Wallet para a versão mais recente ou pareie seu próprio provador em Configurações.</string>
     <string name="prover_at_no_answer">O provador em %1$s não respondeu: %2$s</string>
     <string name="prover_builtin_key_mismatch">Nenhum dos links de provador da RandProtocol embutidos indica a chave que esta carteira fixou para ele; eles não serão usados.</string>
     <string name="prover_builtin_unusable">Os provadores embutidos não podem ser usados.</string>

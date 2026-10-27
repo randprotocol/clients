@@ -533,7 +533,8 @@
     "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "La prueba de una transferencia la genera tu probador, %@, y tarda uno o dos minutos. Mantén la app abierta mientras tanto.",
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "La prueba de una transferencia la genera uno de los probadores de %@ y tarda uno o dos minutos. Mantén la app abierta mientras tanto.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "Generar la prueba tarda uno o dos minutos. La cadena verá dos anuladores, dos compromisos y una prueba; nunca el monto, el destinatario ni el memo.",
-    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "Uno de los probadores de %@ genera la prueba; este teléfono la verifica antes de enviar nada. Mantén la app abierta: si la cierras se pierde esta prueba y no se envía nada."
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "Uno de los probadores de %@ genera la prueba; este teléfono la verifica antes de enviar nada. Mantén la app abierta: si la cierras se pierde esta prueba y no se envía nada.",
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Ninguno de los probadores de %@ que fija esta versión de Rand Wallet respondió como se esperaba (%@). Actualiza Rand Wallet a la última versión o vincula tu propio probador en Ajustes."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

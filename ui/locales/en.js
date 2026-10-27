@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1110 strings.
+// 1111 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -441,6 +441,7 @@ export default {
   "No such signer profile.": "No such signer profile.",
   "No transaction or block matches that.": "No transaction or block matches that.",
   "no wallet on this device": "no wallet on this device",
+  "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.",
   "None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.": "None of the built-in RandProtocol prover links names the key this wallet pins for it; not using them.",
   "not a key file: {reason}": "not a key file: {reason}",
   "not a number": "not a number",

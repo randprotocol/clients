@@ -1110,4 +1110,5 @@ export default {
   "Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app.": "設定で RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングするか、デスクトップアプリから送信してください。",
   "Turn the RandProtocol provers on in Settings, or pair your own prover.": "設定で RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングしてください。",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "証明中にこの端末のメモリが不足しました。送金の証明には約 6.2 GB が必要ですが、ブラウザが WebAssembly に割り当てられるのは最大 4 GB です。ノートには影響ありません。",
+  "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "この Rand Wallet のバージョンが固定している {pool} のプルーバーは、いずれも固定どおりに応答しませんでした（{reasons}）。Rand Wallet を最新バージョンに更新するか、設定で自分のプルーバーをペアリングしてください。",
 };

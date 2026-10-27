@@ -342,6 +342,7 @@
     <string name="pool_member_other_key">%1$s が、このウォレットが固定している鍵とは別の鍵で応答しました</string>
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">%1$s のプルーバーに現在接続できません（%2$s）。後でもう一度試すか、設定で自分のプルーバーをペアリングしてください。</string>
+    <string name="pool_outdated">この Rand Wallet のバージョンが固定している %1$s のプルーバーは、いずれも固定どおりに応答しませんでした（%2$s）。Rand Wallet を最新バージョンに更新するか、設定で自分のプルーバーをペアリングしてください。</string>
     <string name="prover_at_no_answer">%1$s のプルーバーが応答しませんでした: %2$s</string>
     <string name="prover_builtin_key_mismatch">組み込みの RandProtocol プルーバーのリンクには、このウォレットが固定している鍵を示すものがありません。使用しません。</string>
     <string name="prover_builtin_unusable">組み込みのプルーバーは使用できません。</string>

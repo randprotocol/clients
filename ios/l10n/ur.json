@@ -524,7 +524,8 @@
     "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "منتقلی کا پروف آپ کا پروور، %@، بناتا ہے، جس میں ایک دو منٹ لگتے ہیں۔ اس دوران ایپ کھلی رکھیں۔",
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "منتقلی کا پروف %@ پروورز میں سے ایک بناتا ہے، جس میں ایک دو منٹ لگتے ہیں۔ اس دوران ایپ کھلی رکھیں۔",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "پروف بنانے میں ایک دو منٹ لگتے ہیں۔ چین دو nullifiers، دو commitments اور ایک پروف دیکھے گی — رقم، وصول کنندہ یا میمو کبھی نہیں۔",
-    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "%@ پروورز میں سے ایک پروف بناتا ہے؛ یہ فون کچھ بھی بھیجنے سے پہلے اس کی جانچ کرتا ہے۔ ایپ کھلی رکھیں — اسے بند کرنے سے یہ پروف ضائع ہو جاتا ہے، اور کچھ نہیں بھیجا جاتا۔"
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "%@ پروورز میں سے ایک پروف بناتا ہے؛ یہ فون کچھ بھی بھیجنے سے پہلے اس کی جانچ کرتا ہے۔ ایپ کھلی رکھیں — اسے بند کرنے سے یہ پروف ضائع ہو جاتا ہے، اور کچھ نہیں بھیجا جاتا۔",
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Rand Wallet کے اس ورژن میں مقرر %@ پروورز میں سے کسی نے مقررہ طریقے سے جواب نہیں دیا (%@)۔ Rand Wallet کو تازہ ترین ورژن پر اپ ڈیٹ کریں، یا ترتیبات میں اپنا پروور جوڑیں۔"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

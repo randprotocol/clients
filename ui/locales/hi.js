@@ -1117,4 +1117,5 @@ export default {
   "Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app.": "सेटिंग्स में RandProtocol प्रूवर चालू करें, अपना प्रूवर पेयर करें, या डेस्कटॉप ऐप से भेजें।",
   "Turn the RandProtocol provers on in Settings, or pair your own prover.": "सेटिंग्स में RandProtocol प्रूवर चालू करें, या अपना प्रूवर पेयर करें।",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "प्रूफ़ बनाते समय इस डिवाइस की मेमोरी खत्म हो गई। ट्रांसफ़र प्रूफ़ के लिए लगभग 6.2 GB चाहिए और ब्राउज़र WebAssembly को अधिकतम 4 GB देता है। आपके नोट सुरक्षित हैं।",
+  "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "Rand Wallet के इस संस्करण में तय {pool} प्रूवरों में से किसी ने तय तरीके से जवाब नहीं दिया ({reasons})। Rand Wallet को नवीनतम संस्करण में अपडेट करें, या सेटिंग्स में अपना प्रूवर पेयर करें।",
 };

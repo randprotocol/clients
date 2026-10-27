@@ -521,7 +521,8 @@
     "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "송금은 내 프루버 %@에서 증명되며 1~2분 정도 걸립니다. 진행되는 동안 앱을 열어 두세요.",
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "송금은 %@ 프루버 중 하나에서 증명되며 1~2분 정도 걸립니다. 진행되는 동안 앱을 열어 두세요.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "증명하는 데 1~2분 정도 걸립니다. 체인에는 널리파이어 두 개, 커밋먼트 두 개, 증명 하나만 보이며 금액, 받는 사람, 메모는 절대 보이지 않습니다.",
-    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "증명은 %@ 프루버 중 하나가 만들고, 이 휴대폰은 무엇이든 전송하기 전에 증명을 확인합니다. 앱을 열어 두세요 — 닫으면 이 증명을 잃으며 아무것도 전송되지 않습니다."
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "증명은 %@ 프루버 중 하나가 만들고, 이 휴대폰은 무엇이든 전송하기 전에 증명을 확인합니다. 앱을 열어 두세요 — 닫으면 이 증명을 잃으며 아무것도 전송되지 않습니다.",
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@이 버전의 Rand Wallet이 고정한 %@ 프루버 중 고정된 대로 응답한 것이 없습니다(%@). Rand Wallet을 최신 버전으로 업데이트하거나 설정에서 자체 프루버를 페어링하세요."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

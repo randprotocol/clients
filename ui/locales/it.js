@@ -1117,4 +1117,5 @@ export default {
   "Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app.": "Attiva i prover di RandProtocol nelle Impostazioni, associa un tuo prover, oppure invia dall'app desktop.",
   "Turn the RandProtocol provers on in Settings, or pair your own prover.": "Attiva i prover di RandProtocol nelle Impostazioni, oppure associa un tuo prover.",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "Questo dispositivo ha esaurito la memoria durante la prova. La prova di un trasferimento richiede circa 6.2 GB e un browser concede a WebAssembly al massimo 4 GB. Le tue note sono intatte.",
+  "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "Nessuno dei prover di {pool} fissati da questa versione di Rand Wallet ha risposto come previsto ({reasons}). Aggiorna Rand Wallet all'ultima versione, oppure associa un tuo prover nelle Impostazioni.",
 };

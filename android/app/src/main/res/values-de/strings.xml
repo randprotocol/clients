@@ -345,6 +345,7 @@
     <string name="pool_member_other_key">%1$s hat mit einem anderen Schlüssel geantwortet als dem, den diese Wallet hinterlegt hat</string>
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">Die %1$s-Prover sind gerade nicht erreichbar (%2$s). Versuche es später erneut oder kopple deinen eigenen Prover in den Einstellungen.</string>
+    <string name="pool_outdated">Keiner der %1$s-Prover, die diese Version von Rand Wallet hinterlegt, hat wie hinterlegt geantwortet (%2$s). Aktualisiere Rand Wallet auf die neueste Version oder kopple deinen eigenen Prover in den Einstellungen.</string>
     <string name="prover_at_no_answer">Der Prover unter %1$s hat nicht geantwortet: %2$s</string>
     <string name="prover_builtin_key_mismatch">Keiner der integrierten RandProtocol-Prover-Links nennt den Schlüssel, den diese Wallet dafür hinterlegt hat; sie werden nicht verwendet.</string>
     <string name="prover_builtin_unusable">Die eingebauten Prover können nicht genutzt werden.</string>

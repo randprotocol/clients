@@ -403,6 +403,42 @@ test('canWithdraw and canInvoke carry the pool\'s busy / unreachable flags and i
   }
 });
 
+test('every pinned member gone (no answer, or another key) says to update Rand Wallet, not to try later', async () => {
+  const update = /None of the RandProtocol provers this version of Rand Wallet pins answered as pinned \(.*\)\. Update Rand Wallet to the latest version, or pair your own prover in Settings\./;
+  const cases = [
+    { a: { info: down }, b: { info: down }, c: { info: down } },
+    { a: { info: () => proverInfo('OTHER') }, b: { info: () => proverInfo('OTHER') }, c: { info: () => proverInfo('OTHER') } },
+    { a: { info: down }, b: { info: () => proverInfo('OTHER') }, c: { info: down } },
+  ];
+  for (const members of cases) {
+    const env = await sendableWallet({ fetch: poolFetch({}, members) });
+    await env.backend.prover.acknowledgeDefault();
+    const answer = await env.backend.send.canProve();
+    assert.equal(answer.ok, false);
+    assert.equal(answer.outdated, true);
+    assert.equal(answer.unreachable, true);
+    assert.match(answer.reason, update);
+    assert.doesNotMatch(answer.reason, /Try again later/);
+    const withdraw = await env.backend.bridge.canWithdraw();
+    assert.equal(withdraw.outdated, true);
+    assert.match(withdraw.reason, update);
+  }
+  // Not every member gone — one busy, one refusing at submit: still "cannot be reached right now".
+  const mixed = await sendableWallet({
+    fetch: poolFetch({}, { a: { info: down }, b: { info: () => ({ ...proverInfo(poolMember('b').key), queue: { depth: 1, max: 1, proving: 1 } }) }, c: { info: down } }),
+  });
+  const answer = await mixed.backend.send.canProve();
+  assert.equal(answer.outdated, undefined);
+  assert.match(answer.reason, /cannot be reached right now/);
+  // Busy everywhere stays busy.
+  const busy = await sendableWallet({
+    fetch: poolFetch({}, Object.fromEntries(['a', 'b', 'c'].map((n) => [n, { info: () => ({ ...proverInfo(poolMember(n).key), queue: { depth: 1, max: 1, proving: 1 } }) }]))),
+  });
+  const b = await busy.backend.send.canProve();
+  assert.equal(b.busy, true);
+  assert.equal(b.outdated, undefined);
+});
+
 test('a member whose pinned fingerprint does not match its link is never asked; the others still are', async () => {
   const bad = { ...TRUSTED_POOL, members: TRUSTED_POOL.members.map((m) => (m.name === 'a' ? { ...m, fingerprint: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ' } : m)) };
   const env = await sendableWallet({
@@ -490,7 +526,7 @@ test('with the pool on and away, the browser\'s sentence does not tell the user 
   const env = await sendableWallet({ fetch: poolFetch({}, { a: { info: down }, b: { info: down }, c: { info: down } }) });
   const answer = await env.backend.send.canProve();
   assert.equal(answer.unreachable, true);
-  assert.match(answer.reason, /^This browser cannot make a transfer proof \(it needs about 6\.2 GB\)\. The RandProtocol provers cannot be reached/);
+  assert.match(answer.reason, /^This browser cannot make a transfer proof \(it needs about 6\.2 GB\)\. None of the RandProtocol provers/);
   assert.doesNotMatch(answer.reason, /Turn the RandProtocol provers on/);
 });
 

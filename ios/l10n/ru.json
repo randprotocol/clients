@@ -536,7 +536,8 @@
     "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "Доказательство перевода строит ваш прувер %@, это занимает минуту-две. Не закрывайте приложение, пока оно работает.",
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "Доказательство перевода строит один из пруверов %@, это занимает минуту-две. Не закрывайте приложение, пока оно работает.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "Доказательство строится минуту-две. Сеть увидит два нуллификатора, два коммитмента и доказательство — но никогда не сумму, получателя или мемо.",
-    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "Доказательство строит один из пруверов %@; этот телефон проверяет его, прежде чем что-либо отправить. Не закрывайте приложение — если закрыть его, доказательство пропадёт и ничего не отправится."
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "Доказательство строит один из пруверов %@; этот телефон проверяет его, прежде чем что-либо отправить. Не закрывайте приложение — если закрыть его, доказательство пропадёт и ничего не отправится.",
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Ни один из пруверов %@, закреплённых в этой версии Rand Wallet, не ответил как ожидалось (%@). Обновите Rand Wallet до последней версии или подключите свой прувер в настройках."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

@@ -345,6 +345,7 @@
     <string name="pool_member_other_key">%1$s نے اس کی کے بجائے کسی اور کی سے جواب دیا جو یہ والیٹ اس کے لیے مقرر رکھتا ہے</string>
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">%1$s پروور تک اس وقت رسائی نہیں ہو سکتی (%2$s)۔ بعد میں دوبارہ کوشش کریں، یا ترتیبات میں اپنا پروور جوڑیں۔</string>
+    <string name="pool_outdated">Rand Wallet کے اس ورژن میں مقرر %1$s پروورز میں سے کسی نے مقررہ طریقے سے جواب نہیں دیا (%2$s)۔ Rand Wallet کو تازہ ترین ورژن پر اپ ڈیٹ کریں، یا ترتیبات میں اپنا پروور جوڑیں۔</string>
     <string name="prover_at_no_answer">%1$s پر موجود پروور نے جواب نہیں دیا: %2$s</string>
     <string name="prover_builtin_key_mismatch">RandProtocol کے بلٹ اِن پروور لنکس میں سے کوئی بھی اس کی کا نام نہیں لیتا جو یہ والیٹ اس کے لیے مقرر رکھتا ہے؛ انہیں استعمال نہیں کیا جا رہا۔</string>
     <string name="prover_builtin_unusable">بلٹ اِن پروور استعمال نہیں کیے جا سکتے۔</string>

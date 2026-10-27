@@ -242,24 +242,31 @@ enum ProverPairingService {
         }
     }
 
-    /// Why a member cannot take a job now — `nil` when it can: not answering, another key than its
-    /// pin, a fee, no viewing-key jobs, or a full queue (`busy`).
-    static func notReady(_ m: PoolMember, _ answer: Probe) -> (busy: Bool, reason: String)? {
+    /// Why a member cannot take a job now — `nil` when it can: not answering or another key than
+    /// its pin (`gone`), a fee, no viewing-key jobs, or a full queue (`busy`).
+    static func notReady(_ m: PoolMember, _ answer: Probe) -> PoolWhy? {
         switch answer {
         case .unavailable(let w):
-            return (false, w == keyChangedWarning ? String(localized: "\(m.member) answered with another key than the one this wallet pins") : String(localized: "\(m.member) did not answer"))
+            return (false, true, w == keyChangedWarning ? String(localized: "\(m.member) answered with another key than the one this wallet pins") : String(localized: "\(m.member) did not answer"))
         case .ok(let info):
-            if let fee = feeRefusal(info.fee) { return (false, "\(m.member): \(fee)") }
-            if !info.witnessKinds.contains("viewing_key") { return (false, String(localized: "\(m.member) does not take this wallet's jobs")) }
-            if info.max > 0 && info.depth >= info.max { return (true, String(localized: "\(m.member) is busy")) }
+            if let fee = feeRefusal(info.fee) { return (false, false, "\(m.member): \(fee)") }
+            if !info.witnessKinds.contains("viewing_key") { return (false, false, String(localized: "\(m.member) does not take this wallet's jobs")) }
+            if info.max > 0 && info.depth >= info.max { return (true, false, String(localized: "\(m.member) is busy")) }
             return nil
         }
     }
 
-    /// Every member busy, or none reachable: plainly, with the way out.
-    static func poolUnavailable(lead: String, pool: String, _ whys: [(busy: Bool, reason: String)]) -> ProverRefusal {
+    /// Why one member was passed over: busy, gone (no answer, or another key than its pin), and the words.
+    typealias PoolWhy = (busy: Bool, gone: Bool, reason: String)
+
+    /// Every member busy, or none reachable: plainly, with the way out. Every member pinned in this
+    /// build gone: waiting cannot help (the pool was re-keyed or moved), so it says to update.
+    static func poolUnavailable(lead: String, pool: String, _ whys: [PoolWhy]) -> ProverRefusal {
         if !whys.isEmpty && whys.allSatisfy({ $0.busy }) {
             return ProverRefusal(message: String(localized: "\(lead)The \(pool) provers are all busy right now; try again in a minute, or pair your own prover in Settings."), busy: true)
+        }
+        if !whys.isEmpty && whys.allSatisfy({ $0.gone }) {
+            return ProverRefusal(message: String(localized: "\(lead)None of the \(pool) provers this version of Rand Wallet pins answered as pinned (\(whys.map { $0.reason }.joined(separator: "; "))). Update Rand Wallet to the latest version, or pair your own prover in Settings."))
         }
         return ProverRefusal(message: String(localized: "\(lead)The \(pool) provers cannot be reached right now (\(whys.map { $0.reason }.joined(separator: "; "))). Try again later, or pair your own prover in Settings."))
     }
@@ -274,7 +281,7 @@ enum ProverPairingService {
                              seal: (PoolMember, ProverInfo) async throws -> (sealedHex: String, pending: Any),
                              submit: (PoolMember, String) async throws -> String,
                              poll: (PoolMember, String, Any) async throws -> R) async throws -> R {
-        var whys: [(busy: Bool, reason: String)] = []
+        var whys: [PoolWhy] = []
         for m in members {
             let answer = await probe(m.pairing)
             if let why = notReady(m, answer) { whys.append(why); continue }
@@ -286,7 +293,7 @@ enum ProverPairingService {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                whys.append(((error as? ProverRefusal)?.busy ?? false, "\(m.member): \(error.localizedDescription)"))
+                whys.append(((error as? ProverRefusal)?.busy ?? false, false, "\(m.member): \(error.localizedDescription)"))
                 continue
             }
             return try await poll(m, job, sealed.pending)
@@ -412,7 +419,7 @@ enum ProverPairingService {
             guard let r = n.range(of: " (", options: .backwards) else { return n }
             return String(n[..<r.lowerBound])
         } ?? "RandProtocol"
-        var whys: [(busy: Bool, reason: String)] = []
+        var whys: [PoolWhy] = []
         for (i, m) in members.enumerated() {
             if let why = notReady(m, await probe(m.pairing)) { whys.append(why); continue }
             let ordered = [m] + members.enumerated().filter { $0.offset != i }.map { $0.element }

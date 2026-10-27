@@ -351,6 +351,7 @@
     <string name="pool_member_other_key">%1$s ответил другим ключом, а не тем, который закреплён в этом кошельке</string>
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">С пруверами %1$s сейчас не удаётся связаться (%2$s). Попробуйте позже или подключите свой прувер в настройках.</string>
+    <string name="pool_outdated">Ни один из пруверов %1$s, закреплённых в этой версии Rand Wallet, не ответил как ожидалось (%2$s). Обновите Rand Wallet до последней версии или подключите свой прувер в настройках.</string>
     <string name="prover_at_no_answer">Прувер %1$s не ответил: %2$s</string>
     <string name="prover_builtin_key_mismatch">Ни одна из встроенных ссылок на пруверы RandProtocol не указывает ключ, закреплённый в этом кошельке; они не используются.</string>
     <string name="prover_builtin_unusable">Встроенные пруверы использовать нельзя.</string>

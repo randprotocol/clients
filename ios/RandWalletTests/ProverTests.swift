@@ -224,7 +224,8 @@ final class ProverTests: XCTestCase {
             }, secret: { nil }, defaultProver: { two })
             XCTFail("routed to a pool that is not there")
         } catch {
-            XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. The RandProtocol provers cannot be reached right now (\(two[0].member) did not answer; \(two[1].member) answered with another key than the one this wallet pins). Try again later, or pair your own prover in Settings.")
+            // Every pinned member gone (no answer, another key): update the wallet, not "try later".
+            XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. None of the RandProtocol provers this version of Rand Wallet pins answered as pinned (\(two[0].member) did not answer; \(two[1].member) answered with another key than the one this wallet pins). Update Rand Wallet to the latest version, or pair your own prover in Settings.")
         }
     }
 

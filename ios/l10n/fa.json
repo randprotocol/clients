@@ -521,7 +521,8 @@
     "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "انتقال را اثبات‌گر شما، %@، اثبات می‌کند که یکی دو دقیقه طول می‌کشد. تا پایان کار برنامه را باز نگه دارید.",
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "انتقال را یکی از اثبات‌گرهای %@ اثبات می‌کند که یکی دو دقیقه طول می‌کشد. تا پایان کار برنامه را باز نگه دارید.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "اثبات یکی دو دقیقه طول می‌کشد. شبکه دو نالیفایر، دو تعهد و یک اثبات را می‌بیند — هرگز مبلغ، گیرنده یا یادداشت را نمی‌بیند.",
-    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "یکی از اثبات‌گرهای %@ اثبات را می‌سازد؛ این گوشی پیش از ارسال هر چیزی آن را بررسی می‌کند. برنامه را باز نگه دارید — بستن آن این اثبات را از بین می‌برد و چیزی ارسال نمی‌شود."
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "یکی از اثبات‌گرهای %@ اثبات را می‌سازد؛ این گوشی پیش از ارسال هر چیزی آن را بررسی می‌کند. برنامه را باز نگه دارید — بستن آن این اثبات را از بین می‌برد و چیزی ارسال نمی‌شود.",
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@هیچ‌یک از اثبات‌گرهای %@ که این نسخه‌ی Rand Wallet سنجاق کرده، مطابق آن پاسخ نداد (%@). Rand Wallet را به آخرین نسخه به‌روزرسانی کنید، یا اثبات‌گر خودتان را در تنظیمات جفت کنید."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

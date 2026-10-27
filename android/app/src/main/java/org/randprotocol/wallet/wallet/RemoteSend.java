@@ -76,9 +76,9 @@ public final class RemoteSend {
     static String notReady(ProverCore core, ProverPairing m, ProverPairing.Probe answer) {
         String who = memberOf(m);
         if (!answer.ok()) {
-            return answer.keyChanged
+            return GONE_MARK + (answer.keyChanged
                     ? L10n.t(R.string.pool_member_other_key, "%1$s answered with another key than the one this wallet pins", who)
-                    : L10n.t(R.string.pool_member_no_answer, "%1$s did not answer", who);
+                    : L10n.t(R.string.pool_member_no_answer, "%1$s did not answer", who));
         }
         String fee = ProverClient.feeRefusal(answer.info.fee, core);
         if (fee != null) return L10n.t(R.string.pool_member_reason, "%1$s: %2$s", who, fee);
@@ -88,22 +88,35 @@ public final class RemoteSend {
     }
 
     private static final String BUSY_MARK = "\u0000busy:";
+    /** A member not there as pinned: no answer at its address, or another key there. */
+    private static final String GONE_MARK = "\u0000gone:";
 
     static final String SPEND_KEY_OWN_ONLY = "On this chain a proof needs the spend key, which goes only to a prover paired as your own. "
             + "Pair your own prover in Settings, or send from the rand command-line wallet.";
 
-    /** Every member busy, or none reachable: plainly, with the way out. */
+    /**
+     * Every member busy, or none reachable: plainly, with the way out. Every member pinned in this
+     * build gone (no answer at its address, or another key there): waiting cannot help, so it says
+     * to update Rand Wallet.
+     */
     static ProverClient.Refusal poolUnavailable(String lead, String pool, List<String> whys) {
         boolean allBusy = !whys.isEmpty();
+        boolean allGone = !whys.isEmpty();
         StringBuilder reasons = new StringBuilder();
         for (String w : whys) {
             if (!w.startsWith(BUSY_MARK)) allBusy = false;
+            if (!w.startsWith(GONE_MARK)) allGone = false;
             if (reasons.length() > 0) reasons.append(L10n.t(R.string.list_separator, "; "));
-            reasons.append(w.startsWith(BUSY_MARK) ? w.substring(BUSY_MARK.length()) : w);
+            reasons.append(w.startsWith(BUSY_MARK) ? w.substring(BUSY_MARK.length()) : w.startsWith(GONE_MARK) ? w.substring(GONE_MARK.length()) : w);
         }
         if (allBusy) {
             return new ProverClient.Refusal(lead + L10n.t(R.string.pool_all_busy,
                     "The %1$s provers are all busy right now; try again in a minute, or pair your own prover in Settings.", pool), true);
+        }
+        if (allGone) {
+            return new ProverClient.Refusal(lead + L10n.t(R.string.pool_outdated,
+                    "None of the %1$s provers this version of Rand Wallet pins answered as pinned (%2$s). "
+                            + "Update Rand Wallet to the latest version, or pair your own prover in Settings.", pool, reasons));
         }
         return new ProverClient.Refusal(lead + L10n.t(R.string.pool_unreachable,
                 "The %1$s provers cannot be reached right now (%2$s). Try again later, or pair your own prover in Settings.", pool, reasons));

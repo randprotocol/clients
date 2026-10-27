@@ -521,7 +521,8 @@
     "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "Pemindahan dibuktikan oleh pembukti anda, %@, yang mengambil masa seminit dua. Biarkan aplikasi terbuka semasa ia berjalan.",
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "Pemindahan dibuktikan oleh salah satu pembukti %@, yang mengambil masa seminit dua. Biarkan aplikasi terbuka semasa ia berjalan.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "Pembuktian mengambil masa seminit dua. Rantaian akan melihat dua nullifier, dua komitmen dan satu bukti — tidak sekali-kali amaun, penerima atau memo.",
-    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "Salah satu pembukti %@ membuat bukti; telefon ini menyemaknya sebelum apa-apa dihantar. Biarkan aplikasi terbuka — menutupnya akan menghilangkan bukti ini, dan tiada apa-apa dihantar."
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "Salah satu pembukti %@ membuat bukti; telefon ini menyemaknya sebelum apa-apa dihantar. Biarkan aplikasi terbuka — menutupnya akan menghilangkan bukti ini, dan tiada apa-apa dihantar.",
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Tiada satu pun pembukti %@ yang ditetapkan oleh versi Rand Wallet ini menjawab seperti yang ditetapkan (%@). Kemas kini Rand Wallet ke versi terkini, atau pasangkan pembukti anda sendiri dalam Tetapan."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

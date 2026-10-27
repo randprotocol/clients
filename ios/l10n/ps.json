@@ -542,7 +542,8 @@
     "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "لېږد ستاسو ثبوت جوړوونکی، %@، ثبوت کوي، چې یوه یا دوه دقیقې وخت نیسي. تر هغه چې روان وي، اپ خلاص وساتئ.",
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "لېږد د %@ له ثبوت جوړوونکو څخه یو ثبوت کوي، چې یوه یا دوه دقیقې وخت نیسي. تر هغه چې روان وي، اپ خلاص وساتئ.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "ثبوت جوړول یوه یا دوه دقیقې وخت نیسي. زنځیر به دوه nullifier، دوه commitment او یو ثبوت وویني — هېڅکله اندازه، ترلاسه کوونکی یا یادښت نه.",
-    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "د %@ له ثبوت جوړوونکو څخه یو ثبوت جوړوي؛ دا تلیفون یې مخکې له دې چې څه ولېږل شي، کتل کوي. اپ خلاص وساتئ — بندول یې دا ثبوت له منځه وړي، او هېڅ نه لېږل کېږي."
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "د %@ له ثبوت جوړوونکو څخه یو ثبوت جوړوي؛ دا تلیفون یې مخکې له دې چې څه ولېږل شي، کتل کوي. اپ خلاص وساتئ — بندول یې دا ثبوت له منځه وړي، او هېڅ نه لېږل کېږي.",
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@د Rand Wallet د دې نسخې ټاکل شوو %@ ثبوت جوړوونکو څخه هېڅ یوه د ټاکلې بڼې سره سم ځواب ورنه کړ (%@). Rand Wallet وروستۍ نسخې ته تازه کړئ، یا په امستنو کې خپل ثبوت جوړوونکی جوړه کړئ."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

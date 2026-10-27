@@ -342,6 +342,7 @@
     <string name="pool_member_other_key">%1$s 回應的密鑰與此錢包綁定的不同</string>
     <string name="pool_member_reason">%1$s：%2$s</string>
     <string name="pool_unreachable">目前無法連接 %1$s 證明器（%2$s）。請稍後再試，或在設定中配對你自己的證明器。</string>
+    <string name="pool_outdated">此版本 Rand Wallet 固定的 %1$s 證明器均未按固定資料回應（%2$s）。請將 Rand Wallet 更新至最新版本，或在設定中配對你自己的證明器。</string>
     <string name="prover_at_no_answer">%1$s 的證明器沒有回應：%2$s</string>
     <string name="prover_builtin_key_mismatch">內置的 RandProtocol 證明器連結都沒有列明此錢包所綁定的密鑰；不會使用它們。</string>
     <string name="prover_builtin_unusable">無法使用內置證明器。</string>

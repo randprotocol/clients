@@ -542,7 +542,8 @@
     "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "يُثبِت التحويلَ مُثبِتُك، %@، ويستغرق ذلك دقيقة أو دقيقتين. أبقِ التطبيق مفتوحًا أثناء العمل.",
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "يُثبِت التحويلَ أحدُ مُثبِتات %@، ويستغرق ذلك دقيقة أو دقيقتين. أبقِ التطبيق مفتوحًا أثناء العمل.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "يستغرق الإثبات دقيقة أو دقيقتين. سترى السلسلة مُبطِلين والتزامين وإثباتًا — ولن ترى أبدًا المبلغ ولا المستلم ولا المذكرة.",
-    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "يُعِدّ أحد مُثبِتات %@ الإثبات، ويتحقق منه هذا الهاتف قبل إرسال أي شيء. أبقِ التطبيق مفتوحًا — إغلاقه يُضيع هذا الإثبات، ولا يُرسل شيء."
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "يُعِدّ أحد مُثبِتات %@ الإثبات، ويتحقق منه هذا الهاتف قبل إرسال أي شيء. أبقِ التطبيق مفتوحًا — إغلاقه يُضيع هذا الإثبات، ولا يُرسل شيء.",
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@لم يُجب أيٌّ من مُثبِتات %@ التي يثبّتها هذا الإصدار من Rand Wallet كما هو مثبّت (%@). حدّث Rand Wallet إلى أحدث إصدار، أو اقرن مُثبِتك الخاص في الإعدادات."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

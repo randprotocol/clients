@@ -521,7 +521,8 @@
     "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "转账证明由你的证明器 %@ 生成，需要一两分钟。生成期间请保持应用打开。",
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "转账证明由一台 %@ 证明器生成，需要一两分钟。生成期间请保持应用打开。",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "生成证明需要一两分钟。链上只会看到两个作废符、两个承诺和一个证明——绝不会看到金额、收款人或备注。",
-    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "证明由一台 %@ 证明器生成；这部手机会在发送任何内容之前检查它。请保持应用打开——关闭应用会丢失此证明，且不会发送任何内容。"
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "证明由一台 %@ 证明器生成；这部手机会在发送任何内容之前检查它。请保持应用打开——关闭应用会丢失此证明，且不会发送任何内容。",
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@此版本 Rand Wallet 固定的 %@ 证明器均未按固定信息应答（%@）。请将 Rand Wallet 更新到最新版本，或在设置中配对你自己的证明器。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

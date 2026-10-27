@@ -521,7 +521,8 @@
     "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "送金はあなたのプルーバー %@ が証明し、1〜2分かかります。その間はアプリを開いたままにしてください。",
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "送金は %@ のプルーバーのいずれかが証明し、1〜2分かかります。その間はアプリを開いたままにしてください。",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "証明には1〜2分かかります。チェーンに見えるのは2つのヌリファイア、2つのコミットメント、1つの証明だけで、金額、受取人、メモは決して見えません。",
-    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "証明は %@ のプルーバーのいずれかが作成し、このスマートフォンが何かを送信する前に検証します。アプリを開いたままにしてください — 閉じるとこの証明は失われ、何も送信されません。"
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "証明は %@ のプルーバーのいずれかが作成し、このスマートフォンが何かを送信する前に検証します。アプリを開いたままにしてください — 閉じるとこの証明は失われ、何も送信されません。",
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@この Rand Wallet のバージョンが固定している %@ のプルーバーは、いずれも固定どおりに応答しませんでした（%@）。Rand Wallet を最新バージョンに更新するか、設定で自分のプルーバーをペアリングしてください。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

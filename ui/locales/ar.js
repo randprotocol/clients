@@ -1117,4 +1117,5 @@ export default {
   "Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app.": "شغّل مُثبِتات RandProtocol في الإعدادات، أو اقرن مُثبِتك الخاص، أو أرسل من تطبيق سطح المكتب.",
   "Turn the RandProtocol provers on in Settings, or pair your own prover.": "شغّل مُثبِتات RandProtocol في الإعدادات، أو اقرن مُثبِتك الخاص.",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "نفدت ذاكرة هذا الجهاز أثناء الإثبات. يحتاج إثبات التحويل إلى نحو 6.2 GB، والمتصفح لا يمنح WebAssembly أكثر من 4 GB. سنداتك لم تُمسّ.",
+  "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "لم يُجب أيٌّ من مُثبِتات {pool} التي يثبّتها هذا الإصدار من Rand Wallet كما هو مثبّت ({reasons}). حدّث Rand Wallet إلى أحدث إصدار، أو اقرن مُثبِتك الخاص في الإعدادات.",
 };

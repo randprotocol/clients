@@ -1667,9 +1667,9 @@ export function makeSharedBackend({
       info = readInfo(await proverClientFor(m.url).info(signal ? { signal } : undefined));
     } catch (err) {
       if (err && err.name === 'AbortError') throw err;
-      return { ok: false, reason: t('{member} did not answer', { member: m.member }) };
+      return { ok: false, gone: true, reason: t('{member} did not answer', { member: m.member }) };
     }
-    if (!(await sameProverKey(info, m.kemEk, m.fingerprint))) return { ok: false, reason: t('{member} answered with another key than the one this wallet pins', { member: m.member }) };
+    if (!(await sameProverKey(info, m.kemEk, m.fingerprint))) return { ok: false, gone: true, reason: t('{member} answered with another key than the one this wallet pins', { member: m.member }) };
     const fee = await feeRefusal(info.fee);
     if (fee) return { ok: false, reason: `${m.member}: ${fee}` };
     if (!info.witnessKinds.includes('viewing_key')) return { ok: false, reason: t('{member} does not take this wallet\'s jobs', { member: m.member }) };
@@ -1677,16 +1677,24 @@ export function makeSharedBackend({
     return { ok: true, info };
   }
 
-  /** "Every member is busy" / "none can be reached", plainly, with the way out. */
+  /**
+   * "Every member is busy" / "none can be reached", plainly, with the way out. When EVERY member
+   * pinned in this build is gone — no answer at its address, or another key there — waiting cannot
+   * help (the pool was re-keyed or moved since this release): that says to update Rand Wallet
+   * (`outdated`), not to try later.
+   */
   function poolUnavailable(poolName, results, lead = '') {
     const allBusy = results.length > 0 && results.every((r) => r.busy);
+    const allGone = results.length > 0 && results.every((r) => r.gone);
+    const reasons = results.map((r) => r.reason).join('; ');
     const err = new Error(allBusy
       ? lead + t('The {pool} provers are all busy right now; try again in a minute, or pair your own prover in Settings.', { pool: poolName })
-      : lead + t('The {pool} provers cannot be reached right now ({reasons}). Try again later, or pair your own prover in Settings.', {
-        pool: poolName, reasons: results.map((r) => r.reason).join('; '),
-      }));
+      : allGone
+        ? lead + t('None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.', { pool: poolName, reasons })
+        : lead + t('The {pool} provers cannot be reached right now ({reasons}). Try again later, or pair your own prover in Settings.', { pool: poolName, reasons }));
     err.definite = true;
     if (allBusy) err.busy = true; else err.unreachable = true;
+    if (allGone) err.outdated = true;
     return err;
   }
 
@@ -1923,7 +1931,7 @@ export function makeSharedBackend({
     }
     if (first < 0) {
       const err = poolUnavailable(members[0].pool, results, lead);
-      return { answer: { ok: false, ...(err.busy ? { busy: true } : { unreachable: true }), provers: total, reason: err.message } };
+      return { answer: { ok: false, ...(err.busy ? { busy: true } : { unreachable: true }), ...(err.outdated ? { outdated: true } : {}), provers: total, reason: err.message } };
     }
     // Firefox: the user's consent to send the viewing key to the developer's service is part of
     // the notice — until it is given, the notice stands (its button asks for it).
@@ -2096,6 +2104,7 @@ export function makeSharedBackend({
       reason: (prove && prove.reason) || t('Proving is not available here.'),
       ...(prove && prove.unreachable ? { unreachable: true } : {}),
       ...(prove && prove.busy ? { busy: true } : {}),
+      ...(prove && prove.outdated ? { outdated: true } : {}),
       ...(prove && Number.isSafeInteger(prove.provers) ? { provers: prove.provers } : {}),
     };
   }

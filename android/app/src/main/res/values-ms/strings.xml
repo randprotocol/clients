@@ -345,6 +345,7 @@
     <string name="pool_member_other_key">%1$s menjawab dengan kunci yang berlainan daripada kunci yang ditetapkan oleh dompet ini</string>
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">Pembukti %1$s tidak dapat dicapai sekarang (%2$s). Cuba lagi kemudian, atau pasangkan pembukti anda sendiri dalam Tetapan.</string>
+    <string name="pool_outdated">Tiada satu pun pembukti %1$s yang ditetapkan oleh versi Rand Wallet ini menjawab seperti yang ditetapkan (%2$s). Kemas kini Rand Wallet ke versi terkini, atau pasangkan pembukti anda sendiri dalam Tetapan.</string>
     <string name="prover_at_no_answer">Pembukti di %1$s tidak menjawab: %2$s</string>
     <string name="prover_builtin_key_mismatch">Tiada satu pun pautan pembukti RandProtocol terbina dalam menamakan kunci yang ditetapkan oleh dompet ini untuknya; pautan itu tidak digunakan.</string>
     <string name="prover_builtin_unusable">Pembukti terbina dalam tidak dapat digunakan.</string>

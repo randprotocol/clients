@@ -1110,8 +1110,10 @@ public class ProverTest {
             RemoteSend.route(false, null, core, probeWith(core, mixed), () -> null, inOrder(core, "a", "b"));
             fail("routed to a pool that is not there");
         } catch (ProverClient.Refusal e) {
-            assertEquals("This device does not have the memory for this proof. The RandProtocol provers cannot be reached right now "
-                    + "(a did not answer; b answered with another key than the one this wallet pins). Try again later, or pair your own prover in Settings.",
+            // Every pinned member gone (no answer, another key): update the wallet, not "try later".
+            assertEquals("This device does not have the memory for this proof. None of the RandProtocol provers this version of Rand Wallet pins "
+                    + "answered as pinned (a did not answer; b answered with another key than the one this wallet pins). "
+                    + "Update Rand Wallet to the latest version, or pair your own prover in Settings.",
                     e.getMessage());
             assertFalse(e.busy);
         }

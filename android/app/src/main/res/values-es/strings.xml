@@ -348,6 +348,7 @@
     <string name="pool_member_other_key">%1$s respondió con una clave distinta de la que esta billetera tiene fijada</string>
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">No se puede conectar con los probadores de %1$s en este momento (%2$s). Inténtalo más tarde o vincula tu propio probador en Ajustes.</string>
+    <string name="pool_outdated">Ninguno de los probadores de %1$s que fija esta versión de Rand Wallet respondió como se esperaba (%2$s). Actualiza Rand Wallet a la última versión o vincula tu propio probador en Ajustes.</string>
     <string name="prover_at_no_answer">El probador en %1$s no respondió: %2$s</string>
     <string name="prover_builtin_key_mismatch">Ninguno de los enlaces de probador de RandProtocol incluidos indica la clave que esta billetera tiene fijada para él; no se usan.</string>
     <string name="prover_builtin_unusable">No se pueden usar los probadores incluidos.</string>

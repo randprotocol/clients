@@ -345,6 +345,7 @@
     <string name="pool_member_other_key">%1$s ने उस की के बजाय किसी दूसरी की से जवाब दिया जिसे यह वॉलेट पिन करता है</string>
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">%1$s प्रूवर तक अभी पहुँचा नहीं जा सकता (%2$s)। बाद में फिर से कोशिश करें, या सेटिंग्स में अपना खुद का प्रूवर पेयर करें।</string>
+    <string name="pool_outdated">Rand Wallet के इस संस्करण में तय %1$s प्रूवरों में से किसी ने तय तरीके से जवाब नहीं दिया (%2$s)। Rand Wallet को नवीनतम संस्करण में अपडेट करें, या सेटिंग्स में अपना प्रूवर पेयर करें।</string>
     <string name="prover_at_no_answer">%1$s पर मौजूद प्रूवर ने जवाब नहीं दिया: %2$s</string>
     <string name="prover_builtin_key_mismatch">बिल्ट-इन RandProtocol प्रूवर लिंक में से कोई भी वह की नहीं बताता जिसे यह वॉलेट उसके लिए पिन करता है; उनका उपयोग नहीं किया जा रहा।</string>
     <string name="prover_builtin_unusable">बिल्ट-इन प्रूवर इस्तेमाल नहीं किए जा सकते।</string>
