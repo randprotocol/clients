@@ -378,6 +378,7 @@
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">The %1$s provers cannot be reached right now (%2$s). Try again later, or pair your own prover in Settings.</string>
     <string name="pool_outdated">None of the %1$s provers this version of Rand Wallet pins answered as pinned (%2$s). Update Rand Wallet to the latest version, or pair your own prover in Settings.</string>
+    <string name="pool_offline">This device seems to be offline: none of the %1$s provers can be reached (%2$s). Check its internet connection, then try again.</string>
 
     <!-- prover -->
     <string name="prover_at_no_answer">The prover at %1$s did not answer: %2$s</string>

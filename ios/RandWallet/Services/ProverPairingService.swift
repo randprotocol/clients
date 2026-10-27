@@ -100,6 +100,8 @@ enum ProverPairingService {
     enum Probe: Equatable {
         case ok(ProverInfo)
         case unavailable(String)
+        /// No HTTP answer at all (the connection failed or timed out) — what an offline device sees.
+        case unreachable(String)
     }
 
     static func parse(_ link: String) throws -> ParsedLink {
@@ -209,7 +211,9 @@ enum ProverPairingService {
         do {
             info = try await ProverClient(url: pairing.url, session: session).info()
         } catch {
-            return .unavailable(String(localized: "the prover at \(pairing.url) did not answer (\(error.localizedDescription))"))
+            let why = String(localized: "the prover at \(pairing.url) did not answer (\(error.localizedDescription))")
+            let failure = (error as? ProverError)?.failure
+            return failure == .connect || failure == .timeout ? .unreachable(why) : .unavailable(why)
         }
         guard sameKey(info, kemEk: pairing.kemEk, fingerprint: pairing.fingerprint) else {
             return .unavailable(keyChangedWarning)
@@ -247,25 +251,41 @@ enum ProverPairingService {
     static func notReady(_ m: PoolMember, _ answer: Probe) -> PoolWhy? {
         switch answer {
         case .unavailable(let w):
-            return (false, true, w == keyChangedWarning ? String(localized: "\(m.member) answered with another key than the one this wallet pins") : String(localized: "\(m.member) did not answer"))
+            if w == keyChangedWarning { return PoolWhy(gone: true, wrongKey: true, reason: String(localized: "\(m.member) answered with another key than the one this wallet pins")) }
+            return PoolWhy(gone: true, reason: String(localized: "\(m.member) did not answer"))
+        case .unreachable:
+            return PoolWhy(gone: true, network: true, reason: String(localized: "\(m.member) did not answer"))
         case .ok(let info):
-            if let fee = feeRefusal(info.fee) { return (false, false, "\(m.member): \(fee)") }
-            if !info.witnessKinds.contains("viewing_key") { return (false, false, String(localized: "\(m.member) does not take this wallet's jobs")) }
-            if info.max > 0 && info.depth >= info.max { return (true, false, String(localized: "\(m.member) is busy")) }
+            if let fee = feeRefusal(info.fee) { return PoolWhy(reason: "\(m.member): \(fee)") }
+            if !info.witnessKinds.contains("viewing_key") { return PoolWhy(reason: String(localized: "\(m.member) does not take this wallet's jobs")) }
+            if info.max > 0 && info.depth >= info.max { return PoolWhy(busy: true, reason: String(localized: "\(m.member) is busy")) }
             return nil
         }
     }
 
-    /// Why one member was passed over: busy, gone (no answer, or another key than its pin), and the words.
-    typealias PoolWhy = (busy: Bool, gone: Bool, reason: String)
+    /// Why one member was passed over: busy; gone (not there as pinned) because it answered with
+    /// another key than its pin (`wrongKey`), gave no HTTP answer at all (`network`), or answered
+    /// as something else; and the words.
+    struct PoolWhy {
+        var busy = false
+        var gone = false
+        var wrongKey = false
+        var network = false
+        var reason: String
+    }
 
-    /// Every member busy, or none reachable: plainly, with the way out. Every member pinned in this
-    /// build gone: waiting cannot help (the pool was re-keyed or moved), so it says to update.
+    /// Every member busy, or none reachable: plainly, with the way out. When every member pinned in
+    /// this build is gone, the cause decides the sentence: one answered with ANOTHER KEY than its
+    /// pin (this build's pins are stale) — update Rand Wallet; none gave any HTTP answer (the phone
+    /// is offline, or has no route) — check the connection; otherwise — try again later.
     static func poolUnavailable(lead: String, pool: String, _ whys: [PoolWhy]) -> ProverRefusal {
         if !whys.isEmpty && whys.allSatisfy({ $0.busy }) {
             return ProverRefusal(message: String(localized: "\(lead)The \(pool) provers are all busy right now; try again in a minute, or pair your own prover in Settings."), busy: true)
         }
-        if !whys.isEmpty && whys.allSatisfy({ $0.gone }) {
+        if !whys.isEmpty && whys.allSatisfy({ $0.network }) {
+            return ProverRefusal(message: String(localized: "\(lead)This device seems to be offline: none of the \(pool) provers can be reached (\(whys.map { $0.reason }.joined(separator: "; "))). Check its internet connection, then try again."))
+        }
+        if !whys.isEmpty && whys.allSatisfy({ $0.gone }) && whys.contains(where: { $0.wrongKey }) {
             return ProverRefusal(message: String(localized: "\(lead)None of the \(pool) provers this version of Rand Wallet pins answered as pinned (\(whys.map { $0.reason }.joined(separator: "; "))). Update Rand Wallet to the latest version, or pair your own prover in Settings."))
         }
         return ProverRefusal(message: String(localized: "\(lead)The \(pool) provers cannot be reached right now (\(whys.map { $0.reason }.joined(separator: "; "))). Try again later, or pair your own prover in Settings."))
@@ -293,7 +313,7 @@ enum ProverPairingService {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                whys.append(((error as? ProverRefusal)?.busy ?? false, false, "\(m.member): \(error.localizedDescription)"))
+                whys.append(PoolWhy(busy: (error as? ProverRefusal)?.busy ?? false, reason: "\(m.member): \(error.localizedDescription)"))
                 continue
             }
             return try await poll(m, job, sealed.pending)
@@ -389,7 +409,7 @@ enum ProverPairingService {
         let reason = String(localized: "This device does not have the memory for this proof.")
         let why: String?
         switch await probe(p) {
-        case .unavailable(let w):
+        case .unavailable(let w), .unreachable(let w):
             why = w
         case .ok(let info):
             if let fee = feeRefusal(info.fee) {
@@ -487,7 +507,7 @@ enum ProverPairingService {
         case .ok(let info):
             let max = info.max > 0 ? String(localized: " of \(info.max)") : ""
             return String(localized: "Answering · \(info.depth)\(max) in its queue.")
-        case .unavailable(let why):
+        case .unavailable(let why), .unreachable(let why):
             var w = why
             if w.hasSuffix(".") { w.removeLast() }
             return String(localized: "Not answering: \(w).")

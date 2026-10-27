@@ -349,6 +349,7 @@
     <string name="pool_member_reason">%1$s : %2$s</string>
     <string name="pool_unreachable">Impossible de joindre les prouveurs %1$s pour le moment (%2$s). Réessayez plus tard, ou associez votre propre prouveur dans les Paramètres.</string>
     <string name="pool_outdated">Aucun des prouveurs %1$s que cette version de Rand Wallet épingle n\'a répondu comme prévu (%2$s). Mettez à jour Rand Wallet vers la dernière version, ou associez votre propre prouveur dans les Paramètres.</string>
+    <string name="pool_offline">Cet appareil semble hors ligne : aucun des prouveurs %1$s n\'est joignable (%2$s). Vérifiez sa connexion Internet, puis réessayez.</string>
     <string name="prover_at_no_answer">Le prouveur à %1$s n\'a pas répondu : %2$s</string>
     <string name="prover_builtin_key_mismatch">Aucun des liens de prouveur RandProtocol intégrés n\'indique la clé que ce portefeuille a enregistrée pour lui ; ils ne sont pas utilisés.</string>
     <string name="prover_builtin_unusable">Les prouveurs intégrés ne peuvent pas être utilisés.</string>

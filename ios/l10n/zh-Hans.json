@@ -525,7 +525,8 @@
     "Fee: %@ RAND · at most %@ RAND · expires at height %@": "手续费：%1$@ RAND · 最多 %2$@ RAND · 在高度 %3$@ 过期",
     "Highest fee this signer accepts, in RAND": "此签名人接受的最高手续费（RAND）",
     "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "手续费 %1$@ RAND 高于此签名人允许的上限（%2$@ RAND），因此此提案不会签名。请提高签名人的手续费上限，或索取新的提案。",
-    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "手续费 %1$@ RAND 高于此提案支付的 %2$@ RAND，因此此提案不会签名。"
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "手续费 %1$@ RAND 高于此提案支付的 %2$@ RAND，因此此提案不会签名。",
+    "%@This device seems to be offline: none of the %@ provers can be reached (%@). Check its internet connection, then try again.": "%1$@此设备似乎处于离线状态：无法连接任何 %2$@ 证明器（%3$@）。请检查其网络连接，然后重试。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

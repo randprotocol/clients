@@ -358,6 +358,7 @@
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">تعذّر الوصول إلى مُثبِتات %1$s الآن (%2$s). حاول لاحقًا، أو اقرن مُثبِتك الخاص في الإعدادات.</string>
     <string name="pool_outdated">لم يُجب أيٌّ من مُثبِتات %1$s التي يثبّتها هذا الإصدار من Rand Wallet كما هو مثبّت (%2$s). حدّث Rand Wallet إلى أحدث إصدار، أو اقرن مُثبِتك الخاص في الإعدادات.</string>
+    <string name="pool_offline">يبدو أن هذا الجهاز غير متصل بالإنترنت: تعذّر الوصول إلى أيٍّ من مُثبِتات %1$s (%2$s). تحقّق من اتصاله بالإنترنت، ثم حاول مجددًا.</string>
     <string name="prover_at_no_answer">لم يُجب المُثبِت على %1$s: %2$s</string>
     <string name="prover_builtin_key_mismatch">لا يذكر أي من روابط مُثبِتات RandProtocol المدمجة المفتاح الذي تثبّته هذه المحفظة له، لذا لن تُستخدم.</string>
     <string name="prover_builtin_unusable">لا يمكن استخدام المُثبِتات المدمجة.</string>

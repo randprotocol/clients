@@ -76,9 +76,9 @@ public final class RemoteSend {
     static String notReady(ProverCore core, ProverPairing m, ProverPairing.Probe answer) {
         String who = memberOf(m);
         if (!answer.ok()) {
-            return GONE_MARK + (answer.keyChanged
-                    ? L10n.t(R.string.pool_member_other_key, "%1$s answered with another key than the one this wallet pins", who)
-                    : L10n.t(R.string.pool_member_no_answer, "%1$s did not answer", who));
+            return answer.keyChanged
+                    ? KEY_MARK + L10n.t(R.string.pool_member_other_key, "%1$s answered with another key than the one this wallet pins", who)
+                    : (answer.network ? NET_MARK : GONE_MARK) + L10n.t(R.string.pool_member_no_answer, "%1$s did not answer", who);
         }
         String fee = ProverClient.feeRefusal(answer.info.fee, core);
         if (fee != null) return L10n.t(R.string.pool_member_reason, "%1$s: %2$s", who, fee);
@@ -88,32 +88,49 @@ public final class RemoteSend {
     }
 
     private static final String BUSY_MARK = "\u0000busy:";
-    /** A member not there as pinned: no answer at its address, or another key there. */
+    /** A member not there as pinned. GONE: an answer that is not its prover (an HTTP error, no
+     *  JSON-RPC); NET: no HTTP answer at all (connect or timeout); KEY: another key than its pin. */
     private static final String GONE_MARK = "\u0000gone:";
+    private static final String NET_MARK = "\u0000gnet:";
+    private static final String KEY_MARK = "\u0000gkey:";
+
+    private static String unmarked(String w) {
+        for (String m : new String[] {BUSY_MARK, GONE_MARK, NET_MARK, KEY_MARK}) if (w.startsWith(m)) return w.substring(m.length());
+        return w;
+    }
 
     static final String SPEND_KEY_OWN_ONLY = "On this chain a proof needs the spend key, which goes only to a prover paired as your own. "
             + "Pair your own prover in Settings, or send from the rand command-line wallet.";
 
     /**
-     * Every member busy, or none reachable: plainly, with the way out. Every member pinned in this
-     * build gone (no answer at its address, or another key there): waiting cannot help, so it says
-     * to update Rand Wallet.
+     * Every member busy, or none reachable: plainly, with the way out. When every member pinned in
+     * this build is gone, the cause decides the sentence: one answered with ANOTHER KEY than its
+     * pin (this build's pins are stale) — update Rand Wallet; none gave any HTTP answer (the phone
+     * is offline, or has no route) — check the connection; otherwise — try again later.
      */
     static ProverClient.Refusal poolUnavailable(String lead, String pool, List<String> whys) {
         boolean allBusy = !whys.isEmpty();
         boolean allGone = !whys.isEmpty();
+        boolean allNet = !whys.isEmpty();
+        boolean anyKey = false;
         StringBuilder reasons = new StringBuilder();
         for (String w : whys) {
             if (!w.startsWith(BUSY_MARK)) allBusy = false;
-            if (!w.startsWith(GONE_MARK)) allGone = false;
+            if (!(w.startsWith(GONE_MARK) || w.startsWith(NET_MARK) || w.startsWith(KEY_MARK))) allGone = false;
+            if (!w.startsWith(NET_MARK)) allNet = false;
+            if (w.startsWith(KEY_MARK)) anyKey = true;
             if (reasons.length() > 0) reasons.append(L10n.t(R.string.list_separator, "; "));
-            reasons.append(w.startsWith(BUSY_MARK) ? w.substring(BUSY_MARK.length()) : w.startsWith(GONE_MARK) ? w.substring(GONE_MARK.length()) : w);
+            reasons.append(unmarked(w));
         }
         if (allBusy) {
             return new ProverClient.Refusal(lead + L10n.t(R.string.pool_all_busy,
                     "The %1$s provers are all busy right now; try again in a minute, or pair your own prover in Settings.", pool), true);
         }
-        if (allGone) {
+        if (allNet) {
+            return new ProverClient.Refusal(lead + L10n.t(R.string.pool_offline,
+                    "This device seems to be offline: none of the %1$s provers can be reached (%2$s). Check its internet connection, then try again.", pool, reasons));
+        }
+        if (allGone && anyKey) {
             return new ProverClient.Refusal(lead + L10n.t(R.string.pool_outdated,
                     "None of the %1$s provers this version of Rand Wallet pins answered as pinned (%2$s). "
                             + "Update Rand Wallet to the latest version, or pair your own prover in Settings.", pool, reasons));
@@ -246,7 +263,7 @@ public final class RemoteSend {
             try {
                 answer = new ProverPairing.Probe(prover.client().info(), null);
             } catch (ProverClient.ProverError e) {
-                answer = new ProverPairing.Probe(null, "did not answer", false);
+                answer = new ProverPairing.Probe(null, "did not answer", false, ProverPairing.Probe.isNetwork(e));
             }
             if (answer.ok() && !ProverPairing.sameKey(core, answer.info, m.pairing.kemEk, m.pairing.fingerprint)) {
                 answer = new ProverPairing.Probe(null, "different key", true);

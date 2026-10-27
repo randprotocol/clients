@@ -1119,6 +1119,34 @@ public class ProverTest {
         }
     }
 
+    /** Every member gone: another key on one says update; no HTTP answer from any says offline; else later. */
+    @Test
+    public void everyMemberGoneSaysUpdateOnlyForAnotherKeyOfflineWithNoAnswerElseLater() throws Exception {
+        FakeCore core = new FakeCore().withTrustedProver();
+        PoolTransport offline = new PoolTransport()
+                .member("a", (x, p) -> { throw new IOException("Unable to resolve host"); })
+                .member("b", (x, p) -> { throw new IOException("Unable to resolve host"); });
+        try {
+            RemoteSend.route(false, null, core, probeWith(core, offline), () -> null, inOrder(core, "a", "b"));
+            fail("routed with no network");
+        } catch (ProverClient.Refusal e) {
+            assertEquals("This device does not have the memory for this proof. This device seems to be offline: none of the RandProtocol provers can be reached "
+                    + "(a did not answer; b did not answer). Check its internet connection, then try again.", e.getMessage());
+            assertFalse(e.busy);
+        }
+        PoolTransport away = new PoolTransport()
+                .member("a", (x, p) -> new Reply(404, "not found"))
+                .member("b", (x, p) -> { throw new IOException("connection refused"); });
+        try {
+            RemoteSend.route(false, null, core, probeWith(core, away), () -> null, inOrder(core, "a", "b"));
+            fail("routed to a pool that is away");
+        } catch (ProverClient.Refusal e) {
+            assertEquals("This device does not have the memory for this proof. The RandProtocol provers cannot be reached right now "
+                    + "(a did not answer; b did not answer). Try again later, or pair your own prover in Settings.", e.getMessage());
+            assertFalse(e.getMessage().contains("Update Rand Wallet"));
+        }
+    }
+
     @Test
     public void provePoolSkipsABusySubmitAndPollsOnlyTheMemberThatTookTheJob() throws Exception {
         FakeCore core = new FakeCore().withTrustedProver();

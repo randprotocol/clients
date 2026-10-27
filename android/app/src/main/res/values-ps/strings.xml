@@ -346,6 +346,7 @@
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">د %1$s ثبوت جوړوونکو ته اوس لاسرسی نشته (%2$s). وروسته بیا هڅه وکړئ، یا په امستنو کې خپل ثبوت جوړوونکی جوړه کړئ.</string>
     <string name="pool_outdated">د Rand Wallet د دې نسخې ټاکل شوو %1$s ثبوت جوړوونکو څخه هېڅ یوه د ټاکلې بڼې سره سم ځواب ورنه کړ (%2$s). Rand Wallet وروستۍ نسخې ته تازه کړئ، یا په امستنو کې خپل ثبوت جوړوونکی جوړه کړئ.</string>
+    <string name="pool_offline">داسې ښکاري چې دا وسیله آفلاین ده: د %1$s هېڅ ثبوت جوړوونکي ته رسېدل نه کېږي (%2$s). د هغې انټرنېټ اړیکه وګورئ، بیا هڅه وکړئ.</string>
     <string name="prover_at_no_answer">په %1$s کې ثبوت جوړوونکي ځواب ونه ورکړ: %2$s</string>
     <string name="prover_builtin_key_mismatch">د RandProtocol د جوړ شوي ثبوت جوړوونکي له لینکونو څخه هېڅ یو هغه کیلي نه نوموي چې دا والټ یې ورته ټاکلې؛ نه کارول کېږي.</string>
     <string name="prover_builtin_unusable">جوړ شوي ثبوت جوړوونکي نشي کارول کېدای.</string>

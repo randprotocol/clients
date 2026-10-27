@@ -1111,4 +1111,5 @@ export default {
   "Turn the RandProtocol provers on in Settings, or pair your own prover.": "請在設定中開啟 RandProtocol 證明器，或配對你自己的證明器。",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "此裝置在生成證明時記憶體不足。轉帳證明需要約 6.2 GB，而瀏覽器最多只給 WebAssembly 4 GB。你的票據不受影響。",
   "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "此版本 Rand Wallet 固定的 {pool} 證明器均未按固定資料回應（{reasons}）。請將 Rand Wallet 更新至最新版本，或在設定中配對你自己的證明器。",
+  "This device seems to be offline: none of the {pool} provers can be reached ({reasons}). Check its internet connection, then try again.": "此裝置似乎已離線：無法連接任何 {pool} 證明器（{reasons}）。請檢查其互聯網連線，然後再試。",
 };

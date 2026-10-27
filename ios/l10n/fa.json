@@ -525,7 +525,8 @@
     "Fee: %@ RAND · at most %@ RAND · expires at height %@": "کارمزد: %1$@ RAND · حداکثر %2$@ RAND · در ارتفاع %3$@ منقضی می‌شود",
     "Highest fee this signer accepts, in RAND": "بیشترین کارمزدی که این امضاکننده می‌پذیرد، به RAND",
     "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "کارمزد %1$@ RAND بیشتر از حدی است که این امضاکننده اجازه می‌دهد (%2$@ RAND)، پس این پیشنهاد امضا نمی‌شود. حد کارمزد امضاکننده را بالا ببرید یا پیشنهاد تازه‌ای بخواهید.",
-    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "کارمزد %1$@ RAND بیشتر از %2$@ RAND است که این پیشنهاد پرداخت می‌کند، پس این پیشنهاد امضا نمی‌شود."
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "کارمزد %1$@ RAND بیشتر از %2$@ RAND است که این پیشنهاد پرداخت می‌کند، پس این پیشنهاد امضا نمی‌شود.",
+    "%@This device seems to be offline: none of the %@ provers can be reached (%@). Check its internet connection, then try again.": "%1$@به نظر می‌رسد این دستگاه آفلاین است: به هیچ‌یک از اثبات‌گرهای %2$@ دسترسی نیست (%3$@). اتصال اینترنت آن را بررسی کنید، سپس دوباره امتحان کنید."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

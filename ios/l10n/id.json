@@ -525,7 +525,8 @@
     "Fee: %@ RAND · at most %@ RAND · expires at height %@": "Biaya: %1$@ RAND · paling banyak %2$@ RAND · kedaluwarsa pada ketinggian %3$@",
     "Highest fee this signer accepts, in RAND": "Biaya tertinggi yang diterima penanda tangan ini, dalam RAND",
     "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "Biaya %1$@ RAND lebih besar daripada yang diizinkan penanda tangan ini (%2$@ RAND), sehingga proposal ini tidak ditandatangani. Naikkan batas biaya penanda tangan atau minta proposal baru.",
-    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "Biaya %1$@ RAND lebih besar daripada %2$@ RAND yang dibayarkan proposal ini, sehingga proposal ini tidak ditandatangani."
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "Biaya %1$@ RAND lebih besar daripada %2$@ RAND yang dibayarkan proposal ini, sehingga proposal ini tidak ditandatangani.",
+    "%@This device seems to be offline: none of the %@ provers can be reached (%@). Check its internet connection, then try again.": "%1$@Perangkat ini tampaknya sedang offline: tidak satu pun prover %2$@ dapat dijangkau (%3$@). Periksa koneksi internetnya, lalu coba lagi."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

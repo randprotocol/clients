@@ -233,6 +233,24 @@ final class ProverTests: XCTestCase {
             // Every pinned member gone (no answer, another key): update the wallet, not "try later".
             XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. None of the RandProtocol provers this version of Rand Wallet pins answered as pinned (\(two[0].member) did not answer; \(two[1].member) answered with another key than the one this wallet pins). Update Rand Wallet to the latest version, or pair your own prover in Settings.")
         }
+        // No HTTP answer from any member (the phone is offline, or has no route): check the connection.
+        do {
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: { p in
+                .unreachable("the prover at \(p.url) did not answer (The Internet connection appears to be offline.)")
+            }, secret: { nil }, defaultProver: { two })
+            XCTFail("routed with no network")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. This device seems to be offline: none of the RandProtocol provers can be reached (\(two[0].member) did not answer; \(two[1].member) did not answer). Check its internet connection, then try again.")
+        }
+        // Answered, but not as a prover (an HTTP error), beside no answer: away right now — not update, not offline.
+        do {
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: { p in
+                p.url == two[0].pairing.url ? .unavailable("the prover at \(p.url) did not answer (HTTP 404)") : .unreachable("the prover at \(p.url) did not answer (refused)")
+            }, secret: { nil }, defaultProver: { two })
+            XCTFail("routed to a pool that is away")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "This device does not have the memory for this proof. The RandProtocol provers cannot be reached right now (\(two[0].member) did not answer; \(two[1].member) did not answer). Try again later, or pair your own prover in Settings.")
+        }
     }
 
     /// One job: a member busy at submit is skipped for the next, re-sealed for it; only the member

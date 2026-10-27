@@ -525,7 +525,8 @@
     "Fee: %@ RAND · at most %@ RAND · expires at height %@": "수수료: %1$@ RAND · 최대 %2$@ RAND · 높이 %3$@에서 만료",
     "Highest fee this signer accepts, in RAND": "이 서명자가 받아들이는 최대 수수료(RAND)",
     "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "수수료 %1$@ RAND가 이 서명자가 허용하는 한도(%2$@ RAND)보다 많으므로 이 제안에는 서명하지 않습니다. 서명자의 수수료 한도를 올리거나 새 제안을 요청하세요.",
-    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "수수료 %1$@ RAND가 이 제안이 지급하는 %2$@ RAND보다 많으므로 이 제안에는 서명하지 않습니다."
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "수수료 %1$@ RAND가 이 제안이 지급하는 %2$@ RAND보다 많으므로 이 제안에는 서명하지 않습니다.",
+    "%@This device seems to be offline: none of the %@ provers can be reached (%@). Check its internet connection, then try again.": "%1$@이 기기가 오프라인인 것 같습니다. %2$@ 프루버 중 어디에도 연결할 수 없습니다(%3$@). 인터넷 연결을 확인한 다음 다시 시도하세요."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

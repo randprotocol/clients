@@ -1116,4 +1116,5 @@ export default {
   "Turn the RandProtocol provers on in Settings, or pair your own prover.": "Включите пруверы RandProtocol в настройках или подключите свой прувер.",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "Этому устройству не хватило памяти для построения доказательства. Доказательству перевода нужно около 6.2 GB, а браузер выделяет WebAssembly не более 4 GB. Ваши ноты не затронуты.",
   "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "Ни один из пруверов {pool}, закреплённых в этой версии Rand Wallet, не ответил как ожидалось ({reasons}). Обновите Rand Wallet до последней версии или подключите свой прувер в настройках.",
+  "This device seems to be offline: none of the {pool} provers can be reached ({reasons}). Check its internet connection, then try again.": "Похоже, это устройство не в сети: ни с одним из пруверов {pool} не удаётся связаться ({reasons}). Проверьте подключение к интернету и попробуйте снова.",
 };

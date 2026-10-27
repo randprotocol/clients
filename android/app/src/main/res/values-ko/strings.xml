@@ -343,6 +343,7 @@
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">지금 %1$s 프루버에 연결할 수 없습니다(%2$s). 나중에 다시 시도하거나 설정에서 자체 프루버를 페어링하세요.</string>
     <string name="pool_outdated">이 버전의 Rand Wallet이 고정한 %1$s 프루버 중 고정된 대로 응답한 것이 없습니다(%2$s). Rand Wallet을 최신 버전으로 업데이트하거나 설정에서 자체 프루버를 페어링하세요.</string>
+    <string name="pool_offline">이 기기가 오프라인인 것 같습니다. %1$s 프루버 중 어디에도 연결할 수 없습니다(%2$s). 인터넷 연결을 확인한 다음 다시 시도하세요.</string>
     <string name="prover_at_no_answer">%1$s의 프루버가 응답하지 않았습니다: %2$s</string>
     <string name="prover_builtin_key_mismatch">내장된 RandProtocol 프루버 링크 중 이 지갑이 고정한 키를 지정한 것이 없어 사용하지 않습니다.</string>
     <string name="prover_builtin_unusable">내장 프루버를 사용할 수 없습니다.</string>

@@ -1118,4 +1118,5 @@ export default {
   "Turn the RandProtocol provers on in Settings, or pair your own prover.": "په امستنو کې د RandProtocol ثبوت جوړوونکي چالان کړئ، یا خپل ثبوت جوړوونکی جوړه کړئ.",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "دې وسیلې د ثابتولو پر مهال حافظه له لاسه ورکړه. د لېږدونې ثبوت شاوخوا 6.2 GB ته اړتیا لري او براوزر WebAssembly ته تر ډېره 4 GB ورکوي. ستاسو نوټونو ته لاس نه دی وروړل شوی.",
   "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "د Rand Wallet د دې نسخې ټاکل شوو {pool} ثبوت جوړوونکو څخه هېڅ یوه د ټاکلې بڼې سره سم ځواب ورنه کړ ({reasons}). Rand Wallet وروستۍ نسخې ته تازه کړئ، یا په امستنو کې خپل ثبوت جوړوونکی جوړه کړئ.",
+  "This device seems to be offline: none of the {pool} provers can be reached ({reasons}). Check its internet connection, then try again.": "داسې ښکاري چې دا وسیله آفلاین ده: د {pool} هېڅ ثبوت جوړوونکي ته رسېدل نه کېږي ({reasons}). د هغې انټرنېټ اړیکه وګورئ، بیا هڅه وکړئ.",
 };

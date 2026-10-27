@@ -352,6 +352,7 @@
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">Nie można teraz połączyć się z proverami %1$s (%2$s). Spróbuj później lub sparuj własny prover w Ustawieniach.</string>
     <string name="pool_outdated">Żaden z proverów %1$s zapisanych w tej wersji Rand Wallet nie odpowiedział zgodnie z zapisem (%2$s). Zaktualizuj Rand Wallet do najnowszej wersji lub sparuj własny prover w Ustawieniach.</string>
+    <string name="pool_offline">To urządzenie wydaje się być offline: nie można połączyć się z żadnym z proverów %1$s (%2$s). Sprawdź jego połączenie z internetem i spróbuj ponownie.</string>
     <string name="prover_at_no_answer">Prover pod adresem %1$s nie odpowiedział: %2$s</string>
     <string name="prover_builtin_key_mismatch">Żaden z wbudowanych linków do proverów RandProtocol nie wskazuje klucza, który ten portfel do niego przypisuje; nie są używane.</string>
     <string name="prover_builtin_unusable">Nie można użyć wbudowanych proverów.</string>

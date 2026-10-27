@@ -343,6 +343,7 @@
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">Prover %1$s tidak dapat dijangkau saat ini (%2$s). Coba lagi nanti, atau pasangkan prover Anda sendiri di Pengaturan.</string>
     <string name="pool_outdated">Tidak satu pun prover %1$s yang dipatok versi Rand Wallet ini menjawab sesuai patokan (%2$s). Perbarui Rand Wallet ke versi terbaru, atau pasangkan prover Anda sendiri di Pengaturan.</string>
+    <string name="pool_offline">Perangkat ini tampaknya sedang offline: tidak satu pun prover %1$s dapat dijangkau (%2$s). Periksa koneksi internetnya, lalu coba lagi.</string>
     <string name="prover_at_no_answer">Prover di %1$s tidak menjawab: %2$s</string>
     <string name="prover_builtin_key_mismatch">Tidak satu pun tautan prover RandProtocol bawaan menyebutkan kunci yang disematkan dompet ini; tautan itu tidak digunakan.</string>
     <string name="prover_builtin_unusable">Prover bawaan tidak dapat digunakan.</string>

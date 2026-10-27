@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1111 strings.
+// 1112 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -941,6 +941,7 @@ export default {
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.",
   "This device proves the swap. It takes a few minutes.": "This device proves the swap. It takes a few minutes.",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.",
+  "This device seems to be offline: none of the {pool} provers can be reached ({reasons}). Check its internet connection, then try again.": "This device seems to be offline: none of the {pool} provers can be reached ({reasons}). Check its internet connection, then try again.",
   "This device, or where it cannot · {name} provers": "This device, or where it cannot · {name} provers",
   "This forgets the notes and history read from the old chain and reads this node from the start. Your keys and your password are not touched.": "This forgets the notes and history read from the old chain and reads this node from the start. Your keys and your password are not touched.",
   "This key can spend your funds": "This key can spend your funds",

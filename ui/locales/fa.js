@@ -1119,4 +1119,5 @@ export default {
   "Turn the RandProtocol provers on in Settings, or pair your own prover.": "اثبات‌گرهای RandProtocol را در تنظیمات روشن کنید، یا اثبات‌گر خودتان را جفت کنید.",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "حافظه‌ی این دستگاه هنگام اثبات تمام شد. اثبات انتقال به حدود 6.2 GB نیاز دارد و مرورگر حداکثر 4 GB به WebAssembly می‌دهد. نوت‌های شما دست نخورده‌اند.",
   "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "هیچ‌یک از اثبات‌گرهای {pool} که این نسخه‌ی Rand Wallet سنجاق کرده، مطابق آن پاسخ نداد ({reasons}). Rand Wallet را به آخرین نسخه به‌روزرسانی کنید، یا اثبات‌گر خودتان را در تنظیمات جفت کنید.",
+  "This device seems to be offline: none of the {pool} provers can be reached ({reasons}). Check its internet connection, then try again.": "به نظر می‌رسد این دستگاه آفلاین است: به هیچ‌یک از اثبات‌گرهای {pool} دسترسی نیست ({reasons}). اتصال اینترنت آن را بررسی کنید، سپس دوباره امتحان کنید.",
 };

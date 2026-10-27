@@ -1667,9 +1667,12 @@ export function makeSharedBackend({
       info = readInfo(await proverClientFor(m.url).info(signal ? { signal } : undefined));
     } catch (err) {
       if (err && err.name === 'AbortError') throw err;
-      return { ok: false, gone: true, reason: t('{member} did not answer', { member: m.member }) };
+      // `network`: no HTTP answer at all (the connection failed or timed out) — what a device
+      // that is offline sees; an HTTP error or a body that is not JSON-RPC is a server answering.
+      const network = !!err && (err.failure === 'connect' || err.failure === 'timeout');
+      return { ok: false, gone: true, network, reason: t('{member} did not answer', { member: m.member }) };
     }
-    if (!(await sameProverKey(info, m.kemEk, m.fingerprint))) return { ok: false, gone: true, reason: t('{member} answered with another key than the one this wallet pins', { member: m.member }) };
+    if (!(await sameProverKey(info, m.kemEk, m.fingerprint))) return { ok: false, gone: true, wrongKey: true, reason: t('{member} answered with another key than the one this wallet pins', { member: m.member }) };
     const fee = await feeRefusal(info.fee);
     if (fee) return { ok: false, reason: `${m.member}: ${fee}` };
     if (!info.witnessKinds.includes('viewing_key')) return { ok: false, reason: t('{member} does not take this wallet\'s jobs', { member: m.member }) };
@@ -1678,23 +1681,44 @@ export function makeSharedBackend({
   }
 
   /**
-   * "Every member is busy" / "none can be reached", plainly, with the way out. When EVERY member
-   * pinned in this build is gone — no answer at its address, or another key there — waiting cannot
-   * help (the pool was re-keyed or moved since this release): that says to update Rand Wallet
-   * (`outdated`), not to try later.
+   * Whether this device says it is online: the platform's own answer (`platform.isOnline`, a test
+   * seam and a shell's choice), else the browser's `navigator.onLine`; `null` when neither knows.
+   */
+  function deviceOnline() {
+    try {
+      if (platform && typeof platform.isOnline === 'function') return platform.isOnline() !== false;
+    } catch { /* unknown */ }
+    const nav = globalThis.navigator;
+    return nav && typeof nav.onLine === 'boolean' ? nav.onLine : null;
+  }
+
+  /**
+   * "Every member is busy" / "none can be reached", plainly, with the way out. When every member
+   * pinned in this build is gone (no answer, or another key) the cause decides the sentence:
+   * - one answered with ANOTHER KEY than its pin — proof this build's pins are stale: update Rand
+   *   Wallet (`outdated`);
+   * - this device is offline (it says so, or — when it cannot say — no member gave any HTTP
+   *   answer): check the connection (`offline`);
+   * - otherwise the members are away right now: try again later.
    */
   function poolUnavailable(poolName, results, lead = '') {
     const allBusy = results.length > 0 && results.every((r) => r.busy);
     const allGone = results.length > 0 && results.every((r) => r.gone);
+    const outdated = allGone && results.some((r) => r.wrongKey);
+    const online = allGone && !outdated ? deviceOnline() : null;
+    const offline = allGone && !outdated && (online === false || (online === null && results.every((r) => r.network)));
     const reasons = results.map((r) => r.reason).join('; ');
     const err = new Error(allBusy
       ? lead + t('The {pool} provers are all busy right now; try again in a minute, or pair your own prover in Settings.', { pool: poolName })
-      : allGone
+      : outdated
         ? lead + t('None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.', { pool: poolName, reasons })
-        : lead + t('The {pool} provers cannot be reached right now ({reasons}). Try again later, or pair your own prover in Settings.', { pool: poolName, reasons }));
+        : offline
+          ? lead + t('This device seems to be offline: none of the {pool} provers can be reached ({reasons}). Check its internet connection, then try again.', { pool: poolName, reasons })
+          : lead + t('The {pool} provers cannot be reached right now ({reasons}). Try again later, or pair your own prover in Settings.', { pool: poolName, reasons }));
     err.definite = true;
     if (allBusy) err.busy = true; else err.unreachable = true;
-    if (allGone) err.outdated = true;
+    if (outdated) err.outdated = true;
+    if (offline) err.offline = true;
     return err;
   }
 
@@ -1931,7 +1955,7 @@ export function makeSharedBackend({
     }
     if (first < 0) {
       const err = poolUnavailable(members[0].pool, results, lead);
-      return { answer: { ok: false, ...(err.busy ? { busy: true } : { unreachable: true }), ...(err.outdated ? { outdated: true } : {}), provers: total, reason: err.message } };
+      return { answer: { ok: false, ...(err.busy ? { busy: true } : { unreachable: true }), ...(err.outdated ? { outdated: true } : {}), ...(err.offline ? { offline: true } : {}), provers: total, reason: err.message } };
     }
     // Firefox: the user's consent to send the viewing key to the developer's service is part of
     // the notice — until it is given, the notice stands (its button asks for it).
@@ -2105,6 +2129,7 @@ export function makeSharedBackend({
       ...(prove && prove.unreachable ? { unreachable: true } : {}),
       ...(prove && prove.busy ? { busy: true } : {}),
       ...(prove && prove.outdated ? { outdated: true } : {}),
+      ...(prove && prove.offline ? { offline: true } : {}),
       ...(prove && Number.isSafeInteger(prove.provers) ? { provers: prove.provers } : {}),
     };
   }

@@ -47,12 +47,13 @@ function sendableFetch(table = {}) {
   });
 }
 
-function build({ core, storage, fetch, native, systemMemoryGiB, locks = null, memberOrder } = {}) {
+function build({ core, storage, fetch, native, systemMemoryGiB, locks = null, memberOrder, online } = {}) {
   const env = {
     core: core || stubCore(),
     storage: storage || mapStorage(),
     fetch: fetch || sendableFetch(),
-    platform: stubPlatform(),
+    // `online`: what the device says (platform.isOnline); left out, the device cannot say.
+    platform: { ...stubPlatform(), ...(online === undefined ? {} : { isOnline: () => online }) },
   };
   const make = native ? makeNativeBackend : makeWasmBackend;
   env.backend = make({
@@ -254,6 +255,8 @@ function poolFetch(table = {}, members = {}) {
     if (m) {
       inner.requests.push({ url, body, raw: init.body });
       const spec = members[m.name] || {};
+      // `http`: the member's server answers with that HTTP status and no JSON-RPC (a 404, say).
+      if (spec.http) return { ok: false, status: spec.http, json: async () => { throw new SyntaxError('not JSON'); } };
       const reply = (result) => ({ ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, result }) });
       const refuse = (err) => ({ ok: true, status: 200, json: async () => ({ jsonrpc: '2.0', id: body.id, error: { code: err.code ?? -32000, message: err.message, ...(err.data ? { data: err.data } : {}) } }) });
       try {
@@ -403,32 +406,46 @@ test('canWithdraw and canInvoke carry the pool\'s busy / unreachable flags and i
   }
 });
 
-test('every pinned member gone (no answer, or another key) says to update Rand Wallet, not to try later', async () => {
+test('every pinned member gone: another key on one says update, an offline device says check the connection, else try later', async () => {
   const update = /None of the RandProtocol provers this version of Rand Wallet pins answered as pinned \(.*\)\. Update Rand Wallet to the latest version, or pair your own prover in Settings\./;
+  const offline = /This device seems to be offline: none of the RandProtocol provers can be reached \(.*\)\. Check its internet connection, then try again\./;
+  const later = /The RandProtocol provers cannot be reached right now \(.*\)\. Try again later, or pair your own prover in Settings\./;
+  const other = () => proverInfo('OTHER');
   const cases = [
-    { a: { info: down }, b: { info: down }, c: { info: down } },
-    { a: { info: () => proverInfo('OTHER') }, b: { info: () => proverInfo('OTHER') }, c: { info: () => proverInfo('OTHER') } },
-    { a: { info: down }, b: { info: () => proverInfo('OTHER') }, c: { info: down } },
+    // At least one member answered with a key that is not its pin: this build is stale.
+    { members: { a: { info: other }, b: { info: other }, c: { info: other } }, want: update, flag: 'outdated' },
+    { members: { a: { info: down }, b: { info: other }, c: { info: down } }, want: update, flag: 'outdated' },
+    { members: { a: { info: down }, b: { info: other }, c: { info: down } }, online: false, want: update, flag: 'outdated' },
+    // Offline: the device says so, or (when it cannot say) no member gave any HTTP answer.
+    { members: { a: { info: down }, b: { info: down }, c: { info: down } }, online: false, want: offline, flag: 'offline' },
+    { members: { a: { info: down }, b: { info: down }, c: { info: down } }, want: offline, flag: 'offline' },
+    { members: { a: { http: 404 }, b: { http: 404 }, c: { info: down } }, online: false, want: offline, flag: 'offline' },
+    // Online, and nobody answers (connection refused, or a 404): the provers are away right now.
+    { members: { a: { info: down }, b: { info: down }, c: { info: down } }, online: true, want: later, flag: null },
+    { members: { a: { http: 404 }, b: { http: 404 }, c: { http: 503 } }, want: later, flag: null },
+    { members: { a: { http: 404 }, b: { info: down }, c: { info: down } }, want: later, flag: null },
   ];
-  for (const members of cases) {
-    const env = await sendableWallet({ fetch: poolFetch({}, members) });
+  for (const { members, online, want, flag } of cases) {
+    const env = await sendableWallet({ fetch: poolFetch({}, members), online });
     await env.backend.prover.acknowledgeDefault();
+    const label = JSON.stringify({ members: Object.fromEntries(Object.entries(members).map(([k, v]) => [k, v.http || (v.info === down ? 'down' : 'other')])), online });
     const answer = await env.backend.send.canProve();
-    assert.equal(answer.ok, false);
-    assert.equal(answer.outdated, true);
-    assert.equal(answer.unreachable, true);
-    assert.match(answer.reason, update);
-    assert.doesNotMatch(answer.reason, /Try again later/);
+    assert.equal(answer.ok, false, label);
+    assert.equal(answer.unreachable, true, label);
+    assert.match(answer.reason, want, label);
+    for (const f of ['outdated', 'offline']) assert.equal(answer[f], f === flag ? true : undefined, `${label}: ${f}`);
+    if (flag !== 'outdated') assert.doesNotMatch(answer.reason, /Update Rand Wallet/, label);
     const withdraw = await env.backend.bridge.canWithdraw();
-    assert.equal(withdraw.outdated, true);
-    assert.match(withdraw.reason, update);
+    assert.match(withdraw.reason, want, label);
+    if (flag) assert.equal(withdraw[flag], true, label);
   }
-  // Not every member gone — one busy, one refusing at submit: still "cannot be reached right now".
+  // Not every member gone — one busy: still "cannot be reached right now", never update or offline.
   const mixed = await sendableWallet({
     fetch: poolFetch({}, { a: { info: down }, b: { info: () => ({ ...proverInfo(poolMember('b').key), queue: { depth: 1, max: 1, proving: 1 } }) }, c: { info: down } }),
   });
   const answer = await mixed.backend.send.canProve();
   assert.equal(answer.outdated, undefined);
+  assert.equal(answer.offline, undefined);
   assert.match(answer.reason, /cannot be reached right now/);
   // Busy everywhere stays busy.
   const busy = await sendableWallet({
@@ -526,7 +543,7 @@ test('with the pool on and away, the browser\'s sentence does not tell the user 
   const env = await sendableWallet({ fetch: poolFetch({}, { a: { info: down }, b: { info: down }, c: { info: down } }) });
   const answer = await env.backend.send.canProve();
   assert.equal(answer.unreachable, true);
-  assert.match(answer.reason, /^This browser cannot make a transfer proof \(it needs about 6\.2 GB\)\. None of the RandProtocol provers/);
+  assert.match(answer.reason, /^This browser cannot make a transfer proof \(it needs about 6\.2 GB\)\. This device seems to be offline/);
   assert.doesNotMatch(answer.reason, /Turn the RandProtocol provers on/);
 });
 

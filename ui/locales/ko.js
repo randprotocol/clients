@@ -1111,4 +1111,5 @@ export default {
   "Turn the RandProtocol provers on in Settings, or pair your own prover.": "설정에서 RandProtocol 프루버를 켜거나 자체 프루버를 페어링하세요.",
   "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "증명하는 중에 이 기기의 메모리가 부족해졌습니다. 송금 증명에는 약 6.2 GB가 필요한데, 브라우저는 WebAssembly에 최대 4 GB만 제공합니다. 노트는 그대로입니다.",
   "None of the {pool} provers this version of Rand Wallet pins answered as pinned ({reasons}). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "이 버전의 Rand Wallet이 고정한 {pool} 프루버 중 고정된 대로 응답한 것이 없습니다({reasons}). Rand Wallet을 최신 버전으로 업데이트하거나 설정에서 자체 프루버를 페어링하세요.",
+  "This device seems to be offline: none of the {pool} provers can be reached ({reasons}). Check its internet connection, then try again.": "이 기기가 오프라인인 것 같습니다. {pool} 프루버 중 어디에도 연결할 수 없습니다({reasons}). 인터넷 연결을 확인한 다음 다시 시도하세요.",
 };

@@ -525,7 +525,8 @@
     "Fee: %@ RAND · at most %@ RAND · expires at height %@": "手数料: %1$@ RAND · 上限 %2$@ RAND · 高さ %3$@ で期限切れ",
     "Highest fee this signer accepts, in RAND": "この署名者が受け入れる手数料の上限（RAND）",
     "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "手数料 %1$@ RAND がこの署名者の許容額（%2$@ RAND）を上回るため、この提案には署名しません。署名者の手数料上限を上げるか、新しい提案を依頼してください。",
-    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "手数料 %1$@ RAND がこの提案の支払額 %2$@ RAND を上回るため、この提案には署名しません。"
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "手数料 %1$@ RAND がこの提案の支払額 %2$@ RAND を上回るため、この提案には署名しません。",
+    "%@This device seems to be offline: none of the %@ provers can be reached (%@). Check its internet connection, then try again.": "%1$@この端末はオフラインのようです。%2$@ のプルーバーのいずれにも接続できません（%3$@）。インターネット接続を確認してから、もう一度試してください。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

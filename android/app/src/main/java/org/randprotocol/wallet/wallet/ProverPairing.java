@@ -113,15 +113,29 @@ public final class ProverPairing {
         public final String reason;
         /** The prover answered, with another key than the pairing's (the reason's words are the user's language). */
         public final boolean keyChanged;
+        /** No HTTP answer at all: the connection failed or timed out — what an offline device sees. */
+        public final boolean network;
 
         Probe(ProverClient.Info info, String reason) {
             this(info, reason, reason != null && reason.contains("different key"));
         }
 
         Probe(ProverClient.Info info, String reason, boolean keyChanged) {
+            this(info, reason, keyChanged, false);
+        }
+
+        Probe(ProverClient.Info info, String reason, boolean keyChanged, boolean network) {
             this.info = info;
             this.reason = reason;
             this.keyChanged = keyChanged;
+            this.network = network;
+        }
+
+        /** Whether {@code e} is a failure with no HTTP answer (connect or timeout). */
+        static boolean isNetwork(Exception e) {
+            if (!(e instanceof ProverClient.ProverError)) return false;
+            String f = ((ProverClient.ProverError) e).failure;
+            return "connect".equals(f) || "timeout".equals(f);
         }
 
         public boolean ok() {
@@ -221,7 +235,7 @@ public final class ProverPairing {
         try {
             info = new ProverClient(pairing.url, transport).info();
         } catch (Exception e) {
-            return new Probe(null, L10n.t(R.string.prover_probe_no_answer, "the prover at %1$s did not answer (%2$s)", pairing.url, e.getMessage()), false);
+            return new Probe(null, L10n.t(R.string.prover_probe_no_answer, "the prover at %1$s did not answer (%2$s)", pairing.url, e.getMessage()), false, Probe.isNetwork(e));
         }
         if (!sameKey(core, info, pairing.kemEk, pairing.fingerprint)) {
             return new Probe(null, L10n.t(R.string.prover_probe_key_changed, "the prover at that address now has a different key; pair it again"), true);

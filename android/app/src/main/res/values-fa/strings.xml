@@ -346,6 +346,7 @@
     <string name="pool_member_reason">%1$s: %2$s</string>
     <string name="pool_unreachable">اکنون دسترسی به اثبات‌گرهای %1$s ممکن نیست (%2$s). بعداً دوباره امتحان کنید، یا اثبات‌گر خودتان را در تنظیمات جفت کنید.</string>
     <string name="pool_outdated">هیچ‌یک از اثبات‌گرهای %1$s که این نسخه‌ی Rand Wallet سنجاق کرده، مطابق آن پاسخ نداد (%2$s). Rand Wallet را به آخرین نسخه به‌روزرسانی کنید، یا اثبات‌گر خودتان را در تنظیمات جفت کنید.</string>
+    <string name="pool_offline">به نظر می‌رسد این دستگاه آفلاین است: به هیچ‌یک از اثبات‌گرهای %1$s دسترسی نیست (%2$s). اتصال اینترنت آن را بررسی کنید، سپس دوباره امتحان کنید.</string>
     <string name="prover_at_no_answer">اثبات‌گر در %1$s پاسخ نداد: %2$s</string>
     <string name="prover_builtin_key_mismatch">هیچ‌یک از لینک‌های داخلی اثبات‌گر RandProtocol کلیدی را که این کیف پول برای آن ثبت کرده نام نمی‌برد؛ از آن‌ها استفاده نمی‌شود.</string>
     <string name="prover_builtin_unusable">از اثبات‌گرهای داخلی نمی‌توان استفاده کرد.</string>

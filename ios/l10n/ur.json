@@ -528,7 +528,8 @@
     "Fee: %@ RAND · at most %@ RAND · expires at height %@": "فیس: %1$@ RAND · زیادہ سے زیادہ %2$@ RAND · اونچائی %3$@ پر ختم",
     "Highest fee this signer accepts, in RAND": "سب سے زیادہ فیس جو یہ دستخط کنندہ قبول کرتا ہے، RAND میں",
     "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "%1$@ RAND کی فیس اس دستخط کنندہ کی اجازت (%2$@ RAND) سے زیادہ ہے، اس لیے اس تجویز پر دستخط نہیں کیے گئے۔ دستخط کنندہ کی فیس کی حد بڑھائیں یا نئی تجویز مانگیں۔",
-    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "%1$@ RAND کی فیس اُن %2$@ RAND سے زیادہ ہے جو یہ تجویز ادا کرتی ہے، اس لیے اس تجویز پر دستخط نہیں کیے گئے۔"
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "%1$@ RAND کی فیس اُن %2$@ RAND سے زیادہ ہے جو یہ تجویز ادا کرتی ہے، اس لیے اس تجویز پر دستخط نہیں کیے گئے۔",
+    "%@This device seems to be offline: none of the %@ provers can be reached (%@). Check its internet connection, then try again.": "%1$@لگتا ہے یہ ڈیوائس آف لائن ہے: %2$@ پروورز میں سے کسی تک رسائی نہیں ہو رہی (%3$@)۔ اس کا انٹرنیٹ کنکشن چیک کریں، پھر دوبارہ کوشش کریں۔"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",
