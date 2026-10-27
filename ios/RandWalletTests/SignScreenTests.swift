@@ -18,7 +18,9 @@ final class SignScreenTests: XCTestCase {
     private func verdict(_ s: MsauthSummary, head: UInt64? = 1, recipients: [String] = ["rand1payee:5"]) -> MsauthVerdict {
         MsauthRules.verdict(summary: s, head: head, chainId: 13, genesis: genesis, url: "http://node", recipients: recipients)
     }
-    private let rand5: [String: Any] = ["to_account": false, "amount": "5", "asset": 0, "owner_fingerprint": "G", "matches": "GGGG (5 RAND)"]
+    // 5 RAND, in base units as the core's summary writes them (and its own `matches` says): the
+    // summary's 0.001 RAND fee is within the default limit and below the payment (MSC-2).
+    private let rand5: [String: Any] = ["to_account": false, "amount": "5000000000", "asset": 0, "owner_fingerprint": "G", "matches": "GGGG (5 RAND)"]
     private let token: [String: Any] = ["to_account": false, "amount": "5", "asset": 7, "owner_fingerprint": "F", "matches": "FFFF"]
 
     // MARK: final fix wave: a dust token does not unpin its payee's RAND
