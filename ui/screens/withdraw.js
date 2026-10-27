@@ -543,7 +543,7 @@ registerScreen('withdraw', {
     if (!live()) return;
 
     if (!can.ok) {
-      endOfTheRoad(can.unreachable
+      endOfTheRoad(can.unreachable || can.busy
         ? proverUnreachableMarkup(can.reason, can.busy)
         : cannotMarkup(t('This device cannot withdraw'), can.reason || t('Withdrawals are not available here.')));
       return;

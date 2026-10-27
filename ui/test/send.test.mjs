@@ -188,6 +188,19 @@ test('the RandProtocol prover not answering is said plainly, with Settings one t
   assert.equal(root.querySelector('[data-role="use-own-prover"]').getAttribute('data-go'), 'settings');
 });
 
+test('a busy pool shows the pool\'s busy banner, not "this device cannot prove"', async (t) => {
+  const reason = 'The RandProtocol provers are all busy right now; try again in a minute, or pair your own prover in Settings.';
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: false, busy: true, provers: 2, reason }) } });
+  const { root } = await review(t, b);
+  assertGone(root.querySelector('[data-action="prove"]'), 'the prove button while the pool is busy');
+  const box = root.querySelector('[data-role="prover-unreachable"]');
+  assert.ok(box, 'no pool banner for a busy pool');
+  assert.match(box.textContent, /The RandProtocol provers are busy/);
+  assert.ok(box.textContent.includes(reason));
+  assert.doesNotMatch(root.textContent, /This device cannot prove the transfer/);
+  assert.equal(root.querySelector('[data-role="use-own-prover"]').getAttribute('data-go'), 'settings');
+});
+
 test('a shell that can prove walks the phases and lands on sent', async (t) => {
   const phases = [];
   const b = unlockedBackend({

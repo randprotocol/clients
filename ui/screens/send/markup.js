@@ -288,7 +288,9 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
     : '';
   const footer = canProve.ok && canProve.notice
     ? raw(proverNoticeMarkup(canProve.provers))
-    : !canProve.ok && canProve.unreachable
+    // The pool answering "all busy" carries `busy` and not `unreachable` (defaultRoute): both are
+    // the pool's own banner, never "this device cannot prove".
+    : !canProve.ok && (canProve.unreachable || canProve.busy)
       ? raw(proverUnreachableMarkup(canProve.reason, canProve.busy))
       : canProve.ok
     ? raw(h`

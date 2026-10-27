@@ -199,6 +199,17 @@ test('a withdrawal whose RandProtocol prover is away says so, with Settings one 
   assert.equal(root.querySelector('[data-role="use-own-prover"]').getAttribute('data-go'), 'settings');
 });
 
+test('a withdrawal while every RandProtocol prover is busy shows the busy banner', async (t) => {
+  const reason = 'The RandProtocol provers are all busy right now; try again in a minute, or pair your own prover in Settings.';
+  const b = unlockedBackend({ bridge: { canWithdraw: () => ({ ok: false, busy: true, provers: 2, reason, code: 'PROVER_UNAVAILABLE' }) } });
+  const { app, root } = await mountApp(t, b, { hash: '#withdraw/1' });
+  await app.idle();
+  const box = root.querySelector('[data-role="prover-unreachable"]');
+  assert.ok(box, 'no pool banner for a busy pool');
+  assert.match(box.textContent, /The RandProtocol provers are busy/);
+  assert.doesNotMatch(root.textContent, /This device cannot withdraw/);
+});
+
 test('a shell with no bridge group at all offers no Withdraw and asks it nothing', async (t) => {
   const b = unlockedBackend();
   delete b.bridge;
