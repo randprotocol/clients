@@ -395,6 +395,7 @@
     <string name="refusal_default_notice_swap">Sebelum pertukaran pertama melalui pembukti RandProtocol, baca apa yang boleh dilihatnya: ia mendapat kunci tontonan dompet ini. Semak pertukaran semula dan baca notis, atau pasangkan pembukti anda sendiri dalam Tetapan.</string>
     <string name="refusal_no_programs_yet">Rantaian ini belum menjalankan program.</string>
     <string name="refusal_swap_memory">Telefon ini tidak mempunyai memori yang diperlukan untuk pertukaran: ia membuat dua daripada bukti itu sendiri, kira-kira 1.5 GB. Tiada apa-apa dihantar. Buat pertukaran daripada aplikasi desktop atau sambungan pelayar.</string>
+    <string name="refusal_no_prover_memory">Peranti ini tidak mempunyai memori untuk bukti ini, dan tiada pembukti disediakan. Hidupkan pembukti RandProtocol dalam Tetapan › Pembukti, atau pasangkan pembukti anda sendiri.</string>
     <string name="send_confirm_line">kepada %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">kepada %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">Pautan meminta %1$s %2$s; anda menaip %3$s %2$s.</string>

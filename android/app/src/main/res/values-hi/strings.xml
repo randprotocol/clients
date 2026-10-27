@@ -395,6 +395,7 @@
     <string name="refusal_default_notice_swap">RandProtocol प्रूवर के ज़रिए पहले स्वैप से पहले, पढ़ें कि वे क्या देख सकते हैं: उन्हें इस वॉलेट की व्यूइंग की मिलती है। स्वैप की फिर से समीक्षा करें और सूचना पढ़ें, या सेटिंग्स में अपना खुद का प्रूवर पेयर करें।</string>
     <string name="refusal_no_programs_yet">यह चेन अभी प्रोग्राम नहीं चलाती।</string>
     <string name="refusal_swap_memory">इस फ़ोन में स्वैप के लिए आवश्यक मेमोरी नहीं है: यह दो प्रूफ़ खुद बनाता है, लगभग 1.5 GB। कुछ भी नहीं भेजा गया। इसके बजाय डेस्कटॉप ऐप या ब्राउज़र एक्सटेंशन से स्वैप करें।</string>
+    <string name="refusal_no_prover_memory">इस डिवाइस में इस प्रूफ़ के लिए पर्याप्त मेमोरी नहीं है, और कोई प्रूवर सेट नहीं है। सेटिंग्स › प्रूवर में RandProtocol प्रूवर चालू करें, या अपना प्रूवर पेयर करें।</string>
     <string name="send_confirm_line">%1$s को · %2$s %3$s</string>
     <string name="send_confirm_line_named">%1$s को · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">लिंक %1$s %2$s माँगता है; आपने %3$s %2$s टाइप किया।</string>

@@ -395,6 +395,7 @@
     <string name="refusal_default_notice_swap">Lies vor dem ersten Tausch über die RandProtocol-Prover, was sie sehen können: Sie erhalten den Ansichtsschlüssel dieser Wallet. Prüfe den Tausch erneut und lies den Hinweis, oder kopple deinen eigenen Prover in den Einstellungen.</string>
     <string name="refusal_no_programs_yet">Diese Chain führt noch keine Programme aus.</string>
     <string name="refusal_swap_memory">Dieses Telefon hat nicht den Arbeitsspeicher, den ein Tausch braucht: Es erstellt zwei der Beweise selbst, etwa 1.5 GB. Es wurde nichts gesendet. Tausche stattdessen über die Desktop-App oder die Browsererweiterung.</string>
+    <string name="refusal_no_prover_memory">Dieses Gerät hat nicht genug Arbeitsspeicher für diesen Beweis, und kein Prover ist eingerichtet. Schalte die RandProtocol-Prover unter Einstellungen › Prover ein oder kopple deinen eigenen Prover.</string>
     <string name="send_confirm_line">an %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">an %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">Der Link fordert %1$s %2$s; du hast %3$s %2$s eingegeben.</string>

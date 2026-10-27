@@ -517,7 +517,11 @@
     "You need the signer's key file to add this signer back.": "要重新添加此签名人，需要他的密钥文件。",
     "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "此收款人同时收取 RAND 和代币：向同一收款人支付 RAND 和代币需要分开的提案。",
     "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "此证明需要约 %@ GB 内存，而此设备只有 %@ GB。iOS 很可能在完成前终止应用。请在“设置 › 证明器”中开启 RandProtocol 证明器，或配对你自己的证明器。",
-    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "此设备内存不足，无法生成此证明，且尚未设置证明器。请在“设置 › 证明器”中开启 RandProtocol 证明器，或配对你自己的证明器。"
+    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "此设备内存不足，无法生成此证明，且尚未设置证明器。请在“设置 › 证明器”中开启 RandProtocol 证明器，或配对你自己的证明器。",
+    "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "转账证明由你的证明器 %@ 生成，需要一两分钟。生成期间请保持应用打开。",
+    "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "转账证明由一台 %@ 证明器生成，需要一两分钟。生成期间请保持应用打开。",
+    "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "生成证明需要一两分钟。链上只会看到两个作废符、两个承诺和一个证明——绝不会看到金额、收款人或备注。",
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "证明由一台 %@ 证明器生成；这部手机会在发送任何内容之前检查它。请保持应用打开——关闭应用会丢失此证明，且不会发送任何内容。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

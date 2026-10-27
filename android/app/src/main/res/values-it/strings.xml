@@ -398,6 +398,7 @@
     <string name="refusal_default_notice_swap">Prima del primo scambio tramite i prover di RandProtocol, leggi cosa possono vedere: ricevono la chiave di visualizzazione di questo portafoglio. Rivedi di nuovo lo scambio e leggi l\'avviso, oppure associa un tuo prover nelle Impostazioni.</string>
     <string name="refusal_no_programs_yet">Questa catena non esegue ancora programmi.</string>
     <string name="refusal_swap_memory">Questo telefono non ha la memoria che serve a uno scambio: genera da sé due delle prove, circa 1.5 GB. Non è stato inviato nulla. Scambia invece dall\'app desktop o dall\'estensione del browser.</string>
+    <string name="refusal_no_prover_memory">Questo dispositivo non ha la memoria per questa prova e non è configurato alcun prover. Attiva i prover di RandProtocol in Impostazioni › Prover, oppure associa un tuo prover.</string>
     <string name="send_confirm_line">a %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">a %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">Il link chiede %1$s %2$s; hai scritto %3$s %2$s.</string>

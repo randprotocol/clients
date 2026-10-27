@@ -902,4 +902,15 @@ final class StubProver: URLProtocol {
         }
         return out
     }
+
+    /// Who proves a send, as the form, the review and the proving screen name it: never "this
+    /// phone" when a paired prover or the RandProtocol provers make the proof.
+    func testSendScreensNameWhoProves() {
+        XCTAssertEqual(SendProver.of(deviceCanProve: true, paired: "laptop", usesPool: true, poolName: "RandProtocol"), .device)
+        XCTAssertEqual(SendProver.of(deviceCanProve: false, paired: "laptop", usesPool: false, poolName: "RandProtocol"), .paired("laptop"))
+        XCTAssertEqual(SendProver.of(deviceCanProve: false, paired: nil, usesPool: true, poolName: "RandProtocol"), .pool("RandProtocol"))
+        // No route at all (the provers turned off): the device, and the review's memory warning.
+        XCTAssertEqual(SendProver.of(deviceCanProve: false, paired: nil, usesPool: false, poolName: "RandProtocol"), .device)
+        XCTAssertEqual(SendProver.of(deviceCanProve: false, paired: nil, usesPool: true, poolName: nil), .device)
+    }
 }

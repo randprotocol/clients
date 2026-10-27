@@ -42,6 +42,21 @@ public final class Invoke {
     public static final String INSUFFICIENT_FUNDS = "INSUFFICIENT_FUNDS";
     /** No way to make the proof: this device cannot, and no prover can take it. */
     public static final String PROVER_UNAVAILABLE = "PROVER_UNAVAILABLE";
+
+    /** The refusal of a swap this phone cannot prove with no prover route set; iOS's sentence. */
+    static final String NO_PROVER_MEMORY = "This device does not have the memory for this proof, and no prover is set up. "
+            + "Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.";
+
+    /**
+     * A swap where this phone cannot fit the bundle proof and there is no prover route (the
+     * RandProtocol provers turned off and nothing paired: {@code route} null) is refused before
+     * anything is quoted, as on iOS — never a ~6.2 GB proof Android stops half-way through.
+     */
+    public static void requireProofRoute(RemoteSend.Route route, boolean deviceCanProve) throws Refusal {
+        if (route == null && !deviceCanProve) {
+            throw new Refusal(PROVER_UNAVAILABLE, L10n.t(R.string.refusal_no_prover_memory, NO_PROVER_MEMORY));
+        }
+    }
     /** The RandProtocol provers' one-time notice has not been read for this wallet. */
     public static final String PROVER_NOTICE = "PROVER_NOTICE";
     /** The request is not one this wallet can read. */

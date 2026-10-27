@@ -392,6 +392,7 @@
     <string name="refusal_default_notice_swap">RandProtocol のプルーバーで初めてスワップする前に、プルーバーが何を見られるかを読んでください。プルーバーはこのウォレットの閲覧キーを受け取ります。もう一度スワップを確認して案内を読むか、設定で自分のプルーバーをペアリングしてください。</string>
     <string name="refusal_no_programs_yet">このチェーンはまだプログラムを実行しません。</string>
     <string name="refusal_swap_memory">このスマートフォンにはスワップに必要なメモリがありません。スワップでは証明のうち2つを端末自身が作り、約 1.5 GB を使います。何も送信されていません。代わりにデスクトップアプリかブラウザ拡張機能からスワップしてください。</string>
+    <string name="refusal_no_prover_memory">この端末にはこの証明に必要なメモリがなく、プルーバーも設定されていません。設定 › プルーバーで RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングしてください。</string>
     <string name="send_confirm_line">宛先 %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">宛先 %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">リンクの指定は %1$s %2$s ですが、入力されたのは %3$s %2$s です。</string>

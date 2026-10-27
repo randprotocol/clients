@@ -395,6 +395,7 @@
     <string name="refusal_default_notice_swap">د RandProtocol د ثبوت جوړوونکو له لارې له لومړۍ تبادلې مخکې، ولولئ چې هغوی څه لیدلی شي: د دې والټ د لیدو کیلي ترلاسه کوي. تبادله بیا وګورئ او خبرتیا ولولئ، یا په امستنو کې خپل ثبوت جوړوونکی جوړه کړئ.</string>
     <string name="refusal_no_programs_yet">دا زنځیر لا پروګرامونه نه چلوي.</string>
     <string name="refusal_swap_memory">دا تلیفون هغه حافظه نه لري چې تبادلې ته اړینه ده: دوه ثبوتونه پخپله جوړوي، شاوخوا 1.5 GB. هېڅ ونه لېږل شو. پر ځای یې د ډیسټاپ اپ یا براوزر توسیع څخه تبادله وکړئ.</string>
+    <string name="refusal_no_prover_memory">دا وسیله د دې ثبوت لپاره حافظه نه لري، او کوم ثبوت جوړوونکی نه دی ټاکل شوی. په امستنې › ثبوت جوړوونکی کې د RandProtocol ثبوت جوړوونکي چالان کړئ، یا خپل ثبوت جوړوونکی جوړه کړئ.</string>
     <string name="send_confirm_line">%1$s ته · %2$s %3$s</string>
     <string name="send_confirm_line_named">%1$s ته · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">لینک %1$s %2$s غواړي؛ تاسو %3$s %2$s ولیکل.</string>

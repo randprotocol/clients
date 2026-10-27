@@ -517,7 +517,11 @@
     "You need the signer's key file to add this signer back.": "この署名者を再び追加するには、署名者の鍵ファイルが必要です。",
     "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "この受取人は RAND とトークンの両方を受け取ります。同じ受取人への RAND とトークンの支払いは、別々の提案にする必要があります。",
     "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "この証明には約 %@ GB のメモリが必要ですが、この端末には %@ GB しかありません。完了前に iOS がアプリを停止する可能性が高いです。設定 › プルーバーで RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングしてください。",
-    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "この端末にはこの証明に必要なメモリがなく、プルーバーも設定されていません。設定 › プルーバーで RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングしてください。"
+    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "この端末にはこの証明に必要なメモリがなく、プルーバーも設定されていません。設定 › プルーバーで RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングしてください。",
+    "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "送金はあなたのプルーバー %@ が証明し、1〜2分かかります。その間はアプリを開いたままにしてください。",
+    "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "送金は %@ のプルーバーのいずれかが証明し、1〜2分かかります。その間はアプリを開いたままにしてください。",
+    "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "証明には1〜2分かかります。チェーンに見えるのは2つのヌリファイア、2つのコミットメント、1つの証明だけで、金額、受取人、メモは決して見えません。",
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "証明は %@ のプルーバーのいずれかが作成し、このスマートフォンが何かを送信する前に検証します。アプリを開いたままにしてください — 閉じるとこの証明は失われ、何も送信されません。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

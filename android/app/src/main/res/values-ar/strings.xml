@@ -407,6 +407,7 @@
     <string name="refusal_default_notice_swap">قبل أول مبادلة عبر مُثبِتات RandProtocol، اقرأ ما تستطيع رؤيته: تحصل على مفتاح العرض لهذه المحفظة. راجع المبادلة مجددًا واقرأ التنبيه، أو اقرن مُثبِتك الخاص في الإعدادات.</string>
     <string name="refusal_no_programs_yet">هذه السلسلة لا تشغّل برامج بعد.</string>
     <string name="refusal_swap_memory">لا يملك هذا الهاتف الذاكرة التي تحتاجها المبادلة: فهو يُعِدّ إثباتين منها بنفسه، نحو 1.5 غيغابايت. لم يُرسل شيء. بادِل من تطبيق سطح المكتب أو من إضافة المتصفح بدلًا من ذلك.</string>
+    <string name="refusal_no_prover_memory">لا يملك هذا الجهاز الذاكرة اللازمة لهذا الإثبات، ولم يُعَدّ أي مُثبِت. شغّل مُثبِتات RandProtocol في الإعدادات › المُثبِت، أو اقرن مُثبِتك الخاص.</string>
     <string name="send_confirm_line">إلى %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">إلى %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">يطلب الرابط %1$s %2$s، وأنت كتبت %3$s %2$s.</string>

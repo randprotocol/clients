@@ -438,4 +438,19 @@ public class InvokeTest {
         }
         assertNull(RpcClient.limitsOf(new JSONObject().put("program_state", JSONObject.NULL)).programState);
     }
+
+    /** A phone too small for the bundle proof, with no prover route, refuses a swap before anything is quoted (as iOS). */
+    @Test
+    public void aSwapWithNoRouteOnASmallPhoneIsRefusedBeforeAnyProof() throws Exception {
+        try {
+            Invoke.requireProofRoute(null, false);
+            fail("a swap with no prover route on a phone that cannot prove was let through");
+        } catch (Invoke.Refusal r) {
+            assertEquals(Invoke.PROVER_UNAVAILABLE, r.code);
+            assertTrue(r.getMessage(), r.getMessage().contains("Turn the RandProtocol provers on in Settings › Prover, or pair your own prover."));
+        }
+        // The phone can prove, or a route proves for it: nothing refused here.
+        Invoke.requireProofRoute(null, true);
+        Invoke.requireProofRoute(new RemoteSend.Route(null, "t"), false);
+    }
 }

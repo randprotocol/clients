@@ -398,6 +398,7 @@
     <string name="refusal_default_notice_swap">Antes da primeira troca pelos provadores da RandProtocol, leia o que eles podem ver: eles recebem a chave de visualização desta carteira. Revise a troca de novo e leia o aviso, ou pareie seu próprio provador em Configurações.</string>
     <string name="refusal_no_programs_yet">Esta cadeia ainda não executa programas.</string>
     <string name="refusal_swap_memory">Este celular não tem a memória de que uma troca precisa: ele mesmo gera duas das provas, cerca de 1.5 GB. Nada foi enviado. Faça a troca pelo app para computador ou pela extensão do navegador.</string>
+    <string name="refusal_no_prover_memory">Este dispositivo não tem memória para esta prova e nenhum provador está configurado. Ative os provadores da RandProtocol em Configurações › Provador ou pareie seu próprio provador.</string>
     <string name="send_confirm_line">para %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">para %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">O link pede %1$s %2$s; você digitou %3$s %2$s.</string>

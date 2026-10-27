@@ -395,6 +395,7 @@
     <string name="refusal_default_notice_swap">پیش از نخستین سواپ از طریق اثبات‌گرهای RandProtocol، بخوانید که چه چیزی را می‌توانند ببینند: کلید مشاهده‌ی این کیف پول را دریافت می‌کنند. سواپ را دوباره بررسی کنید و اطلاعیه را بخوانید، یا اثبات‌گر خودتان را در تنظیمات جفت کنید.</string>
     <string name="refusal_no_programs_yet">این شبکه هنوز برنامه اجرا نمی‌کند.</string>
     <string name="refusal_swap_memory">این گوشی حافظه‌ای را که سواپ نیاز دارد ندارد: دو تا از اثبات‌ها را خودش می‌سازد، حدود 1.5 گیگابایت. چیزی ارسال نشد. به‌جای آن از برنامه‌ی دسکتاپ یا افزونه‌ی مرورگر سواپ کنید.</string>
+    <string name="refusal_no_prover_memory">این دستگاه حافظه‌ی لازم برای این اثبات را ندارد و هیچ اثبات‌گری تنظیم نشده است. اثبات‌گرهای RandProtocol را در تنظیمات › اثبات‌گر روشن کنید، یا اثبات‌گر خودتان را جفت کنید.</string>
     <string name="send_confirm_line">به %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">به %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">لینک %1$s %2$s درخواست می‌کند؛ شما %3$s %2$s وارد کردید.</string>

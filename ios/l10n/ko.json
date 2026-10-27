@@ -517,7 +517,11 @@
     "You need the signer's key file to add this signer back.": "이 서명자를 다시 추가하려면 서명자의 키 파일이 필요합니다.",
     "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "이 수취인은 RAND와 토큰을 모두 받습니다. 한 수취인에게 보내는 RAND 결제와 토큰 결제는 별도의 제안이 필요합니다.",
     "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "이 증명에는 약 %@ GB의 메모리가 필요하지만 이 기기에는 %@ GB가 있습니다. iOS가 완료 전에 앱을 중지할 가능성이 큽니다. 설정 › 프루버에서 RandProtocol 프루버를 켜거나 자체 프루버를 페어링하세요.",
-    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "이 기기에는 이 증명에 필요한 메모리가 부족하고, 설정된 프루버도 없습니다. 설정 › 프루버에서 RandProtocol 프루버를 켜거나 자체 프루버를 페어링하세요."
+    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "이 기기에는 이 증명에 필요한 메모리가 부족하고, 설정된 프루버도 없습니다. 설정 › 프루버에서 RandProtocol 프루버를 켜거나 자체 프루버를 페어링하세요.",
+    "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "송금은 내 프루버 %@에서 증명되며 1~2분 정도 걸립니다. 진행되는 동안 앱을 열어 두세요.",
+    "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "송금은 %@ 프루버 중 하나에서 증명되며 1~2분 정도 걸립니다. 진행되는 동안 앱을 열어 두세요.",
+    "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "증명하는 데 1~2분 정도 걸립니다. 체인에는 널리파이어 두 개, 커밋먼트 두 개, 증명 하나만 보이며 금액, 받는 사람, 메모는 절대 보이지 않습니다.",
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "증명은 %@ 프루버 중 하나가 만들고, 이 휴대폰은 무엇이든 전송하기 전에 증명을 확인합니다. 앱을 열어 두세요 — 닫으면 이 증명을 잃으며 아무것도 전송되지 않습니다."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

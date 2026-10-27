@@ -431,6 +431,7 @@
     <string name="refusal_default_notice_swap">Before the first swap through the RandProtocol provers, read what they can see: they get this wallet\'s viewing key. Review the swap again and read the notice, or pair your own prover in Settings.</string>
     <string name="refusal_no_programs_yet">This chain does not run programs yet.</string>
     <string name="refusal_swap_memory">This phone does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead.</string>
+    <string name="refusal_no_prover_memory">This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.</string>
 
     <!-- send -->
     <string name="send_confirm_line">to %1$s · %2$s %3$s</string>

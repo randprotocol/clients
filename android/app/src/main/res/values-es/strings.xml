@@ -398,6 +398,7 @@
     <string name="refusal_default_notice_swap">Antes del primer intercambio a través de los probadores de RandProtocol, lee lo que pueden ver: reciben la clave de visualización de esta billetera. Vuelve a revisar el intercambio y lee el aviso, o vincula tu propio probador en Ajustes.</string>
     <string name="refusal_no_programs_yet">Esta cadena todavía no ejecuta programas.</string>
     <string name="refusal_swap_memory">Este teléfono no tiene la memoria que necesita un intercambio: genera dos de las pruebas por sí mismo, unos 1.5 GB. No se envió nada. Intercambia desde la app de escritorio o la extensión del navegador.</string>
+    <string name="refusal_no_prover_memory">Este dispositivo no tiene memoria suficiente para esta prueba y no hay ningún probador configurado. Activa los probadores de RandProtocol en Ajustes › Probador o vincula tu propio probador.</string>
     <string name="send_confirm_line">a %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">a %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">El enlace pide %1$s %2$s; escribiste %3$s %2$s.</string>

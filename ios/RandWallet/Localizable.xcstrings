@@ -65183,6 +65183,502 @@
           }
         }
       }
+    },
+    "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يُثبِت التحويلَ مُثبِتُك، %@، ويستغرق ذلك دقيقة أو دقيقتين. أبقِ التطبيق مفتوحًا أثناء العمل."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Überweisung wird von deinem Prover %@ bewiesen, das dauert ein bis zwei Minuten. Lass die App währenddessen geöffnet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La prueba de una transferencia la genera tu probador, %@, y tarda uno o dos minutos. Mantén la app abierta mientras tanto."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انتقال را اثبات‌گر شما، %@، اثبات می‌کند که یکی دو دقیقه طول می‌کشد. تا پایان کار برنامه را باز نگه دارید."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un transfert est prouvé par votre prouveur, %@, ce qui prend une ou deux minutes. Gardez l'application ouverte pendant ce temps."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ट्रांसफ़र का प्रूफ़ आपका प्रूवर, %@, बनाता है, जिसमें एक-दो मिनट लगते हैं। इसके चलते समय ऐप खुला रखें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transfer dibuktikan oleh prover Anda, %@, yang memakan waktu satu atau dua menit. Biarkan aplikasi tetap terbuka selama prosesnya."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La prova di un trasferimento la genera il tuo prover, %@, e richiede un paio di minuti. Tieni l'app aperta nel frattempo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "送金はあなたのプルーバー %@ が証明し、1〜2分かかります。その間はアプリを開いたままにしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "송금은 내 프루버 %@에서 증명되며 1~2분 정도 걸립니다. 진행되는 동안 앱을 열어 두세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pemindahan dibuktikan oleh pembukti anda, %@, yang mengambil masa seminit dua. Biarkan aplikasi terbuka semasa ia berjalan."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dowód przelewu generuje twój prover, %@, co zajmuje minutę lub dwie. Nie zamykaj aplikacji w tym czasie."
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لېږد ستاسو ثبوت جوړوونکی، %@، ثبوت کوي، چې یوه یا دوه دقیقې وخت نیسي. تر هغه چې روان وي، اپ خلاص وساتئ."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uma transferência é provada pelo seu provador, %@, o que leva um ou dois minutos. Mantenha o app aberto enquanto isso."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доказательство перевода строит ваш прувер %@, это занимает минуту-две. Не закрывайте приложение, пока оно работает."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பரிமாற்றம் உங்கள் நிரூபிப்பான் %@ மூலம் நிரூபிக்கப்படுகிறது, இதற்கு ஓரிரு நிமிடங்கள் ஆகும். அது இயங்கும்போது ஆப்பைத் திறந்தே வையுங்கள்."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منتقلی کا پروف آپ کا پروور، %@، بناتا ہے، جس میں ایک دو منٹ لگتے ہیں۔ اس دوران ایپ کھلی رکھیں۔"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "转账证明由你的证明器 %@ 生成，需要一两分钟。生成期间请保持应用打开。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "轉帳證明由你的證明器 %@ 生成，需時一兩分鐘。進行期間請保持應用程式開啟。"
+          }
+        }
+      }
+    },
+    "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يُثبِت التحويلَ أحدُ مُثبِتات %@، ويستغرق ذلك دقيقة أو دقيقتين. أبقِ التطبيق مفتوحًا أثناء العمل."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Überweisung wird von einem der %@-Prover bewiesen, das dauert ein bis zwei Minuten. Lass die App währenddessen geöffnet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La prueba de una transferencia la genera uno de los probadores de %@ y tarda uno o dos minutos. Mantén la app abierta mientras tanto."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انتقال را یکی از اثبات‌گرهای %@ اثبات می‌کند که یکی دو دقیقه طول می‌کشد. تا پایان کار برنامه را باز نگه دارید."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un transfert est prouvé par l'un des prouveurs %@, ce qui prend une ou deux minutes. Gardez l'application ouverte pendant ce temps."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ट्रांसफ़र का प्रूफ़ %@ प्रूवर में से एक बनाता है, जिसमें एक-दो मिनट लगते हैं। इसके चलते समय ऐप खुला रखें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transfer dibuktikan oleh salah satu prover %@, yang memakan waktu satu atau dua menit. Biarkan aplikasi tetap terbuka selama prosesnya."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La prova di un trasferimento la genera uno dei prover di %@ e richiede un paio di minuti. Tieni l'app aperta nel frattempo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "送金は %@ のプルーバーのいずれかが証明し、1〜2分かかります。その間はアプリを開いたままにしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "송금은 %@ 프루버 중 하나에서 증명되며 1~2분 정도 걸립니다. 진행되는 동안 앱을 열어 두세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pemindahan dibuktikan oleh salah satu pembukti %@, yang mengambil masa seminit dua. Biarkan aplikasi terbuka semasa ia berjalan."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dowód przelewu generuje jeden z proverów %@, co zajmuje minutę lub dwie. Nie zamykaj aplikacji w tym czasie."
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لېږد د %@ له ثبوت جوړوونکو څخه یو ثبوت کوي، چې یوه یا دوه دقیقې وخت نیسي. تر هغه چې روان وي، اپ خلاص وساتئ."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uma transferência é provada por um dos provadores %@, o que leva um ou dois minutos. Mantenha o app aberto enquanto isso."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доказательство перевода строит один из пруверов %@, это занимает минуту-две. Не закрывайте приложение, пока оно работает."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "பரிமாற்றம் %@ நிரூபிப்பான்களில் ஒன்றால் நிரூபிக்கப்படுகிறது, இதற்கு ஓரிரு நிமிடங்கள் ஆகும். அது இயங்கும்போது ஆப்பைத் திறந்தே வையுங்கள்."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منتقلی کا پروف %@ پروورز میں سے ایک بناتا ہے، جس میں ایک دو منٹ لگتے ہیں۔ اس دوران ایپ کھلی رکھیں۔"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "转账证明由一台 %@ 证明器生成，需要一两分钟。生成期间请保持应用打开。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "轉帳證明由一部 %@ 證明器生成，需時一兩分鐘。進行期間請保持應用程式開啟。"
+          }
+        }
+      }
+    },
+    "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستغرق الإثبات دقيقة أو دقيقتين. سترى السلسلة مُبطِلين والتزامين وإثباتًا — ولن ترى أبدًا المبلغ ولا المستلم ولا المذكرة."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Beweisen dauert ein bis zwei Minuten. Die Chain sieht zwei Nullifier, zwei Commitments und einen Beweis – niemals den Betrag, den Empfänger oder das Memo."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generar la prueba tarda uno o dos minutos. La cadena verá dos anuladores, dos compromisos y una prueba; nunca el monto, el destinatario ni el memo."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اثبات یکی دو دقیقه طول می‌کشد. شبکه دو نالیفایر، دو تعهد و یک اثبات را می‌بیند — هرگز مبلغ، گیرنده یا یادداشت را نمی‌بیند."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La génération de la preuve prend une ou deux minutes. La chaîne verra deux nullificateurs, deux engagements et une preuve — jamais le montant, le destinataire ni le mémo."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "प्रूफ़ बनने में एक-दो मिनट लगते हैं। चेन दो नलिफ़ायर, दो कमिटमेंट और एक प्रूफ़ देखेगी — राशि, प्राप्तकर्ता या मेमो कभी नहीं।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pembuktian memakan waktu satu atau dua menit. Chain akan melihat dua nullifier, dua komitmen, dan sebuah bukti — tidak pernah jumlah, penerima, atau memonya."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La generazione della prova richiede un paio di minuti. La catena vedrà due nullifier, due commitment e una prova — mai l'importo, il destinatario o il memo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "証明には1〜2分かかります。チェーンに見えるのは2つのヌリファイア、2つのコミットメント、1つの証明だけで、金額、受取人、メモは決して見えません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "증명하는 데 1~2분 정도 걸립니다. 체인에는 널리파이어 두 개, 커밋먼트 두 개, 증명 하나만 보이며 금액, 받는 사람, 메모는 절대 보이지 않습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pembuktian mengambil masa seminit dua. Rantaian akan melihat dua nullifier, dua komitmen dan satu bukti — tidak sekali-kali amaun, penerima atau memo."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generowanie dowodu zajmuje minutę lub dwie. Łańcuch zobaczy dwa nullifiery, dwa zobowiązania i dowód — nigdy kwotę, odbiorcę ani memo."
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ثبوت جوړول یوه یا دوه دقیقې وخت نیسي. زنځیر به دوه nullifier، دوه commitment او یو ثبوت وویني — هېڅکله اندازه، ترلاسه کوونکی یا یادښت نه."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Provar leva um ou dois minutos. A cadeia vai ver dois anuladores, dois compromissos e uma prova — nunca o valor, o destinatário ou o memo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доказательство строится минуту-две. Сеть увидит два нуллификатора, два коммитмента и доказательство — но никогда не сумму, получателя или мемо."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "நிரூபிக்க ஓரிரு நிமிடங்கள் ஆகும். செயின் இரண்டு nullifier-கள், இரண்டு கமிட்மென்ட்கள், ஒரு நிரூபணம் ஆகியவற்றை மட்டுமே பார்க்கும் — தொகை, பெறுநர், குறிப்பு ஆகியவற்றை ஒருபோதும் பார்க்காது."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "پروف بنانے میں ایک دو منٹ لگتے ہیں۔ چین دو nullifiers، دو commitments اور ایک پروف دیکھے گی — رقم، وصول کنندہ یا میمو کبھی نہیں۔"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成证明需要一两分钟。链上只会看到两个作废符、两个承诺和一个证明——绝不会看到金额、收款人或备注。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成證明需時一兩分鐘。鏈上只會看到兩個作廢符、兩個承諾和一個證明，絕不會看到金額、收款人或備註。"
+          }
+        }
+      }
+    },
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يُعِدّ أحد مُثبِتات %@ الإثبات، ويتحقق منه هذا الهاتف قبل إرسال أي شيء. أبقِ التطبيق مفتوحًا — إغلاقه يُضيع هذا الإثبات، ولا يُرسل شيء."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einer der %@-Prover erstellt den Beweis; dieses Telefon prüft ihn, bevor etwas gesendet wird. Lass die App geöffnet – schließt du sie, geht dieser Beweis verloren, und nichts wird gesendet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uno de los probadores de %@ genera la prueba; este teléfono la verifica antes de enviar nada. Mantén la app abierta: si la cierras se pierde esta prueba y no se envía nada."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "یکی از اثبات‌گرهای %@ اثبات را می‌سازد؛ این گوشی پیش از ارسال هر چیزی آن را بررسی می‌کند. برنامه را باز نگه دارید — بستن آن این اثبات را از بین می‌برد و چیزی ارسال نمی‌شود."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'un des prouveurs %@ génère la preuve ; ce téléphone la vérifie avant tout envoi. Gardez l'application ouverte — la fermer fait perdre cette preuve, et rien n'est envoyé."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ प्रूवर में से एक प्रूफ़ बनाता है; यह फ़ोन कुछ भी भेजने से पहले उसकी जाँच करता है। ऐप खुला रखें — इसे बंद करने से यह प्रूफ़ खो जाता है, और कुछ भी नहीं भेजा जाता।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salah satu prover %@ membuat bukti; ponsel ini memeriksanya sebelum apa pun dikirim. Biarkan aplikasi tetap terbuka — menutupnya akan menghilangkan bukti ini, dan tidak ada yang dikirim."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uno dei prover di %@ genera la prova; questo telefono la verifica prima di inviare qualsiasi cosa. Tieni l'app aperta — chiudendola questa prova va persa, e non viene inviato nulla."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "証明は %@ のプルーバーのいずれかが作成し、このスマートフォンが何かを送信する前に検証します。アプリを開いたままにしてください — 閉じるとこの証明は失われ、何も送信されません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "증명은 %@ 프루버 중 하나가 만들고, 이 휴대폰은 무엇이든 전송하기 전에 증명을 확인합니다. 앱을 열어 두세요 — 닫으면 이 증명을 잃으며 아무것도 전송되지 않습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salah satu pembukti %@ membuat bukti; telefon ini menyemaknya sebelum apa-apa dihantar. Biarkan aplikasi terbuka — menutupnya akan menghilangkan bukti ini, dan tiada apa-apa dihantar."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeden z proverów %@ generuje dowód; ten telefon sprawdza go, zanim cokolwiek zostanie wysłane. Nie zamykaj aplikacji — zamknięcie jej powoduje utratę tego dowodu i nic nie zostanie wysłane."
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "د %@ له ثبوت جوړوونکو څخه یو ثبوت جوړوي؛ دا تلیفون یې مخکې له دې چې څه ولېږل شي، کتل کوي. اپ خلاص وساتئ — بندول یې دا ثبوت له منځه وړي، او هېڅ نه لېږل کېږي."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Um dos provadores %@ gera a prova; este celular a verifica antes de qualquer envio. Mantenha o app aberto — fechá-lo perde esta prova, e nada é enviado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доказательство строит один из пруверов %@; этот телефон проверяет его, прежде чем что-либо отправить. Не закрывайте приложение — если закрыть его, доказательство пропадёт и ничего не отправится."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ நிரூபிப்பான்களில் ஒன்று நிரூபணத்தை உருவாக்கும்; எதையும் அனுப்பும் முன் இந்தத் தொலைபேசி அதைச் சரிபார்க்கும். ஆப்பைத் திறந்தே வையுங்கள் — மூடினால் இந்த நிரூபணம் இழக்கப்படும், எதுவும் அனுப்பப்படாது."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ پروورز میں سے ایک پروف بناتا ہے؛ یہ فون کچھ بھی بھیجنے سے پہلے اس کی جانچ کرتا ہے۔ ایپ کھلی رکھیں — اسے بند کرنے سے یہ پروف ضائع ہو جاتا ہے، اور کچھ نہیں بھیجا جاتا۔"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "证明由一台 %@ 证明器生成；这部手机会在发送任何内容之前检查它。请保持应用打开——关闭应用会丢失此证明，且不会发送任何内容。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "證明由一部 %@ 證明器生成；這部手機會在傳送任何東西之前檢查它。請保持應用程式開啟：關閉它會令此證明遺失，亦不會傳送任何東西。"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

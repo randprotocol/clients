@@ -395,6 +395,7 @@
     <string name="refusal_default_notice_swap">RandProtocol کے پروور کے ذریعے پہلے سواپ سے پہلے پڑھ لیں کہ وہ کیا دیکھ سکتے ہیں: انہیں اس والیٹ کی ویوئنگ کی ملتی ہے۔ سواپ کا دوبارہ جائزہ لیں اور نوٹس پڑھیں، یا ترتیبات میں اپنا پروور جوڑیں۔</string>
     <string name="refusal_no_programs_yet">یہ چین ابھی پروگرام نہیں چلاتی۔</string>
     <string name="refusal_swap_memory">اس فون میں اتنی میموری نہیں جو سواپ کو درکار ہے: یہ دو پروف خود بناتا ہے، تقریباً 1.5 GB۔ کچھ نہیں بھیجا گیا۔ اس کے بجائے ڈیسک ٹاپ ایپ یا براؤزر ایکسٹینشن سے سواپ کریں۔</string>
+    <string name="refusal_no_prover_memory">اس ڈیوائس میں اس پروف کے لیے کافی میموری نہیں، اور کوئی پروور سیٹ نہیں ہے۔ ترتیبات › پروور میں RandProtocol پروورز آن کریں، یا اپنا پروور جوڑیں۔</string>
     <string name="send_confirm_line">بنام %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">بنام %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">لنک %1$s %2$s مانگتا ہے؛ آپ نے %3$s %2$s لکھا۔</string>

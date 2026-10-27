@@ -526,7 +526,11 @@
     "You need the signer's key file to add this signer back.": "इस हस्ताक्षरकर्ता को दोबारा जोड़ने के लिए आपको उसकी कुंजी फ़ाइल चाहिए होगी।",
     "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "यह प्राप्तकर्ता RAND और एक टोकन दोनों प्राप्त करता है: एक ही प्राप्तकर्ता को RAND और टोकन भुगतानों के लिए अलग-अलग प्रस्ताव चाहिए।",
     "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "इस प्रूफ़ के लिए लगभग %@ GB मेमोरी चाहिए और इस डिवाइस में %@ GB है। iOS संभवतः पूरा होने से पहले ही ऐप बंद कर देगा। सेटिंग्स › प्रूवर में RandProtocol प्रूवर चालू करें, या अपना प्रूवर पेयर करें।",
-    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "इस डिवाइस में इस प्रूफ़ के लिए पर्याप्त मेमोरी नहीं है, और कोई प्रूवर सेट नहीं है। सेटिंग्स › प्रूवर में RandProtocol प्रूवर चालू करें, या अपना प्रूवर पेयर करें।"
+    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "इस डिवाइस में इस प्रूफ़ के लिए पर्याप्त मेमोरी नहीं है, और कोई प्रूवर सेट नहीं है। सेटिंग्स › प्रूवर में RandProtocol प्रूवर चालू करें, या अपना प्रूवर पेयर करें।",
+    "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "ट्रांसफ़र का प्रूफ़ आपका प्रूवर, %@, बनाता है, जिसमें एक-दो मिनट लगते हैं। इसके चलते समय ऐप खुला रखें।",
+    "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "ट्रांसफ़र का प्रूफ़ %@ प्रूवर में से एक बनाता है, जिसमें एक-दो मिनट लगते हैं। इसके चलते समय ऐप खुला रखें।",
+    "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "प्रूफ़ बनने में एक-दो मिनट लगते हैं। चेन दो नलिफ़ायर, दो कमिटमेंट और एक प्रूफ़ देखेगी — राशि, प्राप्तकर्ता या मेमो कभी नहीं।",
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "%@ प्रूवर में से एक प्रूफ़ बनाता है; यह फ़ोन कुछ भी भेजने से पहले उसकी जाँच करता है। ऐप खुला रखें — इसे बंद करने से यह प्रूफ़ खो जाता है, और कुछ भी नहीं भेजा जाता।"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

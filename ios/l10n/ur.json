@@ -520,7 +520,11 @@
     "You need the signer's key file to add this signer back.": "اس دستخط کنندہ کو دوبارہ شامل کرنے کے لیے آپ کو اس کی کلیدی فائل چاہیے ہوگی۔",
     "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "یہ وصول کنندہ RAND اور ایک ٹوکن دونوں وصول کرتا ہے: ایک وصول کنندہ کو RAND اور ٹوکن کی ادائیگیوں کے لیے الگ الگ تجاویز درکار ہیں۔",
     "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "اس پروف کو تقریباً %@ GB میموری درکار ہے اور اس ڈیوائس میں %@ GB ہے۔ غالب امکان ہے کہ iOS مکمل ہونے سے پہلے ایپ بند کر دے گا۔ ترتیبات › پروور میں RandProtocol پروورز آن کریں، یا اپنا پروور جوڑیں۔",
-    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "اس ڈیوائس میں اس پروف کے لیے کافی میموری نہیں، اور کوئی پروور سیٹ نہیں ہے۔ ترتیبات › پروور میں RandProtocol پروورز آن کریں، یا اپنا پروور جوڑیں۔"
+    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "اس ڈیوائس میں اس پروف کے لیے کافی میموری نہیں، اور کوئی پروور سیٹ نہیں ہے۔ ترتیبات › پروور میں RandProtocol پروورز آن کریں، یا اپنا پروور جوڑیں۔",
+    "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "منتقلی کا پروف آپ کا پروور، %@، بناتا ہے، جس میں ایک دو منٹ لگتے ہیں۔ اس دوران ایپ کھلی رکھیں۔",
+    "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "منتقلی کا پروف %@ پروورز میں سے ایک بناتا ہے، جس میں ایک دو منٹ لگتے ہیں۔ اس دوران ایپ کھلی رکھیں۔",
+    "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "پروف بنانے میں ایک دو منٹ لگتے ہیں۔ چین دو nullifiers، دو commitments اور ایک پروف دیکھے گی — رقم، وصول کنندہ یا میمو کبھی نہیں۔",
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "%@ پروورز میں سے ایک پروف بناتا ہے؛ یہ فون کچھ بھی بھیجنے سے پہلے اس کی جانچ کرتا ہے۔ ایپ کھلی رکھیں — اسے بند کرنے سے یہ پروف ضائع ہو جاتا ہے، اور کچھ نہیں بھیجا جاتا۔"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

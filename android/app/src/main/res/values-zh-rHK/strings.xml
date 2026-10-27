@@ -392,6 +392,7 @@
     <string name="refusal_default_notice_swap">首次透過 RandProtocol 證明器兌換之前，請先了解它們能看到甚麼：它們會取得此錢包的檢視密鑰。請再次檢查兌換並閱讀提示，或在設定中配對你自己的證明器。</string>
     <string name="refusal_no_programs_yet">此鏈尚未支援運行程式。</string>
     <string name="refusal_swap_memory">這部手機的記憶體不足以完成兌換：其中兩個證明要由它自己生成，約需 1.5 GB。沒有傳送任何東西。請改用桌面應用程式或瀏覽器擴充功能兌換。</string>
+    <string name="refusal_no_prover_memory">此裝置的記憶體不足以生成此證明，而且尚未設定證明器。請在「設定 › 證明器」中開啟 RandProtocol 證明器，或配對你自己的證明器。</string>
     <string name="send_confirm_line">至 %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">至 %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">連結要求 %1$s %2$s；你輸入的是 %3$s %2$s。</string>

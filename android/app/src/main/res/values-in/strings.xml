@@ -392,6 +392,7 @@
     <string name="refusal_default_notice_swap">Sebelum penukaran pertama melalui prover RandProtocol, baca apa yang dapat dilihatnya: prover mendapat kunci tampilan dompet ini. Tinjau penukaran lagi dan baca pemberitahuannya, atau pasangkan prover milik Anda sendiri di Pengaturan.</string>
     <string name="refusal_no_programs_yet">Chain ini belum menjalankan program.</string>
     <string name="refusal_swap_memory">Ponsel ini tidak memiliki memori yang dibutuhkan penukaran: ponsel membuat dua buktinya sendiri, sekitar 1.5 GB. Tidak ada yang dikirim. Lakukan penukaran dari aplikasi desktop atau ekstensi browser.</string>
+    <string name="refusal_no_prover_memory">Perangkat ini tidak memiliki cukup memori untuk bukti ini, dan belum ada prover yang diatur. Aktifkan prover RandProtocol di Pengaturan › Prover, atau pasangkan prover Anda sendiri.</string>
     <string name="send_confirm_line">ke %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">ke %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">Tautan meminta %1$s %2$s; Anda mengetik %3$s %2$s.</string>

@@ -398,6 +398,7 @@
     <string name="refusal_default_notice_swap">Avant le premier échange via les prouveurs RandProtocol, lisez ce qu\'ils peuvent voir : ils reçoivent la clé de visualisation de ce portefeuille. Vérifiez de nouveau l\'échange et lisez l\'avertissement, ou associez votre propre prouveur dans les Paramètres.</string>
     <string name="refusal_no_programs_yet">Cette chaîne n\'exécute pas encore de programmes.</string>
     <string name="refusal_swap_memory">Ce téléphone n\'a pas la mémoire nécessaire à un échange : il génère lui-même deux des preuves, environ 1.5 Go. Rien n\'a été envoyé. Échangez plutôt depuis l\'application de bureau ou l\'extension de navigateur.</string>
+    <string name="refusal_no_prover_memory">Cet appareil n\'a pas la mémoire nécessaire pour cette preuve, et aucun prouveur n\'est configuré. Activez les prouveurs RandProtocol dans Paramètres › Prouveur, ou associez votre propre prouveur.</string>
     <string name="send_confirm_line">à %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">à %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">Le lien demande %1$s %2$s ; vous avez saisi %3$s %2$s.</string>

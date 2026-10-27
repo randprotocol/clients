@@ -392,6 +392,7 @@
     <string name="refusal_default_notice_swap">RandProtocol 프루버로 처음 스왑하기 전에 프루버가 무엇을 볼 수 있는지 읽어 보세요. 프루버는 이 지갑의 조회 키를 받습니다. 스왑을 다시 검토하면서 안내를 읽거나, 설정에서 직접 운영하는 프루버를 페어링하세요.</string>
     <string name="refusal_no_programs_yet">이 체인은 아직 프로그램을 실행하지 않습니다.</string>
     <string name="refusal_swap_memory">이 휴대폰에는 스왑에 필요한 메모리가 부족합니다. 스왑에서는 증명 두 개를 기기가 직접 만들며 약 1.5 GB가 필요합니다. 아무것도 전송되지 않았습니다. 대신 데스크톱 앱이나 브라우저 확장 프로그램에서 스왑하세요.</string>
+    <string name="refusal_no_prover_memory">이 기기에는 이 증명에 필요한 메모리가 부족하고, 설정된 프루버도 없습니다. 설정 › 프루버에서 RandProtocol 프루버를 켜거나 자체 프루버를 페어링하세요.</string>
     <string name="send_confirm_line">받는 사람 %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">받는 사람 %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">링크는 %1$s %2$s을(를) 요청하지만, 입력한 금액은 %3$s %2$s입니다.</string>

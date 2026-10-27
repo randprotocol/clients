@@ -401,6 +401,7 @@
     <string name="refusal_default_notice_swap">Przed pierwszą wymianą przez provery RandProtocol przeczytaj, co mogą zobaczyć: dostają klucz podglądu tego portfela. Przejrzyj wymianę ponownie i przeczytaj komunikat lub sparuj własny prover w Ustawieniach.</string>
     <string name="refusal_no_programs_yet">Ten łańcuch nie uruchamia jeszcze programów.</string>
     <string name="refusal_swap_memory">Ten telefon nie ma pamięci potrzebnej do wymiany: sam generuje dwa z dowodów, około 1.5 GB. Nic nie wysłano. Wymień zamiast tego w aplikacji desktopowej lub rozszerzeniu przeglądarki.</string>
+    <string name="refusal_no_prover_memory">To urządzenie nie ma pamięci na ten dowód, a żaden prover nie jest skonfigurowany. Włącz provery RandProtocol w Ustawienia › Prover lub sparuj własny prover.</string>
     <string name="send_confirm_line">do %1$s · %2$s %3$s</string>
     <string name="send_confirm_line_named">do %1$s · %2$s · %3$s %4$s</string>
     <string name="send_link_amount_conflict">Link prosi o %1$s %2$s; wpisano %3$s %2$s.</string>

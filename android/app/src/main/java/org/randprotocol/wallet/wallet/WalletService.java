@@ -782,6 +782,7 @@ public final class WalletService {
         } catch (ProverClient.Refusal e) {
             throw new Invoke.Refusal(Invoke.PROVER_UNAVAILABLE, e.getMessage());
         }
+        Invoke.requireProofRoute(route, deviceCanProve(app));
         if (rpc().limits().programState == null) throw new Invoke.Refusal(Invoke.PROGRAMS_UNSUPPORTED, L10n.t(R.string.refusal_no_programs_yet, "This chain does not run programs yet."));
         return route;
     }

@@ -147,8 +147,17 @@ struct SendView: View {
                     ErrorText(message: conflicts.amount)
                 }
                 memoSection
-                Text("A transfer is proved on this phone, which takes a minute or two. Keep the app open while it runs.")
-                    .font(.ui(13)).foregroundColor(Theme.textMute)
+                Group {
+                    switch whoProves {
+                    case .paired(let name):
+                        Text("A transfer is proved by your prover, \(name), which takes a minute or two. Keep the app open while it runs.")
+                    case .pool(let name):
+                        Text("A transfer is proved by one of the \(name) provers, which takes a minute or two. Keep the app open while it runs.")
+                    case .device:
+                        Text("A transfer is proved on this phone, which takes a minute or two. Keep the app open while it runs.")
+                    }
+                }
+                .font(.ui(13)).foregroundColor(Theme.textMute)
                 PrimaryButton(title: "Review", enabled: formValid) { step = .review }
             }
             .padding(20)
@@ -239,8 +248,14 @@ struct SendView: View {
                         .lineLimit(1).truncationMode(.tail).clipped()
                 }
             }
-            Text("Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.")
-                .font(.ui(13)).foregroundColor(Theme.textMute).multilineTextAlignment(.center)
+            Group {
+                if case .device = whoProves {
+                    Text("Proving takes a minute or two on this phone. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.")
+                } else {
+                    Text("Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.")
+                }
+            }
+            .font(.ui(13)).foregroundColor(Theme.textMute).multilineTextAlignment(.center)
             if let p = remoteProver {
                 // Delegated proving (split authorisation): this device cannot fit the bundle
                 // proof, and the paired prover — the user's own or not — will make it. The job
@@ -299,6 +314,14 @@ struct SendView: View {
         return p
     }
 
+    /// Who makes the bundle proof of this send, as the route will choose it: this phone (it has
+    /// the memory, or no prover route is set — the review then warns), the prover paired in
+    /// Settings, or the RandProtocol provers (the default, nothing paired).
+    private var whoProves: SendProver {
+        SendProver.of(deviceCanProve: ProverRequirements.deviceHasEnoughMemory, paired: settings.prover?.name,
+                      usesPool: wallet.usesDefaultProver, poolName: ProverPairingService.trusted()?.name)
+    }
+
     /// `ui/screens/send/state.js`'s `AUTHORISING_LABEL`: the auth proof, made on this device.
     static var authorisingLabel: String { String(localized: "Authorising the spend on this device…") }
 
@@ -321,7 +344,11 @@ struct SendView: View {
         switch wallet.phase {
         case .proving: return String(localized: "About a minute or two on this device. Keep the app open.")
         case .authorising(let name, _): return String(localized: "The spend authorisation is proved here, from your spend key, before the job goes to \(name). About ten seconds. Keep the app open.")
-        case .provingRemotely: return String(localized: "Your prover makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.")
+        case .provingRemotely:
+            if case .pool(let pool) = whoProves {
+                return String(localized: "One of the \(pool) provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.")
+            }
+            return String(localized: "Your prover makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.")
         case .waitingForCommit(let h): return String(localized: "Transaction \(h.shortened(head: 8, tail: 6)) is in the mempool.")
         default: return ""
         }
@@ -363,6 +390,21 @@ struct SendView: View {
 
 /// What a bundle proof costs, so the review step can say whether this device can run it.
 /// `peakMemoryBytes` mirrors `wallet_core::PROVER_PEAK_MEMORY_BYTES` (6.2 GB, constraint set 8).
+/// Who makes a send's bundle proof (`SendView.whoProves`): the words on the form, the review and
+/// the proving screen follow it, never "on this phone" when a prover makes it.
+enum SendProver: Equatable {
+    case device
+    case paired(String)
+    case pool(String)
+
+    static func of(deviceCanProve: Bool, paired: String?, usesPool: Bool, poolName: String?) -> SendProver {
+        if deviceCanProve { return .device }
+        if let paired { return .paired(paired) }
+        if usesPool, let poolName { return .pool(poolName) }
+        return .device
+    }
+}
+
 enum ProverRequirements {
     static let peakMemoryBytes: UInt64 = 6_200_000_000
     static var deviceMemoryBytes: UInt64 { ProcessInfo.processInfo.physicalMemory }

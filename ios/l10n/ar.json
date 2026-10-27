@@ -538,7 +538,11 @@
     "You need the signer's key file to add this signer back.": "تحتاج إلى ملف مفتاح الموقّع لإضافته مرة أخرى.",
     "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "يتلقى هذا المستفيد RAND ورمزًا معًا: مدفوعات RAND والرموز إلى مستفيد واحد تحتاج إلى مقترحات منفصلة.",
     "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "يحتاج هذا الإثبات إلى نحو %@ غيغابايت من الذاكرة، وفي هذا الجهاز %@ غيغابايت. على الأرجح سيوقف iOS التطبيق قبل أن ينتهي. شغّل مُثبِتات RandProtocol في الإعدادات › المُثبِت، أو اقرن مُثبِتك الخاص.",
-    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "لا يملك هذا الجهاز الذاكرة اللازمة لهذا الإثبات، ولم يُعَدّ أي مُثبِت. شغّل مُثبِتات RandProtocol في الإعدادات › المُثبِت، أو اقرن مُثبِتك الخاص."
+    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "لا يملك هذا الجهاز الذاكرة اللازمة لهذا الإثبات، ولم يُعَدّ أي مُثبِت. شغّل مُثبِتات RandProtocol في الإعدادات › المُثبِت، أو اقرن مُثبِتك الخاص.",
+    "A transfer is proved by your prover, %@, which takes a minute or two. Keep the app open while it runs.": "يُثبِت التحويلَ مُثبِتُك، %@، ويستغرق ذلك دقيقة أو دقيقتين. أبقِ التطبيق مفتوحًا أثناء العمل.",
+    "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "يُثبِت التحويلَ أحدُ مُثبِتات %@، ويستغرق ذلك دقيقة أو دقيقتين. أبقِ التطبيق مفتوحًا أثناء العمل.",
+    "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "يستغرق الإثبات دقيقة أو دقيقتين. سترى السلسلة مُبطِلين والتزامين وإثباتًا — ولن ترى أبدًا المبلغ ولا المستلم ولا المذكرة.",
+    "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "يُعِدّ أحد مُثبِتات %@ الإثبات، ويتحقق منه هذا الهاتف قبل إرسال أي شيء. أبقِ التطبيق مفتوحًا — إغلاقه يُضيع هذا الإثبات، ولا يُرسل شيء."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",
