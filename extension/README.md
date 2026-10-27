@@ -57,10 +57,14 @@ which `idle-lock.js` implements (a lock the page asked for itself is not reporte
 ## Why Send does not escape to a tab
 
 It used to, because a bundle proof is minutes of wasm and the popup dies when it loses focus. It
-no longer needs to: a bundle proof peaks at about 6.2 GB and wasm32 stops at 4 GiB, so
-`send.canProve()` is `{ok: false}` in every wasm shell and the proving, submitting and confirming
-steps — the only ones that would outlive a closed popup — are never reached. Send renders in the
-popup and ends in an explanation that points at the desktop app.
+no longer needs to: a bundle proof peaks at about 6.2 GB and wasm32 stops at 4 GiB, so the
+extension never makes the bundle proof itself. By default the RandProtocol provers make it (the
+pool every release pins; a one-time notice says what they see), or a prover you pair; the
+extension makes the small authorisation proof, hands the job over, and checks the proof that comes
+back before it submits anything. With the RandProtocol provers
+turned off and nothing paired, `send.canProve()` is `{ok: false}` and Send ends in an explanation:
+turn the RandProtocol provers back on in Settings, pair your own prover, or send from the desktop
+app.
 
 ## Security
 

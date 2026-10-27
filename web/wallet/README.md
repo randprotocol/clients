@@ -32,35 +32,39 @@ git-ignored, and nothing in it is ever edited by hand.
   and tells you what a send would cost before it tells you it cannot make one.
 - **The faucet, settings, the viewing key, the spend-key export**, and a wipe.
 
-## Sending: through a prover you pair
+## Sending: through the RandProtocol provers, or a prover you pair
 
 A transfer on this chain carries a STARK proof of a 4-in/4-out bundle. The bundle prover peaks at
 about **6.2 GB** of memory (`wallet-core`'s `PROVER_PEAK_MEMORY_BYTES`, measured on fullnode
 v0.6.7) and a browser gives WebAssembly a **4 GiB** address space. There is no way to fit one in
 the other, so this shell never makes the bundle proof for itself: it builds the transaction, makes
 the small **authorisation proof** itself (from the spend key, in the worker — about half a minute),
-has a prover you pair make the bundle proof from the viewing key, checks the proof locally and
-submits it. Pair the **Rand Wallet desktop app** on the same machine (its Settings → **Prove for
-my other devices**, then paste its link into this wallet's Settings → **Prover**), or any
-`rand-prover`. The prover receives your viewing key with every job — it can read this wallet's
-whole history and cannot spend; running your own keeps the history to yourself —
+has a prover make the bundle proof from the viewing key, checks the proof locally and submits it.
+By default that is **the RandProtocol provers**: the pool every release pins, used wherever the
+device cannot prove, with nothing to pair (a one-time notice says what they see before the first
+send). Or pair your own in Settings → **Prover**: the **Rand Wallet desktop app** on the same
+machine (its Settings → **Prove for my other devices**, then paste its link here), or any
+`rand-prover`. The prover that makes a proof receives your viewing key with that job — it can read
+this wallet's whole history and cannot spend; running your own keeps the history to yourself —
 [`docs/prover.md`](../../docs/prover.md) is the guide.
 
-Without a paired prover, `send.canProve()` answers `false`, and the Send flow walks you through
-recipient, amount and review and then explains the wall instead of offering a Prove button. Nothing
-is half-started and no proof is attempted. A pending proof lives only in this tab's memory: reloading
+With no prover route — the RandProtocol provers turned off in Settings and nothing paired —
+`send.canProve()` answers `false`, and the Send flow walks you through recipient, amount and review
+and then explains the wall instead of offering a Prove button: turn the RandProtocol provers back
+on, pair your own prover, or send from the desktop app. When the provers are busy or cannot be
+reached, the review says that instead. Nothing is half-started and no proof is attempted. A pending proof lives only in this tab's memory: reloading
 the page mid-proof forgets it, and nothing is sent.
 
 The same holds for the browser extension. It is not a property of this shell.
 
 ## Security model
 
-**Your spend key stays on this machine; your viewing key leaves it only to a prover you pair.**
+**Your spend key stays on this machine; your viewing key leaves it only to the prover that makes a proof** (one of the RandProtocol provers, or one you pair).
 There is no server-side anything: `serve.mjs` hands over static files and nothing else. The wallet
-itself talks to two kinds of host: the Rand node you name in Settings (JSON-RPC), and — only once
-you have paired one — the prover. The viewing key (and the bundle's one-time salt) leaves the page
-only inside a job sealed to that prover (ML-KEM-768 + ChaCha20-Poly1305, under the key its pairing
-link names), so nobody on the path can read it; the prover can read this wallet's history and
+itself talks to two kinds of host: the Rand node you name in Settings (JSON-RPC), and — when it
+sends — the prover: a RandProtocol prover, or the one you paired. The viewing key (and the bundle's
+one-time salt) leaves the page only inside a job sealed to that prover (ML-KEM-768 +
+ChaCha20-Poly1305, under the key the wallet pins for it or its pairing link names), so nobody on the path can read it; the prover can read this wallet's history and
 cannot spend, because the authorisation proof is made here, from the spend key, before the job is
 sent. (On a chain without split authorisation — no public chain any more — the job would carry the
 spend key, and the wallet sends such a job only to a prover whose link marks it as your own,

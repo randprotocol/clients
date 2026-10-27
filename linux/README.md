@@ -2,7 +2,8 @@
 
 The Linux client is the Tauri desktop app in [`../desktop`](../desktop): one codebase for
 Windows, Linux and macOS — the shared wallet UI in a system webview, over the shared Rust core.
-It is the one client that can prove a transfer locally.
+It proves transfers on this computer where it has the memory (8 GiB or more); elsewhere the
+RandProtocol provers prove them by default, as in every other client.
 
 ```
 cd desktop/src-tauri && cargo tauri dev     # run from source
@@ -17,5 +18,5 @@ The `.tar.gz` is for a distribution the three packages do not fit; [`INSTALL`](I
 file inside it that says where things go. The app is the same interface the browser extension
 shows (`../ui`), in a native window.
 
-For every chain action the desktop app does not offer (bridge burns, staking, deploys and
-confidential calls), use the `rand` command-line wallet from the fullnode repository.
+The desktop app sends, swaps, withdraws over the bridge (burns) and makes confidential program
+calls. For staking and deploys, use the `rand` command-line wallet from the fullnode repository.

@@ -23,8 +23,9 @@ Or install it for your user, with a launcher entry:
 
 (~/.local/bin has to be on your PATH for the launcher entry to find it.)
 
-The wallet keeps one file, ~/.config/RandWallet/wallet.json, readable by your user only. Sending
-needs about 8 GiB of memory: the proof is made on this computer.
+The wallet keeps one file, ~/.config/RandWallet/wallet.json, readable by your user only. With
+8 GiB of memory or more a send is proved on this computer; with less, the RandProtocol provers
+prove it by default (or a prover you pair in Settings).
 
 Check the download before you run it: SHA256SUMS is published with every release at
 https://github.com/randprotocol/clients/releases

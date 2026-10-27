@@ -3,10 +3,11 @@
 A [Tauri](https://tauri.app) app: the **shared wallet UI** (`../ui`) in a system webview, over the
 **shared Rust core** (`../core/crates/wallet-core`) linked directly as a crate, no FFI.
 
-**This is the one shell in which a transfer can actually complete.** A bundle proof peaks at about
-6.2 GB and wasm32 stops at 4 GiB, so the web wallet and the browser extension do everything except
-the proof itself and say so (`send.canProve()`). Here the chain crypto is native, and the only
-limit is the machine's real RAM.
+**This is the one shell that makes the bundle proof itself.** A bundle proof peaks at about 6.2 GB
+and wasm32 stops at 4 GiB, so the web wallet and the browser extension hand it to the RandProtocol
+provers (the default) or a prover you pair. Here the chain crypto is native: with 8 GiB or more a
+transfer, a bridge burn or a confidential call is proved on this computer, and with less the
+RandProtocol provers prove it, as in the other shells.
 
 ```
 src-tauri/src/main.rs        the window, the plugins, the command list
@@ -65,7 +66,7 @@ Four commands, and nothing else crosses the boundary:
 | command | why it cannot be JavaScript |
 |---|---|
 | `core_call(method, params)` | a passthrough to `wallet_core::call` — the prover. Runs on the **blocking pool**, never the main thread: a proof takes minutes and would otherwise freeze the window. |
-| `system_memory_gib()` | a webview cannot see the machine. It is the whole of `send.canProve()`'s evidence; below 8 GiB the app refuses to start a proof rather than be killed half-way through one. |
+| `system_memory_gib()` | a webview cannot see the machine. It is the whole of `send.canProve()`'s evidence; below 8 GiB the app never starts a proof here (the RandProtocol provers, or a paired prover, make it) rather than be killed half-way through one. |
 | `storage_*` | a JSON file under the data directory: the vault, the settings, the note store. |
 | `storage_session_*` | a `HashMap` in this process — where the plaintext spend key lives while unlocked, and nowhere else. |
 
