@@ -31,6 +31,11 @@ xcodebuild -project RandWallet.xcodeproj -scheme RandWallet \
   -destination 'platform=iOS Simulator,name=iPhone 17' test
 ```
 
+The framework is git-ignored and built outside Xcode, so a checkout keeps the one it built last.
+The app target's first build phase runs `core/scripts/core-stale.sh` on it: a framework older than
+any core source fails the build ("… Rebuild it: core/scripts/build-ios.sh") rather than ship an
+older core (an older prover pool, an older chain).
+
 `RandWallet.xcodeproj` is generated from `project.yml` by [xcodegen](https://github.com/yonaskolb/XcodeGen)
 and committed; after editing `project.yml`, run `xcodegen generate`.
 

@@ -38,8 +38,21 @@ targets:
     dependencies:
       - framework: Frameworks/RandWalletCore.xcframework
         embed: false
+    # The core is built outside Xcode (core/scripts/build-ios.sh) and git-ignored, so a checkout
+    # keeps whatever it built last: a framework older than any core source (an older prover pool,
+    # an older chain) fails the build here instead of shipping. core-stale.sh walks core/, which a
+    # sandboxed script may not read, so this target's script sandbox is off (it has no other script).
+    preBuildScripts:
+      - name: Check the core is current
+        basedOnDependencyAnalysis: false
+        script: |
+          if reason=$("$SRCROOT/../core/scripts/core-stale.sh" "$SRCROOT/Frameworks/RandWalletCore.xcframework"); then
+            echo "error: $reason. Rebuild it: core/scripts/build-ios.sh"
+            exit 1
+          fi
     settings:
       base:
+        ENABLE_USER_SCRIPT_SANDBOXING: "NO"
         PRODUCT_BUNDLE_IDENTIFIER: org.randprotocol.wallet
         PRODUCT_NAME: RandWallet
         INFOPLIST_FILE: RandWallet/Info.plist
