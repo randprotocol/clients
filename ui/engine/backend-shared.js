@@ -1806,7 +1806,7 @@ export function makeSharedBackend({
 
     /**
      * The RandProtocol provers every client ships (the core's `version.trusted_prover_pool`: the
-     * validators' machines, each with its own key, viewing-key jobs only, no fee) — `{name,
+     * machines RandProtocol operates (two since 0.8.1), each with its own key, viewing-key jobs only, no fee) — `{name,
      * members: [{name, url, fingerprint}], warning}` for a screen, or `null` when this build
      * carries none. Nothing is paired or asked by asking.
      */

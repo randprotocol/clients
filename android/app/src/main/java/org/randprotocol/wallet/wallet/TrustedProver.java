@@ -9,8 +9,8 @@ import java.util.List;
 
 /**
  * The RandProtocol provers this build pins — the core's {@code version.trusted_prover_pool}
- * (wallet 0.6.9; audit v7 VK-9): a pool of validator-hosted provers, EACH WITH ITS OWN KEY,
- * viewing-key jobs only, no fee (docs/prover.md §8). What a screen shows: the pool's name and each
+ * (wallet 0.6.9; audit v7 VK-9): a pool of provers operated by RandProtocol (two since 0.8.1),
+ * EACH WITH ITS OWN KEY, viewing-key jobs only, no fee (docs/prover.md §8). What a screen shows: the pool's name and each
  * member's name, URL and fingerprint. A member's pairing link (its public token inside) is
  * package-private: only {@link ProverPairing#builtInPool} reads it, and it reaches neither a screen
  * nor {@link org.randprotocol.wallet.security.Prefs}.

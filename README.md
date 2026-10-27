@@ -28,8 +28,8 @@ and per-transaction keys that [randscan.org](https://randscan.org) opens confide
 transactions with. The shells that can fit a proof in memory — the desktop app and the mobile
 apps — also prove and submit shielded transfers of RAND and of any listed RPL token; the browser
 extension and the web wallet build, authorise and submit the same transfers but have the bundle
-proof made by a prover: by default **the RandProtocol provers** (run by the validators
-under `prover.randprotocol.org`, each member's own key pinned in the wallet, no fee;
+proof made by a prover: by default **the RandProtocol provers** (two machines, a and b, operated
+by RandProtocol under `prover.randprotocol.org`, each with its own key pinned in the wallet, no fee;
 the wallet says what they see before the first send), or one you pair for privacy — the desktop
 app on the same machine, or your own `rand-prover` (see the known limitation below and
 [`docs/prover.md`](docs/prover.md)). A phone without the memory does the same. The extensions

@@ -210,7 +210,7 @@ same words. Pair a prover that charges nothing, or run your own.
 
 ## 8. The RandProtocol provers
 
-Every client ships a pinned descriptor of the provers the RandProtocol validators run (wallet
+Every client ships a pinned descriptor of the provers RandProtocol operates (wallet
 0.6.9; before it, 0.6.8 pinned one key shared by every machine — audit v7 VK-9, fullnode #123). Each
 member has **its own key** at its own URL:
 
@@ -219,11 +219,12 @@ member has **its own key** at its own URL:
 | a | `4SK4-P64N-XWEN-ZSZZ` | `https://prover.randprotocol.org/m/a` |
 | b | `0XZX-NZ1J-SPMB-GWZN` | `https://prover.randprotocol.org/m/b` |
 
-Wallet 0.8.1 pins these two. Until 0.8.0 the pool had four (a `ZEXQ-1JHV-ZT60-KFB5`, archive2,
-nyc3, sfo3); their hosts were lost on 2026-10-22 with the hosting account. Member a was rebuilt and
-b added, each with a new key made on its own host like the first. A 0.8.0 wallet still pins the
-four old keys, so it finds no member it trusts and has to prove locally or use a prover the user
-pairs.
+The pool is these two machines, each with its own key; wallet 0.8.1 and later pin them. Until
+0.8.0 the pool had four (a `ZEXQ-1JHV-ZT60-KFB5`, archive2, nyc3, sfo3), retired on 2026-10-22;
+member a was rebuilt and b added, each with a new key made on its own host. A 0.8.0 wallet still
+pins the four old keys, so it finds no member it trusts and has to prove locally or use a prover
+the user pairs; from 0.8.2 a wallet in that state (every pinned member silent, or answering with
+another key) says to update Rand Wallet rather than to try again later.
 
 The wallet pins it from data (`core/crates/wallet-core/src/trusted-prover-pool.json`, copied from
 the operators' `pool.json`; the same descriptor is served at
@@ -241,7 +242,9 @@ the job is sealed to that member's key and polled on that member until done — 
 mid-job. A member unreachable, busy (a full queue, or busy at submit) or refusing is skipped for
 the next. Only when every member is busy or away does the wallet say so — "The RandProtocol provers
 are all busy right now; try again in a minute, or pair your own prover in Settings." / "… cannot be
-reached right now (…)" — and it never retries in a loop. Nothing is stored for them.
+reached right now (…)"; when every member is silent or answers with another key than its pin, "None
+of the RandProtocol provers this version of Rand Wallet pins answered as pinned (…). Update Rand
+Wallet to the latest version, or pair your own prover in Settings." — and it never retries in a loop. Nothing is stored for them.
 
 **The first send through them shows a one-time notice**, before anything is built:
 

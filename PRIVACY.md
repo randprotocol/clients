@@ -45,10 +45,10 @@ your device until you delete them.
   into a note that only your key can open.
 - **To a prover, when your device cannot make the proof itself.** A browser wallet, or a phone
   without the memory for a proof, has the payment's proof made by a prover. By default (from
-  version 0.6.8) that is **the RandProtocol provers**: a few machines run by the RandProtocol
-  validators (four today, under https://prover.randprotocol.org), charging no fee. From 0.6.9
-  each machine has its own key, which the wallet pins (Settings → Prover lists them by
-  fingerprint); 0.6.8 used one key shared by all of them. The wallet tells you before your first
+  version 0.6.8) that is **the RandProtocol provers**: two machines, a and b, operated by
+  RandProtocol under https://prover.randprotocol.org, charging no fee. Each machine has its own
+  key, which the wallet pins (Settings → Prover lists them by fingerprint); 0.6.8 used one key
+  shared by all of them. The wallet tells you before your first
   send through them. Each proving job goes to one machine, carrying your wallet's **viewing key**
   and a one-time salt, encrypted to that machine's key. With them its operator can read your
   wallet's whole history — every

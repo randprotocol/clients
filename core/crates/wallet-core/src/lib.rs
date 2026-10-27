@@ -165,8 +165,8 @@ fn binding_domain_of(chain_id: u64, genesis: Option<&str>) -> Result<BindingDoma
 pub const EXPLORER_URL: &str = "https://randscan.org";
 
 /// The RandProtocol provers every client ships (wallet 0.6.9; audit v7 VK-9, fullnode #123): a
-/// pool of validator-hosted `rand-prover`s, EACH WITH ITS OWN KEY, taking viewing-key jobs only and
-/// charging nothing. The pinned list is data — `trusted-prover-pool.json` beside this file, copied
+/// pool of `rand-prover`s operated by RandProtocol (two since wallet 0.8.1, a and b), EACH WITH
+/// ITS OWN KEY, taking viewing-key jobs only and charging nothing. The pinned list is data — `trusted-prover-pool.json` beside this file, copied
 /// from `~/rand-prover-trusted/public/pool.json` (the same descriptor is served at
 /// `https://prover.randprotocol.org/.well-known/rand-prover-pool.json` for people and tools, never
 /// read by a wallet) — so a member removed or re-keyed is one entry changed and the others keep

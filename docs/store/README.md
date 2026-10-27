@@ -124,7 +124,7 @@ YOUR KEYS STAY WITH YOU
 • The app talks only to the RPC node you choose in Settings and to the prover that makes your proofs
 
 GOOD TO KNOW
-• An iPhone with about 8 GB of memory makes the whole proof itself. Other iPhones send through the RandProtocol provers by default (machines run by the network's validators, no fee): the one that proves a payment learns your viewing key, so it can read your history, and it can never spend. The app tells you before your first send, and Settings → Prover lets you use your own prover instead.
+• An iPhone with about 8 GB of memory makes the whole proof itself. Other iPhones send through the RandProtocol provers by default (two machines operated by RandProtocol, each with its own key, no fee): the one that proves a payment learns your viewing key, so it can read your history, and it can never spend. The app tells you before your first send, and Settings → Prover lets you use your own prover instead.
 • A payment or a swap takes a few minutes to prove; keep the app open.
 • There is no recovery service. Save your spend key when the wallet shows it to you; nobody can restore it for you.
 • Rand Wallet sells nothing, charges no fee and holds no funds on your behalf. A swap is a trade with the durian.market pool program on the chain; the wallet is not a party to it.
@@ -310,7 +310,7 @@ YOUR KEYS STAY WITH YOU
 • The app talks only to the RPC node you choose in Settings and to the prover that makes your proofs, and only over HTTPS
 
 GOOD TO KNOW
-• A phone with about 8 GB of memory makes the whole proof itself. Other phones send through the RandProtocol provers by default (machines run by the network's validators, no fee): the one that proves a payment learns your viewing key, so it can read your history, and it can never spend. The app tells you before your first send, and Settings → Prover lets you use your own prover instead.
+• A phone with about 8 GB of memory makes the whole proof itself. Other phones send through the RandProtocol provers by default (two machines operated by RandProtocol, each with its own key, no fee): the one that proves a payment learns your viewing key, so it can read your history, and it can never spend. The app tells you before your first send, and Settings → Prover lets you use your own prover instead.
 • A payment or a swap takes a few minutes to prove; a notification shows while it runs. A swap needs about 1.5 GB of memory on the phone.
 • There is no recovery service. Save your spend key when the wallet shows it to you; nobody can restore it for you.
 • Rand Wallet sells nothing, charges no fee and holds no funds on your behalf. A swap is a trade with the durian.market pool program on the chain; the wallet is not a party to it.
@@ -455,7 +455,7 @@ WHAT IT DOES
 • Password-encrypted key storage, auto-lock, dark and light themes
 
 ABOUT SENDING
-A proof needs more memory than a browser gives an extension, so the extension makes only the small authorisation proof and a prover makes the rest. By default that is the RandProtocol provers: a few machines run by the network's validators at no fee, each with its own key, which the extension pins. The one that proves a send learns your viewing key, so it can read your whole history, and it can never spend. The extension tells you this before your first send. For more privacy, choose your own prover in Settings → Prover: the Rand Wallet desktop app on the same computer, or your own server.
+A proof needs more memory than a browser gives an extension, so the extension makes only the small authorisation proof and a prover makes the rest. By default that is the RandProtocol provers: two machines operated by RandProtocol at no fee, each with its own key, which the extension pins. The one that proves a send learns your viewing key, so it can read your whole history, and it can never spend. The extension tells you this before your first send. For more privacy, choose your own prover in Settings → Prover: the Rand Wallet desktop app on the same computer, or your own server.
 
 YOUR KEYS STAY WITH YOU
 No account, no sign-up, no analytics, no advertising, no remote code. The extension talks only to the RPC node in Settings and to the prover that makes your proofs (the RandProtocol provers, or the one you chose).
@@ -504,9 +504,9 @@ Privacy policy URL: `https://randprotocol.org/clients/privacy`.
 viewing key and a one-time salt, encrypted to the prover: enough to read the wallet's whole
 transaction history, not to spend (the spend key never leaves the device). In 0.6.7 a job went
 only to a prover the user chose and pasted the link of, so nothing reached the developer. In 0.6.8
-the default prover is the RandProtocol prover, run by the project's validators, so by default the
-developer receives what reveals the user's payment history. 0.6.9 and 0.7.x change nothing here: the
-default is still the validators' machines (now each with its own key), and the box stays ticked. Declare it, say what it is used for
+the default prover is the RandProtocol prover, operated by RandProtocol, so by default the
+developer receives what reveals the user's payment history. 0.6.9 to 0.8.x change nothing here: the
+default is still RandProtocol's machines (two since 0.8.1, each with its own key), and the box stays ticked. Declare it, say what it is used for
 (making the payment's proof, nothing else; not sold, not shared, not kept beyond the job), and keep
 the description and the privacy policy saying so: the extension tells the user before the first
 send, and Settings → Prover lets them choose their own prover or none.
@@ -580,7 +580,7 @@ No bundler, minifier or transpiler is used. Every .js file in the add-on is a so
 
 TESTING. No account is needed. Click the toolbar button → "Create a new wallet" → set a password → save the spend key. To test with funds, choose "I already have a wallet" and paste the review wallet's key: <PASTE THE REVIEW WALLET'S SPEND KEY HERE> (the "Get test RAND from the faucet" button, shown while Activity is empty, is refused by the public node; it is for nodes that run an open faucet). Sending works out of the box through the RandProtocol provers, after a one-time notice (Firefox also asks its data-collection consent then). Swap is on the home screen.
 
-NETWORK. JSON-RPC POSTs to the node URL in Settings (default https://rpc.randprotocol.org; rpc1–rpc3.randprotocol.org are failover hosts). When the user sends, a proving job goes to the prover: by default one of the RandProtocol provers under https://prover.randprotocol.org (machines run by the project's validators, each with its own key pinned in the extension; the user is told before the first send), or the prover the user chose in Settings → Prover. A proving job contains the wallet's viewing key and a one-time salt, encrypted to that prover (enough to read the wallet's history, not to spend; the spend key never leaves the device, which makes the authorisation proof itself). No analytics, no telemetry, no remote code.
+NETWORK. JSON-RPC POSTs to the node URL in Settings (default https://rpc.randprotocol.org; rpc1–rpc3.randprotocol.org are failover hosts). When the user sends, a proving job goes to the prover: by default one of the RandProtocol provers under https://prover.randprotocol.org (two machines operated by RandProtocol, each with its own key pinned in the extension; the user is told before the first send), or the prover the user chose in Settings → Prover. A proving job contains the wallet's viewing key and a one-time salt, encrypted to that prover (enough to read the wallet's history, not to spend; the spend key never leaves the device, which makes the authorisation proof itself). No analytics, no telemetry, no remote code.
 
 CONTENT SCRIPTS run only on randbridge.org and durian.market (and localhost, for a locally served copy) and expose a provider object, window.rand. A page learns the wallet address only after the user approves that site, and a transaction a page asks for (window.rand.invoke) is shown in the wallet's own window and sent only on the user's approval.
 
