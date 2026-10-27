@@ -855,7 +855,6 @@ export default {
   "The request was not approved in Rand Wallet.": "Die Anfrage wurde in Rand Wallet nicht genehmigt.",
   "The rescan could not be started.": "Der Neuscan konnte nicht gestartet werden.",
   "The rescan did not finish": "Der Neuscan wurde nicht abgeschlossen",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "die gespeicherten Unterzeichnerprofile konnten nicht geöffnet werden; es wurde nichts geändert. Stelle den Speicher dieses Geräts wieder her oder lösche die Wallet und stelle sie aus ihrem Schlüssel wieder her",
   "The scan was cancelled.": "Der Scan wurde abgebrochen.",
   "The side panel could not be opened.": "Die Seitenleiste konnte nicht geöffnet werden.",
   "The site sent an invoke this wallet cannot read: {reason}.": "Die Website hat einen Aufruf gesendet, den diese Wallet nicht lesen kann: {reason}.",
@@ -1102,4 +1101,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": { one: "{n} Beweis · etwa {minutes} Minuten auf dem Prover", other: "{n} Beweise · etwa {minutes} Minuten auf dem Prover" },
   "A prover will make the proof": "Ein Prover wird den Beweis erstellen",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "Dieses Gerät bereitet die Überweisung vor und übergibt den Beweis dann an einen Prover. Lass die Wallet geöffnet, bis der Prover ihn hat; du kannst dir andere Bildschirme ansehen.",
+  "this record is {n} bytes; the most it may be is {max}": "dieser Datensatz ist {n} Bytes groß; höchstens {max} sind erlaubt",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "die gespeicherten Unterzeichnerprofile konnten nicht geöffnet werden ({reason}); es wurde nichts geändert. Stelle den Speicher dieses Geräts wieder her oder lösche die Wallet und stelle sie aus ihrem Schlüssel wieder her",
+  "the record is larger than this build allows": "der Datensatz ist größer, als diese Version erlaubt",
+  "the record is damaged": "der Datensatz ist beschädigt",
+  "the record was saved by a newer version of Rand Wallet": "der Datensatz wurde von einer neueren Version von Rand Wallet gespeichert",
+  "the record does not open with this password": "der Datensatz lässt sich mit diesem Passwort nicht öffnen",
 };

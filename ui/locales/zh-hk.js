@@ -848,7 +848,6 @@ export default {
   "The request was not approved in Rand Wallet.": "請求未在 Rand Wallet 中獲批准。",
   "The rescan could not be started.": "無法開始重新掃描。",
   "The rescan did not finish": "重新掃描未完成",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "無法開啟已儲存的簽署人資料；未作任何更改。請復原此裝置的儲存空間，或清除錢包後用其金鑰復原",
   "The scan was cancelled.": "掃描已取消。",
   "The side panel could not be opened.": "無法開啟側邊欄。",
   "The site sent an invoke this wallet cannot read: {reason}.": "網站傳來此錢包無法讀取的調用：{reason}。",
@@ -1095,4 +1094,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": "{n} 個證明 · 在證明器上約需 {minutes} 分鐘",
   "A prover will make the proof": "證明將由證明器生成",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "本裝置先準備好轉賬，再把證明交給證明器。在證明器收到之前請保持錢包開啟；你可以查看其他頁面。",
+  "this record is {n} bytes; the most it may be is {max}": "此記錄為 {n} 位元組；最多允許 {max}",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "無法開啟已儲存的簽署人資料（{reason}）；未作任何更改。請復原此裝置的儲存空間，或清除錢包後用其金鑰復原",
+  "the record is larger than this build allows": "記錄超過此版本允許的大小",
+  "the record is damaged": "記錄已損壞",
+  "the record was saved by a newer version of Rand Wallet": "記錄由較新版本的 Rand Wallet 儲存",
+  "the record does not open with this password": "此密碼無法開啟該記錄",
 };

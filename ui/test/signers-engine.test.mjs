@@ -3,7 +3,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeWasmBackend } from '../engine/backend-wasm.js';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PASSWORD, mapStorage, stubCore, stubFetch, stubPlatform, GENESIS } from './backend-fixtures.mjs';
+import { encryptSecret, DEFAULT_RECORD_BYTES } from '../engine/crypto.js';
+import { SIGNER_POLICIES_RECORD_BYTES } from '../engine/signers.js';
+
+/** fullnode's own 2-of-3 policy vector: 8 029 characters, twice the spend-key vault's cap. */
+const REAL_POLICY = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'msauth', 'policy.json'), 'utf8');
 
 export const POLICY = '{"version":1,"threshold":2,"signers":["aa","bb","cc"],"msk":"' + '11'.repeat(32) + '"}';
 export const KEY = '{"seed":"' + '22'.repeat(32) + '","address":"A","public_key":"bb"}';
@@ -76,6 +84,48 @@ test('a wipe removes every profile', async () => {
   await backend.wallet.wipe();
   assert.equal(storage.local.get('signerPolicies'), undefined);
   assert.equal(storage.local.get('signerSeeds'), undefined);
+});
+
+// ---- MSC-1: the profiles record was held to the spend-key vault's 4 096-byte cap on READ only, so a
+// real policy saved fine and every profile was "unreadable" from the next lock on. The stub POLICY
+// above is ~150 characters, which is why nothing here ever failed.
+test('real 2-of-3 policies survive a lock: one, then three (the record is sized for policies, not a spend key)', async () => {
+  const hashes = new Map();
+  const core = msauthCore({ msauth_policy_info: ({ policy }) => {
+    if (!hashes.has(policy)) hashes.set(policy, String(hashes.size + 1).padStart(64, '0'));
+    return { fingerprint: 'NFYW-K8E9-E5K9-AAK3', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(60), policy_hash: hashes.get(policy) };
+  } });
+  const storage = mapStorage();
+  const backend = makeWasmBackend({ core, storage, platform: stubPlatform(), fetch: stubFetch(), locks: null, broadcast: null });
+  await backend.wallet.create(PASSWORD);
+  assert.ok(REAL_POLICY.length > DEFAULT_RECORD_BYTES, `the fixture policy is ${REAL_POLICY.length} characters`);
+  await backend.signers.add({ label: 'one', policy: REAL_POLICY, key: KEY, password: PASSWORD });
+  await backend.wallet.lock();
+  await backend.wallet.unlock(PASSWORD);
+  assert.deepEqual((await backend.signers.list()).map((r) => r.label), ['one']);
+  const parsed = JSON.parse(REAL_POLICY);
+  await backend.signers.add({ label: 'two', policy: JSON.stringify({ ...parsed, name: 'two' }, null, 2), key: KEY, password: PASSWORD });
+  await backend.signers.add({ label: 'three', policy: JSON.stringify({ ...parsed, name: 'three' }, null, 2), key: KEY, password: PASSWORD });
+  await backend.wallet.lock();
+  await backend.wallet.unlock(PASSWORD);
+  assert.deepEqual((await backend.signers.list()).map((r) => r.label), ['one', 'two', 'three']);
+  assert.ok(SIGNER_POLICIES_RECORD_BYTES >= 32 * REAL_POLICY.length, 'headroom: dozens of real policies');
+});
+
+test('an unreadable profiles record names its cause: damaged, newer build, another password, oversize', async () => {
+  const run = async (mutate, expect) => {
+    const { backend, storage } = await unlockedWithSigner();
+    await backend.wallet.lock();
+    const rec = storage.local.get('signerPolicies');
+    storage.local.set('signerPolicies', await mutate(rec));
+    await backend.wallet.unlock(PASSWORD);
+    await assert.rejects(backend.signers.list(), (e) => e.code === 'signers-unreadable' && expect.test(e.message) && /could not be opened/.test(e.message), String(expect));
+    assert.deepEqual((await storage.session.get('unlocked')).signers, [], 'nothing opened');
+  };
+  await run((rec) => ({ ...rec, ct: 'AAAA' }), /damaged/);
+  await run((rec) => ({ ...rec, v: 99 }), /newer version/);
+  await run(() => encryptSecret('another-password-9', JSON.stringify([]), { maxBytes: SIGNER_POLICIES_RECORD_BYTES }), /does not open with this password/);
+  await run((rec) => ({ ...rec, ct: 'A'.repeat(4 * (SIGNER_POLICIES_RECORD_BYTES / 3 + 64)) }), /larger than/);
 });
 
 test('a damaged policies record is never overwritten: unlock works, list/add/remove refuse', async () => {

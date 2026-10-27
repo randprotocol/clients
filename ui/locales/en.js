@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1095 strings.
+// 1100 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -844,6 +844,10 @@ export default {
   "The RandProtocol provers: {n} machines run by the validators, each with its own key, used until you choose another.": "The RandProtocol provers: {n} machines run by the validators, each with its own key, used until you choose another.",
   "The RandProtocol provers: machines run by the validators, each with its own key, used until you choose another.": "The RandProtocol provers: machines run by the validators, each with its own key, used until you choose another.",
   "The randprover: link your prover shows. It carries a secret — paste it here and nowhere else.": "The randprover: link your prover shows. It carries a secret — paste it here and nowhere else.",
+  "the record does not open with this password": "the record does not open with this password",
+  "the record is damaged": "the record is damaged",
+  "the record is larger than this build allows": "the record is larger than this build allows",
+  "the record was saved by a newer version of Rand Wallet": "the record was saved by a newer version of Rand Wallet",
   "the relayer fee {fee} is more than the {amount} being burned": "the relayer fee {fee} is more than the {amount} being burned",
   "The relayer fee cannot be more than the amount being withdrawn.": "The relayer fee cannot be more than the amount being withdrawn.",
   "The relayer fee is more than the amount being withdrawn.": "The relayer fee is more than the amount being withdrawn.",
@@ -857,7 +861,7 @@ export default {
   "The request was not approved in Rand Wallet.": "The request was not approved in Rand Wallet.",
   "The rescan could not be started.": "The rescan could not be started.",
   "The rescan did not finish": "The rescan did not finish",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key",
   "The scan was cancelled.": "The scan was cancelled.",
   "The side panel could not be opened.": "The side panel could not be opened.",
   "The site sent an invoke this wallet cannot read: {reason}.": "The site sent an invoke this wallet cannot read: {reason}.",
@@ -963,6 +967,7 @@ export default {
   "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.": "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.",
   "This prover will be able to read this wallet's whole history. It cannot spend.": "This prover will be able to read this wallet's whole history. It cannot spend.",
   "This Rand Wallet cannot run programs.": "This Rand Wallet cannot run programs.",
+  "this record is {n} bytes; the most it may be is {max}": "this record is {n} bytes; the most it may be is {max}",
   "This removes the wallet from this device. You will need your recovery key to restore it.": "This removes the wallet from this device. You will need your recovery key to restore it.",
   "This screen could not be shown.": "This screen could not be shown.",
   "This screen ships in a later task. Your wallet is unlocked and ready.": "This screen ships in a later task. Your wallet is unlocked and ready.",

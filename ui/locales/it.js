@@ -855,7 +855,6 @@ export default {
   "The request was not approved in Rand Wallet.": "La richiesta non è stata approvata in Rand Wallet.",
   "The rescan could not be started.": "Impossibile avviare la nuova scansione.",
   "The rescan did not finish": "La nuova scansione non è terminata",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "i profili di firmatario salvati non si sono potuti aprire; non è stato modificato nulla. Ripristina l'archiviazione di questo dispositivo, oppure cancella il portafoglio e ripristinalo dalla sua chiave",
   "The scan was cancelled.": "La scansione è stata annullata.",
   "The side panel could not be opened.": "Impossibile aprire il pannello laterale.",
   "The site sent an invoke this wallet cannot read: {reason}.": "Il sito ha inviato un invoke che questo portafoglio non sa leggere: {reason}.",
@@ -1102,4 +1101,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": { one: "{n} prova · circa {minutes} minuti sul prover", many: "{n} prove · circa {minutes} minuti sul prover", other: "{n} prove · circa {minutes} minuti sul prover" },
   "A prover will make the proof": "Un prover creerà la prova",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "Questo dispositivo prepara il trasferimento, poi affida la prova a un prover. Tieni aperto il wallet finché il prover non l'ha ricevuta; puoi guardare altre schermate.",
+  "this record is {n} bytes; the most it may be is {max}": "questo record è di {n} byte; può essere al massimo {max}",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "i profili di firmatario salvati non si sono potuti aprire ({reason}); non è stato modificato nulla. Ripristina l'archiviazione di questo dispositivo, oppure cancella il portafoglio e ripristinalo dalla sua chiave",
+  "the record is larger than this build allows": "il record è più grande di quanto questa versione consenta",
+  "the record is damaged": "il record è danneggiato",
+  "the record was saved by a newer version of Rand Wallet": "il record è stato salvato da una versione più recente di Rand Wallet",
+  "the record does not open with this password": "il record non si apre con questa password",
 };

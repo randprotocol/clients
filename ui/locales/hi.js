@@ -855,7 +855,6 @@ export default {
   "The request was not approved in Rand Wallet.": "Rand Wallet में अनुरोध स्वीकृत नहीं हुआ।",
   "The rescan could not be started.": "फिर से स्कैन शुरू नहीं हो सका।",
   "The rescan did not finish": "फिर से स्कैन पूरा नहीं हुआ",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "सहेजी गई हस्ताक्षरकर्ता प्रोफ़ाइलें खोली नहीं जा सकीं; कुछ नहीं बदला। इस डिवाइस का स्टोरेज बहाल करें, या वॉलेट मिटाकर उसकी की से बहाल करें",
   "The scan was cancelled.": "स्कैन रद्द हो गया।",
   "The side panel could not be opened.": "साइड पैनल खुल नहीं सका।",
   "The site sent an invoke this wallet cannot read: {reason}.": "साइट ने ऐसा invoke भेजा जिसे यह वॉलेट नहीं पढ़ सकता: {reason}।",
@@ -1102,4 +1101,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": "{n} प्रूफ़ · प्रूवर पर लगभग {minutes} मिनट",
   "A prover will make the proof": "प्रूफ़ एक प्रूवर बनाएगा",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "यह डिवाइस ट्रांसफ़र तैयार करता है, फिर प्रूफ़ एक प्रूवर को सौंपता है। जब तक प्रूवर को यह न मिल जाए, वॉलेट खुला रखें; आप दूसरी स्क्रीन देख सकते हैं।",
+  "this record is {n} bytes; the most it may be is {max}": "यह रिकॉर्ड {n} बाइट का है; अधिकतम {max} हो सकता है",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "सहेजी गई हस्ताक्षरकर्ता प्रोफ़ाइलें खोली नहीं जा सकीं ({reason}); कुछ नहीं बदला। इस डिवाइस का स्टोरेज बहाल करें, या वॉलेट मिटाकर उसकी की से बहाल करें",
+  "the record is larger than this build allows": "रिकॉर्ड इस बिल्ड की अनुमति से बड़ा है",
+  "the record is damaged": "रिकॉर्ड खराब है",
+  "the record was saved by a newer version of Rand Wallet": "रिकॉर्ड Rand Wallet के नए संस्करण से सहेजा गया था",
+  "the record does not open with this password": "रिकॉर्ड इस पासवर्ड से नहीं खुलता",
 };

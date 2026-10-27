@@ -848,7 +848,6 @@ export default {
   "The request was not approved in Rand Wallet.": "Permintaan tidak disetujui di Rand Wallet.",
   "The rescan could not be started.": "Pemindaian ulang tidak dapat dimulai.",
   "The rescan did not finish": "Pemindaian ulang tidak selesai",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "profil penanda tangan yang tersimpan tidak dapat dibuka; tidak ada yang diubah. Pulihkan penyimpanan perangkat ini, atau hapus dompet dan pulihkan dari kuncinya",
   "The scan was cancelled.": "Pemindaian dibatalkan.",
   "The side panel could not be opened.": "Panel samping tidak dapat dibuka.",
   "The site sent an invoke this wallet cannot read: {reason}.": "Situs mengirim invoke yang tidak dapat dibaca dompet ini: {reason}.",
@@ -1095,4 +1094,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": "{n} bukti · sekitar {minutes} menit di prover",
   "A prover will make the proof": "Sebuah prover akan membuat bukti",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "Perangkat ini menyiapkan transfer, lalu menyerahkan bukti ke prover. Biarkan dompet tetap terbuka sampai prover menerimanya; Anda bisa melihat layar lain.",
+  "this record is {n} bytes; the most it may be is {max}": "rekaman ini {n} byte; paling besar {max}",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "profil penanda tangan yang tersimpan tidak dapat dibuka ({reason}); tidak ada yang diubah. Pulihkan penyimpanan perangkat ini, atau hapus dompet dan pulihkan dari kuncinya",
+  "the record is larger than this build allows": "rekaman lebih besar daripada yang diizinkan build ini",
+  "the record is damaged": "rekaman rusak",
+  "the record was saved by a newer version of Rand Wallet": "rekaman disimpan oleh versi Rand Wallet yang lebih baru",
+  "the record does not open with this password": "rekaman tidak terbuka dengan kata sandi ini",
 };

@@ -855,7 +855,6 @@ export default {
   "The request was not approved in Rand Wallet.": "A solicitação não foi aprovada na Rand Wallet.",
   "The rescan could not be started.": "Não foi possível iniciar o reescaneamento.",
   "The rescan did not finish": "O reescaneamento não terminou",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "os perfis de signatário salvos não puderam ser abertos; nada foi alterado. Restaure o armazenamento deste dispositivo ou apague a carteira e restaure-a a partir da sua chave",
   "The scan was cancelled.": "A leitura foi cancelada.",
   "The side panel could not be opened.": "Não foi possível abrir o painel lateral.",
   "The site sent an invoke this wallet cannot read: {reason}.": "O site enviou uma invocação que esta carteira não consegue ler: {reason}.",
@@ -1102,4 +1101,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": { one: "{n} prova · cerca de {minutes} minutos no provador", many: "{n} provas · cerca de {minutes} minutos no provador", other: "{n} provas · cerca de {minutes} minutos no provador" },
   "A prover will make the proof": "Um provador fará a prova",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "Este dispositivo prepara a transferência e depois entrega a prova a um provador. Mantenha a carteira aberta até o provador recebê-la; você pode ver outras telas.",
+  "this record is {n} bytes; the most it may be is {max}": "este registro tem {n} bytes; o máximo é {max}",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "os perfis de signatário salvos não puderam ser abertos ({reason}); nada foi alterado. Restaure o armazenamento deste dispositivo ou apague a carteira e restaure-a a partir da sua chave",
+  "the record is larger than this build allows": "o registro é maior do que esta versão permite",
+  "the record is damaged": "o registro está danificado",
+  "the record was saved by a newer version of Rand Wallet": "o registro foi salvo por uma versão mais nova da Rand Wallet",
+  "the record does not open with this password": "o registro não abre com esta senha",
 };

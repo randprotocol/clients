@@ -856,7 +856,6 @@ export default {
   "The request was not approved in Rand Wallet.": "درخواست در Rand Wallet تأیید نشد.",
   "The rescan could not be started.": "اسکن مجدد آغاز نشد.",
   "The rescan did not finish": "اسکن مجدد تمام نشد",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "نمایه‌های امضاکننده ذخیره‌شده باز نشدند؛ چیزی تغییر نکرد. حافظه این دستگاه را بازیابی کنید یا کیف پول را پاک کنید و از کلیدش بازیابی کنید",
   "The scan was cancelled.": "اسکن لغو شد.",
   "The side panel could not be opened.": "پنل کناری باز نشد.",
   "The site sent an invoke this wallet cannot read: {reason}.": "سایت فراخوانی‌ای فرستاد که این کیف پول نمی‌تواند بخواند: {reason}.",
@@ -1103,4 +1102,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": "{n} اثبات · حدود {minutes} دقیقه روی اثبات‌گر",
   "A prover will make the proof": "یک اثبات‌گر اثبات را می‌سازد",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "این دستگاه انتقال را آماده می‌کند و سپس اثبات را به یک اثبات‌گر می‌سپارد. تا وقتی اثبات‌گر آن را دریافت کند کیف پول را باز نگه دارید؛ می‌توانید صفحه‌های دیگر را ببینید.",
+  "this record is {n} bytes; the most it may be is {max}": "این رکورد {n} بایت است؛ حداکثر {max} مجاز است",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "نمایه‌های امضاکننده ذخیره‌شده باز نشدند ({reason})؛ چیزی تغییر نکرد. حافظه این دستگاه را بازیابی کنید یا کیف پول را پاک کنید و از کلیدش بازیابی کنید",
+  "the record is larger than this build allows": "رکورد بزرگ‌تر از حدی است که این نسخه اجازه می‌دهد",
+  "the record is damaged": "رکورد آسیب دیده است",
+  "the record was saved by a newer version of Rand Wallet": "رکورد با نسخه‌ی جدیدتری از Rand Wallet ذخیره شده است",
+  "the record does not open with this password": "رکورد با این گذرواژه باز نمی‌شود",
 };

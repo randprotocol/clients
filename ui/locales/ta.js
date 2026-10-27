@@ -855,7 +855,6 @@ export default {
   "The request was not approved in Rand Wallet.": "கோரிக்கை Rand Wallet இல் அங்கீகரிக்கப்படவில்லை.",
   "The rescan could not be started.": "மீண்டும் ஸ்கேன் செய்வதைத் தொடங்க முடியவில்லை.",
   "The rescan did not finish": "மீண்டும் ஸ்கேன் செய்வது முடியவில்லை",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "சேமித்த கையொப்பமிடுபவர் சுயவிவரங்களைத் திறக்க முடியவில்லை; எதுவும் மாற்றப்படவில்லை. இந்தச் சாதனத்தின் சேமிப்பை மீட்டெடுங்கள், அல்லது வாலட்டை அழித்து அதன் விசையிலிருந்து மீட்டெடுங்கள்",
   "The scan was cancelled.": "ஸ்கேன் ரத்துசெய்யப்பட்டது.",
   "The side panel could not be opened.": "பக்கப் பலகத்தைத் திறக்க முடியவில்லை.",
   "The site sent an invoke this wallet cannot read: {reason}.": "இந்த வாலட்டால் படிக்க முடியாத ஒரு invoke ஐத் தளம் அனுப்பியது: {reason}.",
@@ -1102,4 +1101,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": { one: "{n} நிரூபணம் · நிரூபிப்பானில் சுமார் {minutes} நிமிடங்கள்", other: "{n} நிரூபணங்கள் · நிரூபிப்பானில் சுமார் {minutes} நிமிடங்கள்" },
   "A prover will make the proof": "ஒரு நிரூபிப்பான் நிரூபணத்தை உருவாக்கும்",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "இந்தச் சாதனம் பரிமாற்றத்தைத் தயார் செய்து, பின் நிரூபணத்தை ஒரு நிரூபிப்பானிடம் ஒப்படைக்கிறது. நிரூபிப்பான் பெறும் வரை வாலெட்டைத் திறந்தே வைத்திருங்கள்; மற்ற திரைகளைப் பார்க்கலாம்.",
+  "this record is {n} bytes; the most it may be is {max}": "இந்தப் பதிவு {n} பைட்டுகள்; அதிகபட்சம் {max} ஆக இருக்கலாம்",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "சேமித்த கையொப்பமிடுபவர் சுயவிவரங்களைத் திறக்க முடியவில்லை ({reason}); எதுவும் மாற்றப்படவில்லை. இந்தச் சாதனத்தின் சேமிப்பை மீட்டெடுங்கள், அல்லது வாலட்டை அழித்து அதன் விசையிலிருந்து மீட்டெடுங்கள்",
+  "the record is larger than this build allows": "இந்தப் பதிப்பு அனுமதிப்பதை விடப் பதிவு பெரியது",
+  "the record is damaged": "பதிவு சேதமடைந்துள்ளது",
+  "the record was saved by a newer version of Rand Wallet": "பதிவு Rand Wallet இன் புதிய பதிப்பால் சேமிக்கப்பட்டது",
+  "the record does not open with this password": "இந்தக் கடவுச்சொல்லால் பதிவு திறக்கவில்லை",
 };

@@ -848,7 +848,6 @@ export default {
   "The request was not approved in Rand Wallet.": "リクエストは Rand Wallet で承認されませんでした。",
   "The rescan could not be started.": "再スキャンを開始できませんでした。",
   "The rescan did not finish": "再スキャンが完了しませんでした",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "保存された署名者プロファイルを開けませんでした。何も変更していません。この端末のストレージを復元するか、ウォレットを消去してキーから復元してください",
   "The scan was cancelled.": "スキャンはキャンセルされました。",
   "The side panel could not be opened.": "サイドパネルを開けませんでした。",
   "The site sent an invoke this wallet cannot read: {reason}.": "サイトから、このウォレットが読み取れないインボークが送られてきました: {reason}。",
@@ -1095,4 +1094,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": "証明 {n} 件 · プルーバーで約 {minutes} 分",
   "A prover will make the proof": "プルーバーが証明を作成します",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "この端末で送金を準備し、証明はプルーバーに渡します。プルーバーが受け取るまでウォレットを開いたままにしてください。他の画面を見ても構いません。",
+  "this record is {n} bytes; the most it may be is {max}": "このレコードは {n} バイトです。上限は {max} です",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "保存された署名者プロファイルを開けませんでした（{reason}）。何も変更していません。この端末のストレージを復元するか、ウォレットを消去してキーから復元してください",
+  "the record is larger than this build allows": "レコードがこのビルドで許される大きさを超えています",
+  "the record is damaged": "レコードが破損しています",
+  "the record was saved by a newer version of Rand Wallet": "レコードは新しいバージョンの Rand Wallet で保存されています",
+  "the record does not open with this password": "このパスワードではレコードを開けません",
 };

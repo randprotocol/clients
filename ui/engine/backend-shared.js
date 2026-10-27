@@ -80,6 +80,13 @@
 // *is* the `canProve` parameter) and the inside of `send.send` past the chain gate (which calls
 // `executeSend`) — those two are the only places a caller's choices show through.
 import { encryptSecret, decryptSecret, checkVault, isVaultRecordError, sealWithPasskey, openWithPasskey } from './crypto.js';
+
+/**
+ * The paired prover's record (`proverToken`): `{token, kemEk, url, fingerprint, own}`, the ML-KEM
+ * key alone 2 368 hex characters, so the whole is near 3 KB — under the vault's 4 096-byte default
+ * but without room. Held to this cap on write and on read (MSC-1).
+ */
+const PROVER_PAIRING_RECORD_BYTES = 16 << 10;
 import { makeRpc, isAllowedRpcMethod, rpcUrlList } from './rpc.js';
 import { makeWallet, coreApi, emptyNoteStore, activity as activityRows, toUnits, isSpendable, abortError, HEIGHT_SPAN, envelopeBytesOf } from './wallet.js';
 import { LEGACY_ENVELOPE_CHAIN_IDS } from '../lib/memo.js';
@@ -848,7 +855,7 @@ export function makeSharedBackend({
   async function openProverPairing(password) {
     const rec = await storage.get(K.proverToken);
     if (!rec) return undefined;
-    try { return pairingOf(await decryptSecret(password, rec)); } catch { return undefined; }
+    try { return pairingOf(await decryptSecret(password, rec, { maxBytes: PROVER_PAIRING_RECORD_BYTES })); } catch { return undefined; }
   }
 
   // ------------------------------------------------------------------- unlock attempt throttle --
@@ -971,7 +978,10 @@ export function makeSharedBackend({
     const p = pairingOf(pairing);
     if (p) record.prover = p;
     record.signers = signerState.profiles;
-    if (signerState.unreadable) record.signersUnreadable = true;
+    if (signerState.unreadable) {
+      record.signersUnreadable = true;
+      record.signersUnreadableCause = signerState.cause || 'damaged';
+    }
     await storage.session.set(K.unlocked, record);
     // A wallet wiped and created again in the same page had no multi-tab coordination at all
     // until a reload, because `wipe()` closed the channel for good.
@@ -1755,7 +1765,7 @@ export function makeSharedBackend({
       const pairing = {
         token: String(parsed.token), kemEk, url: checked.url, fingerprint: String(parsed.fingerprint), own: parsed.own === true,
       };
-      const vault = await encryptSecret(password, JSON.stringify(pairing));
+      const vault = await encryptSecret(password, JSON.stringify(pairing), { maxBytes: PROVER_PAIRING_RECORD_BYTES });
       await storage.set(K.proverToken, vault);
       const label = typeof name === 'string' && name.trim() ? name.trim().slice(0, 64) : new URL(checked.url).host;
       const setting = {

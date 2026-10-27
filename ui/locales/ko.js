@@ -848,7 +848,6 @@ export default {
   "The request was not approved in Rand Wallet.": "Rand Wallet에서 요청이 승인되지 않았습니다.",
   "The rescan could not be started.": "재스캔을 시작하지 못했습니다.",
   "The rescan did not finish": "재스캔이 완료되지 않았습니다",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "저장된 서명자 프로필을 열 수 없습니다. 변경된 것은 없습니다. 이 기기의 저장소를 복원하거나, 지갑을 지우고 키로 복원하세요",
   "The scan was cancelled.": "스캔이 취소되었습니다.",
   "The side panel could not be opened.": "사이드 패널을 열지 못했습니다.",
   "The site sent an invoke this wallet cannot read: {reason}.": "사이트가 이 지갑이 읽을 수 없는 호출을 보냈습니다: {reason}.",
@@ -1095,4 +1094,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": "증명 {n}개 · 프루버에서 약 {minutes}분",
   "A prover will make the proof": "프루버가 증명을 만듭니다",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "이 기기가 송금을 준비한 뒤 증명을 프루버에 넘깁니다. 프루버가 받을 때까지 지갑을 열어 두세요. 다른 화면은 봐도 됩니다.",
+  "this record is {n} bytes; the most it may be is {max}": "이 레코드는 {n}바이트입니다. 최대 {max}까지 허용됩니다",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "저장된 서명자 프로필을 열 수 없습니다({reason}). 변경된 것은 없습니다. 이 기기의 저장소를 복원하거나, 지갑을 지우고 키로 복원하세요",
+  "the record is larger than this build allows": "레코드가 이 빌드에서 허용하는 크기보다 큽니다",
+  "the record is damaged": "레코드가 손상되었습니다",
+  "the record was saved by a newer version of Rand Wallet": "레코드가 더 새로운 버전의 Rand Wallet에서 저장되었습니다",
+  "the record does not open with this password": "이 비밀번호로는 레코드가 열리지 않습니다",
 };

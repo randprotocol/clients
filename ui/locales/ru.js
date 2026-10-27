@@ -853,7 +853,6 @@ export default {
   "The request was not approved in Rand Wallet.": "Запрос не был одобрен в Rand Wallet.",
   "The rescan could not be started.": "Не удалось запустить пересканирование.",
   "The rescan did not finish": "Пересканирование не завершилось",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "сохранённые профили подписантов не удалось открыть; ничего не изменено. Восстановите хранилище этого устройства или сотрите кошелёк и восстановите его из ключа",
   "The scan was cancelled.": "Сканирование отменено.",
   "The side panel could not be opened.": "Не удалось открыть боковую панель.",
   "The site sent an invoke this wallet cannot read: {reason}.": "Сайт прислал вызов, который кошелёк не может прочитать: {reason}.",
@@ -1100,4 +1099,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": { one: "{n} доказательство · около {minutes} мин на прувере", few: "{n} доказательства · около {minutes} мин на прувере", many: "{n} доказательств · около {minutes} мин на прувере", other: "{n} доказательства · около {minutes} мин на прувере" },
   "A prover will make the proof": "Доказательство создаст прувер",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "Это устройство готовит перевод, затем передаёт доказательство пруверу. Не закрывайте кошелёк, пока прувер его не получит; можно смотреть другие экраны.",
+  "this record is {n} bytes; the most it may be is {max}": "эта запись занимает {n} байт; максимум — {max}",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "сохранённые профили подписантов не удалось открыть ({reason}); ничего не изменено. Восстановите хранилище этого устройства или сотрите кошелёк и восстановите его из ключа",
+  "the record is larger than this build allows": "запись больше, чем допускает эта сборка",
+  "the record is damaged": "запись повреждена",
+  "the record was saved by a newer version of Rand Wallet": "запись сохранена более новой версией Rand Wallet",
+  "the record does not open with this password": "запись не открывается этим паролем",
 };

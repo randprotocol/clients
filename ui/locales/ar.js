@@ -855,7 +855,6 @@ export default {
   "The request was not approved in Rand Wallet.": "لم تتم الموافقة على الطلب في Rand Wallet.",
   "The rescan could not be started.": "تعذّر بدء إعادة المسح.",
   "The rescan did not finish": "لم تكتمل إعادة المسح",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "تعذّر فتح ملفات الموقّعين المحفوظة؛ لم يتغيّر شيء. استعد تخزين هذا الجهاز أو امسح المحفظة واستعدها من مفتاحها",
   "The scan was cancelled.": "أُلغي المسح.",
   "The side panel could not be opened.": "تعذّر فتح اللوحة الجانبية.",
   "The site sent an invoke this wallet cannot read: {reason}.": "أرسل الموقع استدعاءً لا تستطيع هذه المحفظة قراءته: {reason}.",
@@ -1102,4 +1101,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": { zero: "{n} إثباتات · نحو {minutes} دقيقة على المُثبِت", one: "{n} إثبات · نحو {minutes} دقيقة على المُثبِت", two: "{n} إثباتان · نحو {minutes} دقيقة على المُثبِت", few: "{n} إثباتات · نحو {minutes} دقيقة على المُثبِت", many: "{n} إثباتًا · نحو {minutes} دقيقة على المُثبِت", other: "{n} إثبات · نحو {minutes} دقيقة على المُثبِت" },
   "A prover will make the proof": "سيُنشئ مُثبِت الإثبات",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "يُجهّز هذا الجهاز التحويل، ثم يسلّم الإثبات إلى مُثبِت. أبقِ المحفظة مفتوحة حتى يتسلّمه المُثبِت؛ يمكنك تصفّح شاشات أخرى.",
+  "this record is {n} bytes; the most it may be is {max}": "حجم هذا السجل {n} بايت؛ والحد الأقصى {max}",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "تعذّر فتح ملفات الموقّعين المحفوظة ({reason})؛ لم يتغيّر شيء. استعد تخزين هذا الجهاز أو امسح المحفظة واستعدها من مفتاحها",
+  "the record is larger than this build allows": "السجل أكبر مما تسمح به هذه النسخة",
+  "the record is damaged": "السجل تالف",
+  "the record was saved by a newer version of Rand Wallet": "حُفظ السجل بإصدار أحدث من Rand Wallet",
+  "the record does not open with this password": "لا يُفتح السجل بكلمة المرور هذه",
 };

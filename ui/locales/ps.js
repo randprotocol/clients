@@ -855,7 +855,6 @@ export default {
   "The request was not approved in Rand Wallet.": "غوښتنه په Rand Wallet کې منظور نه شوه.",
   "The rescan could not be started.": "بیا سکین پیل نه شو.",
   "The rescan did not finish": "بیا سکین بشپړ نه شو",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "خوندي شوي د لاسلیک کوونکي پروفایلونه خلاص نشول؛ هیڅ نه دی بدل شوی. د دې وسیلې ذخیره بیا جوړه کړئ، یا والټ پاک کړئ او د خپلې کیلي څخه یې بیرته راولئ",
   "The scan was cancelled.": "سکین لغوه شو.",
   "The side panel could not be opened.": "غاړې پینل خلاص نه شو.",
   "The site sent an invoke this wallet cannot read: {reason}.": "وېبپاڼې داسې invoke ولېږه چې دا والټ یې نه شي لوستلی: {reason}.",
@@ -1102,4 +1101,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": "{n} ثبوتونه · په ثبوت جوړوونکي شاوخوا {minutes} دقیقې",
   "A prover will make the proof": "یو ثبوت جوړوونکی به ثبوت جوړ کړي",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "دا وسیله لېږد چمتو کوي، بیا ثبوت ثبوت جوړوونکي ته سپاري. والټ خلاص وساتئ تر هغه چې ثبوت جوړوونکی یې ترلاسه کړي؛ تاسو نورې پردې کتلی شئ.",
+  "this record is {n} bytes; the most it may be is {max}": "دا ریکارډ {n} بایټه دی؛ تر ټولو ډېر {max} کېدای شي",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "خوندي شوي د لاسلیک کوونکي پروفایلونه خلاص نشول ({reason})؛ هیڅ نه دی بدل شوی. د دې وسیلې ذخیره بیا جوړه کړئ، یا والټ پاک کړئ او د خپلې کیلي څخه یې بیرته راولئ",
+  "the record is larger than this build allows": "ریکارډ له هغه څخه لوی دی چې دا نسخه اجازه ورکوي",
+  "the record is damaged": "ریکارډ خراب شوی",
+  "the record was saved by a newer version of Rand Wallet": "ریکارډ د Rand Wallet د نوې نسخې لخوا خوندي شوی",
+  "the record does not open with this password": "ریکارډ د دې پاسورډ سره نه خلاصېږي",
 };

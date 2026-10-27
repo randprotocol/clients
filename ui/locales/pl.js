@@ -851,7 +851,6 @@ export default {
   "The request was not approved in Rand Wallet.": "Żądanie nie zostało zatwierdzone w Rand Wallet.",
   "The rescan could not be started.": "Nie udało się rozpocząć ponownego skanowania.",
   "The rescan did not finish": "Ponowne skanowanie nie zostało ukończone",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "zapisanych profili sygnatariuszy nie udało się otworzyć; nic nie zmieniono. Przywróć pamięć tego urządzenia albo wyczyść portfel i przywróć go z jego klucza",
   "The scan was cancelled.": "Skanowanie zostało anulowane.",
   "The side panel could not be opened.": "Nie udało się otworzyć panelu bocznego.",
   "The site sent an invoke this wallet cannot read: {reason}.": "Strona wysłała wywołanie, którego ten portfel nie umie odczytać: {reason}.",
@@ -1098,4 +1097,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": { one: "{n} dowód · około {minutes} min na proverze", few: "{n} dowody · około {minutes} min na proverze", many: "{n} dowodów · około {minutes} min na proverze", other: "{n} dowodu · około {minutes} min na proverze" },
   "A prover will make the proof": "Dowód zrobi prover",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "To urządzenie przygotowuje przelew, a potem przekazuje dowód proverowi. Nie zamykaj portfela, dopóki prover go nie otrzyma; możesz przeglądać inne ekrany.",
+  "this record is {n} bytes; the most it may be is {max}": "ten rekord ma {n} bajtów; może mieć najwyżej {max}",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "zapisanych profili sygnatariuszy nie udało się otworzyć ({reason}); nic nie zmieniono. Przywróć pamięć tego urządzenia albo wyczyść portfel i przywróć go z jego klucza",
+  "the record is larger than this build allows": "rekord jest większy, niż pozwala ta wersja",
+  "the record is damaged": "rekord jest uszkodzony",
+  "the record was saved by a newer version of Rand Wallet": "rekord został zapisany przez nowszą wersję Rand Wallet",
+  "the record does not open with this password": "rekord nie otwiera się tym hasłem",
 };

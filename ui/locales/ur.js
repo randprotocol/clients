@@ -856,7 +856,6 @@ export default {
   "The request was not approved in Rand Wallet.": "Rand Wallet میں درخواست منظور نہیں ہوئی۔",
   "The rescan could not be started.": "دوبارہ اسکین شروع نہیں ہو سکا۔",
   "The rescan did not finish": "دوبارہ اسکین مکمل نہیں ہوا",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "محفوظ شدہ دستخط کنندہ پروفائلیں کھولی نہیں جا سکیں؛ کچھ نہیں بدلا۔ اس ڈیوائس کا اسٹوریج بحال کریں، یا والیٹ مٹا کر اس کی کی سے بحال کریں",
   "The scan was cancelled.": "اسکین منسوخ کر دیا گیا۔",
   "The side panel could not be opened.": "سائیڈ پینل نہیں کھل سکا۔",
   "The site sent an invoke this wallet cannot read: {reason}.": "سائٹ نے ایسا invoke بھیجا جسے یہ والیٹ پڑھ نہیں سکتا: {reason}۔",
@@ -1103,4 +1102,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": "{n} پروف · پروور پر تقریباً {minutes} منٹ",
   "A prover will make the proof": "ایک پروور پروف بنائے گا",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "یہ ڈیوائس منتقلی تیار کرتی ہے، پھر پروف ایک پروور کے حوالے کرتی ہے۔ جب تک پروور کو یہ نہ مل جائے والیٹ کھلا رکھیں؛ آپ دوسری اسکرینیں دیکھ سکتے ہیں۔",
+  "this record is {n} bytes; the most it may be is {max}": "یہ ریکارڈ {n} بائٹس ہے؛ زیادہ سے زیادہ {max} ہو سکتا ہے",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "محفوظ شدہ دستخط کنندہ پروفائلیں کھولی نہیں جا سکیں ({reason})؛ کچھ نہیں بدلا۔ اس ڈیوائس کا اسٹوریج بحال کریں، یا والیٹ مٹا کر اس کی کی سے بحال کریں",
+  "the record is larger than this build allows": "ریکارڈ اس بلڈ کی اجازت سے بڑا ہے",
+  "the record is damaged": "ریکارڈ خراب ہے",
+  "the record was saved by a newer version of Rand Wallet": "ریکارڈ Rand Wallet کے نئے ورژن نے محفوظ کیا تھا",
+  "the record does not open with this password": "ریکارڈ اس پاس ورڈ سے نہیں کھلتا",
 };

@@ -11,6 +11,13 @@ import { t } from '../i18n.js';
 
 export const SIGNER_POLICIES_KEY = 'signerPolicies';
 export const SIGNER_SEEDS_KEY = 'signerSeeds';
+/**
+ * The `signerPolicies` record's ciphertext cap, on write and on read (MSC-1). It holds every
+ * profile's policy text: a real 2-of-3 policy (fullnode's vector) is 8 029 bytes, so the vault's
+ * 4 096-byte spend-key cap — which used to apply here on READ alone — made one saved profile
+ * unreadable at the next lock. 256 KiB is some thirty such policies.
+ */
+export const SIGNER_POLICIES_RECORD_BYTES = 256 << 10;
 /** Blocks a proposal needs before its window closes: the CLI's `EXPIRY_MARGIN` (fullnode d5b2e652). */
 export const EXPIRY_MARGIN = 16;
 
@@ -119,9 +126,19 @@ const blankRefusal = () => new SignerRefusal('unchecked-recipient', t('Enter the
 export function makeSigners(deps) {
   const { c, storage, requireUnlocked, setSession, openVault, passwordAttempt, requireVerifiedChain, getSettings, currentRpcUrl } = deps;
 
+  // Why the profiles record did not open, in the user's words (never "unreadable" alone).
+  const REASONS = {
+    oversize: () => t('the record is larger than this build allows'),
+    damaged: () => t('the record is damaged'),
+    newer: () => t('the record was saved by a newer version of Rand Wallet'),
+    closed: () => t('the record does not open with this password'),
+  };
   async function profiles() {
     const u = await requireUnlocked();
-    if (u.signersUnreadable) throw new SignerRefusal('signers-unreadable', t('the saved signer profiles could not be opened; nothing was changed. Restore this device\'s storage or wipe the wallet and restore it from its key'));
+    if (u.signersUnreadable) {
+      const cause = REASONS[u.signersUnreadableCause] ? u.signersUnreadableCause : 'damaged';
+      throw new SignerRefusal('signers-unreadable', t('the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device\'s storage or wipe the wallet and restore it from its key', { reason: REASONS[cause]() }), { reason: cause });
+    }
     return validProfiles(u.signers);
   }
   async function profileOf(id) {
@@ -133,7 +150,7 @@ export function makeSigners(deps) {
     if ((await openVault(password)) === null) throw new Error('wrong password');
   }
   async function writeProfiles(password, list) {
-    await storage.set(SIGNER_POLICIES_KEY, await encryptSecret(password, JSON.stringify(list)));
+    await storage.set(SIGNER_POLICIES_KEY, await encryptSecret(password, JSON.stringify(list), { maxBytes: SIGNER_POLICIES_RECORD_BYTES }));
     await setSession({ ...(await requireUnlocked()), signers: list });
   }
   async function row(p) {
@@ -239,19 +256,25 @@ export function makeSigners(deps) {
   };
 
   /**
-   * The profiles, opened with the password that just opened the vault: `{profiles, unreadable}`.
-   * A record that exists but does not open (damaged, or from a newer build) is `unreadable: true`
-   * and is never overwritten — unlock must not fail on it, but add/remove/list refuse.
+   * The profiles, opened with the password that just opened the vault: `{profiles, unreadable,
+   * cause}`. A record that exists but does not open is `unreadable: true` and is never
+   * overwritten — unlock must not fail on it, but add/remove/list refuse, naming `cause`:
+   * `oversize` (over `SIGNER_POLICIES_RECORD_BYTES`), `newer` (a later build's record), `closed`
+   * (sound, but not this password's) or `damaged` (anything else). An absent record is simply no
+   * profiles.
    */
   async function openOnUnlock(password) {
     const rec = await storage.get(SIGNER_POLICIES_KEY);
     if (!rec) return { profiles: [], unreadable: false };
     try {
-      const list = JSON.parse(await decryptSecret(password, rec));
+      const list = JSON.parse(await decryptSecret(password, rec, { maxBytes: SIGNER_POLICIES_RECORD_BYTES }));
       if (!Array.isArray(list)) throw new Error('not a list');
       return { profiles: validProfiles(list), unreadable: false };
-    } catch {
-      return { profiles: [], unreadable: true };
+    } catch (err) {
+      const cause = err && err.name === 'VaultVersionError' ? 'newer'
+        : err && err.name === 'VaultDamagedError' ? (err.reason === 'oversize' ? 'oversize' : 'damaged')
+          : err && err.message === 'wrong password' ? 'closed' : 'damaged';
+      return { profiles: [], unreadable: true, cause };
     }
   }
 

@@ -857,7 +857,6 @@ export default {
   "The request was not approved in Rand Wallet.": "La demande n'a pas été approuvée dans Rand Wallet.",
   "The rescan could not be started.": "Impossible de lancer la réanalyse.",
   "The rescan did not finish": "La réanalyse ne s'est pas terminée",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "les profils de signataire enregistrés n'ont pas pu être ouverts ; rien n'a été modifié. Restaurez le stockage de cet appareil, ou effacez le portefeuille et restaurez-le à partir de sa clé",
   "The scan was cancelled.": "La lecture a été annulée.",
   "The side panel could not be opened.": "Impossible d'ouvrir le panneau latéral.",
   "The site sent an invoke this wallet cannot read: {reason}.": "Le site a envoyé une invocation que ce portefeuille ne sait pas lire : {reason}.",
@@ -1104,4 +1103,10 @@ export default {
   "{n} proofs · about {minutes} minutes on the prover": { one: "{n} preuve · environ {minutes} minutes sur le prouveur", many: "{n} preuves · environ {minutes} minutes sur le prouveur", other: "{n} preuves · environ {minutes} minutes sur le prouveur" },
   "A prover will make the proof": "Un prouveur va faire la preuve",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "Cet appareil prépare le transfert, puis confie la preuve à un prouveur. Gardez le portefeuille ouvert jusqu'à ce que le prouveur l'ait ; vous pouvez consulter d'autres écrans.",
+  "this record is {n} bytes; the most it may be is {max}": "cet enregistrement fait {n} octets ; il peut en faire au plus {max}",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "les profils de signataire enregistrés n'ont pas pu être ouverts ({reason}) ; rien n'a été modifié. Restaurez le stockage de cet appareil, ou effacez le portefeuille et restaurez-le à partir de sa clé",
+  "the record is larger than this build allows": "l'enregistrement dépasse la taille que cette version autorise",
+  "the record is damaged": "l'enregistrement est endommagé",
+  "the record was saved by a newer version of Rand Wallet": "l'enregistrement a été sauvegardé par une version plus récente de Rand Wallet",
+  "the record does not open with this password": "l'enregistrement ne s'ouvre pas avec ce mot de passe",
 };
