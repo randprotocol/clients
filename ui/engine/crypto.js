@@ -25,6 +25,16 @@ export const VAULT_VERSION = 1;
 export const ITERATIONS = 600_000;
 /** A tampered record must not be able to turn the KDF into a denial of service. */
 const MAX_ITERATIONS = 10_000_000;
+/**
+ * The ciphertext cap a record is held to unless its owner says otherwise: the spend-key vault's,
+ * sized for a 64-character key plus the GCM tag. **The same cap is applied when a record is
+ * written and when it is read** (`maxBytes` on `encryptBytes`/`decryptBytes` and their string
+ * forms). It used to be checked on read alone, so a record that needed more — the signer
+ * profiles, a real 2-of-3 policy being 8 KB — was saved without complaint and refused as
+ * "damaged" at the next unlock, for ever (MSC-1). A record's owner picks one cap for both
+ * sides and keeps it.
+ */
+export const DEFAULT_RECORD_BYTES = 4096;
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -34,12 +44,14 @@ const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
 export class VaultDamagedError extends Error {
-  constructor(detail) {
+  constructor(detail, reason = 'structure') {
     super(t('wallet data is damaged'));
     this.name = 'VaultDamagedError';
     this.code = 'VAULT_DAMAGED';
     /** Never shown to the user; for a log. */
     this.detail = detail;
+    /** `'oversize'` when the record is sound but over the caller's cap; `'structure'` otherwise. */
+    this.reason = reason;
     /** The UI's cue to offer restore-from-key (wipe + import) instead of another password. */
     this.recoverable = true;
   }
@@ -60,22 +72,40 @@ export function isVaultRecordError(err) {
   return !!err && (err.name === 'VaultDamagedError' || err.name === 'VaultVersionError');
 }
 
+/** The write side of the cap: refused before anything is encrypted, so nothing unreadable is ever saved. */
+export class RecordTooLargeError extends Error {
+  constructor(bytes, maxBytes) {
+    super(t('this record is {n} bytes; the most it may be is {max}', { n: String(bytes), max: String(maxBytes) }));
+    this.name = 'RecordTooLargeError';
+    this.code = 'RECORD_TOO_LARGE';
+    this.bytes = bytes;
+    this.maxBytes = maxBytes;
+  }
+}
+
+/** The byte length a base64 field decodes to, without decoding it. */
+function base64Bytes(value) {
+  const pad = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+  return Math.floor((value.length * 3) / 4) - pad;
+}
+
 function base64Field(vault, name, { minBytes, maxBytes }) {
   const value = vault[name];
   if (typeof value !== 'string' || value === '' || !BASE64_RE.test(value)) {
     throw new VaultDamagedError(`${name} is not base64`);
   }
-  // 4 base64 characters per 3 bytes; close enough to bound the field without decoding it.
-  const bytes = Math.floor((value.length * 3) / 4);
-  if (bytes < minBytes || bytes > maxBytes) throw new VaultDamagedError(`${name} is ${bytes} bytes`);
+  const bytes = base64Bytes(value);
+  if (bytes < minBytes) throw new VaultDamagedError(`${name} is ${bytes} bytes`);
+  if (bytes > maxBytes) throw new VaultDamagedError(`${name} is ${bytes} bytes, more than ${maxBytes}`, 'oversize');
   return value;
 }
 
 /**
  * Checks that `vault` is a vault this build can *attempt*, before a single PBKDF2 iteration runs.
  * Throws `VaultVersionError` or `VaultDamagedError`; returns the iteration count to use.
+ * `maxBytes` is the ciphertext cap the record's owner writes it under (`DEFAULT_RECORD_BYTES`).
  */
-export function checkVault(vault) {
+export function checkVault(vault, { maxBytes = DEFAULT_RECORD_BYTES } = {}) {
   if (!vault || typeof vault !== 'object' || Array.isArray(vault)) throw new VaultDamagedError('not an object');
   // Version first: a newer build's vault may legitimately have fields this one would call damaged.
   if (vault.v !== undefined && vault.v !== null) {
@@ -89,8 +119,8 @@ export function checkVault(vault) {
   }
   base64Field(vault, 'salt', { minBytes: 16, maxBytes: 64 });
   base64Field(vault, 'iv', { minBytes: 12, maxBytes: 16 });
-  // The plaintext is a 64-character spend key; the ciphertext is that plus a 16-byte GCM tag.
-  base64Field(vault, 'ct', { minBytes: 16, maxBytes: 4096 });
+  // The ciphertext is the plaintext plus a 16-byte GCM tag; the default cap is the spend key's.
+  base64Field(vault, 'ct', { minBytes: 16, maxBytes });
   return iter;
 }
 
@@ -107,9 +137,12 @@ async function deriveKey(password, salt, iterations, usage) {
 
 /**
  * Returns a vault object safe to persist, over raw bytes (a signer seed). Same format as
- * `encryptSecret`: a string record is just these bytes UTF-8 encoded.
+ * `encryptSecret`: a string record is just these bytes UTF-8 encoded. Refuses, before encrypting,
+ * a record whose ciphertext would exceed `maxBytes` — the cap `decryptBytes` will hold it to.
  */
-export async function encryptBytes(password, bytes) {
+export async function encryptBytes(password, bytes, { maxBytes = DEFAULT_RECORD_BYTES } = {}) {
+  const size = bytes.byteLength + 16; // the GCM tag
+  if (size > maxBytes) throw new RecordTooLargeError(size, maxBytes);
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const key = await deriveKey(password, salt, ITERATIONS, ['encrypt']);
@@ -118,8 +151,8 @@ export async function encryptBytes(password, bytes) {
 }
 
 /** Returns a vault object safe to persist. */
-export async function encryptSecret(password, plaintext) {
-  return encryptBytes(password, enc.encode(plaintext));
+export async function encryptSecret(password, plaintext, opts) {
+  return encryptBytes(password, enc.encode(plaintext), opts);
 }
 
 /**
@@ -127,8 +160,8 @@ export async function encryptSecret(password, plaintext) {
  * is the one buffer JavaScript can overwrite (a string cannot be wiped). That is all this offers;
  * copies the engine makes elsewhere are not tracked. Same refusals as `decryptSecret`.
  */
-export async function decryptBytes(password, vault) {
-  const iterations = checkVault(vault);
+export async function decryptBytes(password, vault, opts) {
+  const iterations = checkVault(vault, opts);
   const key = await deriveKey(password, unb64(vault.salt), iterations, ['decrypt']);
   try {
     return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(vault.iv) }, key, unb64(vault.ct)));
@@ -146,8 +179,8 @@ export async function decryptBytes(password, vault) {
  * `checkVault` has already refused anything below `ITERATIONS` — a vault is attacker-writable if
  * the storage it sits in is, and `{"iter": 1}` would otherwise turn the KDF off.
  */
-export async function decryptSecret(password, vault) {
-  const bytes = await decryptBytes(password, vault);
+export async function decryptSecret(password, vault, opts) {
+  const bytes = await decryptBytes(password, vault, opts);
   try {
     return dec.decode(bytes);
   } finally {

@@ -8,7 +8,7 @@ import { icons } from '../lib/icons.js';
 import { registerScreen } from '../app.js';
 import { formatUnits, parseUnits } from '../lib/format.js';
 import { t } from '../i18n.js';
-import { isZero, isNonRand, payeeAssets } from '../engine/signers.js';
+import { isZero, isNonRand, payeeAssets, DEFAULT_MAX_FEE_UNITS } from '../engine/signers.js';
 
 export const MAX_FILE_BYTES = 1 << 20;
 /** An output the signer must name a payee for: it leaves the account and moves something. Decided
@@ -98,6 +98,7 @@ registerScreen('signers', {
         <div class="field"><label class="label" for="signer-label">${t('Label')}</label><input id="signer-label" data-role="label" type="text" maxlength="64" autocomplete="off"></div>
         ${raw(fileField(ctx, { role: 'policy', label: t('Policy file') }))}
         ${raw(fileField(ctx, { role: 'key', label: t('Signer key file, or its 64-hex seed') }))}
+        <div class="field"><label class="label" for="signer-max-fee">${t('Highest fee this signer accepts, in RAND')}</label><input id="signer-max-fee" data-role="max-fee" type="text" inputmode="decimal" value="${formatUnits(BigInt(DEFAULT_MAX_FEE_UNITS))}" autocomplete="off"></div>
         <p class="error field-error" data-role="error" role="alert" hidden></p>
         <button class="btn btn-primary block" type="button" data-role="preview">${t('Check')}</button>
         <div data-role="preview-out"></div>
@@ -141,7 +142,7 @@ registerScreen('signers', {
         out.querySelector('[data-role="save"]').addEventListener('click', async () => {
           const pw = out.querySelector('[data-role="add-password"]');
           try {
-            await group.add({ label: field('label').value, policy: field('policy').value, key: field('key').value, password: pw.value });
+            await group.add({ label: field('label').value, policy: field('policy').value, key: field('key').value, password: pw.value, maxFee: field('max-fee').value });
             for (const r of ['label', 'policy', 'key']) field(r).value = '';
             out.textContent = '';
             await paintList();
@@ -260,7 +261,7 @@ registerScreen('signer', {
       review.innerHTML = h`<div class="card stack">
         <span class="label">${t('What this proposal does, as checked against your policy')}</span>
         <div class="stack mono" data-role="lines">${raw(s.lines.map(() => '<div data-role="line"></div>').join(''))}</div>
-        <span>${t('Fee: {fee} RAND · expires at height {height}', { fee: unitsOf(s.fee), height: String(s.expires_at) })}</span>
+        <span>${t('Fee: {fee} RAND · at most {max} RAND · expires at height {height}', { fee: unitsOf(s.fee), max: unitsOf(profile.maxFee ?? DEFAULT_MAX_FEE_UNITS), height: String(s.expires_at) })}</span>
         <span class="caption" data-role="matched">${t('{matched} of {total} payments matched.', { matched: String(s.outputs.filter((o) => needsPayee(o) && isMatched(o)).length), total: String(s.outputs.filter(needsPayee).length) })}</span>
         <div data-role="act"></div></div>`;
       review.querySelectorAll('[data-role="line"]').forEach((n, i) => { n.textContent = s.lines[i]; });

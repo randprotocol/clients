@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1112 strings.
+// 1120 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -321,7 +321,7 @@ export default {
   "Fee {fee}": "Fee {fee}",
   "fee must be at least {fee} RAND (the bridge burn floor)": "fee must be at least {fee} RAND (the bridge burn floor)",
   "fee must be at least {fee} RAND (the bundle floor)": "fee must be at least {fee} RAND (the bundle floor)",
-  "Fee: {fee} RAND · expires at height {height}": "Fee: {fee} RAND · expires at height {height}",
+  "Fee: {fee} RAND · at most {max} RAND · expires at height {height}": "Fee: {fee} RAND · at most {max} RAND · expires at height {height}",
   "Filter activity by asset": "Filter activity by asset",
   "Fingerprint": "Fingerprint",
   "fingerprint {fp}": "fingerprint {fp}",
@@ -350,6 +350,7 @@ export default {
   "Hide the full address": "Hide the full address",
   "Hide the transaction key": "Hide the transaction key",
   "Hide viewing key": "Hide viewing key",
+  "Highest fee this signer accepts, in RAND": "Highest fee this signer accepts, in RAND",
   "Hold to reveal": "Hold to reveal",
   "Home": "Home",
   "How much {symbol}?": "How much {symbol}?",
@@ -745,6 +746,8 @@ export default {
   "The faucet could not send RAND": "The faucet could not send RAND",
   "The faucet is unavailable right now.": "The faucet is unavailable right now.",
   "The fee could not be worked out.": "The fee could not be worked out.",
+  "The fee of {fee} RAND is more than the {paid} RAND this proposal pays out, so this proposal is not signed.": "The fee of {fee} RAND is more than the {paid} RAND this proposal pays out, so this proposal is not signed.",
+  "The fee of {fee} RAND is more than this signer allows ({max} RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "The fee of {fee} RAND is more than this signer allows ({max} RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.",
   "the genesis hash is not hex of a plausible length": "the genesis hash is not hex of a plausible length",
   "the inflow is `none` exactly when the bundle burns no token (inflow.amount == 0)": "the inflow is `none` exactly when the bundle burns no token (inflow.amount == 0)",
   "the key file's address is not the one its seed derives": "the key file's address is not the one its seed derives",
@@ -854,6 +857,10 @@ export default {
   "The RandProtocol provers: {n} machines operated by RandProtocol, each with its own key, used until you choose another.": "The RandProtocol provers: {n} machines operated by RandProtocol, each with its own key, used until you choose another.",
   "The RandProtocol provers: machines operated by RandProtocol, each with its own key, used until you choose another.": "The RandProtocol provers: machines operated by RandProtocol, each with its own key, used until you choose another.",
   "The randprover: link your prover shows. It carries a secret — paste it here and nowhere else.": "The randprover: link your prover shows. It carries a secret — paste it here and nowhere else.",
+  "the record does not open with this password": "the record does not open with this password",
+  "the record is damaged": "the record is damaged",
+  "the record is larger than this build allows": "the record is larger than this build allows",
+  "the record was saved by a newer version of Rand Wallet": "the record was saved by a newer version of Rand Wallet",
   "the relayer fee {fee} is more than the {amount} being burned": "the relayer fee {fee} is more than the {amount} being burned",
   "The relayer fee cannot be more than the amount being withdrawn.": "The relayer fee cannot be more than the amount being withdrawn.",
   "The relayer fee is more than the amount being withdrawn.": "The relayer fee is more than the amount being withdrawn.",
@@ -867,7 +874,7 @@ export default {
   "The request was not approved in Rand Wallet.": "The request was not approved in Rand Wallet.",
   "The rescan could not be started.": "The rescan could not be started.",
   "The rescan did not finish": "The rescan did not finish",
-  "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "the saved signer profiles could not be opened; nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key",
+  "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key",
   "The scan was cancelled.": "The scan was cancelled.",
   "The side panel could not be opened.": "The side panel could not be opened.",
   "The site sent an invoke this wallet cannot read: {reason}.": "The site sent an invoke this wallet cannot read: {reason}.",
@@ -975,6 +982,7 @@ export default {
   "This prover will be able to read this wallet's whole history. It cannot spend.": "This prover will be able to read this wallet's whole history. It cannot spend.",
   "This Rand Wallet cannot run programs.": "This Rand Wallet cannot run programs.",
   "This Rand Wallet cannot withdraw to another chain.": "This Rand Wallet cannot withdraw to another chain.",
+  "this record is {n} bytes; the most it may be is {max}": "this record is {n} bytes; the most it may be is {max}",
   "This removes the wallet from this device. You will need your recovery key to restore it.": "This removes the wallet from this device. You will need your recovery key to restore it.",
   "This request is for a different Rand chain than this wallet is on.": "This request is for a different Rand chain than this wallet is on.",
   "This screen could not be shown.": "This screen could not be shown.",
