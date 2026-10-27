@@ -1,9 +1,9 @@
 // The relay between the page's `window.rand` (inpage.js, in the page's world) and the extension
 // (background.js). Isolated world, classic script, no imports. It forwards exactly six method
-// names, and nothing the page put in the message except the request of `invoke` or `withdraw`: the background decides
-// everything else from who is asking (`sender`), never from what they said, and that request
-// is data the user is shown and approves in the wallet's own window, capped here at
-// `MAX_INVOKE_CHARS` of JSON. A connect or an invoke that needs the user comes back as
+// names, and nothing the page put in the message except the request of `invoke` or `withdraw`:
+// the background decides everything else from who is asking (`sender`), never from what they
+// said, and that request is data the user is shown and approves in the wallet's own window,
+// capped here at `MAX_INVOKE_CHARS` of JSON. A connect or an invoke that needs the user comes back as
 // `{pending: id}`; the verdict arrives later as a `rand:decision` message and is handed to the page
 // then. While a withdraw waits, `rand:phase` messages (the approval window's proof phases) are
 // handed to the page as `withdrawPhase` events; they never settle the request.

@@ -101,7 +101,8 @@ contract in randbridge.org/web/lib/rand/provider.ts. Three files, each in its ow
 - `inpage.js` runs in the page's own world (`world: "MAIN"`, document_start) and defines the
   object: `connect`, `getAddress`, `getRecipientHash`, `invoke`, `withdraw`, `disconnect`, `on`, plus the
   `rand:announceProvider` / `rand:requestProvider` handshake. It knows nothing and can reach nothing.
-- `content.js` relays those four method names — and none of the page's data — to the background.
+- `content.js` relays those six method names — and none of the page's data except an `invoke`'s
+  or a `withdraw`'s request — to the background.
 - `provider-host.js`, loaded by `background.js`, decides from the *sender's* origin: `connect`
   needs a wallet, unlocked, and the user's yes in `connect.html` for that origin; the approval
   (address plus its bridge recipient hash, `lib/recipient-hash.js`) is stored under `sites` in

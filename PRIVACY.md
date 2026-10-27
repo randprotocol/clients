@@ -76,6 +76,8 @@ your device until you delete them.
 - **Face ID, Touch ID, fingerprint** — handled by the operating system; the app learns only
   whether the unlock succeeded.
 - **Notifications** (Android) — the progress notification shown while a proof is being made.
+- **Network state** (Android) — only to tell "this phone is offline" apart from "the provers
+  cannot be reached". The app reads whether the phone has a network, and nothing else.
 - **Browser storage, alarms, side panel** (extensions) — the encrypted vault and settings, the
   auto-lock timer, and showing the wallet in the browser's side panel.
 

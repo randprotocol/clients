@@ -367,6 +367,7 @@ device, and a transaction submitted to the chain carries no personal data.
 | `POST_NOTIFICATIONS` | the notification shown while a proof is being made |
 | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` | see the next block |
 | `INTERNET` | JSON-RPC to the node in Settings |
+| `ACCESS_NETWORK_STATE` | telling "this phone is offline" apart from "the provers cannot be reached"; it reads whether the phone has a network, nothing else |
 
 **Foreground service declaration** (Play asks for a description and a short video for each type)
 
