@@ -184,9 +184,38 @@ test('a request that is no longer waiting tells nobody and shows why', async () 
   assert.equal(h.results().length, 0);
 });
 
-test('a wallet without the bridge group refuses with UNSUPPORTED', async () => {
+test('a wallet without the bridge group refuses with UNAVAILABLE', async () => {
   const h = harness();
   delete h.backend.bridge;
   await h.flow.start();
-  assert.equal(h.results()[0].error.code, 'UNSUPPORTED');
+  assert.equal(h.results()[0].error.code, 'UNAVAILABLE');
+});
+
+test('a failure once the burn may have been sent is UNKNOWN_OUTCOME unless the error is definite', async () => {
+  const run = async (phase, err) => {
+    const h = harness({ bridge: { withdraw: async (req, onPhase) => { if (phase) onPhase(phase); throw err; } } });
+    await h.flow.start();
+    await h.flow.approve();
+    return h.results()[0].error;
+  };
+  assert.deepEqual(await run('submitting', new Error('socket closed')), { code: 'UNKNOWN_OUTCOME', message: 'socket closed' });
+  assert.deepEqual(await run('confirming', new Error('socket closed')), { code: 'UNKNOWN_OUTCOME', message: 'socket closed' });
+  assert.deepEqual(await run('submitting', Object.assign(new Error(''), {})), { code: 'UNKNOWN_OUTCOME', message: 'Rand Wallet could not tell whether the burn was sent. Check its activity before trying again.' });
+  assert.deepEqual(await run('submitting', Object.assign(new Error('The node refused it.'), { definite: true, code: 'REFUSED' })), { code: 'REFUSED', message: 'The node refused it.' });
+  assert.deepEqual(await run('proving', new Error('prover went away')), { code: 'UNKNOWN', message: 'prover went away' });
+});
+
+test('a second click on the notice\'s button while the first is pending does nothing', async () => {
+  const h = harness({ bridge: { canWithdraw: async () => ({ ok: true, via: 'prover', notice: true }) } });
+  await h.flow.start();
+  let n = 0;
+  let release;
+  h.backend.prover = { acknowledgeDefault: () => { n += 1; return new Promise((r) => { release = r; }); } };
+  const first = h.flow.acknowledge();
+  const second = h.flow.acknowledge();
+  await Promise.resolve(); await Promise.resolve();
+  release();
+  await Promise.all([first, second]);
+  assert.equal(n, 1);
+  assert.equal(h.flow.state.notice, false);
 });

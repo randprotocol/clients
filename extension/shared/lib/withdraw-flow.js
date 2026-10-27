@@ -37,6 +37,7 @@ const EVM_CHAINS = Object.freeze([2, 3, 4]);
 
 const NO_BRIDGE = (t) => t('This Rand Wallet cannot withdraw to another chain.');
 const WRONG_CHAIN_TEXT = (t) => t('This request is for a different Rand chain than this wallet is on.');
+const UNKNOWN_OUTCOME_TEXT = (t) => t('Rand Wallet could not tell whether the burn was sent. Check its activity before trying again.');
 const BAD_REQUEST_TEXT = (t) => t('Rand Wallet could not read this withdrawal request.');
 
 const coded = (text, code, t = plain) => Object.assign(new Error(text(t)), { code, siteMessage: text(plain) });
@@ -128,7 +129,7 @@ export function makeWithdrawFlow({ id, send, backend, onChange = () => {}, t = p
     }
     set({ origin: String(parked.result.origin || '') });
     const bridge = backend && backend.bridge;
-    if (!bridge || typeof bridge.withdraw !== 'function') { await refuse(refusal(NO_BRIDGE, 'UNSUPPORTED')); return; }
+    if (!bridge || typeof bridge.withdraw !== 'function') { await refuse(refusal(NO_BRIDGE, 'UNAVAILABLE')); return; }
     try {
       const settings = await backend.settings.get();
       const request = normalizeWithdrawRequest(parked.result.request, settings && settings.chainId, t);
@@ -148,8 +149,10 @@ export function makeWithdrawFlow({ id, send, backend, onChange = () => {}, t = p
    * Firefox's consent is asked first and synchronously inside the click; declined, there is no
    * prover and the site is told PROVER_UNAVAILABLE. Then the notice is remembered for the wallet.
    */
+  let acknowledging = false;
   function acknowledge() {
-    if (state.step !== 'review' || !state.notice) return Promise.resolve();
+    if (state.step !== 'review' || !state.notice || acknowledging) return Promise.resolve();
+    acknowledging = true;
     const platform = backend && backend.platform;
     const consent = platform && typeof platform.requestDataCollectionConsent === 'function' ? platform.requestDataCollectionConsent() : null;
     return (async () => {
@@ -165,7 +168,7 @@ export function makeWithdrawFlow({ id, send, backend, onChange = () => {}, t = p
         return;
       }
       set({ notice: false });
-    })();
+    })().finally(() => { acknowledging = false; });
   }
 
   async function approve() {
@@ -184,7 +187,13 @@ export function makeWithdrawFlow({ id, send, backend, onChange = () => {}, t = p
       set({ step: 'done', tx });
       await answer({ ok: true, result: { tx } });
     } catch (err) {
-      await refuse(err);
+      // Once the burn may have reached the node, an error that is not a definite refusal does not
+      // say it was not sent: the site is told to check, not to retry.
+      const maybeSent = (state.phase === 'submitting' || state.phase === 'confirming') && !(err && err.definite === true);
+      if (!maybeSent) { await refuse(err); return; }
+      const message = err && err.message;
+      const unknown = Object.assign(new Error(message || UNKNOWN_OUTCOME_TEXT(t)), { code: 'UNKNOWN_OUTCOME', siteMessage: message || UNKNOWN_OUTCOME_TEXT(plain) });
+      await refuse(unknown);
     }
   }
 
