@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1100 strings.
+// 1103 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -318,7 +318,7 @@ export default {
   "Fee": "Fee",
   "fee must be at least {fee} RAND (the bridge burn floor)": "fee must be at least {fee} RAND (the bridge burn floor)",
   "fee must be at least {fee} RAND (the bundle floor)": "fee must be at least {fee} RAND (the bundle floor)",
-  "Fee: {fee} RAND · expires at height {height}": "Fee: {fee} RAND · expires at height {height}",
+  "Fee: {fee} RAND · at most {max} RAND · expires at height {height}": "Fee: {fee} RAND · at most {max} RAND · expires at height {height}",
   "Filter activity by asset": "Filter activity by asset",
   "Fingerprint": "Fingerprint",
   "fingerprint {fp}": "fingerprint {fp}",
@@ -347,6 +347,7 @@ export default {
   "Hide the full address": "Hide the full address",
   "Hide the transaction key": "Hide the transaction key",
   "Hide viewing key": "Hide viewing key",
+  "Highest fee this signer accepts, in RAND": "Highest fee this signer accepts, in RAND",
   "Hold to reveal": "Hold to reveal",
   "Home": "Home",
   "How much {symbol}?": "How much {symbol}?",
@@ -735,6 +736,8 @@ export default {
   "The faucet could not send RAND": "The faucet could not send RAND",
   "The faucet is unavailable right now.": "The faucet is unavailable right now.",
   "The fee could not be worked out.": "The fee could not be worked out.",
+  "The fee of {fee} RAND is more than the {paid} RAND this proposal pays out, so this proposal is not signed.": "The fee of {fee} RAND is more than the {paid} RAND this proposal pays out, so this proposal is not signed.",
+  "The fee of {fee} RAND is more than this signer allows ({max} RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "The fee of {fee} RAND is more than this signer allows ({max} RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.",
   "the genesis hash is not hex of a plausible length": "the genesis hash is not hex of a plausible length",
   "the inflow is `none` exactly when the bundle burns no token (inflow.amount == 0)": "the inflow is `none` exactly when the bundle burns no token (inflow.amount == 0)",
   "the key file's address is not the one its seed derives": "the key file's address is not the one its seed derives",

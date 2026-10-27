@@ -424,3 +424,37 @@ test('typing the same proposal text back leaves a fresh review alone', async (t)
   ta.dispatchEvent(new Event('input', { bubbles: true }));
   assert.equal(root.querySelectorAll('[data-role="line"]').length, before);
 });
+
+// ---- MSC-2: the fee is shown beside the payments, with the signer's limit.
+test('the review shows the fee and the signer\'s limit beside the payments', async (t) => {
+  const b = signerBackend();
+  await b.signers.add({ label: 'treasury', policy: 'P', key: 'K', password: 'unlocked-password-1' });
+  const { app, root } = await mountApp(t, b, { hash: '#signer/s1' });
+  await app.idle();
+  root.querySelector('textarea[data-role="proposal"]').value = '{"x":1}';
+  root.querySelector('[data-role="check"]').click();
+  await app.idle(); await tick();
+  const text = root.querySelector('[data-role="review"]').textContent;
+  assert.match(text, /Fee: 0\.001 RAND · at most 0\.1 RAND · expires at height 2024/);
+});
+
+test('the add form takes the signer\'s fee limit in RAND and hands it to add', async (t) => {
+  const b = signerBackend();
+  const seen = [];
+  const original = b.signers.add;
+  b.signers.add = async (args) => { seen.push(args.maxFee); return original(args); };
+  const { app, root } = await mountApp(t, b, { hash: '#signers' });
+  await app.idle();
+  const limit = root.querySelector('input[data-role="max-fee"]');
+  assert.equal(limit.value, '0.1', 'the default is shown, not hidden');
+  root.querySelector('[data-role="label"]').value = 'treasury';
+  root.querySelector('textarea[data-role="policy"]').value = 'P';
+  root.querySelector('textarea[data-role="key"]').value = 'K';
+  limit.value = '0.25';
+  root.querySelector('[data-role="preview"]').click();
+  await app.idle(); await tick();
+  root.querySelector('[data-role="add-password"]').value = 'unlocked-password-1';
+  root.querySelector('[data-role="save"]').click();
+  await app.idle(); await tick();
+  assert.deepEqual(seen, ['0.25']);
+});

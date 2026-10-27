@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PASSWORD, mapStorage, stubCore, stubFetch, stubPlatform, GENESIS } from './backend-fixtures.mjs';
 import { encryptSecret, DEFAULT_RECORD_BYTES } from '../engine/crypto.js';
-import { SIGNER_POLICIES_RECORD_BYTES } from '../engine/signers.js';
+import { SIGNER_POLICIES_RECORD_BYTES, DEFAULT_MAX_FEE_UNITS } from '../engine/signers.js';
 
 /** fullnode's own 2-of-3 policy vector: 8 029 characters, twice the spend-key vault's cap. */
 const REAL_POLICY = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'msauth', 'policy.json'), 'utf8');
@@ -38,7 +38,7 @@ export async function unlockedWithSigner(opts = {}) {
 
 test('adding a signer keeps policy and seed only in vault records', async () => {
   const { storage, row } = await unlockedWithSigner();
-  assert.deepEqual({ ...row, id: 'x' }, { id: 'x', label: 'treasury', index: 1, fingerprint: 'NFYW-K8E9-E5K9-AAK3', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(60) });
+  assert.deepEqual({ ...row, id: 'x' }, { id: 'x', label: 'treasury', index: 1, fingerprint: 'NFYW-K8E9-E5K9-AAK3', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(60), maxFee: '100000000' });
   const everything = JSON.stringify([...storage.local.entries()]);
   assert.ok(!everything.includes(SEED_HEX), 'no seed in plain storage');
   assert.ok(!everything.includes('11'.repeat(32)), 'no msk in plain storage');
@@ -146,7 +146,7 @@ test('a damaged policies record is never overwritten: unlock works, list/add/rem
 import { verdict, EXPIRY_MARGIN } from '../engine/signers.js';
 
 const SUMMARY = { expires_at: 200, chain_id: 13, genesis: GENESIS, binding_domain: 1, lines: ['x'], policy_fingerprint: 'NFYW-K8E9-E5K9-AAK3', recipients_checked: true,
-  outputs: [{ to_account: false, amount: '5', needs_payee: true, matches: 'FP' }] };
+  fee: '1', outputs: [{ to_account: false, amount: '5', needs_payee: true, matches: 'FP' }] };
 const signingCore = (extra = {}) => msauthCore({
   msauth_check: () => ({ ...SUMMARY }),
   msauth_sign: ({ seed }) => { if (seed !== SEED_HEX) throw new Error('bad seed'); return '1:' + 'ab'.repeat(8); },
@@ -382,7 +382,7 @@ test('sign hands msauth_sign the same expected-recipient list the check used', a
 test('a dust token beside a RAND output to the same payee does not unpin that payee', () => {
   const G = '0'.repeat(64);
   const summary = {
-    recipients_checked: true, expires_at: 1000, chain_id: 21, binding_domain: 1, genesis: G, lines: ['x'],
+    recipients_checked: true, expires_at: 1000, chain_id: 21, binding_domain: 1, genesis: G, lines: ['x'], fee: '1000000',
     outputs: [
       { to_account: false, amount: '900000000000', asset: 0, owner_fingerprint: 'X', matches: 'AAAA (900 RAND)' },
       { to_account: false, amount: '1', asset: 5, owner_fingerprint: 'X', matches: 'AAAA (0.000000001 RAND)' },
@@ -408,4 +408,65 @@ test('a summary whose lines are missing or not all strings is malformed-summary'
     assert.equal(verdict({ summary, head: 1, chainId: 13, genesis: GENESIS, url: 'u' }).refusal.code, 'malformed-summary', JSON.stringify(lines));
   }
   assert.equal(verdict({ summary: { ...SUMMARY, lines: [] }, head: 1, chainId: 13, genesis: GENESIS, url: 'u' }).signable, true, 'an empty array of lines is well formed');
+});
+
+// ---- MSC-2: the binding a signer signs covers the fee (randprotocol-msig lib.rs), and no client
+// rule ever read it — a signer who pinned the payee and the amount still signed a fee that took
+// the rest of the account. Fees are base units (1 RAND = 10^9), as the core's summary writes them.
+test('the fee rule: over the signer\'s limit, or over what the proposal pays out, is refused; a missing fee is malformed', () => {
+  assert.equal(DEFAULT_MAX_FEE_UNITS, '100000000', '0.1 RAND');
+  const paid = (fee, amount = '5000000000') => ({ ...SUMMARY, fee, outputs: [{ to_account: false, amount, matches: 'FP' }, { to_account: true, amount: '7', matches: null }] });
+  assert.equal(V(paid('100000000')).signable, true, 'at the limit');
+  const over = V(paid('100000001'));
+  assert.equal(over.refusal.code, 'fee-too-high');
+  assert.match(over.refusal.message, /0\.100000001 RAND/);
+  assert.match(over.refusal.message, /0\.1 RAND/);
+  assert.equal(verdict({ summary: paid('100000001'), head: 1, chainId: 13, genesis: GENESIS, url: 'u', maxFee: '200000000' }).signable, true, 'a profile may allow more');
+  assert.equal(verdict({ summary: paid('200000001'), head: 1, chainId: 13, genesis: GENESIS, url: 'u', maxFee: '200000000' }).refusal.code, 'fee-too-high');
+  assert.equal(verdict({ summary: paid('100000001'), head: 1, chainId: 13, genesis: GENESIS, url: 'u', maxFee: 'lots' }).refusal.code, 'fee-too-high', 'an unreadable limit is the default, not no limit');
+  // The RAND the proposal pays out is 5 units here: a fee of 6 is more than the payment.
+  const ratio = V({ ...SUMMARY, fee: '6' });
+  assert.equal(ratio.refusal.code, 'fee-too-high');
+  assert.match(ratio.refusal.message, /pays out/);
+  assert.equal(V({ ...SUMMARY, fee: '5' }).signable, true, 'a fee equal to the payment is allowed');
+  // Change is not a payment, and a token output is not RAND: a token-only proposal is bounded by the limit alone.
+  const token = { ...SUMMARY, fee: '50000000', outputs: [{ to_account: false, amount: '1', asset: 7, owner_fingerprint: 'F', matches: 'X' }, { to_account: true, amount: '9', matches: null }] };
+  assert.equal(V(token).signable, true);
+  assert.equal(V({ ...token, fee: '100000001' }).refusal.code, 'fee-too-high');
+  for (const fee of [undefined, null, '', 'abc', -1, 1.5, '1e3', true]) {
+    const s = { ...SUMMARY };
+    if (fee === undefined) delete s.fee; else s.fee = fee;
+    assert.equal(V(s).refusal.code, 'malformed-summary', JSON.stringify(fee));
+  }
+  assert.equal(V(paid(1000000)).signable, true, 'fullnode\'s own vectors carry the fee as a number');
+  assert.equal(verdict({ summary: paid('100000001'), head: null, chainId: 13, genesis: GENESIS, url: 'u' }).refusal.code, 'fee-too-high', 'needs no node');
+  assert.equal(V({ ...paid('100000001'), recipients_checked: false }).refusal.code, 'unchecked-recipient', 'the payee check comes first');
+});
+
+test('a profile\'s fee limit is saved in the vault, shown in its row, applied by check and sign, and survives a lock', async () => {
+  const big = { ...SUMMARY, fee: '150000000', outputs: [{ to_account: false, amount: '5000000000', matches: 'FP' }] }; // 0.15 RAND fee on a 5 RAND payment
+  let signed = 0;
+  const core = signingCore({ msauth_check: () => ({ ...big }), msauth_sign: () => { signed += 1; return '1:ab'; } });
+  const { backend, row } = await unlockedWithSigner({ core, fetch: atHead(100) });
+  assert.equal(row.maxFee, DEFAULT_MAX_FEE_UNITS);
+  assert.equal((await backend.signers.check(row.id, 'P', ['rand1payee:5'])).refusal.code, 'fee-too-high');
+  await assert.rejects(backend.signers.sign(row.id, 'P', ['rand1payee:5'], PASSWORD), (e) => e.code === 'fee-too-high');
+  assert.equal(signed, 0);
+  await assert.rejects(backend.signers.setMaxFee(row.id, '0.2', 'wrong-password-here'), /wrong password/);
+  await assert.rejects(backend.signers.setMaxFee(row.id, 'lots', PASSWORD), /number of RAND/);
+  await assert.rejects(backend.signers.setMaxFee(row.id, '0', PASSWORD), /number of RAND/);
+  const [updated] = await backend.signers.setMaxFee(row.id, ' 0.2 ', PASSWORD);
+  assert.equal(updated.maxFee, '200000000');
+  assert.equal((await backend.signers.check(row.id, 'P', ['rand1payee:5'])).signable, true);
+  await backend.signers.sign(row.id, 'P', ['rand1payee:5'], PASSWORD);
+  assert.equal(signed, 1);
+  await backend.wallet.lock();
+  await backend.wallet.unlock(PASSWORD);
+  assert.equal((await backend.signers.list())[0].maxFee, '200000000', 'the limit is in the profiles record');
+  // A limit given when the signer is added, in RAND.
+  const fresh = makeWasmBackend({ core: msauthCore(), storage: mapStorage(), platform: stubPlatform(), fetch: stubFetch(), locks: null, broadcast: null });
+  await fresh.wallet.create(PASSWORD);
+  await assert.rejects(fresh.signers.add({ label: 'x', policy: POLICY, key: KEY, password: PASSWORD, maxFee: '-1' }), /number of RAND/);
+  const [added] = await fresh.signers.add({ label: 'x', policy: POLICY, key: KEY, password: PASSWORD, maxFee: '0.05' });
+  assert.equal(added.maxFee, '50000000');
 });

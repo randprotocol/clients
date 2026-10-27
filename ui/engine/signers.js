@@ -7,6 +7,7 @@
 // into the session beside the spend key; and `signerSeeds`, one `encryptBytes` record per seed,
 // opened only by `sign()` with the password typed for that signature — never at unlock, never kept.
 import { encryptSecret, decryptSecret, encryptBytes, decryptBytes } from './crypto.js';
+import { formatUnits, parseUnits } from '../lib/format.js';
 import { t } from '../i18n.js';
 
 export const SIGNER_POLICIES_KEY = 'signerPolicies';
@@ -20,6 +21,14 @@ export const SIGNER_SEEDS_KEY = 'signerSeeds';
 export const SIGNER_POLICIES_RECORD_BYTES = 256 << 10;
 /** Blocks a proposal needs before its window closes: the CLI's `EXPIRY_MARGIN` (fullnode d5b2e652). */
 export const EXPIRY_MARGIN = 16;
+/**
+ * The fee a signer accepts unless its profile says otherwise: 0.1 RAND, in base units (1 RAND =
+ * 10^9, the unit the core's summary writes `fee` in). The binding a signer signs covers the fee
+ * (randprotocol-msig), so a client rule must read it (MSC-2): a signer who pinned the payee and
+ * the amount would otherwise sign a fee that takes the rest of the account. A profile's `maxFee`
+ * (base units, decimal text) replaces this; see `verdict`.
+ */
+export const DEFAULT_MAX_FEE_UNITS = '100000000';
 
 export class SignerRefusal extends Error {
   constructor(code, message, detail = {}) {
@@ -49,6 +58,15 @@ function validProfiles(v) {
   return v.filter((p) => p && typeof p.id === 'string' && typeof p.label === 'string' && typeof p.policy === 'string'
     && Number.isInteger(p.index) && typeof p.policyHash === 'string');
 }
+/** A profile's fee limit in base units, the default when it has none it can read. */
+export const maxFeeOf = (p) => (p && typeof p.maxFee === 'string' && /^\d+$/.test(p.maxFee) ? p.maxFee : DEFAULT_MAX_FEE_UNITS);
+/** A fee limit typed in RAND ("0.1") → base units as decimal text; throws for anything but a positive number. */
+export function parseMaxFee(text) {
+  let units;
+  try { units = parseUnits(String(text ?? '').trim()); } catch { units = null; }
+  if (units === null || units <= 0n) throw new Error(t('An amount is a number of RAND, such as 1.5.'));
+  return units.toString();
+}
 
 export const isZero = (a) => (typeof a === 'string' ? /^0+$/.test(a.trim()) : a === 0);
 
@@ -64,8 +82,14 @@ export function payeeAssets(paying) {
 
 const amountless = (entry) => { const i = String(entry).indexOf(':'); return i < 0 || String(entry).slice(i + 1).trim() === ''; };
 
-/** Whether a checked proposal may be signed now, by the CLI's rule, on this wallet's chain. */
-export function verdict({ summary, head, chainId, genesis, url, recipients }) {
+/**
+ * Whether a checked proposal may be signed now, by the CLI's rule, on this wallet's chain.
+ * `maxFee` is the signer profile's fee limit in base units (`DEFAULT_MAX_FEE_UNITS` when absent or
+ * unreadable). The fee rule (MSC-2) refuses a fee over that limit, and a fee over the RAND the
+ * proposal pays out (change is not a payment; a token is not RAND, so a token-only proposal is
+ * bounded by the limit alone). It needs no node, and comes after the payee rule.
+ */
+export function verdict({ summary, head, chainId, genesis, url, recipients, maxFee }) {
   const malformed = () => ({ signable: false, refusal: { code: 'malformed-summary', message: t('The proposal check returned an incomplete answer, so this proposal is not signed.') } });
   if (summary === null || typeof summary !== 'object') return malformed();
   // Spec §4 step 3: never sign on an unchecked payee (a coordinator could pay its own key).
@@ -99,8 +123,18 @@ export function verdict({ summary, head, chainId, genesis, url, recipients }) {
   const sound = Number.isSafeInteger(summary.expires_at) && summary.expires_at >= 0
     && Number.isSafeInteger(summary.chain_id)
     && Number.isInteger(summary.binding_domain) && summary.binding_domain >= 0
-    && typeof summary.genesis === 'string' && /^[0-9a-fA-F]+$/.test(summary.genesis);
+    && typeof summary.genesis === 'string' && /^[0-9a-fA-F]+$/.test(summary.genesis)
+    && amountOk(summary.fee);
   if (!sound) return malformed();
+  const fee = BigInt(String(summary.fee).trim());
+  const limit = BigInt(maxFeeOf({ maxFee: typeof maxFee === 'string' ? maxFee : String(maxFee ?? '') }));
+  if (fee > limit) {
+    return { signable: false, refusal: { code: 'fee-too-high', message: t('The fee of {fee} RAND is more than this signer allows ({max} RAND), so this proposal is not signed. Raise the signer\'s fee limit or ask for a new proposal.', { fee: formatUnits(fee), max: formatUnits(limit) }) } };
+  }
+  const randPaid = paying.filter((o) => !isNonRand(o)).reduce((sum, o) => sum + BigInt(String(o.amount).trim()), 0n);
+  if (randPaid > 0n && fee > randPaid) {
+    return { signable: false, refusal: { code: 'fee-too-high', message: t('The fee of {fee} RAND is more than the {paid} RAND this proposal pays out, so this proposal is not signed.', { fee: formatUnits(fee), paid: formatUnits(randPaid) }) } };
+  }
   if (head == null) {
     return { signable: false, refusal: { code: 'no-node', node: url, message: t('No node answered at {url}, so the expiry cannot be checked and this proposal is not signed. Retry when the node is reachable.', { url: url || '—' }) } };
   }
@@ -155,15 +189,16 @@ export function makeSigners(deps) {
   }
   async function row(p) {
     const info = await c.msauthPolicyInfo(p.policy);
-    return { id: p.id, label: p.label, index: p.index, fingerprint: info.fingerprint, threshold: info.threshold, signers: info.signers, address: info.address };
+    return { id: p.id, label: p.label, index: p.index, fingerprint: info.fingerprint, threshold: info.threshold, signers: info.signers, address: info.address, maxFee: maxFeeOf(p) };
   }
   async function list() {
     return Promise.all((await profiles()).map(row));
   }
 
   /** The head from a node that passed this wallet's chain check; any failure is "no node". */
-  async function judge(summary, recipients) {
+  async function judge(summary, recipients, profile) {
     const settings = await getSettings();
+    const maxFee = maxFeeOf(profile);
     let url = '';
     try { url = await currentRpcUrl(); } catch { /* no endpoint configured */ }
     try {
@@ -171,9 +206,9 @@ export function makeSigners(deps) {
       const h = await client.head();
       const height = Number(h && h.height);
       if (!Number.isSafeInteger(height) || height < 0) throw new Error('no height');
-      return verdict({ summary, head: height, chainId: settings.chainId, genesis: identity && identity.genesis, url: u, recipients });
+      return verdict({ summary, head: height, chainId: settings.chainId, genesis: identity && identity.genesis, url: u, recipients, maxFee });
     } catch {
-      return verdict({ summary, head: null, url, recipients });
+      return verdict({ summary, head: null, url, recipients, maxFee });
     }
   }
 
@@ -185,9 +220,10 @@ export function makeSigners(deps) {
       const signer = await c.msauthSignerImport(cleanText(key), pol);
       return { fingerprint: info.fingerprint, threshold: info.threshold, signers: info.signers, address: info.address, policyHash: info.policy_hash, index: signer.index, publicKey: signer.public_key };
     },
-    async add({ label, policy, key, password }) {
+    async add({ label, policy, key, password, maxFee }) {
       const name = String(label ?? '').trim();
       if (!name || [...name].length > 64) throw new Error(t('a signer label is 1-64 characters'));
+      const limit = maxFee === undefined || maxFee === null || String(maxFee).trim() === '' ? DEFAULT_MAX_FEE_UNITS : parseMaxFee(maxFee);
       const pol = cleanText(policy);
       const info = await c.msauthPolicyInfo(pol);
       const signer = await c.msauthSignerImport(cleanText(key), pol);
@@ -204,7 +240,15 @@ export function makeSigners(deps) {
       } finally {
         seed.fill(0);
       }
-      await writeProfiles(password, [...current, { id, label: name, policy: pol, index: signer.index, policyHash: info.policy_hash }]);
+      await writeProfiles(password, [...current, { id, label: name, policy: pol, index: signer.index, policyHash: info.policy_hash, maxFee: limit }]);
+      return list();
+    },
+    /** The profile's fee limit, typed in RAND; under the password, like every change to the record. */
+    async setMaxFee(id, maxFee, password) {
+      await profileOf(id);
+      const limit = parseMaxFee(maxFee);
+      await requirePassword(password);
+      await writeProfiles(password, (await profiles()).map((p) => (p.id === id ? { ...p, maxFee: limit } : p)));
       return list();
     },
     async remove(id, password) {
@@ -221,14 +265,14 @@ export function makeSigners(deps) {
       const p = await profileOf(id);
       if (blankPayee(expectedRecipients)) { const r = blankRefusal(); return { summary: null, signable: false, refusal: { code: r.code, message: r.message } }; }
       const summary = await c.msauthCheck(cleanText(proposal), p.policy, payees(expectedRecipients));
-      return { summary, ...(await judge(summary, payees(expectedRecipients))) };
+      return { summary, ...(await judge(summary, payees(expectedRecipients), p)) };
     },
     async sign(id, proposal, expectedRecipients, password) {
       const p = await profileOf(id);
       const text = cleanText(proposal);
       if (blankPayee(expectedRecipients)) throw blankRefusal();
       const summary = await c.msauthCheck(text, p.policy, payees(expectedRecipients));
-      const v = await judge(summary, payees(expectedRecipients));
+      const v = await judge(summary, payees(expectedRecipients), p);
       if (!v.signable) throw new SignerRefusal(v.refusal.code, v.refusal.message, { node: v.refusal.node });
       const rec = ((await storage.get(SIGNER_SEEDS_KEY)) || {})[id];
       if (!rec) throw new Error(t('This signer profile has no key on this device: remove it and add it again.'));
@@ -236,7 +280,7 @@ export function makeSigners(deps) {
       if (!seed) throw new Error('wrong password');
       try {
         // The backoff above can last up to 30 s: re-read the head and re-run the rule before signing.
-        const again = await judge(summary, payees(expectedRecipients));
+        const again = await judge(summary, payees(expectedRecipients), p);
         if (!again.signable) throw new SignerRefusal(again.refusal.code, again.refusal.message, { node: again.refusal.node });
         // The hex copy below cannot be wiped (a JS string); it is unreachable after this call, and
         // wallet-core holds its own copy in Zeroizing. The bytes are wiped here.
