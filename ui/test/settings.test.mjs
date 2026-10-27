@@ -672,7 +672,7 @@ test('the RandProtocol provers are the default: every member named with its own 
   await app.idle();
   const state = root.querySelector('[data-role="prover-state"]');
   assert.match(state.textContent, /RandProtocol provers/);
-  assert.match(state.textContent, /3 machines run by the validators, each with its own key/);
+  assert.match(state.textContent, /3 machines operated by RandProtocol, each with its own key/);
   const rows = [...state.querySelectorAll('[data-role="prover-pool-member"]')].map((r) => r.textContent);
   assert.equal(rows.length, 3, 'one row per member');
   for (const [i, n] of ['a', 'b', 'c'].entries()) assert.match(rows[i], new RegExp(`^${n}[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$`));
@@ -702,7 +702,7 @@ test('with no prover, Use the RandProtocol provers turns the default back on in 
   await app.idle();
   const box = root.querySelector('[data-role="trusted-prover"]');
   assert.ok(box, 'the action is offered once the engine names a trusted prover');
-  assert.match(box.textContent, /3 machines run by the validators, each with its own key/);
+  assert.match(box.textContent, /3 machines operated by RandProtocol, each with its own key/);
   assert.equal(box.querySelectorAll('[data-role="prover-pool-member"]').length, 3);
   assert.match(box.textContent, /read your whole history, past and future\. None can spend\./);
   box.querySelector('[data-role="use-trusted-prover"]').click();

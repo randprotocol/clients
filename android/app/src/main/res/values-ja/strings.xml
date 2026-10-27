@@ -162,13 +162,13 @@
     <string name="settings_prover_warning">このプルーバーは、このウォレットの履歴全体（今日より前と後の、受け取りと送信のすべての支払い）を読めるようになります。支出はできません。履歴を非公開にするには、自分のプルーバーを運用してください。</string>
     <string name="settings_prover_forget">このプルーバーを解除</string>
     <plurals name="settings_prover_trusted_body">
-        <item quantity="other">または RandProtocol のプルーバーを使います。バリデーターが運用する %1$d 台のマシンで、それぞれ独自の鍵を持ちます。料金はかかりません。送信を証明する各プルーバーは、このウォレットの閲覧キーを受け取るため、過去から未来までの履歴をすべて読めます。どのプルーバーも支出はできません。</item>
+        <item quantity="other">または RandProtocol のプルーバーを使います。RandProtocol が運用する %1$d 台のマシンで、それぞれ独自の鍵を持ちます。料金はかかりません。送信を証明する各プルーバーは、このウォレットの閲覧キーを受け取るため、過去から未来までの履歴をすべて読めます。どのプルーバーも支出はできません。</item>
     </plurals>
     <string name="settings_prover_use_trusted">RandProtocol のプルーバーを使う</string>
     <string name="settings_prover_pool_none">現在応答している RandProtocol のプルーバーはありません。</string>
     <string name="settings_prover_default">%1$s のプルーバー · この端末で証明できない場合</string>
     <plurals name="settings_prover_default_note">
-        <item quantity="other">RandProtocol のプルーバー: バリデーターが運用する %1$d 台のマシンで、それぞれ独自の鍵を持ち、別のものを選ぶまで使われます。料金はかかりません。送信を証明する各プルーバーは、このウォレットの閲覧キーを受け取るため、過去から未来までの履歴をすべて読めます。どのプルーバーも支出はできません。</item>
+        <item quantity="other">RandProtocol のプルーバー: RandProtocol が運用する %1$d 台のマシンで、それぞれ独自の鍵を持ち、別のものを選ぶまで使われます。料金はかかりません。送信を証明する各プルーバーは、このウォレットの閲覧キーを受け取るため、過去から未来までの履歴をすべて読めます。どのプルーバーも支出はできません。</item>
     </plurals>
     <string name="settings_prover_use_none">プルーバーを使わない</string>
     <string name="settings_prover_using_default">%1$s のプルーバーを使用中です。この端末で作れない証明はそのいずれかに送られます。送信を証明する各プルーバーは、そのウォレットの閲覧キーを見ます。%2$s</string>
@@ -177,7 +177,7 @@
     <string name="review_default_prover">この端末にはこの証明に必要なメモリがないため、%1$s のプルーバーのいずれかが作成します。作成するプルーバーは、封印されたジョブの中で閲覧キーとソルトを受け取ります。このウォレットの履歴をすべて読めますが、支出はできません。支出の承認はこのスマートフォン自身が行い、何かを送信する前に証明を検証します。</string>
     <string name="prover_notice_title">RandProtocol のプルーバーはあなたの履歴を読めます</string>
     <plurals name="prover_notice_body">
-        <item quantity="other">この端末では証明を作成できないため、RandProtocol のプルーバーのいずれか（バリデーターが運用する %1$d 台のマシン。送信を証明する各プルーバーは、そのウォレットの閲覧キーを見ることになります）が作成します。証明を行うプルーバーはこのウォレットの閲覧キーを受け取るため、過去から未来まで、受け取りと送信のすべての支払いを含むあなたの履歴全体を読めます。支出はできません。確認は一度だけです。履歴を自分だけのものにするには、代わりに自分のプルーバーを使ってください。</item>
+        <item quantity="other">この端末では証明を作成できないため、RandProtocol のプルーバーのいずれか（RandProtocol が運用する %1$d 台のマシン。送信を証明する各プルーバーは、そのウォレットの閲覧キーを見ることになります）が作成します。証明を行うプルーバーはこのウォレットの閲覧キーを受け取るため、過去から未来まで、受け取りと送信のすべての支払いを含むあなたの履歴全体を読めます。支出はできません。確認は一度だけです。履歴を自分だけのものにするには、代わりに自分のプルーバーを使ってください。</item>
     </plurals>
     <string name="prover_notice_continue">理解しました — 続行</string>
     <string name="prover_notice_own">自分のプルーバーを使う</string>

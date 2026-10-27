@@ -154,9 +154,9 @@
     "Optional": "விருப்பத்தேர்வு",
     "Optional: ask for an amount the payer’s wallet fills in for them.": "விருப்பத்தேர்வு: செலுத்துபவரின் வாலட் அவருக்காக நிரப்பும் ஒரு தொகையைக் கேளுங்கள்.",
     "Optional: ask for an amount, and add a note the payer’s wallet fills in for them.": "விருப்பத்தேர்வு: ஒரு தொகையைக் கேளுங்கள், மேலும் செலுத்துபவரின் வாலட் அவருக்காக நிரப்பும் ஒரு குறிப்பைச் சேருங்கள்.",
-    "Or use the RandProtocol provers — %lld machines run by the validators, each with its own key. They charge nothing. %@": {
-      "one": "அல்லது RandProtocol நிரூபிப்பான்களைப் பயன்படுத்துங்கள் — சரிபார்ப்பாளர்கள் இயக்கும் %lld கணினி, ஒவ்வொன்றுக்கும் அதன் சொந்த விசை. அவை கட்டணம் வசூலிப்பதில்லை. %@",
-      "other": "அல்லது RandProtocol நிரூபிப்பான்களைப் பயன்படுத்துங்கள் — சரிபார்ப்பாளர்கள் இயக்கும் %lld கணினிகள், ஒவ்வொன்றுக்கும் அதன் சொந்த விசை. அவை கட்டணம் வசூலிப்பதில்லை. %@"
+    "Or use the RandProtocol provers — %lld machines operated by RandProtocol, each with its own key. They charge nothing. %@": {
+      "one": "அல்லது RandProtocol நிரூபிப்பான்களைப் பயன்படுத்துங்கள் — RandProtocol இயக்கும் %lld கணினி, ஒவ்வொன்றுக்கும் அதன் சொந்த விசை. அவை கட்டணம் வசூலிப்பதில்லை. %@",
+      "other": "அல்லது RandProtocol நிரூபிப்பான்களைப் பயன்படுத்துங்கள் — RandProtocol இயக்கும் %lld கணினிகள், ஒவ்வொன்றுக்கும் அதன் சொந்த விசை. அவை கட்டணம் வசூலிப்பதில்லை. %@"
     },
     "Paid": "செலுத்தியது",
     "Pair your own prover": "உங்கள் சொந்த நிரூபிப்பானை இணை",
@@ -237,9 +237,9 @@
     "That is not a shielded address, a randpay: link, or a saved contact.": "அது பாதுகாக்கப்பட்ட முகவரியோ, randpay: இணைப்போ, சேமிக்கப்பட்ட தொடர்போ அல்ல.",
     "That payment link could not be read: %@": "அந்தக் கட்டண இணைப்பைப் படிக்க முடியவில்லை: %@",
     "The RandProtocol provers can read your history": "RandProtocol நிரூபிப்பான்கள் உங்கள் வரலாற்றைப் படிக்க முடியும்",
-    "The RandProtocol provers: %lld machines run by the validators, each with its own key, used until you choose another. They charge nothing. %@": {
-      "one": "RandProtocol நிரூபிப்பான்கள்: சரிபார்ப்பாளர்கள் இயக்கும் %lld கணினி, ஒவ்வொன்றுக்கும் அதன் சொந்த விசை; நீங்கள் வேறொன்றைத் தேர்ந்தெடுக்கும் வரை பயன்படுத்தப்படும். அவை கட்டணம் வசூலிப்பதில்லை. %@",
-      "other": "RandProtocol நிரூபிப்பான்கள்: சரிபார்ப்பாளர்கள் இயக்கும் %lld கணினிகள், ஒவ்வொன்றுக்கும் அதன் சொந்த விசை; நீங்கள் வேறொன்றைத் தேர்ந்தெடுக்கும் வரை பயன்படுத்தப்படும். அவை கட்டணம் வசூலிப்பதில்லை. %@"
+    "The RandProtocol provers: %lld machines operated by RandProtocol, each with its own key, used until you choose another. They charge nothing. %@": {
+      "one": "RandProtocol நிரூபிப்பான்கள்: RandProtocol இயக்கும் %lld கணினி, ஒவ்வொன்றுக்கும் அதன் சொந்த விசை; நீங்கள் வேறொன்றைத் தேர்ந்தெடுக்கும் வரை பயன்படுத்தப்படும். அவை கட்டணம் வசூலிப்பதில்லை. %@",
+      "other": "RandProtocol நிரூபிப்பான்கள்: RandProtocol இயக்கும் %lld கணினிகள், ஒவ்வொன்றுக்கும் அதன் சொந்த விசை; நீங்கள் வேறொன்றைத் தேர்ந்தெடுக்கும் வரை பயன்படுத்தப்படும். அவை கட்டணம் வசூலிப்பதில்லை. %@"
     },
     "The amount you receive is exact: if the pool moves before the swap lands, nothing is sent and you get a new quote. %@": "நீங்கள் பெறும் தொகை துல்லியமானது: ஸ்வாப் சேர்வதற்கு முன் பூல் மாறினால், எதுவும் அனுப்பப்படாது, உங்களுக்குப் புதிய விலைக்குறிப்பு கிடைக்கும். %@",
     "The link asks for %@ %@; you typed %@ %@.": "இணைப்பு %@ %@ கேட்கிறது; நீங்கள் தட்டச்சு செய்தது %@ %@.",
@@ -404,7 +404,7 @@
     "spend key must be 64 hex characters": "செலவு விசை 64 hex எழுத்துகளாக இருக்க வேண்டும்",
     "spend_key must be 64 hex characters": "spend_key 64 hex எழுத்துகளாக இருக்க வேண்டும்",
     "the RAND notes hold %@, but the fee is %@": "RAND நோட்டுகளில் %@ உள்ளது, ஆனால் கட்டணம் %@",
-    "the RandProtocol provers (%@ run by the validators; each one that proves a send sees that wallet's viewing key)": "RandProtocol நிரூபிப்பான்கள் (சரிபார்ப்பாளர்கள் இயக்கும் %@; ஓர் அனுப்புதலை நிரூபிக்கும் ஒவ்வொன்றும் அந்த வாலட்டின் பார்வை விசையைப் பார்க்கும்)",
+    "the RandProtocol provers (%@ operated by RandProtocol; each one that proves a send sees that wallet's viewing key)": "RandProtocol நிரூபிப்பான்கள் (RandProtocol இயக்கும் %@; ஓர் அனுப்புதலை நிரூபிக்கும் ஒவ்வொன்றும் அந்த வாலட்டின் பார்வை விசையைப் பார்க்கும்)",
     "the chosen RAND notes do not cover the fee": "தேர்ந்தெடுத்த RAND நோட்டுகள் கட்டணத்தை ஈடுகட்டவில்லை",
     "the chosen notes do not cover the amount and the burn": "தேர்ந்தெடுத்த நோட்டுகள் தொகையையும் எரிப்பையும் ஈடுகட்டவில்லை",
     "the core did not name the payment's transaction key": "core கட்டணத்தின் பரிவர்த்தனை விசையைக் குறிப்பிடவில்லை",

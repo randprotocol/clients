@@ -164,7 +164,7 @@ struct SettingsView: View {
                 // member named with its own fingerprint, what they see, asked, off in one tap.
                 row("Proofs are made by", String(localized: "\(t.name) provers · where this device cannot prove"))
                 ForEach(t.members, id: \.name) { m in memberRow(m.name, m.fingerprint) }
-                Text("The RandProtocol provers: \(t.members.count) machines run by the validators, each with its own key, used until you choose another. They charge nothing. \(Self.defaultNote)")
+                Text("The RandProtocol provers: \(t.members.count) machines operated by RandProtocol, each with its own key, used until you choose another. They charge nothing. \(Self.defaultNote)")
                     .font(.ui(13)).foregroundColor(Theme.textSoft)
                 Text(probeLine).font(.ui(13)).foregroundColor(Theme.textSoft)
                 Button("Use no prover") { useNoProver() }
@@ -175,7 +175,7 @@ struct SettingsView: View {
                 // No prover chosen: the way back to the default is one tap, with what it sees.
                 if let t = trusted {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Or use the RandProtocol provers — \(t.members.count) machines run by the validators, each with its own key. They charge nothing. \(Self.defaultNote)")
+                        Text("Or use the RandProtocol provers — \(t.members.count) machines operated by RandProtocol, each with its own key. They charge nothing. \(Self.defaultNote)")
                             .font(.ui(13)).foregroundColor(Theme.textSoft)
                         ForEach(t.members, id: \.name) { m in memberRow(m.name, m.fingerprint) }
                         Button("Use the RandProtocol provers") { useTrustedProver() }

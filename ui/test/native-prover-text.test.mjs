@@ -61,3 +61,47 @@ test('iOS: the send review and the swap refusal name the RandProtocol provers an
   assert.doesNotMatch(swift, /Pair a prover in Settings › Prover/);
   assert.ok(swift.includes(NO_ROUTE));
 });
+
+// DOC-301 (wallet 0.8.2): the pool is operated by RandProtocol, not "run by the validators" — in
+// every string each app shows, in every language. A word for "validator" left in one of those
+// sentences is the old claim in that language.
+const VALIDATOR = ['المدق', 'Validator', 'validador', 'اعتبارسنج', 'validateur', 'वैलिडेटर', 'validator', 'バリデーター', '검증',
+  'pengesah', 'walidator', 'تصدیقوونک', 'валидатор', 'சரிபார்ப்பாளர்', 'ویلیڈیٹر', '验证者', '驗證者'];
+const leftover = (s) => VALIDATOR.find((w) => String(s).includes(w));
+
+test('web: no pool sentence says the provers are run by the validators, in any language', async () => {
+  const dir = join(ROOT, 'ui/locales');
+  const en = (await import(join(dir, 'en.js'))).default;
+  assert.equal(Object.keys(en).filter((k) => /run by the validators/.test(k)).length, 0);
+  const keys = Object.keys(en).filter((k) => /operated by RandProtocol/.test(k));
+  assert.ok(keys.length >= 11, `${keys.length} pool sentences`);
+  for (const f of readdirSync(dir).filter((x) => x.endsWith('.js') && x !== 'en.js')) {
+    const d = (await import(join(dir, f))).default;
+    for (const k of keys) {
+      for (const s of typeof d[k] === 'string' ? [d[k]] : Object.values(d[k])) assert.equal(leftover(s), undefined, `${f}: ${s}`);
+    }
+  }
+});
+
+test('Android and iOS: no pool sentence says the provers are run by the validators, in any language', () => {
+  for (const dir of readdirSync(RES).filter((d) => /^values(-|$)/.test(d))) {
+    let xml;
+    try { xml = readFileSync(join(RES, dir, 'strings.xml'), 'utf8'); } catch { continue; }
+    assert.doesNotMatch(xml, /run by the validators/, dir);
+    for (const name of ['settings_prover_trusted_body', 'settings_prover_default_note', 'prover_notice_body']) {
+      const body = xml.match(new RegExp(`<plurals name="${name}">([\\s\\S]*?)</plurals>`));
+      assert.ok(body, `${dir}: ${name}`);
+      assert.equal(leftover(body[1]), undefined, `${dir} ${name}: ${body[1].slice(0, 120)}`);
+    }
+  }
+  const keys = Object.keys(CATALOG.strings);
+  assert.equal(keys.filter((k) => /run by the validators/.test(k)).length, 0);
+  const pool = keys.filter((k) => /operated by RandProtocol/.test(k));
+  assert.equal(pool.length, 3);
+  for (const k of pool) {
+    for (const [lang, loc] of Object.entries(CATALOG.strings[k].localizations)) {
+      const units = loc.stringUnit ? [loc.stringUnit.value] : Object.values(loc.variations.plural).map((v) => v.stringUnit.value);
+      for (const s of units) assert.equal(leftover(s), undefined, `${lang}: ${s}`);
+    }
+  }
+});

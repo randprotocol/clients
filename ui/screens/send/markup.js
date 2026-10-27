@@ -200,19 +200,19 @@ export function scanSheetMarkup() {
 /** The RandProtocol provers, named the one way every surface names them (wallet 0.6.9). */
 export function poolPhrase(n) {
   return Number.isSafeInteger(n) && n > 0
-    ? t('the RandProtocol provers ({n} machines run by the validators; each one that proves a send sees that wallet\'s viewing key)', { n })
-    : t('the RandProtocol provers (machines run by the validators; each one that proves a send sees that wallet\'s viewing key)');
+    ? t('the RandProtocol provers ({n} machines operated by RandProtocol; each one that proves a send sees that wallet\'s viewing key)', { n })
+    : t('the RandProtocol provers (machines operated by RandProtocol; each one that proves a send sees that wallet\'s viewing key)');
 }
 
 /** The whole notice is one sentence per case (a known count of machines, or none), never
  *  `poolPhrase` glued into a frame: a language declines "one of the provers" its own way. */
 export function defaultProverNotice(n) {
   return Number.isSafeInteger(n) && n > 0
-    ? t('This device cannot make the proof, so one of the RandProtocol provers ({n} machines run by the validators; '
+    ? t('This device cannot make the proof, so one of the RandProtocol provers ({n} machines operated by RandProtocol; '
       + 'each one that proves a send sees that wallet\'s viewing key) makes it. '
       + 'The one that does receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. '
       + 'It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.', { n })
-    : t('This device cannot make the proof, so one of the RandProtocol provers (machines run by the validators; '
+    : t('This device cannot make the proof, so one of the RandProtocol provers (machines operated by RandProtocol; '
       + 'each one that proves a send sees that wallet\'s viewing key) makes it. '
       + 'The one that does receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future. '
       + 'It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.');

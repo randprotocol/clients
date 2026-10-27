@@ -324,7 +324,7 @@ enum ProverPairingService {
     /// The RandProtocol provers, named the one way every surface names them (wallet 0.6.9).
     static func poolPhrase(_ n: Int) -> String {
         let machines = n > 0 ? String(localized: "\(n) machines") : String(localized: "machines")
-        return String(localized: "the RandProtocol provers (\(machines) run by the validators; each one that proves a send sees that wallet's viewing key)")
+        return String(localized: "the RandProtocol provers (\(machines) operated by RandProtocol; each one that proves a send sees that wallet's viewing key)")
     }
 
     /// The one-time notice before the first proof by the RandProtocol provers (the default where

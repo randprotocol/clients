@@ -42,7 +42,7 @@ export function proverNotice(n, t = plain) {
   const known = Number.isSafeInteger(n) && n > 0;
   const count = !known ? t('machines') : n === 1 ? t('{n} machine', { n }) : t('{n} machines', { n });
   return [
-    t('This device cannot make the proof, so one of the RandProtocol provers ({count} run by the validators; each one that proves a send sees that wallet\'s viewing key) makes it.', { count }),
+    t('This device cannot make the proof, so one of the RandProtocol provers ({count} operated by RandProtocol; each one that proves a send sees that wallet\'s viewing key) makes it.', { count }),
     t('The one that does receives this wallet\'s viewing key, so it can read your whole history — every payment received and sent, past and future.'),
     t('It cannot spend.'),
     t('You are asked once; to keep your history to yourself, pair your own prover in the wallet\'s Settings.'),

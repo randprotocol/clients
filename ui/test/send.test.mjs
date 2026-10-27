@@ -120,7 +120,7 @@ test('the first send through the RandProtocol prover shows its notice first; rea
   assert.ok(box, 'the one-time notice');
   assert.match(box.textContent, /viewing key/);
   assert.match(box.textContent, /The RandProtocol provers can read your history/);
-  assert.match(box.textContent, /one of the RandProtocol provers \(4 machines run by the validators; each one that proves a send sees that wallet's viewing key\)/);
+  assert.match(box.textContent, /one of the RandProtocol provers \(4 machines operated by RandProtocol; each one that proves a send sees that wallet's viewing key\)/);
   assert.match(box.textContent, /whole history/);
   assert.match(box.textContent, /past and future/);
   assert.match(box.textContent, /cannot spend/);

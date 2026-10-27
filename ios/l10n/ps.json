@@ -157,9 +157,9 @@
     "Optional": "اختیاري",
     "Optional: ask for an amount the payer’s wallet fills in for them.": "اختیاري: یوه اندازه وغواړئ چې د تادیه کوونکي والټ یې ورته ډکوي.",
     "Optional: ask for an amount, and add a note the payer’s wallet fills in for them.": "اختیاري: یوه اندازه وغواړئ، او یو یادښت ورزیات کړئ چې د تادیه کوونکي والټ یې ورته ډکوي.",
-    "Or use the RandProtocol provers — %lld machines run by the validators, each with its own key. They charge nothing. %@": {
-      "one": "یا د RandProtocol ثبوت جوړوونکي وکاروئ — %lld ماشین چې تصدیقوونکي یې چلوي، هر یو له خپلې کیلي سره. هېڅ پیسې نه اخلي. %@",
-      "other": "یا د RandProtocol ثبوت جوړوونکي وکاروئ — %lld ماشینونه چې تصدیقوونکي یې چلوي، هر یو له خپلې کیلي سره. هېڅ پیسې نه اخلي. %@"
+    "Or use the RandProtocol provers — %lld machines operated by RandProtocol, each with its own key. They charge nothing. %@": {
+      "one": "یا د RandProtocol ثبوت جوړوونکي وکاروئ — %lld ماشین چې RandProtocol یې چلوي، هر یو له خپلې کیلي سره. هېڅ پیسې نه اخلي. %@",
+      "other": "یا د RandProtocol ثبوت جوړوونکي وکاروئ — %lld ماشینونه چې RandProtocol یې چلوي، هر یو له خپلې کیلي سره. هېڅ پیسې نه اخلي. %@"
     },
     "Paid": "ورکړل شو",
     "Pair your own prover": "خپل ثبوت جوړوونکی جوړه کړئ",
@@ -240,9 +240,9 @@
     "That is not a shielded address, a randpay: link, or a saved contact.": "دا خوندي پته، randpay: لینک، یا خوندي شوې اړیکه نه ده.",
     "That payment link could not be read: %@": "د تادیې هغه لینک ونه لوستل شو: %@",
     "The RandProtocol provers can read your history": "د RandProtocol ثبوت جوړوونکي ستاسو تاریخچه لوستلی شي",
-    "The RandProtocol provers: %lld machines run by the validators, each with its own key, used until you choose another. They charge nothing. %@": {
-      "one": "د RandProtocol ثبوت جوړوونکي: %lld ماشین چې تصدیقوونکي یې چلوي، هر یو له خپلې کیلي سره، تر هغه کارول کېږي چې تاسو بل غوره کړئ. هېڅ پیسې نه اخلي. %@",
-      "other": "د RandProtocol ثبوت جوړوونکي: %lld ماشینونه چې تصدیقوونکي یې چلوي، هر یو له خپلې کیلي سره، تر هغه کارول کېږي چې تاسو بل غوره کړئ. هېڅ پیسې نه اخلي. %@"
+    "The RandProtocol provers: %lld machines operated by RandProtocol, each with its own key, used until you choose another. They charge nothing. %@": {
+      "one": "د RandProtocol ثبوت جوړوونکي: %lld ماشین چې RandProtocol یې چلوي، هر یو له خپلې کیلي سره، تر هغه کارول کېږي چې تاسو بل غوره کړئ. هېڅ پیسې نه اخلي. %@",
+      "other": "د RandProtocol ثبوت جوړوونکي: %lld ماشینونه چې RandProtocol یې چلوي، هر یو له خپلې کیلي سره، تر هغه کارول کېږي چې تاسو بل غوره کړئ. هېڅ پیسې نه اخلي. %@"
     },
     "The amount you receive is exact: if the pool moves before the swap lands, nothing is sent and you get a new quote. %@": "هغه اندازه چې تاسو یې ترلاسه کوئ دقیقه ده: که پول د تبادلې له رسېدو مخکې بدل شي، هېڅ نه لېږل کېږي او تاسو نوې بیه ترلاسه کوئ. %@",
     "The link asks for %@ %@; you typed %@ %@.": "لینک %@ %@ غواړي؛ تاسو %@ %@ ولیکل.",
@@ -407,7 +407,7 @@
     "spend key must be 64 hex characters": "د لګښت کیلي باید 64 hex توري وي",
     "spend_key must be 64 hex characters": "spend_key باید 64 hex توري وي",
     "the RAND notes hold %@, but the fee is %@": "د RAND نوټونه %@ لري، خو فیس %@ دی",
-    "the RandProtocol provers (%@ run by the validators; each one that proves a send sees that wallet's viewing key)": "RandProtocol ثبوت جوړوونکو (%@ چې تصدیقوونکي یې چلوي؛ هر یو چې یو لېږد ثبوت کړي، د هغه والټ د لیدو کیلي ویني)",
+    "the RandProtocol provers (%@ operated by RandProtocol; each one that proves a send sees that wallet's viewing key)": "RandProtocol ثبوت جوړوونکو (%@ چې RandProtocol یې چلوي؛ هر یو چې یو لېږد ثبوت کړي، د هغه والټ د لیدو کیلي ویني)",
     "the chosen RAND notes do not cover the fee": "غوره شوي RAND نوټونه فیس نه پوښي",
     "the chosen notes do not cover the amount and the burn": "غوره شوي نوټونه اندازه او سوځول نه پوښي",
     "the core did not name the payment's transaction key": "هستې د تادیې د راکړې ورکړې کیلي ونه نوموله",

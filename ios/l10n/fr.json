@@ -155,10 +155,10 @@
     "Optional": "Facultatif",
     "Optional: ask for an amount the payer’s wallet fills in for them.": "Facultatif : demandez un montant que le portefeuille du payeur remplira pour lui.",
     "Optional: ask for an amount, and add a note the payer’s wallet fills in for them.": "Facultatif : demandez un montant et ajoutez une note que le portefeuille du payeur remplira pour lui.",
-    "Or use the RandProtocol provers — %lld machines run by the validators, each with its own key. They charge nothing. %@": {
-      "one": "Ou utilisez les prouveurs RandProtocol : %lld machine gérée par les validateurs, avec sa propre clé. Ils ne facturent rien. %@",
-      "many": "Ou utilisez les prouveurs RandProtocol : %lld machines gérées par les validateurs, chacune avec sa propre clé. Ils ne facturent rien. %@",
-      "other": "Ou utilisez les prouveurs RandProtocol : %lld machines gérées par les validateurs, chacune avec sa propre clé. Ils ne facturent rien. %@"
+    "Or use the RandProtocol provers — %lld machines operated by RandProtocol, each with its own key. They charge nothing. %@": {
+      "one": "Ou utilisez les prouveurs RandProtocol : %lld machine gérée par RandProtocol, avec sa propre clé. Ils ne facturent rien. %@",
+      "many": "Ou utilisez les prouveurs RandProtocol : %lld machines gérées par RandProtocol, chacune avec sa propre clé. Ils ne facturent rien. %@",
+      "other": "Ou utilisez les prouveurs RandProtocol : %lld machines gérées par RandProtocol, chacune avec sa propre clé. Ils ne facturent rien. %@"
     },
     "Paid": "Payé",
     "Pair your own prover": "Associez votre propre prouveur",
@@ -239,10 +239,10 @@
     "That is not a shielded address, a randpay: link, or a saved contact.": "Ce n'est ni une adresse blindée, ni un lien randpay:, ni un contact enregistré.",
     "That payment link could not be read: %@": "Impossible de lire ce lien de paiement : %@",
     "The RandProtocol provers can read your history": "Les prouveurs RandProtocol peuvent lire votre historique",
-    "The RandProtocol provers: %lld machines run by the validators, each with its own key, used until you choose another. They charge nothing. %@": {
-      "one": "Les prouveurs RandProtocol : %lld machine gérée par les validateurs, avec sa propre clé, utilisée jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@",
-      "many": "Les prouveurs RandProtocol : %lld machines gérées par les validateurs, chacune avec sa propre clé, utilisées jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@",
-      "other": "Les prouveurs RandProtocol : %lld machines gérées par les validateurs, chacune avec sa propre clé, utilisées jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@"
+    "The RandProtocol provers: %lld machines operated by RandProtocol, each with its own key, used until you choose another. They charge nothing. %@": {
+      "one": "Les prouveurs RandProtocol : %lld machine gérée par RandProtocol, avec sa propre clé, utilisée jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@",
+      "many": "Les prouveurs RandProtocol : %lld machines gérées par RandProtocol, chacune avec sa propre clé, utilisées jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@",
+      "other": "Les prouveurs RandProtocol : %lld machines gérées par RandProtocol, chacune avec sa propre clé, utilisées jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@"
     },
     "The amount you receive is exact: if the pool moves before the swap lands, nothing is sent and you get a new quote. %@": "Le montant que vous recevez est exact : si le pool évolue avant que l'échange n'aboutisse, rien n'est envoyé et vous obtenez une nouvelle cotation. %@",
     "The link asks for %@ %@; you typed %@ %@.": "Le lien demande %@ %@ ; vous avez saisi %@ %@.",
@@ -410,7 +410,7 @@
     "spend key must be 64 hex characters": "la clé de dépense doit faire 64 caractères hexadécimaux",
     "spend_key must be 64 hex characters": "spend_key doit faire 64 caractères hexadécimaux",
     "the RAND notes hold %@, but the fee is %@": "les notes RAND contiennent %@, mais les frais sont de %@",
-    "the RandProtocol provers (%@ run by the validators; each one that proves a send sees that wallet's viewing key)": "les prouveurs RandProtocol (%@ aux mains des validateurs ; chacune de celles qui prouvent un envoi voit la clé de visualisation de ce portefeuille)",
+    "the RandProtocol provers (%@ operated by RandProtocol; each one that proves a send sees that wallet's viewing key)": "les prouveurs RandProtocol (%@ exploitées par RandProtocol ; chacune de celles qui prouvent un envoi voit la clé de visualisation de ce portefeuille)",
     "the chosen RAND notes do not cover the fee": "les notes RAND choisies ne couvrent pas les frais",
     "the chosen notes do not cover the amount and the burn": "les notes choisies ne couvrent pas le montant et le brûlage",
     "the core did not name the payment's transaction key": "le cœur n'a pas indiqué la clé de transaction du paiement",

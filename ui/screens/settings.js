@@ -132,17 +132,17 @@ function poolMembersMarkup(members) {
 /** The pool in a sentence: how many machines run it, where the engine says, else just "machines". */
 const poolSentence = (members) => {
   const n = Array.isArray(members) ? members.length : 0;
-  if (n === 0) return t('The RandProtocol provers: machines run by the validators, each with its own key, used until you choose another.');
+  if (n === 0) return t('The RandProtocol provers: machines operated by RandProtocol, each with its own key, used until you choose another.');
   return n === 1
-    ? t('The RandProtocol provers: {n} machine run by the validators, with its own key, used until you choose another.', { n })
-    : t('The RandProtocol provers: {n} machines run by the validators, each with its own key, used until you choose another.', { n });
+    ? t('The RandProtocol provers: {n} machine operated by RandProtocol, with its own key, used until you choose another.', { n })
+    : t('The RandProtocol provers: {n} machines operated by RandProtocol, each with its own key, used until you choose another.', { n });
 };
 const poolOffer = (members) => {
   const n = Array.isArray(members) ? members.length : 0;
-  if (n === 0) return t('Or use the RandProtocol provers — machines run by the validators, each with its own key.');
+  if (n === 0) return t('Or use the RandProtocol provers — machines operated by RandProtocol, each with its own key.');
   return n === 1
-    ? t('Or use the RandProtocol provers — {n} machine run by the validators, with its own key.', { n })
-    : t('Or use the RandProtocol provers — {n} machines run by the validators, each with its own key.', { n });
+    ? t('Or use the RandProtocol provers — {n} machine operated by RandProtocol, with its own key.', { n })
+    : t('Or use the RandProtocol provers — {n} machines operated by RandProtocol, each with its own key.', { n });
 };
 /** Under a pairing that is not the user's own: what that prover can do, in one line. */
 export const proverNotOwnNote = () => t('Not marked as your own: it can read this wallet\'s whole history. It cannot spend.');

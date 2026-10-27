@@ -18970,36 +18970,36 @@
         }
       }
     },
-    "Or use the RandProtocol provers — %lld machines run by the validators, each with its own key. They charge nothing. %@" : {
+    "Or use the RandProtocol provers — %lld machines operated by RandProtocol, each with its own key. They charge nothing. %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Or use the RandProtocol provers — %1$lld machines run by the validators, each with its own key. They charge nothing. %2$@"
+            "value" : "Or use the RandProtocol provers — %1$lld machines operated by RandProtocol, each with its own key. They charge nothing. %2$@"
           }
         },
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "أو استخدم مُثبِتات RandProtocol — %lld جهاز يشغّلها المدقّقون، لكلٍّ منها مفتاحه. لا تتقاضى شيئًا. %@"
+            "value" : "أو استخدم مُثبِتات RandProtocol — %lld جهاز تديرها RandProtocol، لكلٍّ منها مفتاحه. لا تتقاضى شيئًا. %@"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Oder nutze die RandProtocol-Prover – %lld Rechner, betrieben von den Validatoren, jeder mit eigenem Schlüssel. Sie verlangen nichts. %@"
+            "value" : "Oder nutze die RandProtocol-Prover – %lld Rechner, betrieben von RandProtocol, jeder mit eigenem Schlüssel. Sie verlangen nichts. %@"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O usa los probadores de RandProtocol: %lld máquinas administradas por los validadores, cada una con su propia clave. No cobran nada. %@"
+            "value" : "O usa los probadores de RandProtocol: %lld máquinas administradas por RandProtocol, cada una con su propia clave. No cobran nada. %@"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "یا از اثبات‌گرهای RandProtocol استفاده کنید — %lld دستگاه که اعتبارسنج‌ها اداره می‌کنند، هر کدام با کلید خودش. هزینه‌ای نمی‌گیرند. %@"
+            "value" : "یا از اثبات‌گرهای RandProtocol استفاده کنید — %lld دستگاه که RandProtocol اداره می‌کند، هر کدام با کلید خودش. هزینه‌ای نمی‌گیرند. %@"
           }
         },
         "fr" : {
@@ -19008,124 +19008,22 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Ou utilisez les prouveurs RandProtocol : %lld machine gérée par les validateurs, avec sa propre clé. Ils ne facturent rien. %@"
+                  "value" : "Ou utilisez les prouveurs RandProtocol : %lld machine gérée par RandProtocol, avec sa propre clé. Ils ne facturent rien. %@"
                 }
               },
               "many" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Ou utilisez les prouveurs RandProtocol : %lld machines gérées par les validateurs, chacune avec sa propre clé. Ils ne facturent rien. %@"
+                  "value" : "Ou utilisez les prouveurs RandProtocol : %lld machines gérées par RandProtocol, chacune avec sa propre clé. Ils ne facturent rien. %@"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Ou utilisez les prouveurs RandProtocol : %lld machines gérées par les validateurs, chacune avec sa propre clé. Ils ne facturent rien. %@"
+                  "value" : "Ou utilisez les prouveurs RandProtocol : %lld machines gérées par RandProtocol, chacune avec sa propre clé. Ils ne facturent rien. %@"
                 }
               }
             }
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Atau gunakan prover RandProtocol — %lld mesin yang dijalankan oleh validator, masing-masing dengan kuncinya sendiri. Semuanya gratis. %@"
-          }
-        },
-        "it" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Oppure usa i prover di RandProtocol — %lld macchina gestita dai validatori, con la propria chiave. Non costano nulla. %@"
-                }
-              },
-              "many" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Oppure usa i prover di RandProtocol — %lld macchine gestite dai validatori, ognuna con la propria chiave. Non costano nulla. %@"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Oppure usa i prover di RandProtocol — %lld macchine gestite dai validatori, ognuna con la propria chiave. Non costano nulla. %@"
-                }
-              }
-            }
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "または RandProtocol のプルーバーを使います。バリデーターが運用する %lld 台のマシンで、それぞれ独自の鍵を持ちます。料金はかかりません。%@"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "또는 RandProtocol 프루버를 사용하세요 — 검증자가 운영하는 머신 %lld대이며, 각각 자체 키를 가집니다. 요금은 없습니다. %@"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Atau gunakan pembukti RandProtocol — %lld mesin yang dijalankan oleh pengesah, setiap satu dengan kuncinya sendiri. Ia tidak mengenakan sebarang bayaran. %@"
-          }
-        },
-        "pl" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Albo użyj proverów RandProtocol — %lld maszyna prowadzona przez walidatorów, z własnym kluczem. Nic nie pobierają. %@"
-                }
-              },
-              "few" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Albo użyj proverów RandProtocol — %lld maszyny prowadzone przez walidatorów, każda z własnym kluczem. Nic nie pobierają. %@"
-                }
-              },
-              "many" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Albo użyj proverów RandProtocol — %lld maszyn prowadzonych przez walidatorów, każda z własnym kluczem. Nic nie pobierają. %@"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Albo użyj proverów RandProtocol — %lld maszyny prowadzonej przez walidatorów, z własnym kluczem. Nic nie pobierają. %@"
-                }
-              }
-            }
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ou use os provadores da RandProtocol — %lld máquinas operadas pelos validadores, cada uma com sua própria chave. Eles não cobram nada. %@"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Или используйте пруверы RandProtocol — машины под управлением валидаторов (всего: %lld), у каждой свой ключ. Они бесплатны. %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "或者使用 RandProtocol 证明器——由验证者运行的 %lld 台机器，各有自己的密钥。它们不收取任何费用。%@"
-          }
-        },
-        "zh-Hant-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "或使用 RandProtocol 證明器：由驗證者運行的 %lld 部機器，各有自己的密鑰。它們不收取任何費用。%@"
           }
         },
         "hi" : {
@@ -19134,13 +19032,91 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "या RandProtocol प्रूवर इस्तेमाल करें — वैलिडेटरों द्वारा चलाई गई %lld मशीन, जिसकी अपनी की है। ये कोई शुल्क नहीं लेते। %@"
+                  "value" : "या RandProtocol प्रूवर इस्तेमाल करें — RandProtocol द्वारा चलाई गई %lld मशीन, जिसकी अपनी की है। ये कोई शुल्क नहीं लेते। %@"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "या RandProtocol प्रूवर इस्तेमाल करें — वैलिडेटरों द्वारा चलाई गई %lld मशीनें, हर एक की अपनी की के साथ। ये कोई शुल्क नहीं लेते। %@"
+                  "value" : "या RandProtocol प्रूवर इस्तेमाल करें — RandProtocol द्वारा चलाई गई %lld मशीनें, हर एक की अपनी की के साथ। ये कोई शुल्क नहीं लेते। %@"
+                }
+              }
+            }
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atau gunakan prover RandProtocol — %lld mesin yang dioperasikan oleh RandProtocol, masing-masing dengan kuncinya sendiri. Semuanya gratis. %@"
+          }
+        },
+        "it" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Oppure usa i prover di RandProtocol — %lld macchina gestita da RandProtocol, con la propria chiave. Non costano nulla. %@"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Oppure usa i prover di RandProtocol — %lld macchine gestite da RandProtocol, ognuna con la propria chiave. Non costano nulla. %@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Oppure usa i prover di RandProtocol — %lld macchine gestite da RandProtocol, ognuna con la propria chiave. Non costano nulla. %@"
+                }
+              }
+            }
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "または RandProtocol のプルーバーを使います。RandProtocol が運用する %lld 台のマシンで、それぞれ独自の鍵を持ちます。料金はかかりません。%@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "또는 RandProtocol 프루버를 사용하세요 — RandProtocol이 운영하는 머신 %lld대이며, 각각 자체 키를 가집니다. 요금은 없습니다. %@"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atau gunakan pembukti RandProtocol — %lld mesin yang dikendalikan oleh RandProtocol, setiap satu dengan kuncinya sendiri. Ia tidak mengenakan sebarang bayaran. %@"
+          }
+        },
+        "pl" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Albo użyj proverów RandProtocol — %lld maszyna prowadzona przez RandProtocol, z własnym kluczem. Nic nie pobierają. %@"
+                }
+              },
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Albo użyj proverów RandProtocol — %lld maszyny prowadzone przez RandProtocol, każda z własnym kluczem. Nic nie pobierają. %@"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Albo użyj proverów RandProtocol — %lld maszyn prowadzonych przez RandProtocol, każda z własnym kluczem. Nic nie pobierają. %@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Albo użyj proverów RandProtocol — %lld maszyny prowadzonej przez RandProtocol, z własnym kluczem. Nic nie pobierają. %@"
                 }
               }
             }
@@ -19152,16 +19128,28 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "یا د RandProtocol ثبوت جوړوونکي وکاروئ — %lld ماشین چې تصدیقوونکي یې چلوي، هر یو له خپلې کیلي سره. هېڅ پیسې نه اخلي. %@"
+                  "value" : "یا د RandProtocol ثبوت جوړوونکي وکاروئ — %lld ماشین چې RandProtocol یې چلوي، هر یو له خپلې کیلي سره. هېڅ پیسې نه اخلي. %@"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "یا د RandProtocol ثبوت جوړوونکي وکاروئ — %lld ماشینونه چې تصدیقوونکي یې چلوي، هر یو له خپلې کیلي سره. هېڅ پیسې نه اخلي. %@"
+                  "value" : "یا د RandProtocol ثبوت جوړوونکي وکاروئ — %lld ماشینونه چې RandProtocol یې چلوي، هر یو له خپلې کیلي سره. هېڅ پیسې نه اخلي. %@"
                 }
               }
             }
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ou use os provadores da RandProtocol — %lld máquinas operadas pela RandProtocol, cada uma com sua própria chave. Eles não cobram nada. %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Или используйте пруверы RandProtocol — машины под управлением RandProtocol (всего: %lld), у каждой свой ключ. Они бесплатны. %@"
           }
         },
         "ta" : {
@@ -19170,13 +19158,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "அல்லது RandProtocol நிரூபிப்பான்களைப் பயன்படுத்துங்கள் — சரிபார்ப்பாளர்கள் இயக்கும் %lld கணினி, ஒவ்வொன்றுக்கும் அதன் சொந்த விசை. அவை கட்டணம் வசூலிப்பதில்லை. %@"
+                  "value" : "அல்லது RandProtocol நிரூபிப்பான்களைப் பயன்படுத்துங்கள் — RandProtocol இயக்கும் %lld கணினி, ஒவ்வொன்றுக்கும் அதன் சொந்த விசை. அவை கட்டணம் வசூலிப்பதில்லை. %@"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "அல்லது RandProtocol நிரூபிப்பான்களைப் பயன்படுத்துங்கள் — சரிபார்ப்பாளர்கள் இயக்கும் %lld கணினிகள், ஒவ்வொன்றுக்கும் அதன் சொந்த விசை. அவை கட்டணம் வசூலிப்பதில்லை. %@"
+                  "value" : "அல்லது RandProtocol நிரூபிப்பான்களைப் பயன்படுத்துங்கள் — RandProtocol இயக்கும் %lld கணினிகள், ஒவ்வொன்றுக்கும் அதன் சொந்த விசை. அவை கட்டணம் வசூலிப்பதில்லை. %@"
                 }
               }
             }
@@ -19185,7 +19173,19 @@
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "یا RandProtocol کے پروور استعمال کریں — ویلیڈیٹرز کی چلائی ہوئی %lld مشینیں، ہر ایک کی اپنی کی کے ساتھ۔ یہ کوئی فیس نہیں لیتے۔ %@"
+            "value" : "یا RandProtocol کے پروور استعمال کریں — RandProtocol کی چلائی ہوئی %lld مشینیں، ہر ایک کی اپنی کی کے ساتھ۔ یہ کوئی فیس نہیں لیتے۔ %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "或者使用 RandProtocol 证明器——由 RandProtocol 运营的 %lld 台机器，各有自己的密钥。它们不收取任何费用。%@"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "或使用 RandProtocol 證明器：由 RandProtocol 營運的 %lld 部機器，各有自己的密鑰。它們不收取任何費用。%@"
           }
         }
       }
@@ -29019,36 +29019,36 @@
         }
       }
     },
-    "The RandProtocol provers: %lld machines run by the validators, each with its own key, used until you choose another. They charge nothing. %@" : {
+    "The RandProtocol provers: %lld machines operated by RandProtocol, each with its own key, used until you choose another. They charge nothing. %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The RandProtocol provers: %1$lld machines run by the validators, each with its own key, used until you choose another. They charge nothing. %2$@"
+            "value" : "The RandProtocol provers: %1$lld machines operated by RandProtocol, each with its own key, used until you choose another. They charge nothing. %2$@"
           }
         },
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "مُثبِتات RandProtocol: %lld جهاز يشغّلها المدقّقون، لكلٍّ منها مفتاحه، تُستخدم حتى تختار غيرها. لا تتقاضى شيئًا. %@"
+            "value" : "مُثبِتات RandProtocol: %lld جهاز تديرها RandProtocol، لكلٍّ منها مفتاحه، تُستخدم حتى تختار غيرها. لا تتقاضى شيئًا. %@"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die RandProtocol-Prover: %lld Rechner, betrieben von den Validatoren, jeder mit eigenem Schlüssel, genutzt, bis du einen anderen wählst. Sie verlangen nichts. %@"
+            "value" : "Die RandProtocol-Prover: %lld Rechner, betrieben von RandProtocol, jeder mit eigenem Schlüssel, genutzt, bis du einen anderen wählst. Sie verlangen nichts. %@"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los probadores de RandProtocol: %lld máquinas administradas por los validadores, cada una con su propia clave, que se usan hasta que elijas otro. No cobran nada. %@"
+            "value" : "Los probadores de RandProtocol: %lld máquinas administradas por RandProtocol, cada una con su propia clave, que se usan hasta que elijas otro. No cobran nada. %@"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "اثبات‌گرهای RandProtocol: %lld دستگاه که اعتبارسنج‌ها اداره می‌کنند، هر کدام با کلید خودش، که تا وقتی دیگری را انتخاب کنید استفاده می‌شوند. هزینه‌ای نمی‌گیرند. %@"
+            "value" : "اثبات‌گرهای RandProtocol: %lld دستگاه که RandProtocol اداره می‌کند، هر کدام با کلید خودش، که تا وقتی دیگری را انتخاب کنید استفاده می‌شوند. هزینه‌ای نمی‌گیرند. %@"
           }
         },
         "fr" : {
@@ -29057,124 +29057,22 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Les prouveurs RandProtocol : %lld machine gérée par les validateurs, avec sa propre clé, utilisée jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@"
+                  "value" : "Les prouveurs RandProtocol : %lld machine gérée par RandProtocol, avec sa propre clé, utilisée jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@"
                 }
               },
               "many" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Les prouveurs RandProtocol : %lld machines gérées par les validateurs, chacune avec sa propre clé, utilisées jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@"
+                  "value" : "Les prouveurs RandProtocol : %lld machines gérées par RandProtocol, chacune avec sa propre clé, utilisées jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Les prouveurs RandProtocol : %lld machines gérées par les validateurs, chacune avec sa propre clé, utilisées jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@"
+                  "value" : "Les prouveurs RandProtocol : %lld machines gérées par RandProtocol, chacune avec sa propre clé, utilisées jusqu'à ce que vous en choisissiez un autre. Ils ne facturent rien. %@"
                 }
               }
             }
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prover RandProtocol: %lld mesin yang dijalankan oleh validator, masing-masing dengan kuncinya sendiri, digunakan sampai Anda memilih yang lain. Semuanya gratis. %@"
-          }
-        },
-        "it" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "I prover di RandProtocol: %lld macchina gestita dai validatori, con la propria chiave, usata finché non ne scegli un altro. Non costano nulla. %@"
-                }
-              },
-              "many" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "I prover di RandProtocol: %lld macchine gestite dai validatori, ognuna con la propria chiave, usate finché non ne scegli un altro. Non costano nulla. %@"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "I prover di RandProtocol: %lld macchine gestite dai validatori, ognuna con la propria chiave, usate finché non ne scegli un altro. Non costano nulla. %@"
-                }
-              }
-            }
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RandProtocol のプルーバー: バリデーターが運用する %lld 台のマシンで、それぞれ独自の鍵を持ち、別のものを選ぶまで使われます。料金はかかりません。%@"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RandProtocol 프루버: 검증자가 운영하는 머신 %lld대로, 각각 자체 키를 가지며 다른 프루버를 선택할 때까지 사용됩니다. 요금은 없습니다. %@"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pembukti RandProtocol: %lld mesin yang dijalankan oleh pengesah, setiap satu dengan kuncinya sendiri, digunakan sehingga anda memilih yang lain. Ia tidak mengenakan sebarang bayaran. %@"
-          }
-        },
-        "pl" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Provery RandProtocol: %lld maszyna prowadzona przez walidatorów, z własnym kluczem, używana, dopóki nie wybierzesz innego. Nic nie pobierają. %@"
-                }
-              },
-              "few" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Provery RandProtocol: %lld maszyny prowadzone przez walidatorów, każda z własnym kluczem, używane, dopóki nie wybierzesz innego. Nic nie pobierają. %@"
-                }
-              },
-              "many" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Provery RandProtocol: %lld maszyn prowadzonych przez walidatorów, każda z własnym kluczem, używanych, dopóki nie wybierzesz innego. Nic nie pobierają. %@"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Provery RandProtocol: %lld maszyny prowadzonej przez walidatorów, z własnym kluczem, używanej, dopóki nie wybierzesz innego. Nic nie pobierają. %@"
-                }
-              }
-            }
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Os provadores da RandProtocol: %lld máquinas operadas pelos validadores, cada uma com sua própria chave, usados até você escolher outro. Eles não cobram nada. %@"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Пруверы RandProtocol: машины под управлением валидаторов (всего: %lld), у каждой свой ключ; используются, пока вы не выберете другой. Они бесплатны. %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RandProtocol 证明器：由验证者运行的 %lld 台机器，各有自己的密钥，在你选择其他证明器之前一直使用。它们不收取任何费用。%@"
-          }
-        },
-        "zh-Hant-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RandProtocol 證明器：由驗證者運行的 %lld 部機器，各有自己的密鑰，在你選擇其他證明器之前會一直使用。它們不收取任何費用。%@"
           }
         },
         "hi" : {
@@ -29183,13 +29081,91 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "RandProtocol प्रूवर: वैलिडेटरों द्वारा चलाई गई %lld मशीन, जिसकी अपनी की है, जो तब तक इस्तेमाल होगी जब तक आप कोई और न चुनें। ये कोई शुल्क नहीं लेते। %@"
+                  "value" : "RandProtocol प्रूवर: RandProtocol द्वारा चलाई गई %lld मशीन, जिसकी अपनी की है, जो तब तक इस्तेमाल होगी जब तक आप कोई और न चुनें। ये कोई शुल्क नहीं लेते। %@"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "RandProtocol प्रूवर: वैलिडेटरों द्वारा चलाई गई %lld मशीनें, हर एक की अपनी की के साथ, जो तब तक इस्तेमाल होंगी जब तक आप कोई और न चुनें। ये कोई शुल्क नहीं लेते। %@"
+                  "value" : "RandProtocol प्रूवर: RandProtocol द्वारा चलाई गई %lld मशीनें, हर एक की अपनी की के साथ, जो तब तक इस्तेमाल होंगी जब तक आप कोई और न चुनें। ये कोई शुल्क नहीं लेते। %@"
+                }
+              }
+            }
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prover RandProtocol: %lld mesin yang dioperasikan oleh RandProtocol, masing-masing dengan kuncinya sendiri, digunakan sampai Anda memilih yang lain. Semuanya gratis. %@"
+          }
+        },
+        "it" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "I prover di RandProtocol: %lld macchina gestita da RandProtocol, con la propria chiave, usata finché non ne scegli un altro. Non costano nulla. %@"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "I prover di RandProtocol: %lld macchine gestite da RandProtocol, ognuna con la propria chiave, usate finché non ne scegli un altro. Non costano nulla. %@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "I prover di RandProtocol: %lld macchine gestite da RandProtocol, ognuna con la propria chiave, usate finché non ne scegli un altro. Non costano nulla. %@"
+                }
+              }
+            }
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RandProtocol のプルーバー: RandProtocol が運用する %lld 台のマシンで、それぞれ独自の鍵を持ち、別のものを選ぶまで使われます。料金はかかりません。%@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RandProtocol 프루버: RandProtocol이 운영하는 머신 %lld대로, 각각 자체 키를 가지며 다른 프루버를 선택할 때까지 사용됩니다. 요금은 없습니다. %@"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pembukti RandProtocol: %lld mesin yang dikendalikan oleh RandProtocol, setiap satu dengan kuncinya sendiri, digunakan sehingga anda memilih yang lain. Ia tidak mengenakan sebarang bayaran. %@"
+          }
+        },
+        "pl" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Provery RandProtocol: %lld maszyna prowadzona przez RandProtocol, z własnym kluczem, używana, dopóki nie wybierzesz innego. Nic nie pobierają. %@"
+                }
+              },
+              "few" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Provery RandProtocol: %lld maszyny prowadzone przez RandProtocol, każda z własnym kluczem, używane, dopóki nie wybierzesz innego. Nic nie pobierają. %@"
+                }
+              },
+              "many" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Provery RandProtocol: %lld maszyn prowadzonych przez RandProtocol, każda z własnym kluczem, używanych, dopóki nie wybierzesz innego. Nic nie pobierają. %@"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Provery RandProtocol: %lld maszyny prowadzonej przez RandProtocol, z własnym kluczem, używanej, dopóki nie wybierzesz innego. Nic nie pobierają. %@"
                 }
               }
             }
@@ -29201,16 +29177,28 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "د RandProtocol ثبوت جوړوونکي: %lld ماشین چې تصدیقوونکي یې چلوي، هر یو له خپلې کیلي سره، تر هغه کارول کېږي چې تاسو بل غوره کړئ. هېڅ پیسې نه اخلي. %@"
+                  "value" : "د RandProtocol ثبوت جوړوونکي: %lld ماشین چې RandProtocol یې چلوي، هر یو له خپلې کیلي سره، تر هغه کارول کېږي چې تاسو بل غوره کړئ. هېڅ پیسې نه اخلي. %@"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "د RandProtocol ثبوت جوړوونکي: %lld ماشینونه چې تصدیقوونکي یې چلوي، هر یو له خپلې کیلي سره، تر هغه کارول کېږي چې تاسو بل غوره کړئ. هېڅ پیسې نه اخلي. %@"
+                  "value" : "د RandProtocol ثبوت جوړوونکي: %lld ماشینونه چې RandProtocol یې چلوي، هر یو له خپلې کیلي سره، تر هغه کارول کېږي چې تاسو بل غوره کړئ. هېڅ پیسې نه اخلي. %@"
                 }
               }
             }
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os provadores da RandProtocol: %lld máquinas operadas pela RandProtocol, cada uma com sua própria chave, usados até você escolher outro. Eles não cobram nada. %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пруверы RandProtocol: машины под управлением RandProtocol (всего: %lld), у каждой свой ключ; используются, пока вы не выберете другой. Они бесплатны. %@"
           }
         },
         "ta" : {
@@ -29219,13 +29207,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "RandProtocol நிரூபிப்பான்கள்: சரிபார்ப்பாளர்கள் இயக்கும் %lld கணினி, ஒவ்வொன்றுக்கும் அதன் சொந்த விசை; நீங்கள் வேறொன்றைத் தேர்ந்தெடுக்கும் வரை பயன்படுத்தப்படும். அவை கட்டணம் வசூலிப்பதில்லை. %@"
+                  "value" : "RandProtocol நிரூபிப்பான்கள்: RandProtocol இயக்கும் %lld கணினி, ஒவ்வொன்றுக்கும் அதன் சொந்த விசை; நீங்கள் வேறொன்றைத் தேர்ந்தெடுக்கும் வரை பயன்படுத்தப்படும். அவை கட்டணம் வசூலிப்பதில்லை. %@"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "RandProtocol நிரூபிப்பான்கள்: சரிபார்ப்பாளர்கள் இயக்கும் %lld கணினிகள், ஒவ்வொன்றுக்கும் அதன் சொந்த விசை; நீங்கள் வேறொன்றைத் தேர்ந்தெடுக்கும் வரை பயன்படுத்தப்படும். அவை கட்டணம் வசூலிப்பதில்லை. %@"
+                  "value" : "RandProtocol நிரூபிப்பான்கள்: RandProtocol இயக்கும் %lld கணினிகள், ஒவ்வொன்றுக்கும் அதன் சொந்த விசை; நீங்கள் வேறொன்றைத் தேர்ந்தெடுக்கும் வரை பயன்படுத்தப்படும். அவை கட்டணம் வசூலிப்பதில்லை. %@"
                 }
               }
             }
@@ -29234,7 +29222,19 @@
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RandProtocol کے پروور: ویلیڈیٹرز کی چلائی ہوئی %lld مشینیں، ہر ایک کی اپنی کی کے ساتھ، جو تب تک استعمال ہوتی ہیں جب تک آپ کوئی اور منتخب نہ کریں۔ یہ کوئی فیس نہیں لیتے۔ %@"
+            "value" : "RandProtocol کے پروور: RandProtocol کی چلائی ہوئی %lld مشینیں، ہر ایک کی اپنی کی کے ساتھ، جو تب تک استعمال ہوتی ہیں جب تک آپ کوئی اور منتخب نہ کریں۔ یہ کوئی فیس نہیں لیتے۔ %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RandProtocol 证明器：由 RandProtocol 运营的 %lld 台机器，各有自己的密钥，在你选择其他证明器之前一直使用。它们不收取任何费用。%@"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RandProtocol 證明器：由 RandProtocol 營運的 %lld 部機器，各有自己的密鑰，在你選擇其他證明器之前會一直使用。它們不收取任何費用。%@"
           }
         }
       }
@@ -48816,126 +48816,126 @@
         }
       }
     },
-    "the RandProtocol provers (%@ run by the validators; each one that proves a send sees that wallet's viewing key)" : {
+    "the RandProtocol provers (%@ operated by RandProtocol; each one that proves a send sees that wallet's viewing key)" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "the RandProtocol provers (%@ run by the validators; each one that proves a send sees that wallet's viewing key)"
+            "value" : "the RandProtocol provers (%@ operated by RandProtocol; each one that proves a send sees that wallet's viewing key)"
           }
         },
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "مُثبِتات RandProtocol (%@ يشغّلها المدقّقون، وكل مُثبِت يُثبت إرسالًا يرى مفتاح العرض لتلك المحفظة)"
+            "value" : "مُثبِتات RandProtocol (%@ تديرها RandProtocol، وكل مُثبِت يُثبت إرسالًا يرى مفتاح العرض لتلك المحفظة)"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "der RandProtocol-Prover (%@, betrieben von den Validatoren; jeder, der eine Überweisung beweist, sieht den Ansichtsschlüssel dieser Wallet)"
+            "value" : "der RandProtocol-Prover (%@, betrieben von RandProtocol; jeder, der eine Überweisung beweist, sieht den Ansichtsschlüssel dieser Wallet)"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "los probadores de RandProtocol (%@ administradas por los validadores; cada uno que prueba un envío ve la clave de visualización de esa billetera)"
+            "value" : "los probadores de RandProtocol (%@ administradas por RandProtocol; cada uno que prueba un envío ve la clave de visualización de esa billetera)"
           }
         },
         "fa" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "اثبات‌گرهای RandProtocol (%@ که اعتبارسنج‌ها اداره می‌کنند؛ هر اثبات‌گری که یک ارسال را اثبات کند کلید مشاهده‌ی آن کیف پول را می‌بیند)"
+            "value" : "اثبات‌گرهای RandProtocol (%@ که RandProtocol اداره می‌کند؛ هر اثبات‌گری که یک ارسال را اثبات کند کلید مشاهده‌ی آن کیف پول را می‌بیند)"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "les prouveurs RandProtocol (%@ aux mains des validateurs ; chacune de celles qui prouvent un envoi voit la clé de visualisation de ce portefeuille)"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "prover RandProtocol (%@ yang dijalankan oleh validator; setiap prover yang membuktikan pengiriman melihat kunci tampilan dompet itu)"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "i prover di RandProtocol (%@ dei validatori; ognuna che genera la prova di un invio vede la chiave di visualizzazione di quel portafoglio)"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RandProtocol のプルーバー（バリデーターが運用する %@。送信を証明する各プルーバーはそのウォレットの閲覧キーを見ます）"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "RandProtocol 프루버(검증자가 운영하는 %@, 전송을 증명하는 프루버는 각각 해당 지갑의 조회 키를 봄)"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "pembukti RandProtocol (%@ yang dijalankan oleh pengesah; setiap pembukti yang membuktikan penghantaran melihat kunci tontonan dompet itu)"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "proverów RandProtocol (%@ walidatorów; każdy, który generuje dowód wysyłki, widzi klucz podglądu tego portfela)"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "provadores da RandProtocol (%@ operadas pelos validadores; cada um que prova um envio vê a chave de visualização dessa carteira)"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "пруверов RandProtocol (%@ под управлением валидаторов; каждый, кто строит доказательство для отправки, видит ключ просмотра этого кошелька)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : " RandProtocol 证明器（由验证者运行的 %@；为一次发送生成证明的那台会看到该钱包的查看密钥）"
-          }
-        },
-        "zh-Hant-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : " RandProtocol 證明器（由驗證者運行的 %@；為一次傳送生成證明的那部會看到該錢包的檢視密鑰）"
+            "value" : "les prouveurs RandProtocol (%@ exploitées par RandProtocol ; chacune de celles qui prouvent un envoi voit la clé de visualisation de ce portefeuille)"
           }
         },
         "hi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RandProtocol प्रूवर (वैलिडेटरों द्वारा चलाई गई %@; भेजने का प्रूफ़ बनाने वाला हर प्रूवर उस वॉलेट की व्यूइंग की देखता है)"
+            "value" : "RandProtocol प्रूवर (RandProtocol द्वारा चलाई गई %@; भेजने का प्रूफ़ बनाने वाला हर प्रूवर उस वॉलेट की व्यूइंग की देखता है)"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "prover RandProtocol (%@ yang dioperasikan oleh RandProtocol; setiap prover yang membuktikan pengiriman melihat kunci tampilan dompet itu)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "i prover di RandProtocol (%@ di RandProtocol; ognuna che genera la prova di un invio vede la chiave di visualizzazione di quel portafoglio)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RandProtocol のプルーバー（RandProtocol が運用する %@。送信を証明する各プルーバーはそのウォレットの閲覧キーを見ます）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RandProtocol 프루버(RandProtocol이 운영하는 %@, 전송을 증명하는 프루버는 각각 해당 지갑의 조회 키를 봄)"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pembukti RandProtocol (%@ yang dikendalikan oleh RandProtocol; setiap pembukti yang membuktikan penghantaran melihat kunci tontonan dompet itu)"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "proverów RandProtocol (%@, które obsługuje RandProtocol; każdy, który generuje dowód wysyłki, widzi klucz podglądu tego portfela)"
           }
         },
         "ps" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RandProtocol ثبوت جوړوونکو (%@ چې تصدیقوونکي یې چلوي؛ هر یو چې یو لېږد ثبوت کړي، د هغه والټ د لیدو کیلي ویني)"
+            "value" : "RandProtocol ثبوت جوړوونکو (%@ چې RandProtocol یې چلوي؛ هر یو چې یو لېږد ثبوت کړي، د هغه والټ د لیدو کیلي ویني)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "provadores da RandProtocol (%@ operadas pela RandProtocol; cada um que prova um envio vê a chave de visualização dessa carteira)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "пруверов RandProtocol (%@ под управлением RandProtocol; каждый, кто строит доказательство для отправки, видит ключ просмотра этого кошелька)"
           }
         },
         "ta" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RandProtocol நிரூபிப்பான்கள் (சரிபார்ப்பாளர்கள் இயக்கும் %@; ஓர் அனுப்புதலை நிரூபிக்கும் ஒவ்வொன்றும் அந்த வாலட்டின் பார்வை விசையைப் பார்க்கும்)"
+            "value" : "RandProtocol நிரூபிப்பான்கள் (RandProtocol இயக்கும் %@; ஓர் அனுப்புதலை நிரூபிக்கும் ஒவ்வொன்றும் அந்த வாலட்டின் பார்வை விசையைப் பார்க்கும்)"
           }
         },
         "ur" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "RandProtocol کے پروور (ویلیڈیٹرز کی چلائی ہوئی %@؛ جو بھی کسی ترسیل کا پروف بناتا ہے وہ اس والیٹ کی ویوئنگ کی دیکھتا ہے)"
+            "value" : "RandProtocol کے پروور (RandProtocol کی چلائی ہوئی %@؛ جو بھی کسی ترسیل کا پروف بناتا ہے وہ اس والیٹ کی ویوئنگ کی دیکھتا ہے)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " RandProtocol 证明器（由 RandProtocol 运营的 %@；为一次发送生成证明的那台会看到该钱包的查看密钥）"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " RandProtocol 證明器（由 RandProtocol 營運的 %@；為一次傳送生成證明的那部會看到該錢包的檢視密鑰）"
           }
         }
       }

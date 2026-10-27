@@ -154,9 +154,9 @@
     "Optional": "वैकल्पिक",
     "Optional: ask for an amount the payer’s wallet fills in for them.": "वैकल्पिक: एक राशि माँगें जिसे भुगतानकर्ता का वॉलेट उनके लिए भर देगा।",
     "Optional: ask for an amount, and add a note the payer’s wallet fills in for them.": "वैकल्पिक: एक राशि माँगें, और एक नोट जोड़ें जिसे भुगतानकर्ता का वॉलेट उनके लिए भर देगा।",
-    "Or use the RandProtocol provers — %lld machines run by the validators, each with its own key. They charge nothing. %@": {
-      "one": "या RandProtocol प्रूवर इस्तेमाल करें — वैलिडेटरों द्वारा चलाई गई %lld मशीन, जिसकी अपनी की है। ये कोई शुल्क नहीं लेते। %@",
-      "other": "या RandProtocol प्रूवर इस्तेमाल करें — वैलिडेटरों द्वारा चलाई गई %lld मशीनें, हर एक की अपनी की के साथ। ये कोई शुल्क नहीं लेते। %@"
+    "Or use the RandProtocol provers — %lld machines operated by RandProtocol, each with its own key. They charge nothing. %@": {
+      "one": "या RandProtocol प्रूवर इस्तेमाल करें — RandProtocol द्वारा चलाई गई %lld मशीन, जिसकी अपनी की है। ये कोई शुल्क नहीं लेते। %@",
+      "other": "या RandProtocol प्रूवर इस्तेमाल करें — RandProtocol द्वारा चलाई गई %lld मशीनें, हर एक की अपनी की के साथ। ये कोई शुल्क नहीं लेते। %@"
     },
     "Paid": "भुगतान किया",
     "Pair your own prover": "अपना खुद का प्रूवर पेयर करें",
@@ -237,9 +237,9 @@
     "That is not a shielded address, a randpay: link, or a saved contact.": "यह शील्डेड पता, randpay: लिंक, या सहेजा गया संपर्क नहीं है।",
     "That payment link could not be read: %@": "वह भुगतान लिंक पढ़ा नहीं जा सका: %@",
     "The RandProtocol provers can read your history": "RandProtocol प्रूवर आपका इतिहास पढ़ सकते हैं",
-    "The RandProtocol provers: %lld machines run by the validators, each with its own key, used until you choose another. They charge nothing. %@": {
-      "one": "RandProtocol प्रूवर: वैलिडेटरों द्वारा चलाई गई %lld मशीन, जिसकी अपनी की है, जो तब तक इस्तेमाल होगी जब तक आप कोई और न चुनें। ये कोई शुल्क नहीं लेते। %@",
-      "other": "RandProtocol प्रूवर: वैलिडेटरों द्वारा चलाई गई %lld मशीनें, हर एक की अपनी की के साथ, जो तब तक इस्तेमाल होंगी जब तक आप कोई और न चुनें। ये कोई शुल्क नहीं लेते। %@"
+    "The RandProtocol provers: %lld machines operated by RandProtocol, each with its own key, used until you choose another. They charge nothing. %@": {
+      "one": "RandProtocol प्रूवर: RandProtocol द्वारा चलाई गई %lld मशीन, जिसकी अपनी की है, जो तब तक इस्तेमाल होगी जब तक आप कोई और न चुनें। ये कोई शुल्क नहीं लेते। %@",
+      "other": "RandProtocol प्रूवर: RandProtocol द्वारा चलाई गई %lld मशीनें, हर एक की अपनी की के साथ, जो तब तक इस्तेमाल होंगी जब तक आप कोई और न चुनें। ये कोई शुल्क नहीं लेते। %@"
     },
     "The amount you receive is exact: if the pool moves before the swap lands, nothing is sent and you get a new quote. %@": "आपको मिलने वाली राशि सटीक है: अगर स्वैप पूरा होने से पहले पूल बदल जाता है, तो कुछ नहीं भेजा जाता और आपको नया कोट मिलता है। %@",
     "The link asks for %@ %@; you typed %@ %@.": "लिंक %@ %@ माँगता है; आपने %@ %@ टाइप किया।",
@@ -395,7 +395,7 @@
     "spend key must be 64 hex characters": "स्पेंड की 64 हेक्स अक्षरों की होनी चाहिए",
     "spend_key must be 64 hex characters": "spend_key 64 हेक्स अक्षरों की होनी चाहिए",
     "the RAND notes hold %@, but the fee is %@": "RAND नोट में %@ है, लेकिन शुल्क %@ है",
-    "the RandProtocol provers (%@ run by the validators; each one that proves a send sees that wallet's viewing key)": "RandProtocol प्रूवर (वैलिडेटरों द्वारा चलाई गई %@; भेजने का प्रूफ़ बनाने वाला हर प्रूवर उस वॉलेट की व्यूइंग की देखता है)",
+    "the RandProtocol provers (%@ operated by RandProtocol; each one that proves a send sees that wallet's viewing key)": "RandProtocol प्रूवर (RandProtocol द्वारा चलाई गई %@; भेजने का प्रूफ़ बनाने वाला हर प्रूवर उस वॉलेट की व्यूइंग की देखता है)",
     "the chosen RAND notes do not cover the fee": "चुने गए RAND नोट शुल्क के लिए पर्याप्त नहीं हैं",
     "the chosen notes do not cover the amount and the burn": "चुने गए नोट राशि और बर्न के लिए पर्याप्त नहीं हैं",
     "the core did not name the payment's transaction key": "कोर ने भुगतान की लेन-देन की नहीं बताई",

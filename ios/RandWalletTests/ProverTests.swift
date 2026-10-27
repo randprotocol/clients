@@ -299,7 +299,7 @@ final class ProverTests: XCTestCase {
         XCTAssertTrue(ProverPairingService.needsNotice(deviceCanProve: false, usesDefault: true, read: false))
         XCTAssertFalse(ProverPairingService.needsNotice(deviceCanProve: true, usesDefault: true, read: false))
         XCTAssertFalse(ProverPairingService.needsNotice(deviceCanProve: false, usesDefault: true, read: true))
-        XCTAssertTrue(ProverPairingService.defaultNotice(4).contains("one of the RandProtocol provers (4 machines run by the validators; each one that proves a send sees that wallet's viewing key)"))
+        XCTAssertTrue(ProverPairingService.defaultNotice(4).contains("one of the RandProtocol provers (4 machines operated by RandProtocol; each one that proves a send sees that wallet's viewing key)"))
         XCTAssertTrue(ProverPairingService.defaultNotice(4).contains("past and future"))
         XCTAssertTrue(ProverPairingService.defaultNotice(4).contains("It cannot spend"))
     }

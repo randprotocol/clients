@@ -162,13 +162,13 @@
     <string name="settings_prover_warning">Prover ini akan dapat membaca seluruh riwayat dompet ini — setiap pembayaran yang diterima dan dikirim, sebelum dan sesudah hari ini. Prover ini tidak dapat membelanjakan. Agar riwayat Anda tetap privat, jalankan prover Anda sendiri.</string>
     <string name="settings_prover_forget">Lupakan prover ini</string>
     <plurals name="settings_prover_trusted_body">
-        <item quantity="other">Atau gunakan prover RandProtocol — %1$d mesin yang dijalankan oleh validator, masing-masing dengan kuncinya sendiri. Semuanya gratis. Setiap prover yang membuktikan pengiriman menerima kunci tampilan dompet ini, sehingga dapat membaca seluruh riwayat Anda, dulu maupun nanti. Tidak ada yang dapat membelanjakan.</item>
+        <item quantity="other">Atau gunakan prover RandProtocol — %1$d mesin yang dioperasikan oleh RandProtocol, masing-masing dengan kuncinya sendiri. Semuanya gratis. Setiap prover yang membuktikan pengiriman menerima kunci tampilan dompet ini, sehingga dapat membaca seluruh riwayat Anda, dulu maupun nanti. Tidak ada yang dapat membelanjakan.</item>
     </plurals>
     <string name="settings_prover_use_trusted">Gunakan prover RandProtocol</string>
     <string name="settings_prover_pool_none">Saat ini tidak ada prover RandProtocol yang menjawab.</string>
     <string name="settings_prover_default">Prover %1$s · saat perangkat ini tidak dapat membuktikan</string>
     <plurals name="settings_prover_default_note">
-        <item quantity="other">Prover RandProtocol: %1$d mesin yang dijalankan oleh validator, masing-masing dengan kuncinya sendiri, digunakan sampai Anda memilih yang lain. Semuanya gratis. Setiap prover yang membuktikan pengiriman menerima kunci tampilan dompet ini, sehingga dapat membaca seluruh riwayat Anda, dulu maupun nanti. Tidak ada yang dapat membelanjakan.</item>
+        <item quantity="other">Prover RandProtocol: %1$d mesin yang dioperasikan oleh RandProtocol, masing-masing dengan kuncinya sendiri, digunakan sampai Anda memilih yang lain. Semuanya gratis. Setiap prover yang membuktikan pengiriman menerima kunci tampilan dompet ini, sehingga dapat membaca seluruh riwayat Anda, dulu maupun nanti. Tidak ada yang dapat membelanjakan.</item>
     </plurals>
     <string name="settings_prover_use_none">Jangan gunakan prover</string>
     <string name="settings_prover_using_default">Menggunakan prover %1$s. Bukti yang tidak dapat dibuat perangkat ini dikirim ke salah satunya; setiap prover yang membuktikan pengiriman melihat kunci tampilan dompet itu. %2$s</string>
@@ -177,7 +177,7 @@
     <string name="review_default_prover">Perangkat ini tidak memiliki cukup memori untuk bukti ini, jadi salah satu prover %1$s akan membuatnya. Prover yang membuatnya menerima kunci tampilan Anda dan sebuah salt di dalam tugas yang disegel — prover dapat membaca seluruh riwayat dompet ini dan tidak dapat membelanjakan; ponsel ini sendiri yang mengotorisasi pembelanjaan dan memeriksa bukti sebelum apa pun dikirim.</string>
     <string name="prover_notice_title">Prover RandProtocol dapat membaca riwayat Anda</string>
     <plurals name="prover_notice_body">
-        <item quantity="other">Perangkat ini tidak dapat membuat bukti, jadi salah satu prover RandProtocol (%1$d mesin yang dijalankan oleh validator; setiap prover yang membuktikan pengiriman melihat kunci tampilan dompet itu) yang membuatnya. Prover yang membuatnya menerima kunci tampilan dompet ini, sehingga dapat membaca seluruh riwayat Anda — setiap pembayaran yang diterima dan dikirim, dulu maupun nanti. Prover itu tidak dapat membelanjakan. Anda hanya ditanya sekali; agar riwayat Anda tetap untuk Anda sendiri, gunakan prover Anda sendiri.</item>
+        <item quantity="other">Perangkat ini tidak dapat membuat bukti, jadi salah satu prover RandProtocol (%1$d mesin yang dioperasikan oleh RandProtocol; setiap prover yang membuktikan pengiriman melihat kunci tampilan dompet itu) yang membuatnya. Prover yang membuatnya menerima kunci tampilan dompet ini, sehingga dapat membaca seluruh riwayat Anda — setiap pembayaran yang diterima dan dikirim, dulu maupun nanti. Prover itu tidak dapat membelanjakan. Anda hanya ditanya sekali; agar riwayat Anda tetap untuk Anda sendiri, gunakan prover Anda sendiri.</item>
     </plurals>
     <string name="prover_notice_continue">Saya mengerti — lanjutkan</string>
     <string name="prover_notice_own">Gunakan prover saya sendiri</string>

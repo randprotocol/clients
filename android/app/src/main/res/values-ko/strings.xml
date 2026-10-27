@@ -162,13 +162,13 @@
     <string name="settings_prover_warning">이 프루버는 이 지갑의 전체 내역 — 오늘 이전과 이후에 받고 보낸 모든 결제 — 을 읽을 수 있게 됩니다. 지출은 할 수 없습니다. 내역을 비공개로 유지하려면 직접 프루버를 운영하세요.</string>
     <string name="settings_prover_forget">이 프루버 삭제</string>
     <plurals name="settings_prover_trusted_body">
-        <item quantity="other">또는 RandProtocol 프루버를 사용하세요 — 검증자가 운영하는 머신 %1$d대이며, 각각 자체 키를 가집니다. 요금은 없습니다. 전송을 증명하는 프루버는 각각 이 지갑의 조회 키를 받으므로, 과거와 미래의 전체 내역을 읽을 수 있습니다. 어느 프루버도 지출할 수는 없습니다.</item>
+        <item quantity="other">또는 RandProtocol 프루버를 사용하세요 — RandProtocol이 운영하는 머신 %1$d대이며, 각각 자체 키를 가집니다. 요금은 없습니다. 전송을 증명하는 프루버는 각각 이 지갑의 조회 키를 받으므로, 과거와 미래의 전체 내역을 읽을 수 있습니다. 어느 프루버도 지출할 수는 없습니다.</item>
     </plurals>
     <string name="settings_prover_use_trusted">RandProtocol 프루버 사용</string>
     <string name="settings_prover_pool_none">지금은 응답하는 RandProtocol 프루버가 없습니다.</string>
     <string name="settings_prover_default">%1$s 프루버 · 이 기기에서 증명할 수 없을 때</string>
     <plurals name="settings_prover_default_note">
-        <item quantity="other">RandProtocol 프루버: 검증자가 운영하는 머신 %1$d대로, 각각 자체 키를 가지며 다른 프루버를 선택할 때까지 사용됩니다. 요금은 없습니다. 전송을 증명하는 프루버는 각각 이 지갑의 조회 키를 받으므로, 과거와 미래의 전체 내역을 읽을 수 있습니다. 어느 프루버도 지출할 수는 없습니다.</item>
+        <item quantity="other">RandProtocol 프루버: RandProtocol이 운영하는 머신 %1$d대로, 각각 자체 키를 가지며 다른 프루버를 선택할 때까지 사용됩니다. 요금은 없습니다. 전송을 증명하는 프루버는 각각 이 지갑의 조회 키를 받으므로, 과거와 미래의 전체 내역을 읽을 수 있습니다. 어느 프루버도 지출할 수는 없습니다.</item>
     </plurals>
     <string name="settings_prover_use_none">프루버 사용 안 함</string>
     <string name="settings_prover_using_default">%1$s 프루버를 사용하는 중입니다. 이 기기에서 만들 수 없는 증명은 그중 하나로 보내지며, 전송을 증명하는 프루버는 각각 해당 지갑의 조회 키를 봅니다. %2$s</string>
@@ -177,7 +177,7 @@
     <string name="review_default_prover">이 기기에는 이 증명에 필요한 메모리가 부족하므로 %1$s 프루버 중 하나가 증명을 만듭니다. 그 프루버는 봉인된 작업 안에서 조회 키와 솔트를 받습니다. 이 지갑의 전체 내역을 읽을 수 있지만 지출은 할 수 없습니다. 지출 승인은 이 휴대폰이 직접 하며, 무엇이든 전송하기 전에 증명을 확인합니다.</string>
     <string name="prover_notice_title">RandProtocol 프루버는 내역을 읽을 수 있습니다</string>
     <plurals name="prover_notice_body">
-        <item quantity="other">이 기기에서는 증명을 만들 수 없으므로, RandProtocol 프루버 중 하나(검증자가 운영하는 머신 %1$d대. 전송을 증명하는 프루버는 각각 해당 지갑의 조회 키를 봅니다)가 만듭니다. 증명을 맡은 프루버는 이 지갑의 조회 키를 받으므로, 전체 내역 — 과거와 미래에 받고 보낸 모든 결제 — 을 읽을 수 있습니다. 지출은 할 수 없습니다. 이 질문은 한 번만 합니다. 내역을 나만 보려면 대신 자체 프루버를 사용하세요.</item>
+        <item quantity="other">이 기기에서는 증명을 만들 수 없으므로, RandProtocol 프루버 중 하나(RandProtocol이 운영하는 머신 %1$d대. 전송을 증명하는 프루버는 각각 해당 지갑의 조회 키를 봅니다)가 만듭니다. 증명을 맡은 프루버는 이 지갑의 조회 키를 받으므로, 전체 내역 — 과거와 미래에 받고 보낸 모든 결제 — 을 읽을 수 있습니다. 지출은 할 수 없습니다. 이 질문은 한 번만 합니다. 내역을 나만 보려면 대신 자체 프루버를 사용하세요.</item>
     </plurals>
     <string name="prover_notice_continue">이해했습니다 — 계속</string>
     <string name="prover_notice_own">내 프루버 사용</string>

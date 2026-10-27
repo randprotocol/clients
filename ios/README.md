@@ -70,7 +70,7 @@ no fee, viewing-key jobs and room in its queue; `provePool` seals the job to THA
 polls only it — a member busy, refusing or unreachable at submit is skipped for the next. Every
 member out: "The RandProtocol provers are all busy right now …" / "… cannot be reached right now
 (…)", pointing to Settings. Nothing is paired or put in the Keychain. The first such send shows the
-one-time notice (one of the RandProtocol provers — N machines run by the validators; each one that
+one-time notice (one of the RandProtocol provers — N machines operated by RandProtocol; each one that
 proves a send sees that wallet's viewing key; it cannot spend) with "I understand — continue" and
 "Use my own prover"; it is remembered per wallet and `WalletService.send` refuses until it is read.
 Settings → Prover lists each member with its fingerprint and offers "Use no prover"; with none,

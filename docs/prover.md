@@ -219,7 +219,8 @@ member has **its own key** at its own URL:
 | a | `4SK4-P64N-XWEN-ZSZZ` | `https://prover.randprotocol.org/m/a` |
 | b | `0XZX-NZ1J-SPMB-GWZN` | `https://prover.randprotocol.org/m/b` |
 
-The pool is these two machines, each with its own key; wallet 0.8.1 and later pin them. Until
+The pool is these two machines, each with its own key, operated by RandProtocol (member a runs on a
+validator host, b on a dedicated prover host); wallet 0.8.1 and later pin them. Until
 0.8.0 the pool had four (a `ZEXQ-1JHV-ZT60-KFB5`, archive2, nyc3, sfo3), retired on 2026-10-22;
 member a was rebuilt and b added, each with a new key made on its own host. A 0.8.0 wallet still
 pins the four old keys, so it finds no member it trusts and has to prove locally or use a prover
@@ -250,8 +251,8 @@ internet connection, then try again." — and it never retries in a loop. Nothin
 
 **The first send through them shows a one-time notice**, before anything is built:
 
-> This device cannot make the proof, so one of the RandProtocol provers (N machines run by the
-> validators; each one that proves a send sees that wallet's viewing key) makes it. The one that
+> This device cannot make the proof, so one of the RandProtocol provers (N machines operated by
+> RandProtocol; each one that proves a send sees that wallet's viewing key) makes it. The one that
 > does receives this wallet's viewing key, so it can read your whole history — every payment
 > received and sent, past and future. It cannot spend. You are asked once; to keep your history to
 > yourself, use your own prover instead.
