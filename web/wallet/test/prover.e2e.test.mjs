@@ -130,14 +130,14 @@ test('with no prover running, a wasm wallet cannot prove and says how to', { ski
   const unpaired = await env.a.backend.send.canProve();
   assert.equal(unpaired.ok, false);
   assert.equal(unpaired.reason, CANNOT_PROVE_REASON);
-  assert.match(unpaired.reason, /Pair a prover/);
+  assert.match(unpaired.reason, /pair your own prover/);
 
   // A pairing against a prover that is not listening is refused, and nothing is stored.
   await assert.rejects(() => env.a.backend.prover.pair(env.link, PASSWORD, { name: 'laptop' }));
   assert.equal((await env.a.backend.settings.get()).prover.mode, 'device');
   const still = await env.a.backend.send.canProve();
   assert.equal(still.ok, false);
-  assert.match(still.reason, /Pair a prover/);
+  assert.match(still.reason, /pair your own prover/);
 });
 
 test('a wasm wallet pairs a rand-prover that is not its own, sends through it, and the note lands', { skip, timeout: 20 * 60_000 }, async (t) => {
@@ -238,5 +238,5 @@ test('a paired prover that stops answering is no longer a way to prove', { skip 
   await until('rand-prover to exit', () => env.prover.exitCode !== null || env.prover.signalCode !== null, { timeoutMs: 10_000, everyMs: 100 });
   const answer = await env.a.backend.send.canProve();
   assert.equal(answer.ok, false);
-  assert.match(answer.reason, /Pair a prover/);
+  assert.match(answer.reason, /pair your own prover/);
 });

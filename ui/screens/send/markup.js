@@ -300,7 +300,7 @@ export function reviewStepMarkup({ asset, to, units, estimate, canProve, unknown
     : raw(h`
       <div class="banner warn">
         <span class="ic">${raw(icons.warning())}</span>
-        <span><span class="banner-title">${t('This device cannot prove the transfer')}</span>${canProve.reason || t('Proving is not available here.')} ${t('Your keys import into the desktop app, which proves natively; nothing else about this wallet changes.')}</span>
+        <span><span class="banner-title">${t('This device cannot prove the transfer')}</span>${canProve.reason || t('Proving is not available here.')}</span>
       </div>`);
   return h`
     <h2 class="title" data-role="step-title" tabindex="-1">${t('Review')}</h2>

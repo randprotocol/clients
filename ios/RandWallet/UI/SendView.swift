@@ -252,7 +252,7 @@ struct SendView: View {
                 Text("This device does not have the memory for this proof, so one of the \(t.name) provers will make it. The one that does receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent.")
                     .font(.ui(13)).foregroundColor(Theme.textSoft).multilineTextAlignment(.center)
             } else if !ProverRequirements.deviceHasEnoughMemory {
-                Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.")
+                Text("This proof needs about \(ProverRequirements.peakMemoryGB) GB of memory and this device has \(ProverRequirements.deviceMemoryGB) GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.")
                     .font(.ui(13)).foregroundColor(Theme.warning).multilineTextAlignment(.center)
             }
             Spacer()

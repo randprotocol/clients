@@ -80,7 +80,7 @@
     <string name="review_fee">Frais</string>
     <string name="review_total">Total</string>
     <string name="review_note">La génération de la preuve du transfert prend quelques minutes sur un téléphone. Gardez l\'application ouverte ; une notification affiche la progression si vous la quittez.</string>
-    <string name="review_memory_warning">Cette preuve nécessite environ %1$s Go de mémoire et ce téléphone en a %2$s Go. Android arrêtera très probablement l\'application avant la fin. Associez un prouveur dans Paramètres › Prouveur, ou envoyez depuis le portefeuille en ligne de commande rand sur un ordinateur avec le fichier de clé de Paramètres › Exporter.</string>
+    <string name="review_memory_warning">Cette preuve nécessite environ %1$s Go de mémoire et ce téléphone en a %2$s Go. Android arrêtera très probablement l\'application avant la fin. Activez les prouveurs RandProtocol dans Paramètres › Prouveur, ou associez votre propre prouveur.</string>
     <string name="review_confirm">Confirmer et prouver</string>
     <string name="review_back">Retour</string>
     <string name="proving_title">Preuve de votre transfert</string>

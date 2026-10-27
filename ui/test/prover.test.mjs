@@ -479,10 +479,29 @@ test('the_wasm_reason_names_the_prover_option', async () => {
   await env.backend.prover.useNone();
   const answer = await env.backend.send.canProve();
   assert.deepEqual(answer, { ok: false, reason: CANNOT_PROVE_REASON });
-  assert.match(answer.reason, /Pair a prover in Settings/);
+  assert.match(answer.reason, /Turn the RandProtocol provers on in Settings/);
+  assert.match(answer.reason, /pair your own prover/);
   assert.match(answer.reason, /desktop app/);
   assert.match(answer.reason, /6\.2 GB/);
   assert.deepEqual(await env.backend.bridge.canWithdraw(), { ok: false, code: 'PROVER_UNAVAILABLE', reason: CANNOT_PROVE_REASON });
+});
+
+test('with the pool on and away, the browser\'s sentence does not tell the user to turn it on', async () => {
+  const env = await sendableWallet({ fetch: poolFetch({}, { a: { info: down }, b: { info: down }, c: { info: down } }) });
+  const answer = await env.backend.send.canProve();
+  assert.equal(answer.unreachable, true);
+  assert.match(answer.reason, /^This browser cannot make a transfer proof \(it needs about 6\.2 GB\)\. The RandProtocol provers cannot be reached/);
+  assert.doesNotMatch(answer.reason, /Turn the RandProtocol provers on/);
+});
+
+test('a desktop too small to prove, with the pool off, names the provers and your own prover, not the desktop app', async () => {
+  const env = await sendableWallet({ fetch: poolFetch(), native: true, systemMemoryGiB: () => 4 });
+  await env.backend.prover.useNone();
+  const answer = await env.backend.send.canProve();
+  assert.equal(answer.ok, false);
+  assert.equal(answer.reason, 'Proving needs about 6.2 GB of free memory; this computer reports 4 GB. Turn the RandProtocol provers on in Settings, or pair your own prover.');
+  assert.doesNotMatch(answer.reason, /desktop app/);
+  assert.equal((await env.backend.bridge.canWithdraw()).reason, answer.reason);
 });
 
 test('a_viewing_key_job_goes_to_a_prover_that_is_not_the_users_own', async () => {
@@ -690,8 +709,8 @@ test('an own prover that answers makes canProve say yes, via the prover — on t
   const silent = build({ storage: env.storage, core: env.core, fetch: sendableFetch({ prover_info: () => { throw Object.assign(new Error('down'), { code: -32000 }); } }) });
   const answer = await silent.backend.send.canProve();
   assert.equal(answer.ok, false);
-  assert.match(answer.reason, /Pair a prover/);
   assert.match(answer.reason, /prover is not available/);
+  assert.match(answer.reason, /Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app\.$/);
 });
 
 // ------------------------------------------------------------------------------ sending --------

@@ -80,7 +80,7 @@
     <string name="review_fee">Comisión</string>
     <string name="review_total">Total</string>
     <string name="review_note">Generar la prueba de la transferencia tarda unos minutos en un teléfono. Mantén la app abierta; si cambias de app, una notificación muestra el progreso.</string>
-    <string name="review_memory_warning">Esta prueba necesita unos %1$s GB de memoria y este teléfono tiene %2$s GB. Lo más probable es que Android detenga la app antes de que termine. Vincula un probador en Ajustes › Probador, o envía desde la billetera de línea de comandos rand en una computadora con el archivo de clave de Ajustes › Exportar.</string>
+    <string name="review_memory_warning">Esta prueba necesita unos %1$s GB de memoria y este teléfono tiene %2$s GB. Lo más probable es que Android detenga la app antes de que termine. Activa los probadores de RandProtocol en Ajustes › Probador o vincula tu propio probador.</string>
     <string name="review_confirm">Confirmar y probar</string>
     <string name="review_back">Atrás</string>
     <string name="proving_title">Probando tu transferencia</string>

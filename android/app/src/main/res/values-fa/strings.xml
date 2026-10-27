@@ -80,7 +80,7 @@
     <string name="review_fee">کارمزد</string>
     <string name="review_total">مجموع</string>
     <string name="review_note">اثبات انتقال روی گوشی چند دقیقه طول می‌کشد. برنامه را باز نگه دارید؛ اگر به جای دیگری بروید، یک اعلان پیشرفت را نشان می‌دهد.</string>
-    <string name="review_memory_warning">این اثبات به حدود %1$s گیگابایت حافظه نیاز دارد و این گوشی %2$s گیگابایت دارد. به احتمال زیاد Android پیش از پایان، برنامه را متوقف می‌کند. در تنظیمات › اثبات‌گر یک اثبات‌گر جفت کنید، یا از کیف پول خط فرمان rand روی رایانه‌ای با فایل کلید از تنظیمات › صدور ارسال کنید.</string>
+    <string name="review_memory_warning">این اثبات به حدود %1$s گیگابایت حافظه نیاز دارد و این گوشی %2$s گیگابایت دارد. به احتمال زیاد Android پیش از پایان، برنامه را متوقف می‌کند. اثبات‌گرهای RandProtocol را در تنظیمات › اثبات‌گر روشن کنید، یا اثبات‌گر خودتان را جفت کنید.</string>
     <string name="review_confirm">تأیید و اثبات</string>
     <string name="review_back">بازگشت</string>
     <string name="proving_title">در حال اثبات انتقال شما</string>

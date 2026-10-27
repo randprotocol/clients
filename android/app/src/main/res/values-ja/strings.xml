@@ -80,7 +80,7 @@
     <string name="review_fee">手数料</string>
     <string name="review_total">合計</string>
     <string name="review_note">スマートフォンでは送金の証明に数分かかります。アプリを開いたままにしてください。他のアプリに切り替えると、通知に進行状況が表示されます。</string>
-    <string name="review_memory_warning">この証明には約 %1$s GB のメモリが必要ですが、このスマートフォンには %2$s GB しかありません。完了前に Android がアプリを停止する可能性が高いです。設定 › プルーバーでプルーバーをペアリングするか、設定 › エクスポートのキーファイルを使ってコンピューターの rand コマンドラインウォレットから送信してください。</string>
+    <string name="review_memory_warning">この証明には約 %1$s GB のメモリが必要ですが、このスマートフォンには %2$s GB しかありません。完了前に Android がアプリを停止する可能性が高いです。設定 › プルーバーで RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングしてください。</string>
     <string name="review_confirm">確認して証明</string>
     <string name="review_back">戻る</string>
     <string name="proving_title">送金を証明しています</string>

@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1109 strings.
+// 1110 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -911,7 +911,7 @@ export default {
   "This address is reusable — share it to receive any asset. It never expires. Whoever pays you sees the fingerprint above on their confirmation; if it does not match, it is not your address.": "This address is reusable — share it to receive any asset. It never expires. Whoever pays you sees the fingerprint above on their confirmation; if it does not match, it is not your address.",
   "This asset cannot be sent": "This asset cannot be sent",
   "This bridge does not list every chain below": "This bridge does not list every chain below",
-  "This browser cannot make a transfer proof (it needs about 6.2 GB). Pair a prover in Settings, or send from the desktop app.": "This browser cannot make a transfer proof (it needs about 6.2 GB). Pair a prover in Settings, or send from the desktop app.",
+  "This browser cannot make a transfer proof (it needs about 6.2 GB).": "This browser cannot make a transfer proof (it needs about 6.2 GB).",
   "this build does not carry the chain's bundle guest {guest}: update the wallet": "this build does not carry the chain's bundle guest {guest}: update the wallet",
   "This build ships no prover to use.": "This build ships no prover to use.",
   "This cannot be undone here": "This cannot be undone here",
@@ -939,7 +939,7 @@ export default {
   "This device cannot withdraw": "This device cannot withdraw",
   "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.": "This device gets the transfer ready, then hands the proof to a prover. Keep the wallet open until the prover has it; you can look at other screens.",
   "This device proves the swap. It takes a few minutes.": "This device proves the swap. It takes a few minutes.",
-  "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched — send from the desktop app, which proves natively.": "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched — send from the desktop app, which proves natively.",
+  "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.": "This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a browser gives WebAssembly at most 4 GB. Your notes are untouched.",
   "This device, or where it cannot · {name} provers": "This device, or where it cannot · {name} provers",
   "This forgets the notes and history read from the old chain and reads this node from the start. Your keys and your password are not touched.": "This forgets the notes and history read from the old chain and reads this node from the start. Your keys and your password are not touched.",
   "This key can spend your funds": "This key can spend your funds",
@@ -1023,6 +1023,8 @@ export default {
   "Try another node": "Try another node",
   "Turn off {label}": "Turn off {label}",
   "Turn on {label}": "Turn on {label}",
+  "Turn the RandProtocol provers on in Settings, or pair your own prover.": "Turn the RandProtocol provers on in Settings, or pair your own prover.",
+  "Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app.": "Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app.",
   "Type {word} to confirm": "Type {word} to confirm",
   "Type it once more.": "Type it once more.",
   "Type the last four characters of that address": "Type the last four characters of that address",
@@ -1097,7 +1099,6 @@ export default {
   "You receive": "You receive",
   "Your balance doesn’t cover the network fee ({fee} {symbol}).": "Your balance doesn’t cover the network fee ({fee} {symbol}).",
   "your device’s screen lock": "your device’s screen lock",
-  "Your keys import into the desktop app, which proves natively; nothing else about this wallet changes.": "Your keys import into the desktop app, which proves natively; nothing else about this wallet changes.",
   "Your keys stay on this device unless you pair a prover you run.": "Your keys stay on this device unless you pair a prover you run.",
   "Your last transfer’s outcome is unknown — check Activity first.": "Your last transfer’s outcome is unknown — check Activity first.",
   "Your notes are safe on chain; this sync will take longer than usual.": "Your notes are safe on chain; this sync will take longer than usual.",

@@ -80,7 +80,7 @@
     <string name="review_fee">手續費</string>
     <string name="review_total">總計</string>
     <string name="review_note">在手機上為轉帳生成證明需時數分鐘。請保持應用程式開啟；如果切換到其他應用程式，通知會顯示進度。</string>
-    <string name="review_memory_warning">此證明需要約 %1$s GB 記憶體，而這部手機只有 %2$s GB。Android 很可能會在完成前終止應用程式。請在「設定 › 證明器」中配對證明器，或在電腦上使用「設定 › 匯出」中的密鑰檔案，透過 rand 命令列錢包傳送。</string>
+    <string name="review_memory_warning">此證明需要約 %1$s GB 記憶體，而這部手機只有 %2$s GB。Android 很可能會在完成前終止應用程式。請在「設定 › 證明器」中開啟 RandProtocol 證明器，或配對你自己的證明器。</string>
     <string name="review_confirm">確認並生成證明</string>
     <string name="review_back">返回</string>
     <string name="proving_title">正在為你的轉帳生成證明</string>

@@ -273,7 +273,6 @@
     "This device": "此裝置",
     "This device cannot make the proof, so one of %@ makes it. The one that does receives this wallet's viewing key, so it can read your whole history — every payment received and sent, past and future. It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.": "此裝置無法生成該證明，因此會由%@其中一部生成。生成證明的那部會收到此錢包的檢視密鑰，因此可以讀取你的全部記錄，包括過去和將來收到及發出的每一筆付款。它不能花費。此提示只會出現一次；如果想讓記錄只有你自己知道，請改用你自己的證明器。",
     "This device does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead.": "此裝置的記憶體不足以完成兌換：其中兩個證明要由它自己生成，約需 1.5 GB。沒有傳送任何東西。請改用桌面應用程式或瀏覽器擴充功能兌換。",
-    "This device does not have the memory for this proof, and no prover is set up. Pair a prover in Settings › Prover.": "此裝置的記憶體不足以生成此證明，而且尚未設定證明器。請在「設定 › 證明器」中配對證明器。",
     "This device does not have the memory for this proof, so one of the %@ provers will make it. The one that does receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent.": "此裝置的記憶體不足以生成此證明，因此會由一部 %@ 證明器生成。生成證明的那部會在加密工作中收到你的檢視密鑰和一個鹽值，但絕不會收到你的花費私鑰：它可以讀取此錢包的全部記錄，但不能花費。這部手機會自行授權花費，並在傳送任何東西之前檢查證明。",
     "This device does not have the memory for this proof, so your prover, %@, will make it. It receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent.": "此裝置的記憶體不足以生成此證明，因此會由你的證明器 %@ 生成。它會在加密工作中收到你的檢視密鑰和一個鹽值，但絕不會收到你的花費私鑰：它可以讀取此錢包的全部記錄，但不能花費。這部手機會自行授權花費，並在傳送任何東西之前檢查證明。",
     "This device does not have the memory for this proof.": "此裝置的記憶體不足以生成此證明。",
@@ -282,7 +281,6 @@
     "This link is too long for a QR code; share or copy it instead.": "此連結太長，無法製成 QR 碼；請改為分享或複製。",
     "This network doesn't carry memos; the memo will not be sent": "此網絡不支援備註；備註不會被傳送",
     "This payment was made with your key from another device, so its transaction key is not stored here. Your viewing key opens it on RandScan.": "這筆付款是在另一部裝置上用你的密鑰發出的，因此這裡沒有儲存它的交易密鑰。你的檢視密鑰可以在 RandScan 上打開它。",
-    "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.": "此證明需要約 %@ GB 記憶體，而此裝置只有 %@ GB。iOS 很可能會在完成前終止應用程式。請在「設定 › 證明器」中配對證明器，或在電腦上使用「設定 › 匯出」中的密鑰檔案，透過 rand 命令列錢包傳送。",
     "This prover charges a fee, which this version of the wallet does not pay (%@). Pair a prover that charges nothing, or send from the rand command-line wallet.": "此證明器會收費，而此版本的錢包不會支付該費用（%@）。請配對一部免費的證明器，或使用 rand 命令列錢包傳送。",
     "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.": "此證明器會收費，而此版本的錢包不會支付該費用。請配對一部免費的證明器，或使用 rand 命令列錢包傳送。",
     "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet.": "此證明器不接受這類工作%@。請在設定中配對另一部證明器，或使用 rand 命令列錢包傳送。",
@@ -517,7 +515,9 @@
     "That file could not be read.": "無法讀取該檔案。",
     "Remove %@?": "移除%@？",
     "You need the signer's key file to add this signer back.": "要重新新增此簽署人，需要他的密鑰檔案。",
-    "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "此收款人同時收取 RAND 及代幣：向同一收款人支付 RAND 及代幣，需要分開的提案。"
+    "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "此收款人同時收取 RAND 及代幣：向同一收款人支付 RAND 及代幣，需要分開的提案。",
+    "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "此證明需要約 %@ GB 記憶體，而此裝置只有 %@ GB。iOS 很可能會在完成前終止應用程式。請在「設定 › 證明器」中開啟 RandProtocol 證明器，或配對你自己的證明器。",
+    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "此裝置的記憶體不足以生成此證明，而且尚未設定證明器。請在「設定 › 證明器」中開啟 RandProtocol 證明器，或配對你自己的證明器。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

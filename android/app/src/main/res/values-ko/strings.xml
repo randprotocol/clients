@@ -80,7 +80,7 @@
     <string name="review_fee">수수료</string>
     <string name="review_total">합계</string>
     <string name="review_note">휴대폰에서 송금을 증명하는 데 몇 분이 걸립니다. 앱을 열어 두세요. 다른 앱으로 전환하면 알림에 진행 상황이 표시됩니다.</string>
-    <string name="review_memory_warning">이 증명에는 약 %1$s GB의 메모리가 필요하지만 이 휴대폰에는 %2$s GB가 있습니다. Android가 완료 전에 앱을 중지할 가능성이 큽니다. 설정 › 프루버에서 프루버를 페어링하거나, 설정 › 내보내기에서 받은 키 파일로 컴퓨터의 rand 명령줄 지갑에서 보내세요.</string>
+    <string name="review_memory_warning">이 증명에는 약 %1$s GB의 메모리가 필요하지만 이 휴대폰에는 %2$s GB가 있습니다. Android가 완료 전에 앱을 중지할 가능성이 큽니다. 설정 › 프루버에서 RandProtocol 프루버를 켜거나 자체 프루버를 페어링하세요.</string>
     <string name="review_confirm">확인 후 증명</string>
     <string name="review_back">뒤로</string>
     <string name="proving_title">송금을 증명하는 중</string>

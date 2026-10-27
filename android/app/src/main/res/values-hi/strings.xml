@@ -80,7 +80,7 @@
     <string name="review_fee">शुल्क</string>
     <string name="review_total">कुल</string>
     <string name="review_note">फ़ोन पर ट्रांसफ़र का प्रूफ़ बनाने में कुछ मिनट लगते हैं। ऐप खुला रखें; अगर आप दूसरे ऐप पर जाते हैं तो एक सूचना प्रगति दिखाएगी।</string>
-    <string name="review_memory_warning">इस प्रूफ़ के लिए लगभग %1$s GB मेमोरी चाहिए और इस फ़ोन में %2$s GB है। Android संभवतः पूरा होने से पहले ही ऐप बंद कर देगा। सेटिंग्स › प्रूवर में एक प्रूवर पेयर करें, या सेटिंग्स › एक्सपोर्ट की की फ़ाइल के साथ किसी कंप्यूटर पर rand कमांड-लाइन वॉलेट से भेजें।</string>
+    <string name="review_memory_warning">इस प्रूफ़ के लिए लगभग %1$s GB मेमोरी चाहिए और इस फ़ोन में %2$s GB है। Android संभवतः पूरा होने से पहले ही ऐप बंद कर देगा। सेटिंग्स › प्रूवर में RandProtocol प्रूवर चालू करें, या अपना प्रूवर पेयर करें।</string>
     <string name="review_confirm">पुष्टि करें और प्रूफ़ बनाएँ</string>
     <string name="review_back">वापस</string>
     <string name="proving_title">आपके ट्रांसफ़र का प्रूफ़ बन रहा है</string>

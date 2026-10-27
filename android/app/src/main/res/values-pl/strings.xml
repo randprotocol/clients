@@ -80,7 +80,7 @@
     <string name="review_fee">Opłata</string>
     <string name="review_total">Razem</string>
     <string name="review_note">Generowanie dowodu przelewu zajmuje na telefonie kilka minut. Nie zamykaj aplikacji; jeśli przełączysz się gdzie indziej, powiadomienie pokaże postęp.</string>
-    <string name="review_memory_warning">Ten dowód wymaga około %1$s GB pamięci, a ten telefon ma %2$s GB. Android najpewniej zatrzyma aplikację przed końcem. Sparuj prover w Ustawienia › Prover lub wyślij z portfela wiersza poleceń rand na komputerze z plikiem klucza z Ustawienia › Eksport.</string>
+    <string name="review_memory_warning">Ten dowód wymaga około %1$s GB pamięci, a ten telefon ma %2$s GB. Android najpewniej zatrzyma aplikację przed końcem. Włącz provery RandProtocol w Ustawienia › Prover lub sparuj własny prover.</string>
     <string name="review_confirm">Potwierdź i wygeneruj dowód</string>
     <string name="review_back">Wstecz</string>
     <string name="proving_title">Generowanie dowodu przelewu</string>

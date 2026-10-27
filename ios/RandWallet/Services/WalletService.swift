@@ -558,7 +558,7 @@ final class WalletService: ObservableObject {
             throw InvokeRefusal(code: .proverUnavailable, message: error.localizedDescription)
         }
         if route == nil && !deviceCanProve() {
-            throw InvokeRefusal(code: .proverUnavailable, message: String(localized: "This device does not have the memory for this proof, and no prover is set up. Pair a prover in Settings › Prover."))
+            throw InvokeRefusal(code: .proverUnavailable, message: String(localized: "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover."))
         }
         return route
     }

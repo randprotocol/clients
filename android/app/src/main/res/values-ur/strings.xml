@@ -80,7 +80,7 @@
     <string name="review_fee">فیس</string>
     <string name="review_total">کل</string>
     <string name="review_note">فون پر منتقلی کا پروف بنانے میں چند منٹ لگتے ہیں۔ ایپ کھلی رکھیں؛ اگر آپ کسی اور ایپ پر جائیں تو ایک اطلاع پیش رفت دکھاتی ہے۔</string>
-    <string name="review_memory_warning">اس پروف کو تقریباً %1$s GB میموری درکار ہے اور اس فون میں %2$s GB ہے۔ غالب امکان ہے کہ Android مکمل ہونے سے پہلے ایپ بند کر دے گا۔ ترتیبات › پروور میں ایک پروور جوڑیں، یا ترتیبات › برآمد سے حاصل کردہ کی فائل کے ساتھ کسی کمپیوٹر پر rand کمانڈ لائن والیٹ سے بھیجیں۔</string>
+    <string name="review_memory_warning">اس پروف کو تقریباً %1$s GB میموری درکار ہے اور اس فون میں %2$s GB ہے۔ غالب امکان ہے کہ Android مکمل ہونے سے پہلے ایپ بند کر دے گا۔ ترتیبات › پروور میں RandProtocol پروورز آن کریں، یا اپنا پروور جوڑیں۔</string>
     <string name="review_confirm">تصدیق کریں اور پروف بنائیں</string>
     <string name="review_back">واپس</string>
     <string name="proving_title">آپ کی منتقلی کا پروف بن رہا ہے</string>

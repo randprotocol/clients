@@ -226,9 +226,8 @@ export function safeHash(hash) {
 export function explainProvingError(msg) {
   const text = String((msg && msg.message) || msg || '').trim();
   if (/unreachable|out of memory|alloc|worker failed|memory access/i.test(text)) {
-    return t('This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a '
-      + 'browser gives WebAssembly at most 4 GB. Your notes are untouched — send from the desktop '
-      + 'app, which proves natively.');
+    return `${t('This device ran out of memory while proving. A transfer proof needs about 6.2 GB and a '
+      + 'browser gives WebAssembly at most 4 GB. Your notes are untouched.')} ${t('Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app.')}`;
   }
   return text || t('The transfer could not be proved.');
 }

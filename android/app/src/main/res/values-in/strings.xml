@@ -80,7 +80,7 @@
     <string name="review_fee">Biaya</string>
     <string name="review_total">Total</string>
     <string name="review_note">Pembuktian transfer memakan waktu beberapa menit di ponsel. Biarkan aplikasi tetap terbuka; notifikasi menampilkan progres jika Anda beralih ke aplikasi lain.</string>
-    <string name="review_memory_warning">Bukti ini memerlukan sekitar %1$s GB memori, sedangkan ponsel ini memiliki %2$s GB. Android kemungkinan besar akan menghentikan aplikasi sebelum selesai. Pasangkan prover di Pengaturan › Prover, atau kirim dari dompet baris perintah rand di komputer dengan file kunci dari Pengaturan › Ekspor.</string>
+    <string name="review_memory_warning">Bukti ini memerlukan sekitar %1$s GB memori, sedangkan ponsel ini memiliki %2$s GB. Android kemungkinan besar akan menghentikan aplikasi sebelum selesai. Aktifkan prover RandProtocol di Pengaturan › Prover, atau pasangkan prover Anda sendiri.</string>
     <string name="review_confirm">Konfirmasi dan buktikan</string>
     <string name="review_back">Kembali</string>
     <string name="proving_title">Membuktikan transfer Anda</string>

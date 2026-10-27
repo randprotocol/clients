@@ -89,7 +89,7 @@
     <string name="review_fee">Fee</string>
     <string name="review_total">Total</string>
     <string name="review_note">Proving the transfer takes a few minutes on a phone. Keep the app open; a notification shows progress if you switch away.</string>
-    <string name="review_memory_warning">This proof needs about %1$s GB of memory and this phone has %2$s GB. Android will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.</string>
+    <string name="review_memory_warning">This proof needs about %1$s GB of memory and this phone has %2$s GB. Android will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.</string>
     <string name="review_confirm">Confirm and prove</string>
     <string name="review_back">Back</string>
     <string name="proving_title">Proving your transfer</string>

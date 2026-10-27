@@ -273,7 +273,6 @@
     "This device": "この端末",
     "This device cannot make the proof, so one of %@ makes it. The one that does receives this wallet's viewing key, so it can read your whole history — every payment received and sent, past and future. It cannot spend. You are asked once; to keep your history to yourself, use your own prover instead.": "この端末では証明を作れないため、%@ のいずれかが作成します。作成するプルーバーはこのウォレットの閲覧キーを受け取るため、過去から未来までに受け取り、送ったすべての支払いを含む履歴全体を読めます。支出はできません。この確認は一度だけです。履歴を自分だけのものにするには、代わりに自分のプルーバーを使ってください。",
     "This device does not have the memory a swap needs: it makes two of the proofs itself, about 1.5 GB. Nothing was sent. Swap from the desktop app or the browser extension instead.": "この端末にはスワップに必要なメモリがありません。スワップでは証明のうち2つを端末自身が作り、約 1.5 GB を使います。何も送信されていません。代わりにデスクトップアプリかブラウザ拡張機能からスワップしてください。",
-    "This device does not have the memory for this proof, and no prover is set up. Pair a prover in Settings › Prover.": "この端末にはこの証明に必要なメモリがなく、プルーバーも設定されていません。設定 › プルーバーでプルーバーをペアリングしてください。",
     "This device does not have the memory for this proof, so one of the %@ provers will make it. The one that does receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent.": "この端末にはこの証明に必要なメモリがないため、%@ のプルーバーのいずれかが作成します。作成するプルーバーは、封印されたジョブの中で閲覧キーとソルトを受け取り、支出キーは決して受け取りません。このウォレットの履歴をすべて読めますが、支出はできません。支出の承認はこのスマートフォン自身が行い、何かを送信する前に証明を検証します。",
     "This device does not have the memory for this proof, so your prover, %@, will make it. It receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent.": "この端末にはこの証明に必要なメモリがないため、あなたのプルーバー %@ が作成します。プルーバーは封印されたジョブの中で閲覧キーとソルトを受け取り、支出キーは決して受け取りません。このウォレットの履歴をすべて読めますが、支出はできません。支出の承認はこのスマートフォン自身が行い、何かを送信する前に証明を検証します。",
     "This device does not have the memory for this proof.": "この端末にはこの証明に必要なメモリがありません。",
@@ -282,7 +281,6 @@
     "This link is too long for a QR code; share or copy it instead.": "このリンクは QR コードには長すぎます。代わりに共有またはコピーしてください。",
     "This network doesn't carry memos; the memo will not be sent": "このネットワークはメモを扱いません。メモは送信されません",
     "This payment was made with your key from another device, so its transaction key is not stored here. Your viewing key opens it on RandScan.": "この支払いは別の端末であなたのキーを使って行われたため、トランザクションキーはここに保存されていません。閲覧キーを使えば RandScan で開けます。",
-    "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export.": "この証明には約 %@ GB のメモリが必要ですが、この端末には %@ GB しかありません。完了前に iOS がアプリを停止する可能性が高いです。設定 › プルーバーでプルーバーをペアリングするか、設定 › エクスポートのキーファイルを使ってコンピューターの rand コマンドラインウォレットから送信してください。",
     "This prover charges a fee, which this version of the wallet does not pay (%@). Pair a prover that charges nothing, or send from the rand command-line wallet.": "このプルーバーは手数料を請求しますが、このバージョンのウォレットはそれを支払いません（%@）。無料のプルーバーをペアリングするか、rand コマンドラインウォレットから送信してください。",
     "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.": "このプルーバーは手数料を請求しますが、このバージョンのウォレットはそれを支払いません。無料のプルーバーをペアリングするか、rand コマンドラインウォレットから送信してください。",
     "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet.": "このプルーバーはこの種類のジョブを受け付けません%@。設定で別のプルーバーをペアリングするか、rand コマンドラインウォレットから送信してください。",
@@ -517,7 +515,9 @@
     "That file could not be read.": "そのファイルを読み込めませんでした。",
     "Remove %@?": "%@を削除しますか?",
     "You need the signer's key file to add this signer back.": "この署名者を再び追加するには、署名者の鍵ファイルが必要です。",
-    "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "この受取人は RAND とトークンの両方を受け取ります。同じ受取人への RAND とトークンの支払いは、別々の提案にする必要があります。"
+    "This payee receives both RAND and a token: RAND and token payments to one payee need separate proposals.": "この受取人は RAND とトークンの両方を受け取ります。同じ受取人への RAND とトークンの支払いは、別々の提案にする必要があります。",
+    "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "この証明には約 %@ GB のメモリが必要ですが、この端末には %@ GB しかありません。完了前に iOS がアプリを停止する可能性が高いです。設定 › プルーバーで RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングしてください。",
+    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover.": "この端末にはこの証明に必要なメモリがなく、プルーバーも設定されていません。設定 › プルーバーで RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングしてください。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

@@ -352,7 +352,7 @@ function uiActivity(row, st) {
 
 export function makeSharedBackend({
   core, storage, platform, fetch: fetchImpl, locks, broadcast, canProve, executeSend, executeWithdraw,
-  proverOptions,
+  proverOptions, noRouteHint,
 } = {}) {
   if (!core || typeof core.call !== 'function') throw new Error('makeSharedBackend needs a core with call()');
   if (!storage || typeof storage.get !== 'function' || !storage.session) throw new Error('makeSharedBackend needs a storage');
@@ -1869,12 +1869,22 @@ export function makeSharedBackend({
    * one. Which of the two a given send needs is the chain's and is settled by the core when the
    * job is made (`proveHookFor`); this only rules out a prover that could take neither.
    */
+  function withNoRouteHint(reason) {
+    const hint = typeof noRouteHint === 'function'
+      ? noRouteHint()
+      : t('Turn the RandProtocol provers on in Settings, or pair your own prover.');
+    return `${reason || t('This device cannot prove.')} ${hint}`;
+  }
+
   async function proveRoute() {
     const device = await canProve();
     if (device && device.ok) return { answer: device };
     const { prover: p } = await getSettings();
     if (p && p.mode === 'default') return defaultRoute(device);
-    if (!p || p.mode !== 'remote') return { answer: device };
+    // No route at all (the RandProtocol provers turned off, nothing paired): the device's own
+    // sentence and the shell's ways out — the provers back on, a prover of your own (and, in a
+    // browser, the desktop app).
+    if (!p || p.mode !== 'remote') return { answer: { ...device, reason: withNoRouteHint(device && device.reason) } };
     const probe = await prover.probe();
     const kinds = probe.ok ? probe.witnessKinds : [];
     const why = !probe.ok ? probe.reason
@@ -1882,7 +1892,7 @@ export function makeSharedBackend({
         || (kinds.includes('viewing_key') || (p.own === true && kinds.includes('spend_key')) ? null : t('it does not take this wallet\'s jobs'));
     if (why) {
       const unavailable = t('Your paired prover is not available: {reason}.', { reason: why });
-      return { answer: { ok: false, reason: `${(device && device.reason) || t('This device cannot prove.')} ${unavailable}` } };
+      return { answer: { ok: false, reason: withNoRouteHint(`${(device && device.reason) || t('This device cannot prove.')} ${unavailable}`) } };
     }
     return { answer: { ok: true, via: 'prover' }, route: p };
   }

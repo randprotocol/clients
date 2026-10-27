@@ -80,7 +80,7 @@
     <string name="review_fee">Yuran</string>
     <string name="review_total">Jumlah</string>
     <string name="review_note">Membuktikan pemindahan mengambil masa beberapa minit pada telefon. Biarkan aplikasi terbuka; pemberitahuan menunjukkan kemajuan jika anda beralih ke tempat lain.</string>
-    <string name="review_memory_warning">Bukti ini memerlukan kira-kira %1$s GB memori dan telefon ini mempunyai %2$s GB. Android berkemungkinan besar akan menghentikan aplikasi sebelum ia selesai. Pasangkan pembukti dalam Tetapan › Pembukti, atau hantar daripada dompet baris perintah rand pada komputer dengan fail kunci daripada Tetapan › Eksport.</string>
+    <string name="review_memory_warning">Bukti ini memerlukan kira-kira %1$s GB memori dan telefon ini mempunyai %2$s GB. Android berkemungkinan besar akan menghentikan aplikasi sebelum ia selesai. Hidupkan pembukti RandProtocol dalam Tetapan › Pembukti, atau pasangkan pembukti anda sendiri.</string>
     <string name="review_confirm">Sahkan dan buktikan</string>
     <string name="review_back">Kembali</string>
     <string name="proving_title">Membuktikan pemindahan anda</string>

@@ -313,7 +313,7 @@ test('a wasm wallet cannot withdraw until a prover is paired', { skip }, async (
   await env.a.backend.prover.useNone();
   const answer = await env.a.backend.bridge.canWithdraw();
   assert.equal(answer.ok, false);
-  assert.match(answer.reason, /Pair a prover/);
+  assert.match(answer.reason, /pair your own prover/);
 });
 
 test('the wasm wallet is minted zUSD, pairs its prover, and withdraws it to Ethereum', { skip, timeout: 25 * 60_000 }, async (t) => {

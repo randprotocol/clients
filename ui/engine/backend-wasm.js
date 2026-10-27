@@ -43,21 +43,27 @@ import { t } from '../i18n.js';
 export { UNLOCKED_SESSION_KEY, unlockDelayMs };
 
 /**
- * Shown to the user verbatim, so it is written for them (ui/backend.js on `send.canProve`). The
- * delegated-proving spec's sentence (§4.2): it names both ways out — a prover the user pairs, or
- * the desktop app. `backend-shared.js` answers `{ok: true, via: 'prover'}` instead of this when
- * a prover is paired and answering. (Since split authorisation it need not be the user's own: the
- * spend key stays in this browser, which makes the small auth proof itself.)
+ * Shown to the user verbatim, so it is written for them (ui/backend.js on `send.canProve`).
+ * `canProve()` answers only what this browser lacks; with no prover route at all (the user turned
+ * the RandProtocol provers off) `backend-shared.js` adds `noRouteHint` — the ways out: the
+ * RandProtocol provers back on, a prover of the user's own, or the desktop app. With a route,
+ * the route's own answer follows the first sentence instead (the pool busy or away, a paired
+ * prover not answering).
  */
-export const CANNOT_PROVE_REASON = 'This browser cannot make a transfer proof (it needs about 6.2 GB). '
-  + 'Pair a prover in Settings, or send from the desktop app.';
+export const CANNOT_PROVE_NEED = 'This browser cannot make a transfer proof (it needs about 6.2 GB).';
+export const NO_ROUTE_HINT = 'Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app.';
+/** What `send.canProve` answers in English with no prover route at all. */
+export const CANNOT_PROVE_REASON = `${CANNOT_PROVE_NEED} ${NO_ROUTE_HINT}`;
 
-/** `CANNOT_PROVE_REASON` in the user's language (the constant stays English for its importers). */
-export const cannotProveText = () => t('This browser cannot make a transfer proof (it needs about 6.2 GB). '
-  + 'Pair a prover in Settings, or send from the desktop app.');
+/** `CANNOT_PROVE_NEED` in the user's language. */
+export const cannotProveNeed = () => t('This browser cannot make a transfer proof (it needs about 6.2 GB).');
+/** `NO_ROUTE_HINT` in the user's language. */
+export const noRouteHint = () => t('Turn the RandProtocol provers on in Settings, pair your own prover, or send from the desktop app.');
+/** `CANNOT_PROVE_REASON` in the user's language (the constants stay English for their importers). */
+export const cannotProveText = () => `${cannotProveNeed()} ${noRouteHint()}`;
 
 async function canProve() {
-  return { ok: false, reason: cannotProveText() };
+  return { ok: false, reason: cannotProveNeed() };
 }
 
 /**
@@ -87,6 +93,6 @@ async function executeWithdraw(ctx) {
 
 export function makeWasmBackend({ core, storage, platform, fetch: fetchImpl, locks, broadcast, proverOptions } = {}) {
   return makeSharedBackend({
-    core, storage, platform, fetch: fetchImpl, locks, broadcast, canProve, executeSend, executeWithdraw, proverOptions,
+    core, storage, platform, fetch: fetchImpl, locks, broadcast, canProve, executeSend, executeWithdraw, proverOptions, noRouteHint,
   });
 }

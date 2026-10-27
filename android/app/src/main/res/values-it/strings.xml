@@ -80,7 +80,7 @@
     <string name="review_fee">Commissione</string>
     <string name="review_total">Totale</string>
     <string name="review_note">La generazione della prova del trasferimento richiede qualche minuto su un telefono. Tieni l\'app aperta; se passi ad altro, una notifica mostra l\'avanzamento.</string>
-    <string name="review_memory_warning">Questa prova richiede circa %1$s GB di memoria e questo telefono ne ha %2$s GB. Molto probabilmente Android chiuderà l\'app prima che finisca. Associa un prover in Impostazioni › Prover, oppure invia dal portafoglio a riga di comando rand su un computer con il file della chiave da Impostazioni › Esporta.</string>
+    <string name="review_memory_warning">Questa prova richiede circa %1$s GB di memoria e questo telefono ne ha %2$s GB. Molto probabilmente Android chiuderà l\'app prima che finisca. Attiva i prover di RandProtocol in Impostazioni › Prover, oppure associa un tuo prover.</string>
     <string name="review_confirm">Conferma e genera la prova</string>
     <string name="review_back">Indietro</string>
     <string name="proving_title">Generazione della prova del trasferimento</string>

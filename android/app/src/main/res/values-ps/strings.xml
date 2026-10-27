@@ -80,7 +80,7 @@
     <string name="review_fee">فیس</string>
     <string name="review_total">ټولټال</string>
     <string name="review_note">په تلیفون کې د لېږد ثبوت جوړول څو دقیقې وخت نیسي. اپ خلاص وساتئ؛ که بلې خوا ته لاړ شئ، یو خبرتیا پرمختګ ښيي.</string>
-    <string name="review_memory_warning">دې ثبوت ته شاوخوا %1$s GB حافظه اړینه ده او دا تلیفون %2$s GB لري. ډېر احتمال لري چې Android به اپ له بشپړېدو مخکې ودروي. په امستنې › ثبوت جوړوونکی کې یو ثبوت جوړوونکی جوړه کړئ، یا د rand له کمانډ لاین والټ څخه په یو کمپیوټر کې د امستنې › صادرول د کیلي فایل سره ولېږئ.</string>
+    <string name="review_memory_warning">دې ثبوت ته شاوخوا %1$s GB حافظه اړینه ده او دا تلیفون %2$s GB لري. ډېر احتمال لري چې Android به اپ له بشپړېدو مخکې ودروي. په امستنې › ثبوت جوړوونکی کې د RandProtocol ثبوت جوړوونکي چالان کړئ، یا خپل ثبوت جوړوونکی جوړه کړئ.</string>
     <string name="review_confirm">تایید او ثبوت کړئ</string>
     <string name="review_back">شاته</string>
     <string name="proving_title">ستاسو د لېږد ثبوت جوړېږي</string>

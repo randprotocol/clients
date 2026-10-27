@@ -80,7 +80,7 @@
     <string name="review_fee">الرسوم</string>
     <string name="review_total">الإجمالي</string>
     <string name="review_note">يستغرق إثبات التحويل بضع دقائق على الهاتف. أبقِ التطبيق مفتوحًا، ويُظهر إشعار التقدم إن انتقلت إلى تطبيق آخر.</string>
-    <string name="review_memory_warning">يحتاج هذا الإثبات إلى نحو %1$s غيغابايت من الذاكرة، وفي هذا الهاتف %2$s غيغابايت. على الأرجح سيوقف Android التطبيق قبل أن ينتهي. اقرن مُثبِتًا في الإعدادات › المُثبِت، أو أرسل من محفظة سطر الأوامر rand على حاسوب باستخدام ملف المفتاح من الإعدادات › التصدير.</string>
+    <string name="review_memory_warning">يحتاج هذا الإثبات إلى نحو %1$s غيغابايت من الذاكرة، وفي هذا الهاتف %2$s غيغابايت. على الأرجح سيوقف Android التطبيق قبل أن ينتهي. شغّل مُثبِتات RandProtocol في الإعدادات › المُثبِت، أو اقرن مُثبِتك الخاص.</string>
     <string name="review_confirm">تأكيد وإثبات</string>
     <string name="review_back">رجوع</string>
     <string name="proving_title">جارٍ إثبات تحويلك</string>

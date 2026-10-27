@@ -54,7 +54,8 @@ test('canProve explains the 6.2 GB wall', async () => {
   const answer = await backend.send.canProve();
   assert.equal(answer.ok, false);
   assert.match(answer.reason, /6\.2 GB/);
-  assert.match(answer.reason, /desktop app/);
+  // The build's RandProtocol provers are on and none answers here: their sentence, with the way out.
+  assert.match(answer.reason, /pair your own prover in Settings/);
 });
 
 test('send rejects definitely, without ever reaching prove_transfer', async () => {

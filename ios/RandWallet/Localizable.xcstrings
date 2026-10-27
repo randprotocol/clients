@@ -34407,130 +34407,6 @@
         }
       }
     },
-    "This device does not have the memory for this proof, and no prover is set up. Pair a prover in Settings › Prover." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This device does not have the memory for this proof, and no prover is set up. Pair a prover in Settings › Prover."
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "لا يملك هذا الجهاز الذاكرة اللازمة لهذا الإثبات، ولم يُعَدّ أي مُثبِت. اقرن مُثبِتًا في الإعدادات › المُثبِت."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dieses Gerät hat nicht genug Arbeitsspeicher für diesen Beweis, und kein Prover ist eingerichtet. Kopple einen Prover unter Einstellungen › Prover."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Este dispositivo no tiene memoria suficiente para esta prueba y no hay ningún probador configurado. Vincula un probador en Ajustes › Probador."
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "این دستگاه حافظه‌ی لازم برای این اثبات را ندارد و هیچ اثبات‌گری تنظیم نشده است. در تنظیمات › اثبات‌گر یک اثبات‌گر جفت کنید."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cet appareil n'a pas la mémoire nécessaire pour cette preuve, et aucun prouveur n'est configuré. Associez un prouveur dans Paramètres › Prouveur."
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Perangkat ini tidak memiliki cukup memori untuk bukti ini, dan belum ada prover yang diatur. Pasangkan prover di Pengaturan › Prover."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Questo dispositivo non ha la memoria per questa prova e non è configurato alcun prover. Associa un prover in Impostazioni › Prover."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "この端末にはこの証明に必要なメモリがなく、プルーバーも設定されていません。設定 › プルーバーでプルーバーをペアリングしてください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 기기에는 이 증명에 필요한 메모리가 부족하고, 설정된 프루버도 없습니다. 설정 › 프루버에서 프루버를 페어링하세요."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Peranti ini tidak mempunyai memori untuk bukti ini, dan tiada pembukti disediakan. Pasangkan pembukti dalam Tetapan › Pembukti."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "To urządzenie nie ma pamięci na ten dowód, a żaden prover nie jest skonfigurowany. Sparuj prover w Ustawienia › Prover."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Este dispositivo não tem memória para esta prova e nenhum provador está configurado. Pareie um provador em Configurações › Provador."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Этому устройству не хватает памяти для этого доказательства, а прувер не настроен. Подключите прувер в разделе «Настройки › Прувер»."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此设备内存不足，无法生成此证明，且尚未设置证明器。请在“设置 › 证明器”中配对证明器。"
-          }
-        },
-        "zh-Hant-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此裝置的記憶體不足以生成此證明，而且尚未設定證明器。請在「設定 › 證明器」中配對證明器。"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "इस डिवाइस में इस प्रूफ़ के लिए पर्याप्त मेमोरी नहीं है, और कोई प्रूवर सेट नहीं है। सेटिंग्स › प्रूवर में एक प्रूवर पेयर करें।"
-          }
-        },
-        "ps" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "دا وسیله د دې ثبوت لپاره حافظه نه لري، او کوم ثبوت جوړوونکی نه دی ټاکل شوی. په امستنې › ثبوت جوړوونکی کې یو ثبوت جوړوونکی جوړه کړئ."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "இந்த நிரூபணத்துக்குத் தேவையான நினைவகம் இந்தச் சாதனத்தில் இல்லை, நிரூபிப்பான் எதுவும் அமைக்கப்படவில்லை. அமைப்புகள் › நிரூபிப்பான் என்பதில் ஒரு நிரூபிப்பானை இணைக்கவும்."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "اس ڈیوائس میں اس پروف کے لیے کافی میموری نہیں، اور کوئی پروور سیٹ نہیں ہے۔ ترتیبات › پروور میں ایک پروور جوڑیں۔"
-          }
-        }
-      }
-    },
     "This device does not have the memory for this proof, so one of the %@ provers will make it. The one that does receives your viewing key and a salt inside a sealed job — never your spend key: it can read this wallet's whole history and cannot spend. This phone authorises the spend itself and checks the proof before anything is sent." : {
       "localizations" : {
         "en" : {
@@ -35519,130 +35395,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "یہ ادائیگی کسی اور ڈیوائس سے آپ کی کی کے ساتھ کی گئی تھی، اس لیے اس کی لین دین کی کی یہاں محفوظ نہیں۔ آپ کی ویوئنگ کی اسے RandScan پر کھولتی ہے۔"
-          }
-        }
-      }
-    },
-    "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This proof needs about %1$@ GB of memory and this device has %2$@ GB. iOS will most likely stop the app before it finishes. Pair a prover in Settings › Prover, or send from the rand command-line wallet on a computer with the key file from Settings › Export."
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "يحتاج هذا الإثبات إلى نحو %@ غيغابايت من الذاكرة، وفي هذا الجهاز %@ غيغابايت. على الأرجح سيوقف iOS التطبيق قبل أن ينتهي. اقرن مُثبِتًا في الإعدادات › المُثبِت، أو أرسل من محفظة سطر الأوامر rand على حاسوب باستخدام ملف المفتاح من الإعدادات › التصدير."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dieser Beweis braucht etwa %@ GB Arbeitsspeicher, und dieses Gerät hat %@ GB. iOS wird die App sehr wahrscheinlich beenden, bevor er fertig ist. Kopple einen Prover unter Einstellungen › Prover oder sende aus der rand-Kommandozeilen-Wallet auf einem Computer mit der Schlüsseldatei aus Einstellungen › Exportieren."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esta prueba necesita unos %@ GB de memoria y este dispositivo tiene %@ GB. Lo más probable es que iOS detenga la app antes de que termine. Vincula un probador en Ajustes › Probador, o envía desde la billetera de línea de comandos rand en una computadora con el archivo de clave de Ajustes › Exportar."
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "این اثبات به حدود %@ گیگابایت حافظه نیاز دارد و این دستگاه %@ گیگابایت دارد. به احتمال زیاد iOS پیش از پایان، برنامه را متوقف می‌کند. در تنظیمات › اثبات‌گر یک اثبات‌گر جفت کنید، یا از کیف پول خط فرمان rand روی رایانه‌ای با فایل کلید از تنظیمات › صدور ارسال کنید."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cette preuve nécessite environ %@ Go de mémoire et cet appareil en a %@ Go. iOS arrêtera très probablement l'application avant la fin. Associez un prouveur dans Paramètres › Prouveur, ou envoyez depuis le portefeuille en ligne de commande rand sur un ordinateur avec le fichier de clé de Paramètres › Exporter."
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bukti ini memerlukan sekitar %@ GB memori, sedangkan perangkat ini memiliki %@ GB. iOS kemungkinan besar akan menghentikan aplikasi sebelum selesai. Pasangkan prover di Pengaturan › Prover, atau kirim dari dompet baris perintah rand di komputer dengan file kunci dari Pengaturan › Ekspor."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Questa prova richiede circa %@ GB di memoria e questo dispositivo ne ha %@ GB. Molto probabilmente iOS chiuderà l'app prima che finisca. Associa un prover in Impostazioni › Prover, oppure invia dal portafoglio a riga di comando rand su un computer con il file della chiave da Impostazioni › Esporta."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "この証明には約 %@ GB のメモリが必要ですが、この端末には %@ GB しかありません。完了前に iOS がアプリを停止する可能性が高いです。設定 › プルーバーでプルーバーをペアリングするか、設定 › エクスポートのキーファイルを使ってコンピューターの rand コマンドラインウォレットから送信してください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이 증명에는 약 %@ GB의 메모리가 필요하지만 이 기기에는 %@ GB가 있습니다. iOS가 완료 전에 앱을 중지할 가능성이 큽니다. 설정 › 프루버에서 프루버를 페어링하거나, 설정 › 내보내기에서 받은 키 파일로 컴퓨터의 rand 명령줄 지갑에서 보내세요."
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bukti ini memerlukan kira-kira %@ GB memori dan peranti ini mempunyai %@ GB. iOS berkemungkinan besar akan menghentikan aplikasi sebelum ia selesai. Pasangkan pembukti dalam Tetapan › Pembukti, atau hantar daripada dompet baris perintah rand pada komputer dengan fail kunci daripada Tetapan › Eksport."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ten dowód wymaga około %@ GB pamięci, a to urządzenie ma %@ GB. iOS najpewniej zatrzyma aplikację przed końcem. Sparuj prover w Ustawienia › Prover lub wyślij z portfela wiersza poleceń rand na komputerze z plikiem klucza z Ustawienia › Eksport."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esta prova precisa de cerca de %@ GB de memória e este dispositivo tem %@ GB. O iOS provavelmente vai encerrar o app antes de terminar. Pareie um provador em Configurações › Provador ou envie pela carteira de linha de comando rand em um computador, com o arquivo de chave de Configurações › Exportar."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Этому доказательству нужно около %@ ГБ памяти, а в устройстве %@ ГБ. Скорее всего, iOS остановит приложение до завершения. Подключите прувер в разделе «Настройки › Прувер» или отправьте из консольного кошелька rand на компьютере с файлом ключа из раздела «Настройки › Экспорт»."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此证明需要约 %@ GB 内存，而此设备只有 %@ GB。iOS 很可能在完成前终止应用。请在“设置 › 证明器”中配对证明器，或在电脑上使用“设置 › 导出”中的密钥文件，通过 rand 命令行钱包发送。"
-          }
-        },
-        "zh-Hant-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此證明需要約 %@ GB 記憶體，而此裝置只有 %@ GB。iOS 很可能會在完成前終止應用程式。請在「設定 › 證明器」中配對證明器，或在電腦上使用「設定 › 匯出」中的密鑰檔案，透過 rand 命令列錢包傳送。"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "इस प्रूफ़ के लिए लगभग %@ GB मेमोरी चाहिए और इस डिवाइस में %@ GB है। iOS संभवतः पूरा होने से पहले ही ऐप बंद कर देगा। सेटिंग्स › प्रूवर में एक प्रूवर पेयर करें, या सेटिंग्स › एक्सपोर्ट की की फ़ाइल के साथ किसी कंप्यूटर पर rand कमांड-लाइन वॉलेट से भेजें।"
-          }
-        },
-        "ps" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "دې ثبوت ته شاوخوا %@ GB حافظه اړینه ده او دا وسیله %@ GB لري. ډېر احتمال لري چې iOS به اپ له بشپړېدو مخکې ودروي. په امستنې › ثبوت جوړوونکی کې یو ثبوت جوړوونکی جوړه کړئ، یا د rand له کمانډ لاین والټ څخه په یو کمپیوټر کې د امستنې › صادرول د کیلي فایل سره ولېږئ."
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "இந்த நிரூபணத்துக்குச் சுமார் %@ GB நினைவகம் தேவை, இந்தச் சாதனத்தில் %@ GB உள்ளது. அது முடிவதற்கு முன்பே iOS ஆப்பை நிறுத்திவிடும் வாய்ப்பு அதிகம். அமைப்புகள் › நிரூபிப்பான் என்பதில் ஒரு நிரூபிப்பானை இணைக்கவும், அல்லது அமைப்புகள் › ஏற்றுமதி என்பதிலிருந்து பெறும் விசைக் கோப்புடன் கணினியில் rand கட்டளை-வரி வாலட்டிலிருந்து அனுப்பவும்."
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "اس پروف کو تقریباً %@ GB میموری درکار ہے اور اس ڈیوائس میں %@ GB ہے۔ غالب امکان ہے کہ iOS مکمل ہونے سے پہلے ایپ بند کر دے گا۔ ترتیبات › پروور میں ایک پروور جوڑیں، یا ترتیبات › برآمد سے حاصل کردہ کی فائل کے ساتھ کسی کمپیوٹر پر rand کمانڈ لائن والیٹ سے بھیجیں۔"
           }
         }
       }
@@ -65180,6 +64932,254 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此收款人同時收取 RAND 及代幣：向同一收款人支付 RAND 及代幣，需要分開的提案。"
+          }
+        }
+      }
+    },
+    "This proof needs about %@ GB of memory and this device has %@ GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This proof needs about %1$@ GB of memory and this device has %2$@ GB. iOS will most likely stop the app before it finishes. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يحتاج هذا الإثبات إلى نحو %@ غيغابايت من الذاكرة، وفي هذا الجهاز %@ غيغابايت. على الأرجح سيوقف iOS التطبيق قبل أن ينتهي. شغّل مُثبِتات RandProtocol في الإعدادات › المُثبِت، أو اقرن مُثبِتك الخاص."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Beweis braucht etwa %@ GB Arbeitsspeicher, und dieses Gerät hat %@ GB. iOS wird die App sehr wahrscheinlich beenden, bevor er fertig ist. Schalte die RandProtocol-Prover unter Einstellungen › Prover ein oder kopple deinen eigenen Prover."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta prueba necesita unos %@ GB de memoria y este dispositivo tiene %@ GB. Lo más probable es que iOS detenga la app antes de que termine. Activa los probadores de RandProtocol en Ajustes › Probador o vincula tu propio probador."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این اثبات به حدود %@ گیگابایت حافظه نیاز دارد و این دستگاه %@ گیگابایت دارد. به احتمال زیاد iOS پیش از پایان، برنامه را متوقف می‌کند. اثبات‌گرهای RandProtocol را در تنظیمات › اثبات‌گر روشن کنید، یا اثبات‌گر خودتان را جفت کنید."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette preuve nécessite environ %@ Go de mémoire et cet appareil en a %@ Go. iOS arrêtera très probablement l'application avant la fin. Activez les prouveurs RandProtocol dans Paramètres › Prouveur, ou associez votre propre prouveur."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस प्रूफ़ के लिए लगभग %@ GB मेमोरी चाहिए और इस डिवाइस में %@ GB है। iOS संभवतः पूरा होने से पहले ही ऐप बंद कर देगा। सेटिंग्स › प्रूवर में RandProtocol प्रूवर चालू करें, या अपना प्रूवर पेयर करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bukti ini memerlukan sekitar %@ GB memori, sedangkan perangkat ini memiliki %@ GB. iOS kemungkinan besar akan menghentikan aplikasi sebelum selesai. Aktifkan prover RandProtocol di Pengaturan › Prover, atau pasangkan prover Anda sendiri."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa prova richiede circa %@ GB di memoria e questo dispositivo ne ha %@ GB. Molto probabilmente iOS chiuderà l'app prima che finisca. Attiva i prover di RandProtocol in Impostazioni › Prover, oppure associa un tuo prover."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この証明には約 %@ GB のメモリが必要ですが、この端末には %@ GB しかありません。完了前に iOS がアプリを停止する可能性が高いです。設定 › プルーバーで RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 증명에는 약 %@ GB의 메모리가 필요하지만 이 기기에는 %@ GB가 있습니다. iOS가 완료 전에 앱을 중지할 가능성이 큽니다. 설정 › 프루버에서 RandProtocol 프루버를 켜거나 자체 프루버를 페어링하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bukti ini memerlukan kira-kira %@ GB memori dan peranti ini mempunyai %@ GB. iOS berkemungkinan besar akan menghentikan aplikasi sebelum ia selesai. Hidupkan pembukti RandProtocol dalam Tetapan › Pembukti, atau pasangkan pembukti anda sendiri."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ten dowód wymaga około %@ GB pamięci, a to urządzenie ma %@ GB. iOS najpewniej zatrzyma aplikację przed końcem. Włącz provery RandProtocol w Ustawienia › Prover lub sparuj własny prover."
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "دې ثبوت ته شاوخوا %@ GB حافظه اړینه ده او دا وسیله %@ GB لري. ډېر احتمال لري چې iOS به اپ له بشپړېدو مخکې ودروي. په امستنې › ثبوت جوړوونکی کې د RandProtocol ثبوت جوړوونکي چالان کړئ، یا خپل ثبوت جوړوونکی جوړه کړئ."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta prova precisa de cerca de %@ GB de memória e este dispositivo tem %@ GB. O iOS provavelmente vai encerrar o app antes de terminar. Ative os provadores da RandProtocol em Configurações › Provador ou pareie seu próprio provador."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этому доказательству нужно около %@ ГБ памяти, а в устройстве %@ ГБ. Скорее всего, iOS остановит приложение до завершения. Включите пруверы RandProtocol в разделе «Настройки › Прувер» или подключите свой прувер."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த நிரூபணத்துக்குச் சுமார் %@ GB நினைவகம் தேவை, இந்தச் சாதனத்தில் %@ GB உள்ளது. அது முடிவதற்கு முன்பே iOS ஆப்பை நிறுத்திவிடும் வாய்ப்பு அதிகம். அமைப்புகள் › நிரூபிப்பான் என்பதில் RandProtocol நிரூபிப்பான்களை இயக்கவும், அல்லது உங்கள் சொந்த நிரூபிப்பானை இணைக்கவும்."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اس پروف کو تقریباً %@ GB میموری درکار ہے اور اس ڈیوائس میں %@ GB ہے۔ غالب امکان ہے کہ iOS مکمل ہونے سے پہلے ایپ بند کر دے گا۔ ترتیبات › پروور میں RandProtocol پروورز آن کریں، یا اپنا پروور جوڑیں۔"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此证明需要约 %@ GB 内存，而此设备只有 %@ GB。iOS 很可能在完成前终止应用。请在“设置 › 证明器”中开启 RandProtocol 证明器，或配对你自己的证明器。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此證明需要約 %@ GB 記憶體，而此裝置只有 %@ GB。iOS 很可能會在完成前終止應用程式。請在「設定 › 證明器」中開啟 RandProtocol 證明器，或配對你自己的證明器。"
+          }
+        }
+      }
+    },
+    "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device does not have the memory for this proof, and no prover is set up. Turn the RandProtocol provers on in Settings › Prover, or pair your own prover."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يملك هذا الجهاز الذاكرة اللازمة لهذا الإثبات، ولم يُعَدّ أي مُثبِت. شغّل مُثبِتات RandProtocol في الإعدادات › المُثبِت، أو اقرن مُثبِتك الخاص."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Gerät hat nicht genug Arbeitsspeicher für diesen Beweis, und kein Prover ist eingerichtet. Schalte die RandProtocol-Prover unter Einstellungen › Prover ein oder kopple deinen eigenen Prover."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este dispositivo no tiene memoria suficiente para esta prueba y no hay ningún probador configurado. Activa los probadores de RandProtocol en Ajustes › Probador o vincula tu propio probador."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "این دستگاه حافظه‌ی لازم برای این اثبات را ندارد و هیچ اثبات‌گری تنظیم نشده است. اثبات‌گرهای RandProtocol را در تنظیمات › اثبات‌گر روشن کنید، یا اثبات‌گر خودتان را جفت کنید."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cet appareil n'a pas la mémoire nécessaire pour cette preuve, et aucun prouveur n'est configuré. Activez les prouveurs RandProtocol dans Paramètres › Prouveur, ou associez votre propre prouveur."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस डिवाइस में इस प्रूफ़ के लिए पर्याप्त मेमोरी नहीं है, और कोई प्रूवर सेट नहीं है। सेटिंग्स › प्रूवर में RandProtocol प्रूवर चालू करें, या अपना प्रूवर पेयर करें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perangkat ini tidak memiliki cukup memori untuk bukti ini, dan belum ada prover yang diatur. Aktifkan prover RandProtocol di Pengaturan › Prover, atau pasangkan prover Anda sendiri."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo dispositivo non ha la memoria per questa prova e non è configurato alcun prover. Attiva i prover di RandProtocol in Impostazioni › Prover, oppure associa un tuo prover."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この端末にはこの証明に必要なメモリがなく、プルーバーも設定されていません。設定 › プルーバーで RandProtocol のプルーバーをオンにするか、自分のプルーバーをペアリングしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 기기에는 이 증명에 필요한 메모리가 부족하고, 설정된 프루버도 없습니다. 설정 › 프루버에서 RandProtocol 프루버를 켜거나 자체 프루버를 페어링하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Peranti ini tidak mempunyai memori untuk bukti ini, dan tiada pembukti disediakan. Hidupkan pembukti RandProtocol dalam Tetapan › Pembukti, atau pasangkan pembukti anda sendiri."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To urządzenie nie ma pamięci na ten dowód, a żaden prover nie jest skonfigurowany. Włącz provery RandProtocol w Ustawienia › Prover lub sparuj własny prover."
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "دا وسیله د دې ثبوت لپاره حافظه نه لري، او کوم ثبوت جوړوونکی نه دی ټاکل شوی. په امستنې › ثبوت جوړوونکی کې د RandProtocol ثبوت جوړوونکي چالان کړئ، یا خپل ثبوت جوړوونکی جوړه کړئ."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este dispositivo não tem memória para esta prova e nenhum provador está configurado. Ative os provadores da RandProtocol em Configurações › Provador ou pareie seu próprio provador."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этому устройству не хватает памяти для этого доказательства, а прувер не настроен. Включите пруверы RandProtocol в разделе «Настройки › Прувер» или подключите свой прувер."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த நிரூபணத்துக்குத் தேவையான நினைவகம் இந்தச் சாதனத்தில் இல்லை, நிரூபிப்பான் எதுவும் அமைக்கப்படவில்லை. அமைப்புகள் › நிரூபிப்பான் என்பதில் RandProtocol நிரூபிப்பான்களை இயக்கவும், அல்லது உங்கள் சொந்த நிரூபிப்பானை இணைக்கவும்."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اس ڈیوائس میں اس پروف کے لیے کافی میموری نہیں، اور کوئی پروور سیٹ نہیں ہے۔ ترتیبات › پروور میں RandProtocol پروورز آن کریں، یا اپنا پروور جوڑیں۔"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备内存不足，无法生成此证明，且尚未设置证明器。请在“设置 › 证明器”中开启 RandProtocol 证明器，或配对你自己的证明器。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此裝置的記憶體不足以生成此證明，而且尚未設定證明器。請在「設定 › 證明器」中開啟 RandProtocol 證明器，或配對你自己的證明器。"
           }
         }
       }

@@ -76,6 +76,7 @@ export function makeNativeBackend({ core, storage, platform, fetch: fetchImpl, l
   return makeSharedBackend({
     core, storage, platform, fetch: fetchImpl, locks, broadcast, proverOptions,
     canProve: makeCanProve(systemMemoryGiB),
+    noRouteHint: () => t('Turn the RandProtocol provers on in Settings, or pair your own prover.'),
     executeSend: executeTransfer,
     executeWithdraw: executeBurn,
   });

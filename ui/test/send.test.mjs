@@ -101,7 +101,6 @@ test('a shell that cannot prove shows the reason and no prove button', async (t)
   const { root } = await review(t, b);
   assertGone(root.querySelector('[data-action="prove"]'), 'root.querySelector([data-action="prove"])');
   assert.match(root.textContent, /6\.2 GB/);
-  assert.match(root.textContent, /desktop app/i);
 });
 
 test('the first send through the RandProtocol prover shows its notice first; read, it is the prove button', async (t) => {
@@ -232,11 +231,21 @@ test('amount above balance is refused before estimate', async (t) => {
   assert.equal(b.calls.filter((c) => c[0] === 'send.estimate').length, 0);
 });
 
+test('a device that cannot prove shows only the engine\'s reason, never "import into the desktop app"', async (t) => {
+  const reason = 'Proving needs about 6.2 GB of free memory; this computer reports 4 GB. Turn the RandProtocol provers on in Settings, or pair your own prover.';
+  const b = unlockedBackend({ send: { canProve: async () => ({ ok: false, reason }) } });
+  const { root } = await review(t, b);
+  assert.match(root.textContent, /This device cannot prove the transfer/);
+  assert.ok(root.textContent.includes(reason));
+  assert.doesNotMatch(root.textContent, /desktop app/);
+});
+
 test('explainProvingError maps wasm OOM', () => {
   assert.match(explainProvingError('RuntimeError: unreachable'), /memory/);
   assert.match(explainProvingError('out of memory'), /memory/);
   assert.match(explainProvingError('failed to allocate'), /memory/);
   assert.match(explainProvingError('RuntimeError: unreachable'), /desktop app/i);
+  assert.match(explainProvingError('RuntimeError: unreachable'), /Turn the RandProtocol provers on in Settings, pair your own prover/);
   // Anything else is the node's own words, unchanged.
   assert.equal(explainProvingError('rejected by the mempool'), 'rejected by the mempool');
 });

@@ -80,7 +80,7 @@
     <string name="review_fee">Gebühr</string>
     <string name="review_total">Gesamt</string>
     <string name="review_note">Das Beweisen der Überweisung dauert auf einem Telefon ein paar Minuten. Lass die App geöffnet; wenn du wechselst, zeigt eine Benachrichtigung den Fortschritt.</string>
-    <string name="review_memory_warning">Dieser Beweis braucht etwa %1$s GB Arbeitsspeicher, und dieses Telefon hat %2$s GB. Android wird die App sehr wahrscheinlich beenden, bevor er fertig ist. Kopple einen Prover unter Einstellungen › Prover oder sende aus der rand-Kommandozeilen-Wallet auf einem Computer mit der Schlüsseldatei aus Einstellungen › Exportieren.</string>
+    <string name="review_memory_warning">Dieser Beweis braucht etwa %1$s GB Arbeitsspeicher, und dieses Telefon hat %2$s GB. Android wird die App sehr wahrscheinlich beenden, bevor er fertig ist. Schalte die RandProtocol-Prover unter Einstellungen › Prover ein oder kopple deinen eigenen Prover.</string>
     <string name="review_confirm">Bestätigen und beweisen</string>
     <string name="review_back">Zurück</string>
     <string name="proving_title">Deine Überweisung wird bewiesen</string>
