@@ -2073,6 +2073,23 @@ export function makeSharedBackend({
     };
   }
 
+  /**
+   * A refusal for want of a proof route, as `bridge.canWithdraw` and `program.canInvoke` answer
+   * it: `code: 'PROVER_UNAVAILABLE'` and the route's reason, with the pool's own flags passed
+   * through (`unreachable` or `busy`, and `provers`) so a screen shows the pool's banner, not
+   * "this device cannot".
+   */
+  function proverUnavailable(prove) {
+    return {
+      ok: false,
+      code: 'PROVER_UNAVAILABLE',
+      reason: (prove && prove.reason) || t('Proving is not available here.'),
+      ...(prove && prove.unreachable ? { unreachable: true } : {}),
+      ...(prove && prove.busy ? { busy: true } : {}),
+      ...(prove && Number.isSafeInteger(prove.provers) ? { provers: prove.provers } : {}),
+    };
+  }
+
   const pendingRefusal = () => t('A proof is still pending — resume or cancel it.');
 
   async function refuseWhilePending() {
@@ -2395,9 +2412,7 @@ export function makeSharedBackend({
      */
     async canWithdraw() {
       const prove = (await proveRoute()).answer;
-      if (!prove || !prove.ok) {
-        return { ok: false, code: 'PROVER_UNAVAILABLE', reason: (prove && prove.reason) || t('Proving is not available here.') };
-      }
+      if (!prove || !prove.ok) return proverUnavailable(prove);
       let state;
       try {
         ({ state } = await bridgeStateFull());
@@ -2502,9 +2517,7 @@ export function makeSharedBackend({
      */
     async canInvoke() {
       const prove = (await proveRoute()).answer;
-      if (!prove || !prove.ok) {
-        return { ok: false, code: 'PROVER_UNAVAILABLE', reason: (prove && prove.reason) || t('Proving is not available here.') };
-      }
+      if (!prove || !prove.ok) return proverUnavailable(prove);
       const { client } = await requireVerifiedChain();
       const limits = checkLimits(await client.getLimits());
       if (!limits.programState) {

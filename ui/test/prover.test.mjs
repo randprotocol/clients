@@ -379,6 +379,30 @@ test('every member busy is said plainly, once each, with the way to pair your ow
   assert.equal(count(env2.fetch, 'prover_submit'), 3);
 });
 
+test('canWithdraw and canInvoke carry the pool\'s busy / unreachable flags and its size, with their code', async () => {
+  const full = () => ({ queue: { depth: 1, max: 1, proving: 1 } });
+  const busyEnv = await sendableWallet({
+    fetch: poolFetch({}, Object.fromEntries(['a', 'b', 'c'].map((n) => [n, { info: () => ({ ...proverInfo(poolMember(n).key), ...full() }) }]))),
+  });
+  await busyEnv.backend.prover.acknowledgeDefault();
+  for (const answer of [await busyEnv.backend.bridge.canWithdraw(), await busyEnv.backend.program.canInvoke()]) {
+    assert.equal(answer.ok, false);
+    assert.equal(answer.code, 'PROVER_UNAVAILABLE');
+    assert.equal(answer.busy, true);
+    assert.equal(answer.unreachable, undefined);
+    assert.equal(answer.provers, 3);
+    assert.match(answer.reason, /all busy right now/);
+  }
+  const downEnv = await sendableWallet({ fetch: poolFetch({}, { a: { info: down }, b: { info: down }, c: { info: down } }) });
+  await downEnv.backend.prover.acknowledgeDefault();
+  for (const answer of [await downEnv.backend.bridge.canWithdraw(), await downEnv.backend.program.canInvoke()]) {
+    assert.equal(answer.code, 'PROVER_UNAVAILABLE');
+    assert.equal(answer.unreachable, true);
+    assert.equal(answer.busy, undefined);
+    assert.equal(answer.provers, 3);
+  }
+});
+
 test('a member whose pinned fingerprint does not match its link is never asked; the others still are', async () => {
   const bad = { ...TRUSTED_POOL, members: TRUSTED_POOL.members.map((m) => (m.name === 'a' ? { ...m, fingerprint: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ' } : m)) };
   const env = await sendableWallet({
