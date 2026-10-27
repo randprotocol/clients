@@ -995,7 +995,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "do odcisku {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "do: odcisk niedostępny · {amount} {symbol}",
   "Today": "Dzisiaj",
-  "Token": "Token",
+  "token {token}": "token {token}",
   "token is not 64 hex digits: {reason}": "token nie ma 64 cyfr szesnastkowych: {reason}",
   "too many attempts in progress": "zbyt wiele trwających prób",
   "too many decimal places (max {n})": { one: "za dużo miejsc po przecinku (maks. {n})", few: "za dużo miejsc po przecinku (maks. {n})", many: "za dużo miejsc po przecinku (maks. {n})", other: "za dużo miejsc po przecinku (maks. {n})" },

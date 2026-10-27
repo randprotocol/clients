@@ -1001,7 +1001,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "à l'empreinte {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "à une empreinte indisponible · {amount} {symbol}",
   "Today": "Aujourd'hui",
-  "Token": "Jeton",
+  "token {token}": "jeton {token}",
   "token is not 64 hex digits: {reason}": "le jeton ne fait pas 64 chiffres hexadécimaux : {reason}",
   "too many attempts in progress": "trop de tentatives en cours",
   "too many decimal places (max {n})": { one: "trop de décimales (max. {n})", many: "trop de décimales (max. {n})", other: "trop de décimales (max. {n})" },

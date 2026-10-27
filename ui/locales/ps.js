@@ -999,7 +999,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "ګوتنښې {fingerprint} ته · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "ګوتنښه نشته · {amount} {symbol}",
   "Today": "نن",
-  "Token": "ټوکن",
+  "token {token}": "ټوکن {token}",
   "token is not 64 hex digits: {reason}": "token 64 هېکس عددونه نه دي: {reason}",
   "too many attempts in progress": "ډېرې هڅې روانې دي",
   "too many decimal places (max {n})": "ډېر اعشاري ځایونه (تر ډېره {n})",

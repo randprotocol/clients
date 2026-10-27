@@ -999,7 +999,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "para a impressão digital {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "para impressão digital indisponível · {amount} {symbol}",
   "Today": "Hoje",
-  "Token": "Token",
+  "token {token}": "token {token}",
   "token is not 64 hex digits: {reason}": "o token não tem 64 dígitos hexadecimais: {reason}",
   "too many attempts in progress": "tentativas demais em andamento",
   "too many decimal places (max {n})": { one: "casas decimais demais (máx. {n})", many: "casas decimais demais (máx. {n})", other: "casas decimais demais (máx. {n})" },

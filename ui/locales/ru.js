@@ -997,7 +997,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "на отпечаток {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "отпечаток получателя недоступен · {amount} {symbol}",
   "Today": "Сегодня",
-  "Token": "Токен",
+  "token {token}": "токен {token}",
   "token is not 64 hex digits: {reason}": "токен — не 64 шестнадцатеричные цифры: {reason}",
   "too many attempts in progress": "выполняется слишком много попыток",
   "too many decimal places (max {n})": { one: "слишком много знаков после запятой (не более {n})", few: "слишком много знаков после запятой (не более {n})", many: "слишком много знаков после запятой (не более {n})", other: "слишком много знаков после запятой (не более {n})" },

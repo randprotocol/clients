@@ -23,6 +23,7 @@ import { formatUnits, shortHex, elapsed } from './ui/lib/format.js';
 import { expectedMs, progressAt, remainingText, recordDuration } from './ui/lib/progress.js';
 import { explorerLink } from './ui/lib/explorer.js';
 import { feeDecimals, feeSymbol } from './ui/lib/assets.js';
+import { receiveLabel } from './lib/withdraw-label.js';
 import { phaseLabel } from './ui/screens/send/state.js';
 import { leavesPoolWarning, PHASE_LABELS, EVM_CHAINS, chainName } from './ui/screens/withdraw.js';
 import { t } from './ui/i18n.js';
@@ -132,11 +133,12 @@ function render(state) {
     title.append(sentenceWith(t('{origin} asks Rand Wallet to withdraw'), 'origin', el('strong', null, state.origin || t('A site'))));
     const card = el('div', 'card');
     card.append(line(t('Burn {amount}', { amount: amountText(request.asset, request.amount) }), 'v amount'));
-    card.append(line(t('Receive {receive} on {chain}', {
-      receive: amountText(request.asset, estimate.receive || '0'),
-      chain: chainName(request.toChain),
-    }), 'v amount'));
-    card.append(kv(t('Token'), shortHex(request.token, 10), 'v mono'));
+    // The coin that arrives, from the wallet's own table: never the burn asset's name.
+    const got = receiveLabel({
+      toChain: request.toChain, token: request.token, receive: estimate.receive || '0',
+      assetDecimals: Number((assetOf(request.asset) || {}).decimals) || 0, t, fallbackChain: chainName, formatUnits, shortHex,
+    });
+    card.append(line(t('Receive {receive} on {chain}', { receive: got.receive, chain: got.chain }), 'v amount'));
     const dest = el('div', 'address-box');
     dest.append(el('span', 'mono', destinationText(request)));
     card.append(kv(t('To'), ''), dest);

@@ -992,7 +992,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "지문 {fingerprint}에게 · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "지문 없음 · {amount} {symbol}",
   "Today": "오늘",
-  "Token": "토큰",
+  "token {token}": "토큰 {token}",
   "token is not 64 hex digits: {reason}": "토큰이 16진수 64자리가 아닙니다: {reason}",
   "too many attempts in progress": "진행 중인 시도가 너무 많습니다",
   "too many decimal places (max {n})": "소수 자릿수가 너무 많습니다(최대 {n})",

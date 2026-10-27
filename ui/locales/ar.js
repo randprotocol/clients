@@ -999,7 +999,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "إلى البصمة {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "إلى بصمة غير متاحة · {amount} {symbol}",
   "Today": "اليوم",
-  "Token": "الرمز",
+  "token {token}": "الرمز {token}",
   "token is not 64 hex digits: {reason}": "token ليس 64 رقمًا ست عشريًا: {reason}",
   "too many attempts in progress": "محاولات كثيرة جدًا قيد التنفيذ",
   "too many decimal places (max {n})": { zero: "منازل عشرية كثيرة جدًا (الحد الأقصى {n})", one: "منازل عشرية كثيرة جدًا (الحد الأقصى {n})", two: "منازل عشرية كثيرة جدًا (الحد الأقصى {n})", few: "منازل عشرية كثيرة جدًا (الحد الأقصى {n})", many: "منازل عشرية كثيرة جدًا (الحد الأقصى {n})", other: "منازل عشرية كثيرة جدًا (الحد الأقصى {n})" },

@@ -992,7 +992,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "フィンガープリント {fingerprint} 宛 · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "フィンガープリント取得不可の宛先 · {amount} {symbol}",
   "Today": "今日",
-  "Token": "トークン",
+  "token {token}": "トークン {token}",
   "token is not 64 hex digits: {reason}": "トークンが16進数64桁ではありません: {reason}",
   "too many attempts in progress": "進行中の試行が多すぎます",
   "too many decimal places (max {n})": "小数点以下の桁数が多すぎます（最大 {n}）",

@@ -994,7 +994,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "kepada cap jari {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "kepada cap jari tidak tersedia · {amount} {symbol}",
   "Today": "Hari ini",
-  "Token": "Token",
+  "token {token}": "token {token}",
   "token is not 64 hex digits: {reason}": "token bukan 64 digit heks: {reason}",
   "too many attempts in progress": "terlalu banyak percubaan sedang berjalan",
   "too many decimal places (max {n})": "terlalu banyak tempat perpuluhan (maks {n})",

@@ -999,7 +999,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "para la huella {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "para huella no disponible · {amount} {symbol}",
   "Today": "Hoy",
-  "Token": "Token",
+  "token {token}": "token {token}",
   "token is not 64 hex digits: {reason}": "el token no tiene 64 dígitos hexadecimales: {reason}",
   "too many attempts in progress": "demasiados intentos en curso",
   "too many decimal places (max {n})": { one: "demasiados decimales (máximo {n})", many: "demasiados decimales (máximo {n})", other: "demasiados decimales (máximo {n})" },

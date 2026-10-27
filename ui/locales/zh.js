@@ -992,7 +992,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "发往指纹 {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "发往（指纹不可用）· {amount} {symbol}",
   "Today": "今天",
-  "Token": "代币",
+  "token {token}": "代币 {token}",
   "token is not 64 hex digits: {reason}": "token 不是 64 位十六进制数字：{reason}",
   "too many attempts in progress": "进行中的尝试过多",
   "too many decimal places (max {n})": "小数位数过多（最多 {n} 位）",

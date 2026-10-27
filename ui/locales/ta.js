@@ -999,7 +999,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "கைரேகை {fingerprint} க்கு · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "கைரேகை கிடைக்காத முகவரிக்கு · {amount} {symbol}",
   "Today": "இன்று",
-  "Token": "டோக்கன்",
+  "token {token}": "டோக்கன் {token}",
   "token is not 64 hex digits: {reason}": "token 64 hex இலக்கங்கள் அல்ல: {reason}",
   "too many attempts in progress": "அதிகமான முயற்சிகள் நடந்துகொண்டிருக்கின்றன",
   "too many decimal places (max {n})": "அதிகமான தசம இடங்கள் (அதிகபட்சம் {n})",

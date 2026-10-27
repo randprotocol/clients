@@ -1003,7 +1003,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "to fingerprint {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "to fingerprint unavailable · {amount} {symbol}",
   "Today": "Today",
-  "Token": "Token",
+  "token {token}": "token {token}",
   "token is not 64 hex digits: {reason}": "token is not 64 hex digits: {reason}",
   "too many attempts in progress": "too many attempts in progress",
   "too many decimal places (max {n})": "too many decimal places (max {n})",

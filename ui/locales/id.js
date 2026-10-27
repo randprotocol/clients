@@ -992,7 +992,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "ke sidik jari {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "ke sidik jari tidak tersedia · {amount} {symbol}",
   "Today": "Hari ini",
-  "Token": "Token",
+  "token {token}": "token {token}",
   "token is not 64 hex digits: {reason}": "token bukan 64 digit hex: {reason}",
   "too many attempts in progress": "terlalu banyak percobaan yang sedang berjalan",
   "too many decimal places (max {n})": "terlalu banyak angka desimal (maks {n})",

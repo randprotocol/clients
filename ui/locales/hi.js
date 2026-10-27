@@ -999,7 +999,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "फ़िंगरप्रिंट {fingerprint} को · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "फ़िंगरप्रिंट उपलब्ध नहीं · {amount} {symbol}",
   "Today": "आज",
-  "Token": "टोकन",
+  "token {token}": "टोकन {token}",
   "token is not 64 hex digits: {reason}": "token 64 hex अंकों का नहीं है: {reason}",
   "too many attempts in progress": "बहुत सारी कोशिशें चल रही हैं",
   "too many decimal places (max {n})": "बहुत ज़्यादा दशमलव स्थान (अधिकतम {n})",

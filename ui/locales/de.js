@@ -999,7 +999,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "an Fingerabdruck {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "an Fingerabdruck nicht verfügbar · {amount} {symbol}",
   "Today": "Heute",
-  "Token": "Token",
+  "token {token}": "Token {token}",
   "token is not 64 hex digits: {reason}": "Token ist keine 64 Hex-Ziffern: {reason}",
   "too many attempts in progress": "zu viele laufende Versuche",
   "too many decimal places (max {n})": { one: "zu viele Nachkommastellen (max. {n})", other: "zu viele Nachkommastellen (max. {n})" },

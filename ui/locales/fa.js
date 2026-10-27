@@ -1000,7 +1000,7 @@ export default {
   "to fingerprint {fingerprint} · {amount} {symbol}": "به اثر انگشت {fingerprint} · {amount} {symbol}",
   "to fingerprint unavailable · {amount} {symbol}": "به اثر انگشت نامشخص · {amount} {symbol}",
   "Today": "امروز",
-  "Token": "توکن",
+  "token {token}": "توکن {token}",
   "token is not 64 hex digits: {reason}": "توکن 64 رقم هگز نیست: {reason}",
   "too many attempts in progress": "تلاش‌های در جریان بیش از حد است",
   "too many decimal places (max {n})": "ارقام اعشار بیش از حد (حداکثر {n})",
