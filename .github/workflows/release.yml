@@ -162,6 +162,10 @@ jobs:
           key: cargo-wasm-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('core/Cargo.lock') }}
       - name: The wasm core
         run: core/scripts/build-wasm.sh
+      # The pinned RandProtocol prover pool, in wallet-core and in the wasm core just built: a
+      # wrong or dropped member fails here, before anything is packed.
+      - name: The pinned prover pool
+        run: scripts/release/check-pool.sh
       - name: The shared UI's tests
         run: |
           npm ci --prefix ui

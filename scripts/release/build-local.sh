@@ -32,6 +32,7 @@ say() { printf '\n== %s ==\n' "$*"; }
 stage_extensions() {
   say "extensions $VER"
   core/scripts/build-wasm.sh
+  scripts/release/check-pool.sh
   chrome/pack.sh
   firefox/pack.sh
   cp "dist/rand-wallet-chrome-$VER.zip" "dist/rand-wallet-firefox-$VER.zip" "$OUT/"

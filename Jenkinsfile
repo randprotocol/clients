@@ -51,6 +51,7 @@ pipeline {
                 || cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
 
               core/scripts/build-wasm.sh
+              scripts/release/check-pool.sh
               npm ci --prefix ui
               node --test --test-reporter=tap "ui/test/**/*.test.mjs" > ui-test.tap || { grep -B2 -A30 '^not ok' ui-test.tap | head -200; exit 1; }
               chrome/pack.sh
