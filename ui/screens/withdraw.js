@@ -279,7 +279,7 @@ function cannotMarkup(title, reason) {
     <button class="btn btn-ghost block" type="button" data-go="home">${t('Back to home')}</button>`;
 }
 
-function chainName(id) {
+export function chainName(id) {
   return EVM_CHAINS.includes(Number(id)) ? t('Chain {id} (EVM)', { id }) : t('Chain {id}', { id });
 }
 
