@@ -40,6 +40,7 @@
 		4FCE7819F36C9A8468D0CEF0 /* expected.json in Resources */ = {isa = PBXBuildFile; fileRef = D0AE0D1769FB5401CAE879A9 /* expected.json */; };
 		5E809DE4F136AAEAD14CF445 /* InterVariable.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C6A590C5B77BAD64AC13D7BB /* InterVariable.ttf */; };
 		64554089BC7AAD37655A0162 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8548109BF97F5DB7DB99F6CE /* HomeView.swift */; };
+		658FE2E290B863AB89C78877 /* Connectivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD06EB8417E3ABE64BA5BDA /* Connectivity.swift */; };
 		66ACB9955A4ACD4DB0CBD929 /* DepositWalkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D73D5A77FFC38FC54259D79 /* DepositWalkTests.swift */; };
 		686393B1820A71E557A7A91C /* SwapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF55C3B3E2EBB1C8325F5E1E /* SwapView.swift */; };
 		69324B64FAC3E19759982AA7 /* Msauth.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8C1D597A763D74857FBC37D /* Msauth.swift */; };
@@ -127,6 +128,7 @@
 		511FB7F3639F8196E229371D /* LiveSendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveSendTests.swift; sourceTree = "<group>"; };
 		51B8C97D2A4B42DF67451B26 /* ContactsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsTests.swift; sourceTree = "<group>"; };
 		579B488EB09271EADE817752 /* ReceiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiveView.swift; sourceTree = "<group>"; };
+		5BD06EB8417E3ABE64BA5BDA /* Connectivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Connectivity.swift; sourceTree = "<group>"; };
 		5BDD584B1202C111C8EAB6BE /* ActivityDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityDetailView.swift; sourceTree = "<group>"; };
 		5D73D5A77FFC38FC54259D79 /* DepositWalkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DepositWalkTests.swift; sourceTree = "<group>"; };
 		600C46C8B2B89650FE98BDFC /* RpcClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RpcClient.swift; sourceTree = "<group>"; };
@@ -213,6 +215,7 @@
 			isa = PBXGroup;
 			children = (
 				A11EDD0B6F2E0ABC54D4BFED /* AuthService.swift */,
+				5BD06EB8417E3ABE64BA5BDA /* Connectivity.swift */,
 				1CAA1C4A31DC664F417BA006 /* DepositWalk.swift */,
 				1B2F56A8ABC5E364C3C1FAD3 /* InvokeFlow.swift */,
 				E9F38010836B46706F1EEF2C /* ProverClient.swift */,
@@ -570,6 +573,7 @@
 				21698A3770AC81F8D6A5AC04 /* Amount.swift in Sources */,
 				CC2E8838F78355A6E1C149F7 /* AuthService.swift in Sources */,
 				22071A30C7AE0DB38093A94F /* Components.swift in Sources */,
+				658FE2E290B863AB89C78877 /* Connectivity.swift in Sources */,
 				800C1F2EAA73B476DEF97F7D /* Contacts.swift in Sources */,
 				DEB816520B783380A0B1801C /* ContactsView.swift in Sources */,
 				B1687316C1DC29FF183854FD /* CoreErrors.swift in Sources */,

@@ -103,21 +103,42 @@ public final class RemoteSend {
             + "Pair your own prover in Settings, or send from the rand command-line wallet.";
 
     /**
+     * The platform's reading of this phone's connectivity: TRUE online, FALSE offline, null when it
+     * cannot say. {@link WalletService} installs ConnectivityManager's (an active network with
+     * INTERNET and VALIDATED); a test installs its own.
+     */
+    public interface Connectivity {
+        Boolean online();
+    }
+
+    static volatile Connectivity connectivity = () -> null;
+
+    public static void setConnectivity(Connectivity c) {
+        connectivity = c == null ? () -> null : c;
+    }
+
+    private static Boolean onlineNow() {
+        try {
+            return connectivity.online();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
      * Every member busy, or none reachable: plainly, with the way out. When every member pinned in
      * this build is gone, the cause decides the sentence: one answered with ANOTHER KEY than its
-     * pin (this build's pins are stale) — update Rand Wallet; none gave any HTTP answer (the phone
-     * is offline, or has no route) — check the connection; otherwise — try again later.
+     * pin (this build's pins are stale) — update Rand Wallet; the platform says the phone is
+     * offline — check the connection; otherwise (online, or it cannot say) — try again later.
      */
     static ProverClient.Refusal poolUnavailable(String lead, String pool, List<String> whys) {
         boolean allBusy = !whys.isEmpty();
         boolean allGone = !whys.isEmpty();
-        boolean allNet = !whys.isEmpty();
         boolean anyKey = false;
         StringBuilder reasons = new StringBuilder();
         for (String w : whys) {
             if (!w.startsWith(BUSY_MARK)) allBusy = false;
             if (!(w.startsWith(GONE_MARK) || w.startsWith(NET_MARK) || w.startsWith(KEY_MARK))) allGone = false;
-            if (!w.startsWith(NET_MARK)) allNet = false;
             if (w.startsWith(KEY_MARK)) anyKey = true;
             if (reasons.length() > 0) reasons.append(L10n.t(R.string.list_separator, "; "));
             reasons.append(unmarked(w));
@@ -126,14 +147,14 @@ public final class RemoteSend {
             return new ProverClient.Refusal(lead + L10n.t(R.string.pool_all_busy,
                     "The %1$s provers are all busy right now; try again in a minute, or pair your own prover in Settings.", pool), true);
         }
-        if (allNet) {
-            return new ProverClient.Refusal(lead + L10n.t(R.string.pool_offline,
-                    "This device seems to be offline: none of the %1$s provers can be reached (%2$s). Check its internet connection, then try again.", pool, reasons));
-        }
         if (allGone && anyKey) {
             return new ProverClient.Refusal(lead + L10n.t(R.string.pool_outdated,
                     "None of the %1$s provers this version of Rand Wallet pins answered as pinned (%2$s). "
                             + "Update Rand Wallet to the latest version, or pair your own prover in Settings.", pool, reasons));
+        }
+        if (allGone && Boolean.FALSE.equals(onlineNow())) {
+            return new ProverClient.Refusal(lead + L10n.t(R.string.pool_offline,
+                    "This device seems to be offline: none of the %1$s provers can be reached (%2$s). Check its internet connection, then try again.", pool, reasons));
         }
         return new ProverClient.Refusal(lead + L10n.t(R.string.pool_unreachable,
                 "The %1$s provers cannot be reached right now (%2$s). Try again later, or pair your own prover in Settings.", pool, reasons));

@@ -116,6 +116,21 @@ public final class WalletService {
 
     private WalletService(Context app) {
         this.app = app;
+        // The RandProtocol provers' "this device seems to be offline" rests on the platform's
+        // reading only: an active network with INTERNET and VALIDATED is online, none is offline.
+        RemoteSend.setConnectivity(() -> {
+            try {
+                android.net.ConnectivityManager cm = app.getSystemService(android.net.ConnectivityManager.class);
+                if (cm == null) return null;
+                android.net.Network n = cm.getActiveNetwork();
+                if (n == null) return false;
+                android.net.NetworkCapabilities c = cm.getNetworkCapabilities(n);
+                return c != null && c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        && c.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+            } catch (RuntimeException e) {
+                return null;
+            }
+        });
         this.vault = new KeyVault(app);
         this.prefs = new Prefs(app);
         this.storeFile = new File(app.getFilesDir(), "notes.json");

@@ -10,6 +10,8 @@ struct RandWalletApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // Start watching the network now, so the first "provers cannot be reached" has a reading.
+        _ = Connectivity.shared
         let settings = Settings()
         let wallet = WalletService(settings: settings)
         _settings = StateObject(wrappedValue: settings)

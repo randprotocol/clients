@@ -274,19 +274,24 @@ enum ProverPairingService {
         var reason: String
     }
 
+    /// The platform's reading of this phone's connectivity: true online, false offline, nil when it
+    /// cannot say. `Connectivity.shared` (NWPathMonitor) by default; a test installs its own.
+    static var online: () -> Bool? = { Connectivity.shared.online }
+
     /// Every member busy, or none reachable: plainly, with the way out. When every member pinned in
     /// this build is gone, the cause decides the sentence: one answered with ANOTHER KEY than its
-    /// pin (this build's pins are stale) — update Rand Wallet; none gave any HTTP answer (the phone
-    /// is offline, or has no route) — check the connection; otherwise — try again later.
+    /// pin (this build's pins are stale) — update Rand Wallet; the platform says the phone is
+    /// offline — check the connection; otherwise (online, or it cannot say) — try again later.
     static func poolUnavailable(lead: String, pool: String, _ whys: [PoolWhy]) -> ProverRefusal {
         if !whys.isEmpty && whys.allSatisfy({ $0.busy }) {
             return ProverRefusal(message: String(localized: "\(lead)The \(pool) provers are all busy right now; try again in a minute, or pair your own prover in Settings."), busy: true)
         }
-        if !whys.isEmpty && whys.allSatisfy({ $0.network }) {
-            return ProverRefusal(message: String(localized: "\(lead)This device seems to be offline: none of the \(pool) provers can be reached (\(whys.map { $0.reason }.joined(separator: "; "))). Check its internet connection, then try again."))
-        }
-        if !whys.isEmpty && whys.allSatisfy({ $0.gone }) && whys.contains(where: { $0.wrongKey }) {
+        let allGone = !whys.isEmpty && whys.allSatisfy({ $0.gone })
+        if allGone && whys.contains(where: { $0.wrongKey }) {
             return ProverRefusal(message: String(localized: "\(lead)None of the \(pool) provers this version of Rand Wallet pins answered as pinned (\(whys.map { $0.reason }.joined(separator: "; "))). Update Rand Wallet to the latest version, or pair your own prover in Settings."))
+        }
+        if allGone && online() == false {
+            return ProverRefusal(message: String(localized: "\(lead)This device seems to be offline: none of the \(pool) provers can be reached (\(whys.map { $0.reason }.joined(separator: "; "))). Check its internet connection, then try again."))
         }
         return ProverRefusal(message: String(localized: "\(lead)The \(pool) provers cannot be reached right now (\(whys.map { $0.reason }.joined(separator: "; "))). Try again later, or pair your own prover in Settings."))
     }
