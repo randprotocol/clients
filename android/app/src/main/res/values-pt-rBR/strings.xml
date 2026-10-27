@@ -500,6 +500,8 @@
     <string name="msauth_refuse_wrong_chain">Esta proposta é para a cadeia %1$s; esta carteira está na cadeia %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">Esta proposta está vinculada a um genesis diferente do que o nó desta carteira serve.</string>
     <string name="msauth_refuse_expired">Esta proposta expira na altura %1$s e a cadeia está em %2$s: tarde demais para assinar. Peça uma nova proposta.</string>
+    <string name="msauth_refuse_fee_limit">A taxa de %1$s RAND é maior do que este signatário permite (%2$s RAND), então esta proposta não é assinada. Aumente o limite de taxa do signatário ou peça uma nova proposta.</string>
+    <string name="msauth_refuse_fee_payout">A taxa de %1$s RAND é maior que os %2$s RAND que esta proposta paga, então esta proposta não é assinada.</string>
     <string name="msauth_no_profile">Não existe esse perfil de signatário.</string>
     <string name="msauth_no_seed">Este perfil de signatário não tem chave neste dispositivo: remova-o e adicione-o de novo.</string>
     <string name="msauth_label_length">o rótulo de um signatário tem 1-64 caracteres</string>
@@ -544,7 +546,8 @@
     <string name="msauth_row_no_amount">Informe o valor de cada pagamento: é o que impede uma divisão ou um pagamento inflado.</string>
     <string name="msauth_row_bad_amount">Um valor é um número de RAND, como 1.5.</string>
     <string name="msauth_review_title">O que esta proposta faz, verificado contra a sua política</string>
-    <string name="msauth_fee_line">Taxa: %1$s RAND · expira na altura %2$s</string>
+    <string name="msauth_fee_line">Taxa: %1$s RAND · no máximo %2$s RAND · expira na altura %3$s</string>
+    <string name="msauth_max_fee">Taxa mais alta que este signatário aceita, em RAND</string>
     <string name="msauth_matched">%1$s de %2$s pagamentos conferem.</string>
     <string name="msauth_retry">Tentar de novo</string>
     <string name="msauth_blocks_left">Faltam %1$s blocos para prová-la.</string>

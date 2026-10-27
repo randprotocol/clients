@@ -502,7 +502,6 @@
     "Amount in RAND": "RAND-இல் தொகை",
     "Intended payments": "நோக்கிய கட்டணங்கள்",
     "Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.": "நீங்கள் செய்யவிருக்கும் ஒவ்வொரு கட்டணத்தையும் உள்ளிடுங்கள்: முகவரியும் RAND-இல் தொகையும். ஒரே முகவரிக்கு இருமுறை செலுத்தும் கட்டணம் மொத்தத்துடன் ஒருமுறை உள்ளிடப்படும். இவற்றில் எதனுடனும் பொருந்தாத வெளியீட்டில் கையொப்பமிட முடியாது.",
-    "Fee: %@ RAND · expires at height %@": "கட்டணம்: %@ RAND · உயரம் %@-இல் காலாவதியாகும்",
     "%@ of %@ payments matched.": "%2$@ கட்டணங்களில் %1$@ பொருந்துகின்றன.",
     "Retry": "மீண்டும் முயல்",
     "%@ blocks left to prove it.": "இதை நிரூபிக்க இன்னும் %@ பிளாக்குகள் உள்ளன.",
@@ -540,7 +539,11 @@
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "பரிமாற்றம் %@ நிரூபிப்பான்களில் ஒன்றால் நிரூபிக்கப்படுகிறது, இதற்கு ஓரிரு நிமிடங்கள் ஆகும். அது இயங்கும்போது ஆப்பைத் திறந்தே வையுங்கள்.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "நிரூபிக்க ஓரிரு நிமிடங்கள் ஆகும். செயின் இரண்டு nullifier-கள், இரண்டு கமிட்மென்ட்கள், ஒரு நிரூபணம் ஆகியவற்றை மட்டுமே பார்க்கும் — தொகை, பெறுநர், குறிப்பு ஆகியவற்றை ஒருபோதும் பார்க்காது.",
     "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "%@ நிரூபிப்பான்களில் ஒன்று நிரூபணத்தை உருவாக்கும்; எதையும் அனுப்பும் முன் இந்தத் தொலைபேசி அதைச் சரிபார்க்கும். ஆப்பைத் திறந்தே வையுங்கள் — மூடினால் இந்த நிரூபணம் இழக்கப்படும், எதுவும் அனுப்பப்படாது.",
-    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Rand Wallet இன் இந்தப் பதிப்பு பொருத்தியுள்ள %@ நிரூபிப்பான்களில் எதுவும் பொருத்தியபடி பதிலளிக்கவில்லை (%@). Rand Wallet ஐச் சமீபத்திய பதிப்புக்குப் புதுப்பிக்கவும், அல்லது அமைப்புகளில் உங்கள் சொந்த நிரூபிப்பானை இணைக்கவும்."
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Rand Wallet இன் இந்தப் பதிப்பு பொருத்தியுள்ள %@ நிரூபிப்பான்களில் எதுவும் பொருத்தியபடி பதிலளிக்கவில்லை (%@). Rand Wallet ஐச் சமீபத்திய பதிப்புக்குப் புதுப்பிக்கவும், அல்லது அமைப்புகளில் உங்கள் சொந்த நிரூபிப்பானை இணைக்கவும்.",
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@": "கட்டணம்: %1$@ RAND · அதிகபட்சம் %2$@ RAND · உயரம் %3$@-இல் காலாவதியாகும்",
+    "Highest fee this signer accepts, in RAND": "இந்தக் கையொப்பமிடுபவர் ஏற்கும் அதிகபட்சக் கட்டணம், RAND-இல்",
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "%1$@ RAND கட்டணம், இந்தக் கையொப்பமிடுபவர் அனுமதிக்கும் அளவை (%2$@ RAND) விட அதிகம், எனவே இந்த முன்மொழிவில் கையொப்பமிடப்படவில்லை. கையொப்பமிடுபவரின் கட்டண வரம்பை உயர்த்துங்கள் அல்லது புதிய முன்மொழிவைக் கேளுங்கள்.",
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "%1$@ RAND கட்டணம், இந்த முன்மொழிவு செலுத்தும் %2$@ RAND-ஐ விட அதிகம், எனவே இந்த முன்மொழிவில் கையொப்பமிடப்படவில்லை."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

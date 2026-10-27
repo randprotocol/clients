@@ -484,7 +484,6 @@
     "Amount in RAND": "金額 (RAND)",
     "Intended payments": "予定している支払い",
     "Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.": "行う予定の支払いをすべて入力してください。アドレスと RAND 建ての金額です。同じアドレスへの支払いが2回ある場合は、合計額で1件として入力します。どれにも一致しない出力には署名できません。",
-    "Fee: %@ RAND · expires at height %@": "手数料: %@ RAND · 高さ %@ で期限切れ",
     "%@ of %@ payments matched.": "%2$@ 件中 %1$@ 件の支払いが一致しました。",
     "Retry": "再試行",
     "%@ blocks left to prove it.": "証明まであと %@ ブロックです。",
@@ -522,7 +521,11 @@
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "送金は %@ のプルーバーのいずれかが証明し、1〜2分かかります。その間はアプリを開いたままにしてください。",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "証明には1〜2分かかります。チェーンに見えるのは2つのヌリファイア、2つのコミットメント、1つの証明だけで、金額、受取人、メモは決して見えません。",
     "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "証明は %@ のプルーバーのいずれかが作成し、このスマートフォンが何かを送信する前に検証します。アプリを開いたままにしてください — 閉じるとこの証明は失われ、何も送信されません。",
-    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@この Rand Wallet のバージョンが固定している %@ のプルーバーは、いずれも固定どおりに応答しませんでした（%@）。Rand Wallet を最新バージョンに更新するか、設定で自分のプルーバーをペアリングしてください。"
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@この Rand Wallet のバージョンが固定している %@ のプルーバーは、いずれも固定どおりに応答しませんでした（%@）。Rand Wallet を最新バージョンに更新するか、設定で自分のプルーバーをペアリングしてください。",
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@": "手数料: %1$@ RAND · 上限 %2$@ RAND · 高さ %3$@ で期限切れ",
+    "Highest fee this signer accepts, in RAND": "この署名者が受け入れる手数料の上限（RAND）",
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "手数料 %1$@ RAND がこの署名者の許容額（%2$@ RAND）を上回るため、この提案には署名しません。署名者の手数料上限を上げるか、新しい提案を依頼してください。",
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "手数料 %1$@ RAND がこの提案の支払額 %2$@ RAND を上回るため、この提案には署名しません。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

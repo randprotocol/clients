@@ -492,6 +492,8 @@
     <string name="msauth_refuse_wrong_chain">دا وړاندیز د زنځیر %1$s لپاره دی؛ دا والټ په زنځیر %2$s کې دی.</string>
     <string name="msauth_refuse_wrong_genesis">دا وړاندیز له هغه genesis پرته بل ته تړل شوی چې د دې والټ نوډ یې وړاندې کوي.</string>
     <string name="msauth_refuse_expired">دا وړاندیز په %1$s لوړوالي کې پای ته رسېږي او زنځیر په %2$s کې دی: د لاسلیک لپاره ډېر ناوخته دی. نوی وړاندیز وغواړئ.</string>
+    <string name="msauth_refuse_fee_limit">د %1$s RAND فیس له هغه حد څخه زیات دی چې دا لاسلیک کوونکی یې اجازه ورکوي (%2$s RAND)، نو دا وړاندیز نه لاسلیک کېږي. د لاسلیک کوونکي د فیس حد لوړ کړئ یا نوی وړاندیز وغواړئ.</string>
+    <string name="msauth_refuse_fee_payout">د %1$s RAND فیس له هغو %2$s RAND څخه زیات دی چې دا وړاندیز یې ورکوي، نو دا وړاندیز نه لاسلیک کېږي.</string>
     <string name="msauth_no_profile">داسې د لاسلیک کوونکي پروفایل نشته.</string>
     <string name="msauth_no_seed">دا د لاسلیک کوونکي پروفایل په دې وسیله کې کیلي نه لري: لرې یې کړئ او بیا یې زیات کړئ.</string>
     <string name="msauth_label_length">د لاسلیک کوونکي نښه ۱-۶۴ توري ده</string>
@@ -536,7 +538,8 @@
     <string name="msauth_row_no_amount">د هرې تادیې اندازه ولیکئ: همدا هغه څه دي چې ویش یا پړسول شوې تادیه ځنډوي.</string>
     <string name="msauth_row_bad_amount">اندازه د RAND شمېره ده، لکه 1.5.</string>
     <string name="msauth_review_title">دا وړاندیز څه کوي، ستاسو د پالیسۍ پر وړاندې څېړل شوی</string>
-    <string name="msauth_fee_line">فیس: %1$s RAND · په %2$s لوړوالي کې پای ته رسېږي</string>
+    <string name="msauth_fee_line">فیس: %1$s RAND · تر ډېره %2$s RAND · په %3$s لوړوالي کې پای ته رسېږي</string>
+    <string name="msauth_max_fee">تر ټولو لوړ فیس چې دا لاسلیک کوونکی یې مني، په RAND کې</string>
     <string name="msauth_matched">د %2$s تادیاتو څخه %1$s سره برابر شول.</string>
     <string name="msauth_retry">بیا هڅه وکړئ</string>
     <string name="msauth_blocks_left">د ثبوت لپاره %1$s بلاکونه پاتې دي.</string>

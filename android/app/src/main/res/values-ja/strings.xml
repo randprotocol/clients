@@ -484,6 +484,8 @@
     <string name="msauth_refuse_wrong_chain">この提案はチェーン %1$s 用ですが、このウォレットはチェーン %2$s にあります。</string>
     <string name="msauth_refuse_wrong_genesis">この提案は、このウォレットのノードが提供するものとは別のジェネシスに結び付けられています。</string>
     <string name="msauth_refuse_expired">この提案は高さ %1$s で期限切れとなり、チェーンは %2$s にあります: 署名には遅すぎます。新しい提案を依頼してください。</string>
+    <string name="msauth_refuse_fee_limit">手数料 %1$s RAND がこの署名者の許容額（%2$s RAND）を上回るため、この提案には署名しません。署名者の手数料上限を上げるか、新しい提案を依頼してください。</string>
+    <string name="msauth_refuse_fee_payout">手数料 %1$s RAND がこの提案の支払額 %2$s RAND を上回るため、この提案には署名しません。</string>
     <string name="msauth_no_profile">そのような署名者プロファイルはありません。</string>
     <string name="msauth_no_seed">この署名者プロファイルには、この端末にキーがありません。削除してから追加し直してください。</string>
     <string name="msauth_label_length">署名者のラベルは 1-64 文字です</string>
@@ -528,7 +530,8 @@
     <string name="msauth_row_no_amount">すべての支払いの金額を入力してください。支払いの分割や水増しを防ぐのは金額です。</string>
     <string name="msauth_row_bad_amount">金額は RAND の数値です。例: 1.5</string>
     <string name="msauth_review_title">この提案が行うこと (あなたのポリシーと照合済み)</string>
-    <string name="msauth_fee_line">手数料: %1$s RAND · 高さ %2$s で期限切れ</string>
+    <string name="msauth_fee_line">手数料: %1$s RAND · 上限 %2$s RAND · 高さ %3$s で期限切れ</string>
+    <string name="msauth_max_fee">この署名者が受け入れる手数料の上限（RAND）</string>
     <string name="msauth_matched">%2$s 件中 %1$s 件の支払いが一致しました。</string>
     <string name="msauth_retry">再試行</string>
     <string name="msauth_blocks_left">証明まであと %1$s ブロックです。</string>

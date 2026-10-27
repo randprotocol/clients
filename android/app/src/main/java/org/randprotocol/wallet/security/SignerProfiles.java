@@ -49,16 +49,33 @@ public final class SignerProfiles {
     public static final class Profile {
         public final String id, label, policyHash;
         public final int index;
+        /**
+         * The highest fee this signer signs, in base units (decimal digits); null for a profile saved
+         * before 0.8.2, which {@link #feeLimit} reads as the default, 0.1 RAND.
+         */
+        public final String maxFee;
 
         public Profile(String id, String label, int index, String policyHash) {
+            this(id, label, index, policyHash, null);
+        }
+
+        public Profile(String id, String label, int index, String policyHash, String maxFee) {
             this.id = id;
             this.label = label;
             this.index = index;
             this.policyHash = policyHash;
+            this.maxFee = maxFee != null && maxFee.matches("\\d+") ? maxFee : null;
+        }
+
+        /** The limit the signing rule applies: this profile's, or {@link org.randprotocol.wallet.wallet.SignFlow#DEFAULT_MAX_FEE_UNITS}. */
+        public String feeLimit() {
+            return org.randprotocol.wallet.wallet.SignFlow.feeLimit(maxFee);
         }
 
         JSONObject toJson() throws JSONException {
-            return new JSONObject().put("id", id).put("label", label).put("index", index).put("policyHash", policyHash);
+            JSONObject o = new JSONObject().put("id", id).put("label", label).put("index", index).put("policyHash", policyHash);
+            if (maxFee != null) o.put("maxFee", maxFee);
+            return o;
         }
 
         /** null for an entry that is not a whole profile. */
@@ -67,7 +84,8 @@ public final class SignerProfiles {
             JSONObject o = (JSONObject) item;
             Object id = o.opt("id"), label = o.opt("label"), index = o.opt("index"), hash = o.opt("policyHash");
             if (!(id instanceof String) || !(label instanceof String) || !(index instanceof Integer) || !(hash instanceof String)) return null;
-            return new Profile((String) id, (String) label, (Integer) index, (String) hash);
+            Object max = o.opt("maxFee");
+            return new Profile((String) id, (String) label, (Integer) index, (String) hash, max instanceof String ? (String) max : null);
         }
     }
 
@@ -133,7 +151,7 @@ public final class SignerProfiles {
                 throw new IllegalStateException(L10n.t(R.string.msauth_already_saved, "this signer is already saved as %1$s", q.label));
             }
         }
-        Profile saved = new Profile(p.id, label, p.index, p.policyHash);
+        Profile saved = new Profile(p.id, label, p.index, p.policyHash, p.maxFee);
         try {
             kv.put(policyKey(p.id), policy);
             kv.put(seedKey(p.id), sealedSeed);

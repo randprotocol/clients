@@ -484,7 +484,6 @@
     "Amount in RAND": "Jumlah dalam RAND",
     "Intended payments": "Pembayaran yang dimaksud",
     "Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.": "Masukkan setiap pembayaran yang akan Anda lakukan: alamat dan jumlah dalam RAND. Pembayaran ke alamat yang sama dua kali dimasukkan satu kali, dengan totalnya. Output yang tidak cocok dengan satu pun tidak dapat ditandatangani.",
-    "Fee: %@ RAND · expires at height %@": "Biaya: %@ RAND · kedaluwarsa pada ketinggian %@",
     "%@ of %@ payments matched.": "%@ dari %@ pembayaran cocok.",
     "Retry": "Coba lagi",
     "%@ blocks left to prove it.": "Tersisa %@ blok untuk membuktikannya.",
@@ -522,7 +521,11 @@
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "Transfer dibuktikan oleh salah satu prover %@, yang memakan waktu satu atau dua menit. Biarkan aplikasi tetap terbuka selama prosesnya.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "Pembuktian memakan waktu satu atau dua menit. Chain akan melihat dua nullifier, dua komitmen, dan sebuah bukti — tidak pernah jumlah, penerima, atau memonya.",
     "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "Salah satu prover %@ membuat bukti; ponsel ini memeriksanya sebelum apa pun dikirim. Biarkan aplikasi tetap terbuka — menutupnya akan menghilangkan bukti ini, dan tidak ada yang dikirim.",
-    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Tidak satu pun prover %@ yang dipatok versi Rand Wallet ini menjawab sesuai patokan (%@). Perbarui Rand Wallet ke versi terbaru, atau pasangkan prover Anda sendiri di Pengaturan."
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Tidak satu pun prover %@ yang dipatok versi Rand Wallet ini menjawab sesuai patokan (%@). Perbarui Rand Wallet ke versi terbaru, atau pasangkan prover Anda sendiri di Pengaturan.",
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@": "Biaya: %1$@ RAND · paling banyak %2$@ RAND · kedaluwarsa pada ketinggian %3$@",
+    "Highest fee this signer accepts, in RAND": "Biaya tertinggi yang diterima penanda tangan ini, dalam RAND",
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "Biaya %1$@ RAND lebih besar daripada yang diizinkan penanda tangan ini (%2$@ RAND), sehingga proposal ini tidak ditandatangani. Naikkan batas biaya penanda tangan atau minta proposal baru.",
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "Biaya %1$@ RAND lebih besar daripada %2$@ RAND yang dibayarkan proposal ini, sehingga proposal ini tidak ditandatangani."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

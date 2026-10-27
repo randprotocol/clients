@@ -113,6 +113,12 @@ struct SignerProfile: Codable, Identifiable, Equatable {
     let signers: Int
     let address: String
     let policyHash: String
+    /// The highest fee this signer signs, in base units; nil (a profile saved before 0.8.2) is
+    /// `MsauthRules.defaultMaxFeeUnits`, 0.1 RAND.
+    var maxFee: String? = nil
+
+    /// The limit the signing rule applies.
+    var feeLimit: String { MsauthRules.feeLimit(maxFee) }
 }
 
 /// Signer profiles (spec §3), in three kinds of item: `msauth.index` (the list),
@@ -140,12 +146,22 @@ final class SignerStore: ObservableObject {
     /// Saves a profile: the label (1-64 characters), the policy, and the key — a `rand-node keygen`
     /// file or 64 hex — which must be one of the policy's signers. Refused without a device
     /// passcode, and for a signer already saved. Nothing is left behind when a save fails.
-    func add(label: String, policy: String, key: String) throws -> SignerProfile {
+    func add(label: String, policy: String, key: String, maxFee: String = "") throws -> SignerProfile {
         guard secrets.canRequireUserPresence else {
             throw StoreError(errorDescription: String(localized: "Set a device passcode first: a signer key is read only after Face ID, Touch ID or the passcode."))
         }
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name.unicodeScalars.count <= 64 else { throw StoreError(errorDescription: String(localized: "a signer label is 1-64 characters")) }
+        // The fee limit, typed in RAND; empty is the default (0.1 RAND).
+        let typedFee = maxFee.trimmingCharacters(in: .whitespacesAndNewlines)
+        let limit: String
+        if typedFee.isEmpty {
+            limit = MsauthRules.defaultMaxFeeUnits
+        } else if let units = MsauthRules.parseMaxFee(typedFee) {
+            limit = units
+        } else {
+            throw StoreError(errorDescription: String(localized: "An amount is a number of RAND, such as 1.5."))
+        }
         let pol = MsauthRules.clean(policy)
         let info = try RandCore.msauthPolicyInfo(pol)
         // The core's reply carries the seed as a hex String, which cannot be wiped; only the Data
@@ -159,7 +175,7 @@ final class SignerStore: ObservableObject {
         defer { seed.resetBytes(in: 0..<seed.count) }
         let id = UUID().uuidString.lowercased()
         let p = SignerProfile(id: id, label: name, index: index, fingerprint: info.fingerprint, threshold: info.threshold,
-                              signers: info.signers, address: info.address, policyHash: info.policyHash)
+                              signers: info.signers, address: info.address, policyHash: info.policyHash, maxFee: limit)
         do {
             try secrets.save(seed, account: Self.seedAccount(id), requireUserPresence: true)
             try secrets.save(Data(pol.utf8), account: Self.policyAccount(id), requireUserPresence: false)

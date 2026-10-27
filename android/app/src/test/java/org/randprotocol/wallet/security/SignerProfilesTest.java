@@ -100,6 +100,20 @@ public class SignerProfilesTest {
         assertEquals("c3", p.list().get(0).id);
     }
 
+    /** The fee limit is kept with the profile; a profile saved without one reads as the default. */
+    @Test public void theFeeLimitIsKeptWithTheProfile() throws Exception {
+        MapKv kv = new MapKv();
+        SignerProfiles p = new SignerProfiles(kv);
+        p.add(new SignerProfiles.Profile("a1", "treasury", 2, "33".repeat(32), "500000000"), "{policy}", "iv:ct");
+        p.add(profile("b2", "ops", 1), "{policy}", "iv:ct");
+        List<SignerProfiles.Profile> all = new SignerProfiles(kv).list();
+        assertEquals("500000000", all.get(0).maxFee);
+        assertEquals("500000000", all.get(0).feeLimit());
+        assertNull(all.get(1).maxFee);
+        assertEquals("100000000", all.get(1).feeLimit());
+        assertNull("an unreadable limit is not kept", new SignerProfiles.Profile("c3", "x", 0, "h", "lots").maxFee);
+    }
+
     @Test public void removingAProfileDeletesItsKeystoreKey() throws Exception {
         MapKv kv = new MapKv();
         FakeAliases ks = new FakeAliases();

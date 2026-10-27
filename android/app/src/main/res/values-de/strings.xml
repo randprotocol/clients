@@ -492,6 +492,8 @@
     <string name="msauth_refuse_wrong_chain">Dieser Vorschlag gilt für Chain %1$s; diese Wallet ist auf Chain %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">Dieser Vorschlag ist an ein anderes Genesis gebunden als das, das der Knoten dieser Wallet bedient.</string>
     <string name="msauth_refuse_expired">Dieser Vorschlag läuft bei Höhe %1$s ab und die Chain steht bei %2$s: zu spät zum Signieren. Fordere einen neuen Vorschlag an.</string>
+    <string name="msauth_refuse_fee_limit">Die Gebühr von %1$s RAND ist höher, als dieser Unterzeichner erlaubt (%2$s RAND), daher wird dieser Vorschlag nicht signiert. Erhöhe das Gebührenlimit des Unterzeichners oder fordere einen neuen Vorschlag an.</string>
+    <string name="msauth_refuse_fee_payout">Die Gebühr von %1$s RAND ist höher als die %2$s RAND, die dieser Vorschlag auszahlt, daher wird dieser Vorschlag nicht signiert.</string>
     <string name="msauth_no_profile">Dieses Unterzeichnerprofil gibt es nicht.</string>
     <string name="msauth_no_seed">Dieses Unterzeichnerprofil hat auf diesem Gerät keinen Schlüssel: Entferne es und füge es erneut hinzu.</string>
     <string name="msauth_label_length">eine Unterzeichner-Bezeichnung hat 1-64 Zeichen</string>
@@ -536,7 +538,8 @@
     <string name="msauth_row_no_amount">Gib den Betrag jeder Zahlung ein: Er verhindert eine Aufteilung oder eine überhöhte Zahlung.</string>
     <string name="msauth_row_bad_amount">Ein Betrag ist eine Anzahl RAND, zum Beispiel 1.5.</string>
     <string name="msauth_review_title">Was dieser Vorschlag tut, geprüft gegen deine Richtlinie</string>
-    <string name="msauth_fee_line">Gebühr: %1$s RAND · läuft bei Höhe %2$s ab</string>
+    <string name="msauth_fee_line">Gebühr: %1$s RAND · höchstens %2$s RAND · läuft bei Höhe %3$s ab</string>
+    <string name="msauth_max_fee">Höchste Gebühr, die dieser Unterzeichner akzeptiert, in RAND</string>
     <string name="msauth_matched">%1$s von %2$s Zahlungen stimmen überein.</string>
     <string name="msauth_retry">Erneut versuchen</string>
     <string name="msauth_blocks_left">Noch %1$s Blöcke, um es zu beweisen.</string>

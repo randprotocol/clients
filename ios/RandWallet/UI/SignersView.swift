@@ -83,6 +83,7 @@ struct AddSignerView: View {
     @State private var label = ""
     @State private var policy = ""
     @State private var key = ""
+    @State private var maxFee = MsauthRules.randText(MsauthRules.defaultMaxFeeUnits)
     @State private var preview: SignerPreview?
     @State private var error: String?
     @State private var target: Target?
@@ -95,6 +96,10 @@ struct AddSignerView: View {
             }
             fileSection("Policy file", text: $policy, target: .policy)
             fileSection("Signer key file, or its 64-hex seed", text: $key, target: .key)
+            Section("Highest fee this signer accepts, in RAND") {
+                TextField(text: $maxFee, prompt: Text(verbatim: "0.1")) { Text("Highest fee this signer accepts, in RAND") }
+                    .font(.mono).keyboardType(.decimalPad).autocorrectionDisabled()
+            }
             Section {
                 if let error { Text(verbatim: error).foregroundColor(.red) }
                 Button("Check") { check() }.disabled(policy.isEmpty || key.isEmpty)
@@ -140,8 +145,9 @@ struct AddSignerView: View {
 
     private func save() {
         do {
-            _ = try store.add(label: label, policy: policy, key: key)
+            _ = try store.add(label: label, policy: policy, key: key, maxFee: maxFee)
             label = ""; policy = ""; key = ""; preview = nil
+            maxFee = MsauthRules.randText(MsauthRules.defaultMaxFeeUnits)
             dismiss()
         } catch { self.error = error.localizedDescription }
     }

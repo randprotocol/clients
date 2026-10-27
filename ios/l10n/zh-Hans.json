@@ -484,7 +484,6 @@
     "Amount in RAND": "金额（RAND）",
     "Intended payments": "拟进行的付款",
     "Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.": "请输入你打算进行的每一笔付款：地址和以 RAND 计的金额。向同一地址的两笔付款只输入一次，填合计金额。与其中任何一笔都不匹配的输出无法签名。",
-    "Fee: %@ RAND · expires at height %@": "手续费：%@ RAND · 在高度 %@ 过期",
     "%@ of %@ payments matched.": "%2$@ 笔付款中有 %1$@ 笔匹配。",
     "Retry": "重试",
     "%@ blocks left to prove it.": "还差 %@ 个区块即可证明。",
@@ -522,7 +521,11 @@
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "转账证明由一台 %@ 证明器生成，需要一两分钟。生成期间请保持应用打开。",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "生成证明需要一两分钟。链上只会看到两个作废符、两个承诺和一个证明——绝不会看到金额、收款人或备注。",
     "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "证明由一台 %@ 证明器生成；这部手机会在发送任何内容之前检查它。请保持应用打开——关闭应用会丢失此证明，且不会发送任何内容。",
-    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@此版本 Rand Wallet 固定的 %@ 证明器均未按固定信息应答（%@）。请将 Rand Wallet 更新到最新版本，或在设置中配对你自己的证明器。"
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@此版本 Rand Wallet 固定的 %@ 证明器均未按固定信息应答（%@）。请将 Rand Wallet 更新到最新版本，或在设置中配对你自己的证明器。",
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@": "手续费：%1$@ RAND · 最多 %2$@ RAND · 在高度 %3$@ 过期",
+    "Highest fee this signer accepts, in RAND": "此签名人接受的最高手续费（RAND）",
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "手续费 %1$@ RAND 高于此签名人允许的上限（%2$@ RAND），因此此提案不会签名。请提高签名人的手续费上限，或索取新的提案。",
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "手续费 %1$@ RAND 高于此提案支付的 %2$@ RAND，因此此提案不会签名。"
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

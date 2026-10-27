@@ -500,6 +500,8 @@
     <string name="msauth_refuse_wrong_chain">Questa proposta è per la catena %1$s; questo portafoglio è sulla catena %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">Questa proposta è legata a un genesis diverso da quello che serve il nodo di questo portafoglio.</string>
     <string name="msauth_refuse_expired">Questa proposta scade all\'altezza %1$s e la catena è a %2$s: troppo tardi per firmare. Chiedi una nuova proposta.</string>
+    <string name="msauth_refuse_fee_limit">La commissione di %1$s RAND supera quanto consente questo firmatario (%2$s RAND), quindi questa proposta non viene firmata. Alza il limite di commissione del firmatario o chiedi una nuova proposta.</string>
+    <string name="msauth_refuse_fee_payout">La commissione di %1$s RAND supera i %2$s RAND che questa proposta paga, quindi questa proposta non viene firmata.</string>
     <string name="msauth_no_profile">Nessun profilo di firmatario del genere.</string>
     <string name="msauth_no_seed">Questo profilo di firmatario non ha una chiave su questo dispositivo: rimuovilo e aggiungilo di nuovo.</string>
     <string name="msauth_label_length">l\'etichetta di un firmatario è di 1-64 caratteri</string>
@@ -544,7 +546,8 @@
     <string name="msauth_row_no_amount">Inserisci l\'importo di ogni pagamento: è ciò che impedisce una divisione o un pagamento gonfiato.</string>
     <string name="msauth_row_bad_amount">Un importo è un numero di RAND, come 1.5.</string>
     <string name="msauth_review_title">Cosa fa questa proposta, verificato rispetto alla tua policy</string>
-    <string name="msauth_fee_line">Commissione: %1$s RAND · scade all\'altezza %2$s</string>
+    <string name="msauth_fee_line">Commissione: %1$s RAND · al massimo %2$s RAND · scade all\'altezza %3$s</string>
+    <string name="msauth_max_fee">Commissione massima che questo firmatario accetta, in RAND</string>
     <string name="msauth_matched">%1$s pagamenti su %2$s corrispondono.</string>
     <string name="msauth_retry">Riprova</string>
     <string name="msauth_blocks_left">Mancano %1$s blocchi per dimostrarlo.</string>

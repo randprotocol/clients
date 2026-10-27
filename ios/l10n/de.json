@@ -493,7 +493,6 @@
     "Amount in RAND": "Betrag in RAND",
     "Intended payments": "Vorgesehene Zahlungen",
     "Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.": "Gib jede Zahlung ein, die du leisten willst: die Adresse und den Betrag in RAND. Eine Zahlung, die zweimal an dieselbe Adresse geht, wird einmal mit der Summe eingetragen. Eine Ausgabe, die zu keiner davon passt, kann nicht signiert werden.",
-    "Fee: %@ RAND · expires at height %@": "Gebühr: %@ RAND · läuft bei Höhe %@ ab",
     "%@ of %@ payments matched.": "%@ von %@ Zahlungen stimmen überein.",
     "Retry": "Erneut versuchen",
     "%@ blocks left to prove it.": "Noch %@ Blöcke, um es zu beweisen.",
@@ -531,7 +530,11 @@
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "Eine Überweisung wird von einem der %@-Prover bewiesen, das dauert ein bis zwei Minuten. Lass die App währenddessen geöffnet.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "Das Beweisen dauert ein bis zwei Minuten. Die Chain sieht zwei Nullifier, zwei Commitments und einen Beweis – niemals den Betrag, den Empfänger oder das Memo.",
     "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "Einer der %@-Prover erstellt den Beweis; dieses Telefon prüft ihn, bevor etwas gesendet wird. Lass die App geöffnet – schließt du sie, geht dieser Beweis verloren, und nichts wird gesendet.",
-    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Keiner der %@-Prover, die diese Version von Rand Wallet hinterlegt, hat wie hinterlegt geantwortet (%@). Aktualisiere Rand Wallet auf die neueste Version oder kopple deinen eigenen Prover in den Einstellungen."
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Keiner der %@-Prover, die diese Version von Rand Wallet hinterlegt, hat wie hinterlegt geantwortet (%@). Aktualisiere Rand Wallet auf die neueste Version oder kopple deinen eigenen Prover in den Einstellungen.",
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@": "Gebühr: %1$@ RAND · höchstens %2$@ RAND · läuft bei Höhe %3$@ ab",
+    "Highest fee this signer accepts, in RAND": "Höchste Gebühr, die dieser Unterzeichner akzeptiert, in RAND",
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "Die Gebühr von %1$@ RAND ist höher, als dieser Unterzeichner erlaubt (%2$@ RAND), daher wird dieser Vorschlag nicht signiert. Erhöhe das Gebührenlimit des Unterzeichners oder fordere einen neuen Vorschlag an.",
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "Die Gebühr von %1$@ RAND ist höher als die %2$@ RAND, die dieser Vorschlag auszahlt, daher wird dieser Vorschlag nicht signiert."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

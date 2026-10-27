@@ -505,7 +505,6 @@
     "Amount in RAND": "المبلغ بعملة RAND",
     "Intended payments": "المدفوعات المقصودة",
     "Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.": "أدخل كل دفعة تنوي إجراءها: العنوان والمبلغ بعملة RAND. الدفعة إلى العنوان نفسه مرتين تُدخل مرة واحدة بالمجموع. لا يمكن توقيع مخرج لا يطابق أيًّا منها.",
-    "Fee: %@ RAND · expires at height %@": "الرسوم: %@ RAND · تنتهي عند الارتفاع %@",
     "%@ of %@ payments matched.": "تطابقت %@ من أصل %@ من المدفوعات.",
     "Retry": "إعادة المحاولة",
     "%@ blocks left to prove it.": "بقي %@ كتلة لإثباته.",
@@ -543,7 +542,11 @@
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "يُثبِت التحويلَ أحدُ مُثبِتات %@، ويستغرق ذلك دقيقة أو دقيقتين. أبقِ التطبيق مفتوحًا أثناء العمل.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "يستغرق الإثبات دقيقة أو دقيقتين. سترى السلسلة مُبطِلين والتزامين وإثباتًا — ولن ترى أبدًا المبلغ ولا المستلم ولا المذكرة.",
     "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "يُعِدّ أحد مُثبِتات %@ الإثبات، ويتحقق منه هذا الهاتف قبل إرسال أي شيء. أبقِ التطبيق مفتوحًا — إغلاقه يُضيع هذا الإثبات، ولا يُرسل شيء.",
-    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@لم يُجب أيٌّ من مُثبِتات %@ التي يثبّتها هذا الإصدار من Rand Wallet كما هو مثبّت (%@). حدّث Rand Wallet إلى أحدث إصدار، أو اقرن مُثبِتك الخاص في الإعدادات."
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@لم يُجب أيٌّ من مُثبِتات %@ التي يثبّتها هذا الإصدار من Rand Wallet كما هو مثبّت (%@). حدّث Rand Wallet إلى أحدث إصدار، أو اقرن مُثبِتك الخاص في الإعدادات.",
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@": "الرسوم: %1$@ RAND · بحد أقصى %2$@ RAND · تنتهي عند الارتفاع %3$@",
+    "Highest fee this signer accepts, in RAND": "أعلى رسوم يقبلها هذا الموقّع، بالـ RAND",
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "رسوم %1$@ RAND أكثر مما يسمح به هذا الموقّع (%2$@ RAND)، لذا لن يُوقَّع هذا الاقتراح. ارفع حد رسوم الموقّع أو اطلب اقتراحًا جديدًا.",
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "رسوم %1$@ RAND أكثر من %2$@ RAND التي يدفعها هذا الاقتراح، لذا لن يُوقَّع هذا الاقتراح."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

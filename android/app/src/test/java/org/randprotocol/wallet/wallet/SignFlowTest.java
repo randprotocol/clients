@@ -75,6 +75,72 @@ public class SignFlowTest {
 
     // ------------------------------------------------------------------ the rule
 
+    /** A summary paying {@code amount} RAND units to the payee and 7 back to the account, with {@code fee}. */
+    static JSONObject paid(Object fee, String amount) throws Exception {
+        JSONObject s = summary().put("fee", fee);
+        s.put("outputs", new JSONArray()
+                .put(new JSONObject().put("to_account", false).put("amount", amount).put("asset", 0).put("matches", "FP"))
+                .put(new JSONObject().put("to_account", true).put("amount", "7").put("matches", JSONObject.NULL)));
+        return s;
+    }
+
+    static SignFlow.Judgement fee(JSONObject s, Long head, String maxFee) throws Exception {
+        return SignFlow.judge(s, head, 7, GENESIS, "u", payees(), maxFee);
+    }
+
+    /** MSC-2 (ui/test/signers-engine.test.mjs): a fee over the profile's limit, or over the RAND paid out, is refused. */
+    @Test public void theFeeRuleRefusesAFeeOverTheLimitOrOverThePayout() throws Exception {
+        assertEquals("0.1 RAND", "100000000", SignFlow.DEFAULT_MAX_FEE_UNITS);
+        assertEquals("at the limit", Verdict.SIGNABLE, fee(paid("100000000", "5000000000"), 2000L, null).verdict);
+        SignFlow.Judgement over = fee(paid("100000001", "5000000000"), 2000L, null);
+        assertEquals(Verdict.FEE_OVER_LIMIT, over.verdict);
+        assertTrue(over.message(), over.message().contains("0.100000001 RAND") && over.message().contains("(0.1 RAND)"));
+        assertEquals("a profile may allow more", Verdict.SIGNABLE, fee(paid("100000001", "5000000000"), 2000L, "200000000").verdict);
+        assertEquals(Verdict.FEE_OVER_LIMIT, fee(paid("200000001", "5000000000"), 2000L, "200000000").verdict);
+        assertEquals("an unreadable limit is the default, not no limit", Verdict.FEE_OVER_LIMIT, fee(paid("100000001", "5000000000"), 2000L, "lots").verdict);
+        assertEquals("a fee past a long", Verdict.FEE_OVER_LIMIT, fee(paid("99999999999999999999999", "5000000000"), 2000L, null).verdict);
+        // The RAND paid out is 5 units: a fee of 6 is more than the payment, 5 is not.
+        SignFlow.Judgement ratio = fee(paid("6", "5"), 2000L, null);
+        assertEquals(Verdict.FEE_OVER_PAYOUT, ratio.verdict);
+        assertTrue(ratio.message(), ratio.message().contains("pays out"));
+        assertEquals(Verdict.SIGNABLE, fee(paid("5", "5"), 2000L, null).verdict);
+        // A token-only proposal is bounded by the limit alone; change is not a payment.
+        JSONObject token = summary().put("fee", "50000000");
+        token.put("outputs", new JSONArray()
+                .put(new JSONObject().put("to_account", false).put("amount", "1").put("asset", 5).put("matches", "FP"))
+                .put(new JSONObject().put("to_account", true).put("amount", "900000000000").put("matches", JSONObject.NULL)));
+        assertEquals(Verdict.SIGNABLE, fee(token, 2000L, null).verdict);
+        // A missing or unreadable fee is malformed; the vectors' numeric fee reads.
+        JSONObject none = summary();
+        none.remove("fee");
+        assertEquals(Verdict.MALFORMED_SUMMARY, fee(none, 2000L, null).verdict);
+        assertEquals(Verdict.MALFORMED_SUMMARY, fee(summary().put("fee", "abc"), 2000L, null).verdict);
+        assertEquals(Verdict.MALFORMED_SUMMARY, fee(summary().put("fee", -1), 2000L, null).verdict);
+        assertEquals(Verdict.SIGNABLE, fee(summary(), 2000L, null).verdict);
+        // No node needed: the fee is refused before the node is asked.
+        assertEquals(Verdict.FEE_OVER_LIMIT, fee(paid("100000001", "5000000000"), null, null).verdict);
+        assertEquals("250000000", SignFlow.parseMaxFee("0.25"));
+        assertNull(SignFlow.parseMaxFee("0"));
+        assertNull(SignFlow.parseMaxFee("lots"));
+    }
+
+    /** The flow reads the profile's own limit, on the check and on the signature. */
+    @Test public void theFlowAppliesTheProfilesFeeLimit() throws Exception {
+        JSONObject s = summary().put("fee", "200000000"); // 0.2 RAND against the 10 RAND payment
+        Profiles p = new Profiles();
+        SignFlow strict = new SignFlow(p.store, new FakeCore(s), new FakeNode(2000L), 7, new FakeSeeds());
+        assertEquals(Verdict.FEE_OVER_LIMIT, strict.check("a1", PROPOSAL, payees()).judgement.verdict);
+        try {
+            strict.sign("a1", PROPOSAL, payees(), null);
+            fail("signed a fee over the limit");
+        } catch (SignFlow.Refusal r) {
+            assertEquals(Verdict.FEE_OVER_LIMIT, r.judgement.verdict);
+        }
+        p.store.add(new SignerProfiles.Profile("b2", "ops", 1, "44".repeat(32), "500000000"), POLICY, "AA==:AA==");
+        SignFlow loose = new SignFlow(p.store, new FakeCore(s), new FakeNode(2000L), 7, new FakeSeeds());
+        assertEquals(Verdict.SIGNABLE, loose.check("b2", PROPOSAL, payees()).judgement.verdict);
+    }
+
     @Test public void theExpiryRuleIsTheClis() throws Exception {
         JSONObject s = summary(); // expires_at 2024
         assertEquals(16, SignFlow.EXPIRY_MARGIN);
@@ -652,7 +718,7 @@ public class SignFlowTest {
     private static JSONObject probe() throws Exception {
         String g = "0".repeat(64);
         return new JSONObject().put("recipients_checked", true).put("expires_at", 1000).put("chain_id", 21).put("binding_domain", 1)
-                .put("genesis", g).put("lines", new JSONArray().put("x"))
+                .put("genesis", g).put("lines", new JSONArray().put("x")).put("fee", "1000000")
                 .put("outputs", new JSONArray()
                         .put(new JSONObject().put("to_account", false).put("amount", "900000000000").put("asset", 0).put("owner_fingerprint", "X").put("matches", "AAAA (900 RAND)"))
                         .put(new JSONObject().put("to_account", false).put("amount", "1").put("asset", 5).put("owner_fingerprint", "X").put("matches", "AAAA (0.000000001 RAND)"))

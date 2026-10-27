@@ -545,6 +545,8 @@
     <string name="msauth_refuse_wrong_chain">This proposal is for chain %1$s; this wallet is on chain %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">This proposal is bound to another genesis than the one this wallet\'s node serves.</string>
     <string name="msauth_refuse_expired">This proposal expires at height %1$s and the chain is at %2$s: too late to sign. Ask for a new proposal.</string>
+    <string name="msauth_refuse_fee_limit">The fee of %1$s RAND is more than this signer allows (%2$s RAND), so this proposal is not signed. Raise the signer\'s fee limit or ask for a new proposal.</string>
+    <string name="msauth_refuse_fee_payout">The fee of %1$s RAND is more than the %2$s RAND this proposal pays out, so this proposal is not signed.</string>
     <string name="msauth_no_profile">No such signer profile.</string>
     <string name="msauth_no_seed">This signer profile has no key on this device: remove it and add it again.</string>
     <string name="msauth_label_length">a signer label is 1-64 characters</string>
@@ -590,7 +592,8 @@
     <string name="msauth_row_no_amount">Enter the amount of every payment: it is what stops a split or an inflated payment.</string>
     <string name="msauth_row_bad_amount">An amount is a number of RAND, such as 1.5.</string>
     <string name="msauth_review_title">What this proposal does, as checked against your policy</string>
-    <string name="msauth_fee_line">Fee: %1$s RAND · expires at height %2$s</string>
+    <string name="msauth_fee_line">Fee: %1$s RAND · at most %2$s RAND · expires at height %3$s</string>
+    <string name="msauth_max_fee">Highest fee this signer accepts, in RAND</string>
     <string name="msauth_matched">%1$s of %2$s payments matched.</string>
     <string name="msauth_retry">Retry</string>
     <string name="msauth_blocks_left">%1$s blocks left to prove it.</string>

@@ -496,7 +496,6 @@
     "Amount in RAND": "Valor em RAND",
     "Intended payments": "Pagamentos pretendidos",
     "Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.": "Informe cada pagamento que você pretende fazer: o endereço e o valor em RAND. Um pagamento ao mesmo endereço duas vezes é informado uma vez só, com o total. Uma saída que não corresponde a nenhum não pode ser assinada.",
-    "Fee: %@ RAND · expires at height %@": "Taxa: %@ RAND · expira na altura %@",
     "%@ of %@ payments matched.": "%@ de %@ pagamentos conferem.",
     "Retry": "Tentar de novo",
     "%@ blocks left to prove it.": "Faltam %@ blocos para prová-la.",
@@ -534,7 +533,11 @@
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "Uma transferência é provada por um dos provadores %@, o que leva um ou dois minutos. Mantenha o app aberto enquanto isso.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "Provar leva um ou dois minutos. A cadeia vai ver dois anuladores, dois compromissos e uma prova — nunca o valor, o destinatário ou o memo.",
     "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "Um dos provadores %@ gera a prova; este celular a verifica antes de qualquer envio. Mantenha o app aberto — fechá-lo perde esta prova, e nada é enviado.",
-    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Nenhum dos provadores %@ fixados nesta versão do Rand Wallet respondeu como esperado (%@). Atualize o Rand Wallet para a versão mais recente ou pareie seu próprio provador em Configurações."
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Nenhum dos provadores %@ fixados nesta versão do Rand Wallet respondeu como esperado (%@). Atualize o Rand Wallet para a versão mais recente ou pareie seu próprio provador em Configurações.",
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@": "Taxa: %1$@ RAND · no máximo %2$@ RAND · expira na altura %3$@",
+    "Highest fee this signer accepts, in RAND": "Taxa mais alta que este signatário aceita, em RAND",
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "A taxa de %1$@ RAND é maior do que este signatário permite (%2$@ RAND), então esta proposta não é assinada. Aumente o limite de taxa do signatário ou peça uma nova proposta.",
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "A taxa de %1$@ RAND é maior que os %2$@ RAND que esta proposta paga, então esta proposta não é assinada."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

@@ -492,6 +492,8 @@
     <string name="msauth_refuse_wrong_chain">یہ تجویز چین %1$s کے لیے ہے؛ یہ والیٹ چین %2$s پر ہے۔</string>
     <string name="msauth_refuse_wrong_genesis">یہ تجویز اس جینیسس سے مختلف جینیسس سے بندھی ہے جو اس والیٹ کا نوڈ فراہم کرتا ہے۔</string>
     <string name="msauth_refuse_expired">یہ تجویز اونچائی %1$s پر ختم ہوتی ہے اور چین %2$s پر ہے: دستخط کے لیے بہت دیر ہو چکی۔ نئی تجویز مانگیں۔</string>
+    <string name="msauth_refuse_fee_limit">%1$s RAND کی فیس اس دستخط کنندہ کی اجازت (%2$s RAND) سے زیادہ ہے، اس لیے اس تجویز پر دستخط نہیں کیے گئے۔ دستخط کنندہ کی فیس کی حد بڑھائیں یا نئی تجویز مانگیں۔</string>
+    <string name="msauth_refuse_fee_payout">%1$s RAND کی فیس اُن %2$s RAND سے زیادہ ہے جو یہ تجویز ادا کرتی ہے، اس لیے اس تجویز پر دستخط نہیں کیے گئے۔</string>
     <string name="msauth_no_profile">ایسی کوئی دستخط کنندہ پروفائل نہیں ہے۔</string>
     <string name="msauth_no_seed">اس دستخط کنندہ پروفائل کی اس ڈیوائس پر کوئی کی نہیں ہے: اسے ہٹا کر دوبارہ شامل کریں۔</string>
     <string name="msauth_label_length">دستخط کنندہ کا لیبل 1-64 حروف کا ہوتا ہے</string>
@@ -536,7 +538,8 @@
     <string name="msauth_row_no_amount">ہر ادائیگی کی رقم درج کریں: یہی ادائیگی کو بانٹنے یا پھلانے سے روکتی ہے۔</string>
     <string name="msauth_row_bad_amount">رقم RAND کی ایک عددی مقدار ہے، جیسے 1.5۔</string>
     <string name="msauth_review_title">یہ تجویز کیا کرتی ہے، آپ کی پالیسی کے مقابل جانچا گیا</string>
-    <string name="msauth_fee_line">فیس: %1$s RAND · اونچائی %2$s پر ختم</string>
+    <string name="msauth_fee_line">فیس: %1$s RAND · زیادہ سے زیادہ %2$s RAND · اونچائی %3$s پر ختم</string>
+    <string name="msauth_max_fee">سب سے زیادہ فیس جو یہ دستخط کنندہ قبول کرتا ہے، RAND میں</string>
     <string name="msauth_matched">%2$s میں سے %1$s ادائیگیاں مطابقت رکھتی ہیں۔</string>
     <string name="msauth_retry">دوبارہ کوشش کریں</string>
     <string name="msauth_blocks_left">اسے ثابت کرنے کے لیے %1$s بلاک باقی ہیں۔</string>

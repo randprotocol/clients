@@ -499,7 +499,6 @@
     "Amount in RAND": "Сумма в RAND",
     "Intended payments": "Предполагаемые платежи",
     "Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.": "Введите каждый платёж, который вы собираетесь сделать: адрес и сумму в RAND. Платёж на один и тот же адрес дважды вводится один раз, с итоговой суммой. Выход, не совпадающий ни с одним из них, подписать нельзя.",
-    "Fee: %@ RAND · expires at height %@": "Комиссия: %@ RAND · истекает на высоте %@",
     "%@ of %@ payments matched.": "Совпало платежей: %@ из %@.",
     "Retry": "Повторить",
     "%@ blocks left to prove it.": "Осталось %@ блоков, чтобы доказать это.",
@@ -537,7 +536,11 @@
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "Доказательство перевода строит один из пруверов %@, это занимает минуту-две. Не закрывайте приложение, пока оно работает.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "Доказательство строится минуту-две. Сеть увидит два нуллификатора, два коммитмента и доказательство — но никогда не сумму, получателя или мемо.",
     "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "Доказательство строит один из пруверов %@; этот телефон проверяет его, прежде чем что-либо отправить. Не закрывайте приложение — если закрыть его, доказательство пропадёт и ничего не отправится.",
-    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Ни один из пруверов %@, закреплённых в этой версии Rand Wallet, не ответил как ожидалось (%@). Обновите Rand Wallet до последней версии или подключите свой прувер в настройках."
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@Ни один из пруверов %@, закреплённых в этой версии Rand Wallet, не ответил как ожидалось (%@). Обновите Rand Wallet до последней версии или подключите свой прувер в настройках.",
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@": "Комиссия: %1$@ RAND · не более %2$@ RAND · истекает на высоте %3$@",
+    "Highest fee this signer accepts, in RAND": "Наибольшая комиссия, которую принимает этот подписант, в RAND",
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "Комиссия %1$@ RAND больше, чем допускает этот подписант (%2$@ RAND), поэтому это предложение не подписано. Поднимите лимит комиссии подписанта или запросите новое предложение.",
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "Комиссия %1$@ RAND больше, чем %2$@ RAND, которые выплачивает это предложение, поэтому это предложение не подписано."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

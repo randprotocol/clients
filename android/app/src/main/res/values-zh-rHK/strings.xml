@@ -484,6 +484,8 @@
     <string name="msauth_refuse_wrong_chain">此提案屬於鏈 %1$s；此錢包在鏈 %2$s 上。</string>
     <string name="msauth_refuse_wrong_genesis">此提案綁定的創世區塊與此錢包的節點所提供的不同。</string>
     <string name="msauth_refuse_expired">此提案在高度 %1$s 過期，而鏈已去到 %2$s：已來不及簽署。請索取新的提案。</string>
+    <string name="msauth_refuse_fee_limit">手續費 %1$s RAND 高於此簽署人允許的上限（%2$s RAND），因此此提案不會簽署。請提高簽署人的手續費上限，或索取新的提案。</string>
+    <string name="msauth_refuse_fee_payout">手續費 %1$s RAND 高於此提案支付的 %2$s RAND，因此此提案不會簽署。</string>
     <string name="msauth_no_profile">沒有這個簽署人資料。</string>
     <string name="msauth_no_seed">此簽署人資料在此裝置上沒有金鑰：請移除後重新新增。</string>
     <string name="msauth_label_length">簽署人標籤為 1-64 個字元</string>
@@ -528,7 +530,8 @@
     <string name="msauth_row_no_amount">請輸入每筆付款的金額：它可防止拆分或虛增付款。</string>
     <string name="msauth_row_bad_amount">金額是 RAND 的數值，例如 1.5。</string>
     <string name="msauth_review_title">此提案的作用（已對照你的政策核對）</string>
-    <string name="msauth_fee_line">手續費：%1$s RAND · 於高度 %2$s 過期</string>
+    <string name="msauth_fee_line">手續費：%1$s RAND · 最多 %2$s RAND · 於高度 %3$s 過期</string>
+    <string name="msauth_max_fee">此簽署人接受的最高手續費（RAND）</string>
     <string name="msauth_matched">%2$s 筆付款中有 %1$s 筆相符。</string>
     <string name="msauth_retry">重試</string>
     <string name="msauth_blocks_left">尚欠 %1$s 個區塊便可證明。</string>

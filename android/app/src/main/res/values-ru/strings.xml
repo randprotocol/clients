@@ -508,6 +508,8 @@
     <string name="msauth_refuse_wrong_chain">Это предложение для сети %1$s; этот кошелёк в сети %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">Это предложение привязано к другому genesis, чем тот, который обслуживает узел этого кошелька.</string>
     <string name="msauth_refuse_expired">Это предложение истекает на высоте %1$s, а сеть на %2$s: подписывать поздно. Запросите новое предложение.</string>
+    <string name="msauth_refuse_fee_limit">Комиссия %1$s RAND больше, чем допускает этот подписант (%2$s RAND), поэтому это предложение не подписано. Поднимите лимит комиссии подписанта или запросите новое предложение.</string>
+    <string name="msauth_refuse_fee_payout">Комиссия %1$s RAND больше, чем %2$s RAND, которые выплачивает это предложение, поэтому это предложение не подписано.</string>
     <string name="msauth_no_profile">Такого профиля подписанта нет.</string>
     <string name="msauth_no_seed">У этого профиля подписанта нет ключа на этом устройстве: удалите его и добавьте снова.</string>
     <string name="msauth_label_length">метка подписанта — 1-64 символа</string>
@@ -552,7 +554,8 @@
     <string name="msauth_row_no_amount">Введите сумму каждого платежа: именно она не даёт разбить платёж или завысить его.</string>
     <string name="msauth_row_bad_amount">Сумма — это число RAND, например 1.5.</string>
     <string name="msauth_review_title">Что делает это предложение — проверено по вашей политике</string>
-    <string name="msauth_fee_line">Комиссия: %1$s RAND · истекает на высоте %2$s</string>
+    <string name="msauth_fee_line">Комиссия: %1$s RAND · не более %2$s RAND · истекает на высоте %3$s</string>
+    <string name="msauth_max_fee">Наибольшая комиссия, которую принимает этот подписант, в RAND</string>
     <string name="msauth_matched">Совпало платежей: %1$s из %2$s.</string>
     <string name="msauth_retry">Повторить</string>
     <string name="msauth_blocks_left">Осталось %1$s блоков, чтобы доказать это.</string>

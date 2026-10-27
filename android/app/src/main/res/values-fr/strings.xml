@@ -500,6 +500,8 @@
     <string name="msauth_refuse_wrong_chain">Cette proposition est pour la chaîne %1$s ; ce portefeuille est sur la chaîne %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">Cette proposition est liée à un autre genesis que celui que sert le nœud de ce portefeuille.</string>
     <string name="msauth_refuse_expired">Cette proposition expire à la hauteur %1$s et la chaîne en est à %2$s : trop tard pour signer. Demandez une nouvelle proposition.</string>
+    <string name="msauth_refuse_fee_limit">Les frais de %1$s RAND dépassent ce que ce signataire autorise (%2$s RAND), cette proposition n\'est donc pas signée. Relevez la limite de frais du signataire ou demandez une nouvelle proposition.</string>
+    <string name="msauth_refuse_fee_payout">Les frais de %1$s RAND dépassent les %2$s RAND que cette proposition verse, cette proposition n\'est donc pas signée.</string>
     <string name="msauth_no_profile">Ce profil de signataire n\'existe pas.</string>
     <string name="msauth_no_seed">Ce profil de signataire n\'a pas de clé sur cet appareil : retirez-le et ajoutez-le de nouveau.</string>
     <string name="msauth_label_length">une étiquette de signataire compte 1-64 caractères</string>
@@ -544,7 +546,8 @@
     <string name="msauth_row_no_amount">Saisissez le montant de chaque paiement : c\'est ce qui empêche un fractionnement ou un paiement gonflé.</string>
     <string name="msauth_row_bad_amount">Un montant est un nombre de RAND, comme 1.5.</string>
     <string name="msauth_review_title">Ce que fait cette proposition, vérifié par rapport à votre politique</string>
-    <string name="msauth_fee_line">Frais : %1$s RAND · expire à la hauteur %2$s</string>
+    <string name="msauth_fee_line">Frais : %1$s RAND · au plus %2$s RAND · expire à la hauteur %3$s</string>
+    <string name="msauth_max_fee">Frais maximaux que ce signataire accepte, en RAND</string>
     <string name="msauth_matched">%1$s paiements sur %2$s correspondent.</string>
     <string name="msauth_retry">Réessayer</string>
     <string name="msauth_blocks_left">Il reste %1$s blocs pour la prouver.</string>

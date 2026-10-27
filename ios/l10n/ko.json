@@ -484,7 +484,6 @@
     "Amount in RAND": "금액 (RAND)",
     "Intended payments": "예정된 결제",
     "Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.": "보내려는 모든 결제를 입력하세요: 주소와 RAND 금액입니다. 같은 주소로 두 번 결제하는 경우 합계로 한 번만 입력합니다. 어느 것과도 일치하지 않는 출력은 서명할 수 없습니다.",
-    "Fee: %@ RAND · expires at height %@": "수수료: %@ RAND · 높이 %@에서 만료",
     "%@ of %@ payments matched.": "결제 %2$@건 중 %1$@건이 일치합니다.",
     "Retry": "다시 시도",
     "%@ blocks left to prove it.": "증명까지 %@ 블록 남았습니다.",
@@ -522,7 +521,11 @@
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "송금은 %@ 프루버 중 하나에서 증명되며 1~2분 정도 걸립니다. 진행되는 동안 앱을 열어 두세요.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "증명하는 데 1~2분 정도 걸립니다. 체인에는 널리파이어 두 개, 커밋먼트 두 개, 증명 하나만 보이며 금액, 받는 사람, 메모는 절대 보이지 않습니다.",
     "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "증명은 %@ 프루버 중 하나가 만들고, 이 휴대폰은 무엇이든 전송하기 전에 증명을 확인합니다. 앱을 열어 두세요 — 닫으면 이 증명을 잃으며 아무것도 전송되지 않습니다.",
-    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@이 버전의 Rand Wallet이 고정한 %@ 프루버 중 고정된 대로 응답한 것이 없습니다(%@). Rand Wallet을 최신 버전으로 업데이트하거나 설정에서 자체 프루버를 페어링하세요."
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@이 버전의 Rand Wallet이 고정한 %@ 프루버 중 고정된 대로 응답한 것이 없습니다(%@). Rand Wallet을 최신 버전으로 업데이트하거나 설정에서 자체 프루버를 페어링하세요.",
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@": "수수료: %1$@ RAND · 최대 %2$@ RAND · 높이 %3$@에서 만료",
+    "Highest fee this signer accepts, in RAND": "이 서명자가 받아들이는 최대 수수료(RAND)",
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "수수료 %1$@ RAND가 이 서명자가 허용하는 한도(%2$@ RAND)보다 많으므로 이 제안에는 서명하지 않습니다. 서명자의 수수료 한도를 올리거나 새 제안을 요청하세요.",
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "수수료 %1$@ RAND가 이 제안이 지급하는 %2$@ RAND보다 많으므로 이 제안에는 서명하지 않습니다."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

@@ -492,6 +492,8 @@
     <string name="msauth_refuse_wrong_chain">Cadangan ini untuk rantaian %1$s; dompet ini berada pada rantaian %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">Cadangan ini terikat pada genesis yang berbeza daripada yang dilayani nod dompet ini.</string>
     <string name="msauth_refuse_expired">Cadangan ini tamat tempoh pada ketinggian %1$s dan rantaian berada di %2$s: terlambat untuk menandatangani. Minta cadangan baharu.</string>
+    <string name="msauth_refuse_fee_limit">Yuran %1$s RAND melebihi had yang dibenarkan penandatangan ini (%2$s RAND), jadi cadangan ini tidak ditandatangani. Naikkan had yuran penandatangan atau minta cadangan baharu.</string>
+    <string name="msauth_refuse_fee_payout">Yuran %1$s RAND melebihi %2$s RAND yang dibayar cadangan ini, jadi cadangan ini tidak ditandatangani.</string>
     <string name="msauth_no_profile">Tiada profil penandatangan sedemikian.</string>
     <string name="msauth_no_seed">Profil penandatangan ini tiada kunci pada peranti ini: buangnya dan tambah semula.</string>
     <string name="msauth_label_length">label penandatangan ialah 1-64 aksara</string>
@@ -536,7 +538,8 @@
     <string name="msauth_row_no_amount">Masukkan amaun setiap pembayaran: ia menghalang pemecahan atau pembayaran yang dibengkakkan.</string>
     <string name="msauth_row_bad_amount">Amaun ialah bilangan RAND, seperti 1.5.</string>
     <string name="msauth_review_title">Apa yang cadangan ini lakukan, disemak terhadap dasar anda</string>
-    <string name="msauth_fee_line">Yuran: %1$s RAND · tamat tempoh pada ketinggian %2$s</string>
+    <string name="msauth_fee_line">Yuran: %1$s RAND · paling banyak %2$s RAND · tamat tempoh pada ketinggian %3$s</string>
+    <string name="msauth_max_fee">Yuran tertinggi yang diterima penandatangan ini, dalam RAND</string>
     <string name="msauth_matched">%1$s daripada %2$s pembayaran sepadan.</string>
     <string name="msauth_retry">Cuba lagi</string>
     <string name="msauth_blocks_left">Tinggal %1$s blok lagi untuk membuktikannya.</string>

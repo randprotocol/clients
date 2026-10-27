@@ -88,6 +88,10 @@ enum MsauthVerdict: Equatable {
     case wrongChain(proposal: UInt64, wallet: UInt64)
     case wrongGenesis
     case expired(head: UInt64, expiresAt: UInt64)
+    /// The fee (base units) is over the signer profile's limit (`max`, base units).
+    case feeOverLimit(fee: String, max: String)
+    /// The fee is over the RAND the proposal pays out (`paid`, base units).
+    case feeOverPayout(fee: String, paid: String)
 
     var isSignable: Bool { if case .signable = self { return true } else { return false } }
 
@@ -109,6 +113,12 @@ enum MsauthVerdict: Equatable {
             return String(localized: "This proposal is bound to another genesis than the one this wallet's node serves.")
         case .expired(let head, let expiresAt):
             return String(localized: "This proposal expires at height \(String(expiresAt)) and the chain is at \(String(head)): too late to sign. Ask for a new proposal.")
+        case .feeOverLimit(let fee, let max):
+            let (f, m) = (MsauthRules.randText(fee), MsauthRules.randText(max))
+            return String(localized: "The fee of \(f) RAND is more than this signer allows (\(m) RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.")
+        case .feeOverPayout(let fee, let paid):
+            let (f, p) = (MsauthRules.randText(fee), MsauthRules.randText(paid))
+            return String(localized: "The fee of \(f) RAND is more than the \(p) RAND this proposal pays out, so this proposal is not signed.")
         }
     }
 }
@@ -174,6 +184,41 @@ enum MsauthRules {
     /// Blocks a proposal needs before its window closes: the CLI's `EXPIRY_MARGIN`.
     static let expiryMargin: UInt64 = 16
 
+    /// The fee a signer accepts unless its profile says otherwise: 0.1 RAND in base units (1 RAND =
+    /// 10^9, the unit the core's summary writes `fee` in) — ui/engine/signers.js
+    /// `DEFAULT_MAX_FEE_UNITS`. The binding a signer signs covers the fee, so the rule reads it.
+    static let defaultMaxFeeUnits = "100000000"
+
+    /// A profile's fee limit in base units: its own when it is a digit string, else the default.
+    static func feeLimit(_ maxFee: String?) -> String {
+        guard let m = maxFee, !m.isEmpty, m.unicodeScalars.allSatisfy({ ("0"..."9").contains($0) }) else { return defaultMaxFeeUnits }
+        return m
+    }
+
+    /// A fee limit typed in RAND ("0.1") → base units as digits; nil for anything but a positive amount.
+    static func parseMaxFee(_ text: String) -> String? {
+        guard let units = Amount.parse(text.trimmingCharacters(in: .whitespacesAndNewlines)), units > 0 else { return nil }
+        return String(units)
+    }
+
+    /// Two digit strings compared as whole numbers, whatever their length.
+    static func compareUnits(_ a: String, _ b: String) -> ComparisonResult {
+        let x = String(a.drop { $0 == "0" }), y = String(b.drop { $0 == "0" })
+        if x.count != y.count { return x.count < y.count ? .orderedAscending : .orderedDescending }
+        return x == y ? .orderedSame : (x < y ? .orderedAscending : .orderedDescending)
+    }
+
+    /// Base units (a digit string of any length) as RAND, 9 decimals, trailing zeros dropped (JS `formatUnits`).
+    static func randText(_ units: String) -> String {
+        let digits = String(units.drop { $0 == "0" })
+        let padded = String(repeating: "0", count: max(0, 10 - digits.count)) + digits
+        let whole = String(padded.dropLast(9)).drop { $0 == "0" }
+        var frac = String(padded.suffix(9))
+        while frac.hasSuffix("0") { frac.removeLast() }
+        let w = whole.isEmpty ? "0" : String(whole)
+        return frac.isEmpty ? w : "\(w).\(frac)"
+    }
+
     /// A pasted or opened file: a leading byte-order mark dropped, whitespace trimmed.
     static func clean(_ s: String) -> String {
         var t = s
@@ -208,9 +253,13 @@ enum MsauthRules {
     }
 
     /// Whether a checked proposal may be signed now, on this wallet's chain. `recipients` is the
-    /// list the check was given (`payees`), `head` nil when no node answered.
+    /// list the check was given (`payees`), `head` nil when no node answered. `maxFee` is the signer
+    /// profile's fee limit in base units (the default when nil or unreadable): the fee rule refuses
+    /// a fee over it, and a fee over the RAND the proposal pays out (change is not a payment; a
+    /// token is not RAND, so a token-only proposal is bounded by the limit alone). It needs no
+    /// node and comes after the payee rule — ui/engine/signers.js `verdict`, the same order.
     static func verdict(summary: MsauthSummary, head: UInt64?, chainId: UInt64, genesis: String?, url: String,
-                        recipients: [String]) -> MsauthVerdict {
+                        recipients: [String], maxFee: String? = nil) -> MsauthVerdict {
         guard let s = summary.json as? [String: Any] else { return .malformedSummary }
         // Never sign on an unchecked payee (a coordinator could pay its own key).
         guard MsauthJSON.bool(s["recipients_checked"]) == true else { return .uncheckedRecipient }
@@ -252,8 +301,25 @@ enum MsauthRules {
         if unmatched { return .uncheckedRecipient }
         guard let expiresAt = MsauthJSON.uint(s["expires_at"]), let proposalChain = MsauthJSON.uint(s["chain_id"]),
               let domain = MsauthJSON.uint(s["binding_domain"]),
-              let proposalGenesis = s["genesis"] as? String, MsauthJSON.isHex(proposalGenesis) else {
+              let proposalGenesis = s["genesis"] as? String, MsauthJSON.isHex(proposalGenesis),
+              let fee = MsauthJSON.amount(s["fee"]) else {
             return .malformedSummary
+        }
+        let limit = feeLimit(maxFee)
+        if compareUnits(fee, limit) == .orderedDescending { return .feeOverLimit(fee: fee, max: limit) }
+        // The RAND paid out: paying outputs whose asset is not a token (a missing or unreadable
+        // asset is RAND, as in `payeeAssets`). A sum past UInt64 is more than any fee here.
+        var paid: UInt64 = 0
+        var huge = false
+        for o in paying {
+            if let asset = MsauthJSON.asset(o["asset"]), asset != 0 { continue }
+            guard let a = MsauthJSON.amount(o["amount"]).flatMap({ UInt64($0) }) else { huge = true; break }
+            let (sum, overflow) = paid.addingReportingOverflow(a)
+            if overflow { huge = true; break }
+            paid = sum
+        }
+        if !huge && paid > 0 && compareUnits(fee, String(paid)) == .orderedDescending {
+            return .feeOverPayout(fee: fee, paid: String(paid))
         }
         guard let head else { return .noNode(url: url) }
         if proposalChain != chainId { return .wrongChain(proposal: proposalChain, wallet: chainId) }
@@ -323,25 +389,30 @@ struct MsauthSigning {
     let chainId: UInt64
 
     /// The node's head, from a node on this wallet's chain; any failure is `.noNode`.
-    private func judge(_ summary: MsauthSummary, _ payees: [String]) async -> MsauthVerdict {
+    private func judge(_ summary: MsauthSummary, _ payees: [String], maxFee: String?) async -> MsauthVerdict {
         guard let node else {
-            return MsauthRules.verdict(summary: summary, head: nil, chainId: chainId, genesis: nil, url: "", recipients: payees)
+            return MsauthRules.verdict(summary: summary, head: nil, chainId: chainId, genesis: nil, url: "", recipients: payees, maxFee: maxFee)
         }
         let url = node.nodeURL
         do {
             guard try await node.chainId() == chainId else {
-                return MsauthRules.verdict(summary: summary, head: nil, chainId: chainId, genesis: nil, url: url, recipients: payees)
+                return MsauthRules.verdict(summary: summary, head: nil, chainId: chainId, genesis: nil, url: url, recipients: payees, maxFee: maxFee)
             }
             let head = try await node.headHeight()
             // A height past 2^53-1 is no answer a node gives honestly (the JS rule's safe-integer bound).
             guard head <= 9_007_199_254_740_991 else {
-                return MsauthRules.verdict(summary: summary, head: nil, chainId: chainId, genesis: nil, url: url, recipients: payees)
+                return MsauthRules.verdict(summary: summary, head: nil, chainId: chainId, genesis: nil, url: url, recipients: payees, maxFee: maxFee)
             }
             let genesis = try await node.genesisHash()
-            return MsauthRules.verdict(summary: summary, head: head, chainId: chainId, genesis: genesis, url: url, recipients: payees)
+            return MsauthRules.verdict(summary: summary, head: head, chainId: chainId, genesis: genesis, url: url, recipients: payees, maxFee: maxFee)
         } catch {
-            return MsauthRules.verdict(summary: summary, head: nil, chainId: chainId, genesis: nil, url: url, recipients: payees)
+            return MsauthRules.verdict(summary: summary, head: nil, chainId: chainId, genesis: nil, url: url, recipients: payees, maxFee: maxFee)
         }
+    }
+
+    /// The signer profile's fee limit (base units), nil when it names none (the default applies).
+    private func maxFee(_ id: String) -> String? {
+        store.profiles.first { $0.id == id }?.maxFee
     }
 
     /// The core's check with the intended payments, and the verdict on it now. A blank entry is
@@ -351,7 +422,7 @@ struct MsauthSigning {
         let payees = MsauthRules.payees(expectedRecipients)
         if payees.contains(where: MsauthRules.isBlank) { return MsauthCheck(summary: nil, verdict: .uncheckedRecipient) }
         let summary = try core.check(proposal: MsauthRules.clean(proposal), policy: policy, expectedRecipients: payees)
-        return MsauthCheck(summary: summary, verdict: await judge(summary, payees))
+        return MsauthCheck(summary: summary, verdict: await judge(summary, payees, maxFee: maxFee(id)))
     }
 
     /// The share, or the refusal (`MsauthRefusal`, or the core's error). The order: check and
@@ -365,12 +436,13 @@ struct MsauthSigning {
         let payees = MsauthRules.payees(expectedRecipients)
         if payees.contains(where: MsauthRules.isBlank) { throw MsauthRefusal(verdict: .uncheckedRecipient) }
         let summary = try core.check(proposal: text, policy: policy, expectedRecipients: payees)
-        let first = await judge(summary, payees)
+        let limit = maxFee(id)
+        let first = await judge(summary, payees, maxFee: limit)
         guard first.isSignable else { throw MsauthRefusal(verdict: first) }
         // Leaving the screen cancels this task: stop before the Face ID prompt and before signing.
         try Task.checkCancellation()
         let share = try await store.withSeedAsync(id, reason: reason) { seed in
-            let again = await judge(summary, payees)
+            let again = await judge(summary, payees, maxFee: limit)
             guard again.isSignable else { throw MsauthRefusal(verdict: again) }
             try Task.checkCancellation()
             return try core.sign(proposal: text, policy: policy, seed: seed, expectedRecipients: payees)

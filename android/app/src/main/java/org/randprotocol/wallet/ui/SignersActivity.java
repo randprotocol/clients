@@ -29,6 +29,7 @@ import org.randprotocol.wallet.databinding.ActivitySignersBinding;
 import org.randprotocol.wallet.databinding.ItemSignerBinding;
 import org.randprotocol.wallet.security.KeystoreSeedCipher;
 import org.randprotocol.wallet.security.SignerProfiles;
+import org.randprotocol.wallet.util.Amounts;
 import org.randprotocol.wallet.util.L10n;
 import org.randprotocol.wallet.wallet.MsauthCore;
 import org.randprotocol.wallet.wallet.NativeMsauthCore;
@@ -355,6 +356,13 @@ public class SignersActivity extends BaseActivity {
             show(b.addError, L10n.t(R.string.msauth_label_length, "a signer label is 1-64 characters"));
             return;
         }
+        // The fee limit, typed in RAND; empty is the default (0.1 RAND).
+        String typedFee = String.valueOf(b.maxFee.getText()).trim();
+        String maxFee = typedFee.isEmpty() ? SignFlow.DEFAULT_MAX_FEE_UNITS : SignFlow.parseMaxFee(typedFee);
+        if (maxFee == null) {
+            show(b.addError, L10n.t(R.string.msauth_row_bad_amount, "An amount is a number of RAND, such as 1.5."));
+            return;
+        }
         saving = true;
         b.save.setEnabled(false);
         String id = SignerProfiles.newId();
@@ -384,12 +392,12 @@ public class SignersActivity extends BaseActivity {
                     done(m);
                     return;
                 }
-                promptToSeal(id, label, p, c);
+                promptToSeal(id, label, maxFee, p, c);
             });
         });
     }
 
-    private void promptToSeal(String id, String label, Preview p, Cipher cipher) {
+    private void promptToSeal(String id, String label, String maxFee, Preview p, Cipher cipher) {
         BiometricPrompt prompt = new BiometricPrompt(this, ContextCompat.getMainExecutor(this), new BiometricPrompt.AuthenticationCallback() {
             @Override
             public void onAuthenticationSucceeded(@NonNull BiometricPrompt.AuthenticationResult result) {
@@ -404,7 +412,7 @@ public class SignersActivity extends BaseActivity {
                     KeystoreSeedCipher.deleteKey(id);
                     return;
                 }
-                work.execute(() -> seal(id, label, p, authed));
+                work.execute(() -> seal(id, label, maxFee, p, authed));
             }
 
             @Override
@@ -418,7 +426,7 @@ public class SignersActivity extends BaseActivity {
     }
 
     /** Off the main thread: the seed read again from the key text, sealed, saved; zeroed whatever happens. */
-    private void seal(String id, String label, Preview p, Cipher cipher) {
+    private void seal(String id, String label, String maxFee, Preview p, Cipher cipher) {
         byte[] seed = null;
         String err = null;
         boolean ok = false;
@@ -427,7 +435,7 @@ public class SignersActivity extends BaseActivity {
             seed = hex(signer.optString("seed"));
             signer.remove("seed");
             byte[] ct = cipher.doFinal(seed);
-            profiles().add(new SignerProfiles.Profile(id, label, p.index, p.policyHash), p.policy, KeystoreSeedCipher.seal(cipher.getIV(), ct));
+            profiles().add(new SignerProfiles.Profile(id, label, p.index, p.policyHash, maxFee), p.policy, KeystoreSeedCipher.seal(cipher.getIV(), ct));
             ok = true;
         } catch (Exception e) {
             err = CoreErrors.of(e);
@@ -441,6 +449,7 @@ public class SignersActivity extends BaseActivity {
             if (isFinishing() || isDestroyed()) return;
             if (saved) {
                 b.label.setText("");
+                b.maxFee.setText(Amounts.format(SignFlow.DEFAULT_MAX_FEE_UNITS));
                 b.policy.setText("");
                 b.key.setText("");
                 preview = null;

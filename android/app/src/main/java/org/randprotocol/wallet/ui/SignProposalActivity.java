@@ -23,6 +23,7 @@ import org.randprotocol.wallet.rpc.RpcClient;
 import org.randprotocol.wallet.security.KeystoreSeedSource;
 import org.randprotocol.wallet.security.Prefs;
 import org.randprotocol.wallet.security.SignerProfiles;
+import org.randprotocol.wallet.util.Amounts;
 import org.randprotocol.wallet.util.L10n;
 import org.randprotocol.wallet.wallet.NativeMsauthCore;
 import org.randprotocol.wallet.wallet.SignFlow;
@@ -501,7 +502,8 @@ public class SignProposalActivity extends BaseActivity {
                 t.setPadding(0, 2, 0, 2);
                 b.lines.addView(t);
             }
-            b.fee.setText(L10n.t(R.string.msauth_fee_line, "Fee: %1$s RAND · expires at height %2$s", r.fee(), r.expiresAt()));
+            b.fee.setText(L10n.t(R.string.msauth_fee_line, "Fee: %1$s RAND · at most %2$s RAND · expires at height %3$s", r.fee(),
+                    Amounts.format(profile == null ? SignFlow.DEFAULT_MAX_FEE_UNITS : profile.feeLimit()), r.expiresAt()));
             b.matched.setText(L10n.t(R.string.msauth_matched, "%1$s of %2$s payments matched.", String.valueOf(r.payingMatched()), String.valueOf(r.payingTotal())));
         }
         b.refusal.setText(r.refusal() == null ? "" : r.refusal());

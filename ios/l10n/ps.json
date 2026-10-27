@@ -505,7 +505,6 @@
     "Amount in RAND": "په RAND کې اندازه",
     "Intended payments": "موخه شوې تادیات",
     "Enter every payment you mean to make: the address and the amount in RAND. A payment to the same address twice is entered once, with the total. An output that matches none of them cannot be signed.": "هره تادیه چې کول یې غواړئ ولیکئ: پته او په RAND کې اندازه. هماغې پتې ته دوه ځله تادیه یو ځل د ټولیز مجموعې سره لیکل کېږي. هغه محصول چې له هیڅ یوې سره نه برابرېږي لاسلیک نشي کېدای.",
-    "Fee: %@ RAND · expires at height %@": "فیس: %@ RAND · په %@ لوړوالي کې پای ته رسېږي",
     "%@ of %@ payments matched.": "د %2$@ تادیاتو څخه %1$@ سره برابر شول.",
     "Retry": "بیا هڅه وکړئ",
     "%@ blocks left to prove it.": "د ثبوت لپاره %@ بلاکونه پاتې دي.",
@@ -543,7 +542,11 @@
     "A transfer is proved by one of the %@ provers, which takes a minute or two. Keep the app open while it runs.": "لېږد د %@ له ثبوت جوړوونکو څخه یو ثبوت کوي، چې یوه یا دوه دقیقې وخت نیسي. تر هغه چې روان وي، اپ خلاص وساتئ.",
     "Proving takes a minute or two. The chain will see two nullifiers, two commitments and a proof — never the amount, the recipient or the memo.": "ثبوت جوړول یوه یا دوه دقیقې وخت نیسي. زنځیر به دوه nullifier، دوه commitment او یو ثبوت وویني — هېڅکله اندازه، ترلاسه کوونکی یا یادښت نه.",
     "One of the %@ provers makes the proof; this phone checks it before anything is sent. Keep the app open — closing it loses this proof, and nothing is sent.": "د %@ له ثبوت جوړوونکو څخه یو ثبوت جوړوي؛ دا تلیفون یې مخکې له دې چې څه ولېږل شي، کتل کوي. اپ خلاص وساتئ — بندول یې دا ثبوت له منځه وړي، او هېڅ نه لېږل کېږي.",
-    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@د Rand Wallet د دې نسخې ټاکل شوو %@ ثبوت جوړوونکو څخه هېڅ یوه د ټاکلې بڼې سره سم ځواب ورنه کړ (%@). Rand Wallet وروستۍ نسخې ته تازه کړئ، یا په امستنو کې خپل ثبوت جوړوونکی جوړه کړئ."
+    "%@None of the %@ provers this version of Rand Wallet pins answered as pinned (%@). Update Rand Wallet to the latest version, or pair your own prover in Settings.": "%@د Rand Wallet د دې نسخې ټاکل شوو %@ ثبوت جوړوونکو څخه هېڅ یوه د ټاکلې بڼې سره سم ځواب ورنه کړ (%@). Rand Wallet وروستۍ نسخې ته تازه کړئ، یا په امستنو کې خپل ثبوت جوړوونکی جوړه کړئ.",
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@": "فیس: %1$@ RAND · تر ډېره %2$@ RAND · په %3$@ لوړوالي کې پای ته رسېږي",
+    "Highest fee this signer accepts, in RAND": "تر ټولو لوړ فیس چې دا لاسلیک کوونکی یې مني، په RAND کې",
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal.": "د %1$@ RAND فیس له هغه حد څخه زیات دی چې دا لاسلیک کوونکی یې اجازه ورکوي (%2$@ RAND)، نو دا وړاندیز نه لاسلیک کېږي. د لاسلیک کوونکي د فیس حد لوړ کړئ یا نوی وړاندیز وغواړئ.",
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed.": "د %1$@ RAND فیس له هغو %2$@ RAND څخه زیات دی چې دا وړاندیز یې ورکوي، نو دا وړاندیز نه لاسلیک کېږي."
   },
   "InfoPlist": {
     "CFBundleDisplayName": "Rand Wallet",

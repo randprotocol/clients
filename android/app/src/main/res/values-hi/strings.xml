@@ -492,6 +492,8 @@
     <string name="msauth_refuse_wrong_chain">यह प्रस्ताव चेन %1$s के लिए है; यह वॉलेट चेन %2$s पर है।</string>
     <string name="msauth_refuse_wrong_genesis">यह प्रस्ताव उस जेनेसिस से अलग जेनेसिस से बँधा है जिसे इस वॉलेट का नोड परोसता है।</string>
     <string name="msauth_refuse_expired">यह प्रस्ताव ऊँचाई %1$s पर समाप्त होता है और चेन %2$s पर है: हस्ताक्षर के लिए बहुत देर हो चुकी। नया प्रस्ताव माँगें।</string>
+    <string name="msauth_refuse_fee_limit">%1$s RAND का शुल्क इस हस्ताक्षरकर्ता की अनुमति (%2$s RAND) से अधिक है, इसलिए इस प्रस्ताव पर हस्ताक्षर नहीं किए गए। हस्ताक्षरकर्ता की शुल्क सीमा बढ़ाएँ या नया प्रस्ताव माँगें।</string>
+    <string name="msauth_refuse_fee_payout">%1$s RAND का शुल्क इस प्रस्ताव द्वारा भुगतान किए जा रहे %2$s RAND से अधिक है, इसलिए इस प्रस्ताव पर हस्ताक्षर नहीं किए गए।</string>
     <string name="msauth_no_profile">ऐसी कोई हस्ताक्षरकर्ता प्रोफ़ाइल नहीं है।</string>
     <string name="msauth_no_seed">इस हस्ताक्षरकर्ता प्रोफ़ाइल की इस डिवाइस पर कोई की नहीं है: इसे हटाकर फिर जोड़ें।</string>
     <string name="msauth_label_length">हस्ताक्षरकर्ता का लेबल 1-64 अक्षरों का होता है</string>
@@ -536,7 +538,8 @@
     <string name="msauth_row_no_amount">हर भुगतान की राशि दर्ज करें: यही भुगतान को बाँटने या बढ़ाए जाने से रोकती है।</string>
     <string name="msauth_row_bad_amount">राशि RAND की एक संख्या होती है, जैसे 1.5।</string>
     <string name="msauth_review_title">यह प्रस्ताव क्या करता है, आपकी पॉलिसी के विरुद्ध जाँचा गया</string>
-    <string name="msauth_fee_line">शुल्क: %1$s RAND · ऊँचाई %2$s पर समाप्त</string>
+    <string name="msauth_fee_line">शुल्क: %1$s RAND · अधिकतम %2$s RAND · ऊँचाई %3$s पर समाप्त</string>
+    <string name="msauth_max_fee">इस हस्ताक्षरकर्ता द्वारा स्वीकार्य अधिकतम शुल्क, RAND में</string>
     <string name="msauth_matched">%2$s में से %1$s भुगतान मेल खाते हैं।</string>
     <string name="msauth_retry">दोबारा कोशिश करें</string>
     <string name="msauth_blocks_left">इसे प्रूव करने के लिए %1$s ब्लॉक बाकी हैं।</string>

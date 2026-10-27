@@ -5,6 +5,7 @@ import org.json.JSONObject;
 import org.randprotocol.wallet.R;
 import org.randprotocol.wallet.rpc.RpcClient;
 import org.randprotocol.wallet.security.SignerProfiles;
+import org.randprotocol.wallet.util.Amounts;
 import org.randprotocol.wallet.util.L10n;
 
 import java.math.BigDecimal;
@@ -33,7 +34,25 @@ public final class SignFlow {
     /** JavaScript's {@code Number.MAX_SAFE_INTEGER}, the bound the web's rule applies to every number it reads. */
     public static final long MAX_SAFE_INTEGER = 9_007_199_254_740_991L;
 
-    public enum Verdict { SIGNABLE, MALFORMED_SUMMARY, UNCHECKED_RECIPIENT, NO_NODE, WRONG_CHAIN, WRONG_GENESIS, EXPIRED }
+    public enum Verdict { SIGNABLE, MALFORMED_SUMMARY, UNCHECKED_RECIPIENT, NO_NODE, WRONG_CHAIN, WRONG_GENESIS, EXPIRED, FEE_OVER_LIMIT, FEE_OVER_PAYOUT }
+
+    /**
+     * The fee a signer accepts unless its profile says otherwise: 0.1 RAND in base units (1 RAND =
+     * 10^9, the unit the core's summary writes {@code fee} in) — ui/engine/signers.js
+     * {@code DEFAULT_MAX_FEE_UNITS}. The binding a signer signs covers the fee, so the rule reads it.
+     */
+    public static final String DEFAULT_MAX_FEE_UNITS = "100000000";
+
+    /** A profile's fee limit in base units: its own when it is a digit string, else the default. */
+    public static String feeLimit(String maxFee) {
+        return maxFee != null && digits(maxFee) ? maxFee : DEFAULT_MAX_FEE_UNITS;
+    }
+
+    /** A fee limit typed in RAND ("0.1") → base units as digits; null for anything but a positive amount. */
+    public static String parseMaxFee(String text) {
+        java.math.BigInteger u = org.randprotocol.wallet.util.Amounts.parse(text);
+        return u == null || u.signum() <= 0 ? null : u.toString();
+    }
 
     /** A verdict and what its sentence names. */
     public static final class Judgement {
@@ -47,8 +66,16 @@ public final class SignFlow {
         public final String url;
         /** {@code expires_at - head} when signable, else 0. */
         public final long blocksLeft;
+        /** For the fee verdicts: the fee and the limit or the RAND paid out, base units; else "". */
+        public final String fee, bound;
 
         private Judgement(Verdict verdict, Long head, long expiresAt, long proposalChain, long walletChain, String url) {
+            this(verdict, head, expiresAt, proposalChain, walletChain, url, "", "");
+        }
+
+        private Judgement(Verdict verdict, Long head, long expiresAt, long proposalChain, long walletChain, String url, String fee, String bound) {
+            this.fee = fee;
+            this.bound = bound;
             this.verdict = verdict;
             this.head = head;
             this.expiresAt = expiresAt;
@@ -84,6 +111,12 @@ public final class SignFlow {
                 case EXPIRED:
                     return L10n.t(R.string.msauth_refuse_expired, "This proposal expires at height %1$s and the chain is at %2$s: too late to sign. Ask for a new proposal.",
                             String.valueOf(expiresAt), String.valueOf(head));
+                case FEE_OVER_LIMIT:
+                    return L10n.t(R.string.msauth_refuse_fee_limit, "The fee of %1$s RAND is more than this signer allows (%2$s RAND), so this proposal is not signed. "
+                            + "Raise the signer's fee limit or ask for a new proposal.", Amounts.format(fee), Amounts.format(bound));
+                case FEE_OVER_PAYOUT:
+                    return L10n.t(R.string.msauth_refuse_fee_payout, "The fee of %1$s RAND is more than the %2$s RAND this proposal pays out, so this proposal is not signed.",
+                            Amounts.format(fee), Amounts.format(bound));
                 default:
                     return null;
             }
@@ -107,12 +140,21 @@ public final class SignFlow {
         return judge(summary, head, chainId, genesis, "", recipients).verdict;
     }
 
+    /** {@link #judge} with the default fee limit. */
+    public static Judgement judge(Object summary, Long head, long chainId, String genesis, String url, List<String> recipients) {
+        return judge(summary, head, chainId, genesis, url, recipients, null);
+    }
+
     /**
      * Whether a checked proposal may be signed now, on this wallet's chain. {@code summary} is
      * {@code msauth_check}'s reply, {@code recipients} the list the check was given ({@link
-     * #payees}), {@code head} null when no node answered, {@code url} the node asked.
+     * #payees}), {@code head} null when no node answered, {@code url} the node asked. {@code maxFee}
+     * is the signer profile's fee limit in base units (the default when null or unreadable): the
+     * fee rule refuses a fee over it, and a fee over the RAND the proposal pays out (change is not
+     * a payment; a token is not RAND, so a token-only proposal is bounded by the limit alone). It
+     * needs no node and comes after the payee rule — ui/engine/signers.js {@code verdict}, the same order.
      */
-    public static Judgement judge(Object summary, Long head, long chainId, String genesis, String url, List<String> recipients) {
+    public static Judgement judge(Object summary, Long head, long chainId, String genesis, String url, List<String> recipients, String maxFee) {
         if (!(summary instanceof JSONObject)) return Judgement.of(Verdict.MALFORMED_SUMMARY, url);
         JSONObject s = (JSONObject) summary;
         Judgement unchecked = Judgement.of(Verdict.UNCHECKED_RECIPIENT, url);
@@ -175,6 +217,21 @@ public final class SignFlow {
         Long domain = uint(s.opt("binding_domain"));
         Object g = s.opt("genesis");
         if (expiresAt == null || proposalChain == null || domain == null || !(g instanceof String) || !isHex((String) g)) return malformed;
+        Object feeV = s.opt("fee");
+        if (!amountOk(feeV)) return malformed;
+        java.math.BigInteger fee = new java.math.BigInteger(feeV instanceof String ? jsTrim((String) feeV) : String.valueOf(uint(feeV)));
+        java.math.BigInteger limit = new java.math.BigInteger(feeLimit(maxFee));
+        if (fee.compareTo(limit) > 0) return new Judgement(Verdict.FEE_OVER_LIMIT, null, 0, 0, 0, url, fee.toString(), limit.toString());
+        // The RAND paid out: paying outputs whose asset is not a token (a missing or unreadable asset
+        // is RAND, as in payeeAssets).
+        java.math.BigInteger paid = java.math.BigInteger.ZERO;
+        for (JSONObject o : paying) {
+            Long asset = assetId(o.opt("asset"));
+            if (asset != null && asset != 0) continue;
+            Object a = o.opt("amount");
+            paid = paid.add(new java.math.BigInteger(a instanceof String ? jsTrim((String) a) : String.valueOf(uint(a))));
+        }
+        if (paid.signum() > 0 && fee.compareTo(paid) > 0) return new Judgement(Verdict.FEE_OVER_PAYOUT, null, 0, 0, 0, url, fee.toString(), paid.toString());
         if (head == null || head < 0 || head > MAX_SAFE_INTEGER) return Judgement.of(Verdict.NO_NODE, url);
         if (proposalChain != chainId) return new Judgement(Verdict.WRONG_CHAIN, head, expiresAt, proposalChain, chainId, url);
         String ours = genesis == null ? "" : genesis.toLowerCase(Locale.ROOT);
@@ -449,18 +506,24 @@ public final class SignFlow {
     }
 
     /** The head from a node on this wallet's chain; any failure, or a height past 2^53-1, is no node. */
-    private Judgement judgeNow(JSONObject summary, List<String> payees) {
-        if (node == null) return judge(summary, null, chainId, null, "", payees);
+    private Judgement judgeNow(JSONObject summary, List<String> payees, String maxFee) {
+        if (node == null) return judge(summary, null, chainId, null, "", payees, maxFee);
         String url = "";
         try {
             url = node.url();
-            if (node.chainId() != chainId) return judge(summary, null, chainId, null, url, payees);
+            if (node.chainId() != chainId) return judge(summary, null, chainId, null, url, payees, maxFee);
             long head = node.headHeight();
-            if (head < 0 || head > MAX_SAFE_INTEGER) return judge(summary, null, chainId, null, url, payees);
-            return judge(summary, head, chainId, node.genesisHash(), url, payees);
+            if (head < 0 || head > MAX_SAFE_INTEGER) return judge(summary, null, chainId, null, url, payees, maxFee);
+            return judge(summary, head, chainId, node.genesisHash(), url, payees, maxFee);
         } catch (Exception e) {
-            return judge(summary, null, chainId, null, url, payees);
+            return judge(summary, null, chainId, null, url, payees, maxFee);
         }
+    }
+
+    /** The signer profile's fee limit (base units), null when it names none (the default applies). */
+    private String maxFee(String id) {
+        for (SignerProfiles.Profile p : profiles.list()) if (p.id.equals(id)) return p.maxFee;
+        return null;
     }
 
     private static void checkCancel(Cancel cancel) {
@@ -478,7 +541,7 @@ public final class SignFlow {
         List<String> payees = Collections.unmodifiableList(payees(expectedRecipients));
         if (anyBlank(payees)) return new Check(null, Judgement.of(Verdict.UNCHECKED_RECIPIENT, ""));
         JSONObject summary = core.msauthCheck(clean(proposal), policy, payees);
-        return new Check(summary, judgeNow(summary, payees));
+        return new Check(summary, judgeNow(summary, payees, maxFee(id)));
     }
 
     /**
@@ -496,12 +559,13 @@ public final class SignFlow {
         List<String> payees = Collections.unmodifiableList(payees(expectedRecipients));
         if (anyBlank(payees)) throw new Refusal(Judgement.of(Verdict.UNCHECKED_RECIPIENT, ""));
         JSONObject summary = core.msauthCheck(text, policy, payees);
-        Judgement first = judgeNow(summary, payees);
+        String limit = maxFee(id);
+        Judgement first = judgeNow(summary, payees, limit);
         if (!first.signable()) throw new Refusal(first);
         checkCancel(cancel);
         byte[] seed = seeds.seed(id);
         try {
-            Judgement again = judgeNow(summary, payees);
+            Judgement again = judgeNow(summary, payees, limit);
             if (!again.signable()) throw new Refusal(again);
             checkCancel(cancel);
             String share = core.msauthSign(text, policy, hex(seed), payees);

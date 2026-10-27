@@ -26,7 +26,7 @@ final class SignScreenTests: XCTestCase {
     /// The reviewer's probe: X is paid 900 RAND beside 1 unit of asset 5, named with no amount.
     func testADustTokenBesideARandOutputToTheSamePayeeIsRefused() {
         let json: [String: Any] = ["recipients_checked": true, "expires_at": 1000, "chain_id": 21, "binding_domain": 1,
-                                   "genesis": String(repeating: "0", count: 64), "lines": ["x"],
+                                   "genesis": String(repeating: "0", count: 64), "lines": ["x"], "fee": "1000000",
                                    "outputs": [["to_account": false, "amount": "900000000000", "asset": 0, "owner_fingerprint": "X", "matches": "AAAA (900 RAND)"],
                                                ["to_account": false, "amount": "1", "asset": 5, "owner_fingerprint": "X", "matches": "AAAA (0.000000001 RAND)"],
                                                ["to_account": true, "amount": "5", "asset": 0, "owner_fingerprint": "self", "matches": NSNull()]],

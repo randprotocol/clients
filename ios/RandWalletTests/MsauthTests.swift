@@ -101,7 +101,7 @@ final class MsauthTests: XCTestCase {
     private let genesis = String(repeating: "aa", count: 32)
     private func summary(_ changes: [String: Any?] = [:]) -> [String: Any] {
         var s: [String: Any] = ["expires_at": 200, "chain_id": 13, "genesis": genesis, "binding_domain": 1, "lines": ["x"],
-                                "policy_fingerprint": "NFYW-K8E9-E5K9-AAK3", "recipients_checked": true,
+                                "policy_fingerprint": "NFYW-K8E9-E5K9-AAK3", "recipients_checked": true, "fee": "1",
                                 "outputs": [["to_account": false, "amount": "5", "needs_payee": true, "matches": "FP"]]]
         for (k, v) in changes { s[k] = v }   // nil removes the field
         return s
@@ -112,6 +112,47 @@ final class MsauthTests: XCTestCase {
 
     func testAWellFormedCheckedSummaryIsSignable() {
         XCTAssertEqual(v(summary()), .signable(blocksLeft: 199))
+    }
+
+    /// The fee rule (ui/test/signers-engine.test.mjs, MSC-2): the binding a signer signs covers the
+    /// fee, so a fee over the profile's limit, or over the RAND the proposal pays out, is refused.
+    func testTheFeeRuleRefusesAFeeOverTheLimitOrOverThePayout() {
+        XCTAssertEqual(MsauthRules.defaultMaxFeeUnits, "100000000", "0.1 RAND")
+        func paid(_ fee: Any, _ amount: String = "5000000000") -> [String: Any] {
+            summary(["fee": fee, "outputs": [["to_account": false, "amount": amount, "matches": "FP"], ["to_account": true, "amount": "7", "matches": NSNull()]]])
+        }
+        func w(_ json: [String: Any], maxFee: String?) -> MsauthVerdict {
+            MsauthRules.verdict(summary: MsauthSummary(json: json), head: 1, chainId: 13, genesis: genesis, url: "u", recipients: ["rand1payee:5"], maxFee: maxFee)
+        }
+        XCTAssertEqual(v(paid("100000000")), .signable(blocksLeft: 199), "at the limit")
+        let over = v(paid("100000001"))
+        XCTAssertEqual(over, .feeOverLimit(fee: "100000001", max: "100000000"))
+        XCTAssertTrue(over.message!.contains("0.100000001 RAND") && over.message!.contains("(0.1 RAND)"), over.message!)
+        XCTAssertEqual(w(paid("100000001"), maxFee: "200000000"), .signable(blocksLeft: 199), "a profile may allow more")
+        XCTAssertEqual(w(paid("200000001"), maxFee: "200000000"), .feeOverLimit(fee: "200000001", max: "200000000"))
+        XCTAssertEqual(w(paid("100000001"), maxFee: "lots"), .feeOverLimit(fee: "100000001", max: "100000000"), "an unreadable limit is the default, not no limit")
+        XCTAssertEqual(v(paid("99999999999999999999999")), .feeOverLimit(fee: "99999999999999999999999", max: "100000000"), "a fee past UInt64 is over any limit")
+        // The RAND this proposal pays out is 5 units: a fee of 6 is more than the payment, 5 is not.
+        let ratio = v(summary(["fee": "6"]))
+        XCTAssertEqual(ratio, .feeOverPayout(fee: "6", paid: "5"))
+        XCTAssertTrue(ratio.message!.contains("pays out"))
+        XCTAssertEqual(v(summary(["fee": "5"])), .signable(blocksLeft: 199), "a fee equal to the payment is allowed")
+        // Change is not a payment, and a token output is not RAND: a token-only proposal is bounded by the limit alone.
+        let token = summary(["fee": "50000000", "outputs": [["to_account": false, "amount": "1", "asset": 5, "matches": "FP"], ["to_account": true, "amount": "900000000000", "matches": NSNull()]]])
+        XCTAssertEqual(v(token), .signable(blocksLeft: 199))
+        // A missing or unreadable fee is malformed; a numeric fee (the core's vectors) reads.
+        XCTAssertEqual(v(summary(["fee": nil])), .malformedSummary)
+        XCTAssertEqual(v(summary(["fee": "abc"])), .malformedSummary)
+        XCTAssertEqual(v(summary(["fee": -1])), .malformedSummary)
+        XCTAssertEqual(v(summary(["fee": 1])), .signable(blocksLeft: 199))
+        // No node needed: the fee is refused before the node is asked.
+        XCTAssertEqual(v(paid("100000001"), head: nil), .feeOverLimit(fee: "100000001", max: "100000000"))
+        XCTAssertEqual(MsauthRules.randText("100000000"), "0.1")
+        XCTAssertEqual(MsauthRules.randText("1500000000"), "1.5")
+        XCTAssertEqual(MsauthRules.randText("0"), "0")
+        XCTAssertEqual(MsauthRules.parseMaxFee("0.25"), "250000000")
+        XCTAssertNil(MsauthRules.parseMaxFee("0"))
+        XCTAssertNil(MsauthRules.parseMaxFee("lots"))
     }
 
     func testAMalformedSummaryIsRefused() {
@@ -273,6 +314,23 @@ final class MsauthTests: XCTestCase {
         secrets.canRequireUserPresence = false
         XCTAssertThrowsError(try store.add(label: "x", policy: try fx("policy"), key: try seeds()[0]))
         XCTAssertTrue(secrets.items.isEmpty, "no passcode, no profile, nothing written")
+    }
+
+    /// The fee limit is the profile's: typed in RAND when the signer is added, 0.1 RAND when not,
+    /// kept across a reload of the index, and read as the default for a profile saved without one.
+    func testTheFeeLimitIsSavedWithTheProfile() throws {
+        let secrets = FakeSignerSecrets()
+        let store = SignerStore(secrets: secrets)
+        let plain = try store.add(label: "a", policy: try fx("policy"), key: try seeds()[0])
+        XCTAssertEqual(plain.maxFee, "100000000")
+        XCTAssertThrowsError(try store.add(label: "b", policy: try fx("policy"), key: try seeds()[1], maxFee: "lots"))
+        XCTAssertThrowsError(try store.add(label: "b", policy: try fx("policy"), key: try seeds()[1], maxFee: "0"))
+        let raised = try store.add(label: "b", policy: try fx("policy"), key: try seeds()[1], maxFee: "0.5")
+        XCTAssertEqual(raised.maxFee, "500000000")
+        XCTAssertEqual(SignerStore(secrets: secrets).profiles.map(\.maxFee), ["100000000", "500000000"], "the limit survives a reload")
+        let old = try JSONDecoder().decode(SignerProfile.self, from: Data(#"{"id":"x","label":"l","index":0,"fingerprint":"F","threshold":2,"signers":3,"address":"rand1","policyHash":"h"}"#.utf8))
+        XCTAssertNil(old.maxFee)
+        XCTAssertEqual(old.feeLimit, "100000000", "a profile saved before the limit existed gets the default")
     }
 
     func testAFailedSaveLeavesNothingBehind() throws {

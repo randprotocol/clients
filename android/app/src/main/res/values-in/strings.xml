@@ -484,6 +484,8 @@
     <string name="msauth_refuse_wrong_chain">Proposal ini untuk chain %1$s; dompet ini berada di chain %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">Proposal ini terikat pada genesis yang berbeda dari yang dilayani node dompet ini.</string>
     <string name="msauth_refuse_expired">Proposal ini kedaluwarsa pada ketinggian %1$s dan chain berada di %2$s: terlambat untuk menandatangani. Minta proposal baru.</string>
+    <string name="msauth_refuse_fee_limit">Biaya %1$s RAND lebih besar daripada yang diizinkan penanda tangan ini (%2$s RAND), sehingga proposal ini tidak ditandatangani. Naikkan batas biaya penanda tangan atau minta proposal baru.</string>
+    <string name="msauth_refuse_fee_payout">Biaya %1$s RAND lebih besar daripada %2$s RAND yang dibayarkan proposal ini, sehingga proposal ini tidak ditandatangani.</string>
     <string name="msauth_no_profile">Profil penanda tangan itu tidak ada.</string>
     <string name="msauth_no_seed">Profil penanda tangan ini tidak memiliki kunci di perangkat ini: hapus lalu tambahkan lagi.</string>
     <string name="msauth_label_length">label penanda tangan terdiri dari 1-64 karakter</string>
@@ -528,7 +530,8 @@
     <string name="msauth_row_no_amount">Masukkan jumlah setiap pembayaran: inilah yang mencegah pemecahan atau pembayaran yang digelembungkan.</string>
     <string name="msauth_row_bad_amount">Jumlah adalah bilangan RAND, misalnya 1.5.</string>
     <string name="msauth_review_title">Apa yang dilakukan proposal ini, diperiksa terhadap kebijakan Anda</string>
-    <string name="msauth_fee_line">Biaya: %1$s RAND · kedaluwarsa pada ketinggian %2$s</string>
+    <string name="msauth_fee_line">Biaya: %1$s RAND · paling banyak %2$s RAND · kedaluwarsa pada ketinggian %3$s</string>
+    <string name="msauth_max_fee">Biaya tertinggi yang diterima penanda tangan ini, dalam RAND</string>
     <string name="msauth_matched">%1$s dari %2$s pembayaran cocok.</string>
     <string name="msauth_retry">Coba lagi</string>
     <string name="msauth_blocks_left">Tersisa %1$s blok untuk membuktikannya.</string>

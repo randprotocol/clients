@@ -492,6 +492,8 @@
     <string name="msauth_refuse_wrong_chain">این پیشنهاد برای شبکه %1$s است؛ این کیف پول روی شبکه %2$s است.</string>
     <string name="msauth_refuse_wrong_genesis">این پیشنهاد به genesis دیگری بسته شده است، نه آنچه گره این کیف پول ارائه می‌دهد.</string>
     <string name="msauth_refuse_expired">این پیشنهاد در ارتفاع %1$s منقضی می‌شود و شبکه در %2$s است: برای امضا دیر شده است. پیشنهاد جدید بخواهید.</string>
+    <string name="msauth_refuse_fee_limit">کارمزد %1$s RAND بیشتر از حدی است که این امضاکننده اجازه می‌دهد (%2$s RAND)، پس این پیشنهاد امضا نمی‌شود. حد کارمزد امضاکننده را بالا ببرید یا پیشنهاد تازه‌ای بخواهید.</string>
+    <string name="msauth_refuse_fee_payout">کارمزد %1$s RAND بیشتر از %2$s RAND است که این پیشنهاد پرداخت می‌کند، پس این پیشنهاد امضا نمی‌شود.</string>
     <string name="msauth_no_profile">چنین نمایه امضاکننده‌ای وجود ندارد.</string>
     <string name="msauth_no_seed">این نمایه امضاکننده روی این دستگاه کلیدی ندارد: آن را حذف کنید و دوباره اضافه کنید.</string>
     <string name="msauth_label_length">برچسب امضاکننده ۱-۶۴ نویسه است</string>
@@ -536,7 +538,8 @@
     <string name="msauth_row_no_amount">مقدار هر پرداخت را وارد کنید: همین است که جلوی تقسیم یا پرداخت باد‌شده را می‌گیرد.</string>
     <string name="msauth_row_bad_amount">مقدار یک عدد RAND است، مانند 1.5.</string>
     <string name="msauth_review_title">این پیشنهاد چه می‌کند، بررسی‌شده در برابر سیاست شما</string>
-    <string name="msauth_fee_line">کارمزد: %1$s RAND · در ارتفاع %2$s منقضی می‌شود</string>
+    <string name="msauth_fee_line">کارمزد: %1$s RAND · حداکثر %2$s RAND · در ارتفاع %3$s منقضی می‌شود</string>
+    <string name="msauth_max_fee">بیشترین کارمزدی که این امضاکننده می‌پذیرد، به RAND</string>
     <string name="msauth_matched">%1$s از %2$s پرداخت مطابقت دارد.</string>
     <string name="msauth_retry">تلاش دوباره</string>
     <string name="msauth_blocks_left">%1$s بلوک مانده تا اثبات شود.</string>

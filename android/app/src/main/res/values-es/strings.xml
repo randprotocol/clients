@@ -500,6 +500,8 @@
     <string name="msauth_refuse_wrong_chain">Esta propuesta es para la cadena %1$s; esta billetera está en la cadena %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">Esta propuesta está ligada a un génesis distinto del que sirve el nodo de esta billetera.</string>
     <string name="msauth_refuse_expired">Esta propuesta caduca en la altura %1$s y la cadena va por %2$s: es tarde para firmar. Pide una propuesta nueva.</string>
+    <string name="msauth_refuse_fee_limit">La comisión de %1$s RAND es mayor de lo que permite este firmante (%2$s RAND), así que esta propuesta no se firma. Sube el límite de comisión del firmante o pide una propuesta nueva.</string>
+    <string name="msauth_refuse_fee_payout">La comisión de %1$s RAND es mayor que los %2$s RAND que paga esta propuesta, así que esta propuesta no se firma.</string>
     <string name="msauth_no_profile">No existe ese perfil de firmante.</string>
     <string name="msauth_no_seed">Este perfil de firmante no tiene clave en este dispositivo: quítalo y vuelve a añadirlo.</string>
     <string name="msauth_label_length">la etiqueta de un firmante tiene 1-64 caracteres</string>
@@ -544,7 +546,8 @@
     <string name="msauth_row_no_amount">Introduce el monto de cada pago: es lo que impide una división o un pago inflado.</string>
     <string name="msauth_row_bad_amount">Un monto es una cantidad de RAND, como 1.5.</string>
     <string name="msauth_review_title">Lo que hace esta propuesta, comprobado contra tu política</string>
-    <string name="msauth_fee_line">Comisión: %1$s RAND · caduca en la altura %2$s</string>
+    <string name="msauth_fee_line">Comisión: %1$s RAND · como máximo %2$s RAND · caduca en la altura %3$s</string>
+    <string name="msauth_max_fee">Comisión máxima que acepta este firmante, en RAND</string>
     <string name="msauth_matched">%1$s de %2$s pagos coinciden.</string>
     <string name="msauth_retry">Reintentar</string>
     <string name="msauth_blocks_left">Quedan %1$s bloques para probarlo.</string>

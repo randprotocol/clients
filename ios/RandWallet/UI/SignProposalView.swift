@@ -359,7 +359,9 @@ struct SignProposalView: View {
         if m.showsSummary, let s = m.summary {
             Section("What this proposal does, as checked against your policy") {
                 ForEach(Array(m.lines.enumerated()), id: \.offset) { Text(verbatim: $0.element).font(.mono) }
-                Text(String(localized: "Fee: \(Amount.format(s.fee ?? "0")) RAND · expires at height \(String(s.expiresAt ?? 0))"))
+                let fee = MsauthRules.randText(MsauthJSON.amount((s.json as? [String: Any])?["fee"]) ?? "0")
+                let max = MsauthRules.randText(profile.feeLimit)
+                Text(String(localized: "Fee: \(fee) RAND · at most \(max) RAND · expires at height \(String(s.expiresAt ?? 0))"))
                 Text(String(localized: "\(String(m.payingMatched)) of \(String(m.payingTotal)) payments matched."))
                     .font(.footnote).foregroundColor(.secondary)
             }

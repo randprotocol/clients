@@ -60968,130 +60968,6 @@
         }
       }
     },
-    "Fee: %@ RAND · expires at height %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fee: %@ RAND · expires at height %@"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "الرسوم: %@ RAND · تنتهي عند الارتفاع %@"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gebühr: %@ RAND · läuft bei Höhe %@ ab"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comisión: %@ RAND · caduca en la altura %@"
-          }
-        },
-        "fa" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "کارمزد: %@ RAND · در ارتفاع %@ منقضی می‌شود"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Frais : %@ RAND · expire à la hauteur %@"
-          }
-        },
-        "hi" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "शुल्क: %@ RAND · ऊँचाई %@ पर समाप्त"
-          }
-        },
-        "id" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Biaya: %@ RAND · kedaluwarsa pada ketinggian %@"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Commissione: %@ RAND · scade all'altezza %@"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "手数料: %@ RAND · 高さ %@ で期限切れ"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "수수료: %@ RAND · 높이 %@에서 만료"
-          }
-        },
-        "ms" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Yuran: %@ RAND · tamat tempoh pada ketinggian %@"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Opłata: %@ RAND · wygasa na wysokości %@"
-          }
-        },
-        "ps" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "فیس: %@ RAND · په %@ لوړوالي کې پای ته رسېږي"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Taxa: %@ RAND · expira na altura %@"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Комиссия: %@ RAND · истекает на высоте %@"
-          }
-        },
-        "ta" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "கட்டணம்: %@ RAND · உயரம் %@-இல் காலாவதியாகும்"
-          }
-        },
-        "ur" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "فیس: %@ RAND · اونچائی %@ پر ختم"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "手续费：%@ RAND · 在高度 %@ 过期"
-          }
-        },
-        "zh-Hant-HK" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "手續費：%@ RAND · 於高度 %@ 過期"
-          }
-        }
-      }
-    },
     "%@ of %@ payments matched." : {
       "localizations" : {
         "en" : {
@@ -65801,6 +65677,502 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@此版本 Rand Wallet 固定的 %@ 證明器均未按固定資料回應（%@）。請將 Rand Wallet 更新至最新版本，或在設定中配對你自己的證明器。"
+          }
+        }
+      }
+    },
+    "Fee: %@ RAND · at most %@ RAND · expires at height %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fee: %1$@ RAND · at most %2$@ RAND · expires at height %3$@"
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرسوم: %1$@ RAND · بحد أقصى %2$@ RAND · تنتهي عند الارتفاع %3$@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gebühr: %1$@ RAND · höchstens %2$@ RAND · läuft bei Höhe %3$@ ab"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comisión: %1$@ RAND · como máximo %2$@ RAND · caduca en la altura %3$@"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کارمزد: %1$@ RAND · حداکثر %2$@ RAND · در ارتفاع %3$@ منقضی می‌شود"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frais : %1$@ RAND · au plus %2$@ RAND · expire à la hauteur %3$@"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "शुल्क: %1$@ RAND · अधिकतम %2$@ RAND · ऊँचाई %3$@ पर समाप्त"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biaya: %1$@ RAND · paling banyak %2$@ RAND · kedaluwarsa pada ketinggian %3$@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commissione: %1$@ RAND · al massimo %2$@ RAND · scade all'altezza %3$@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手数料: %1$@ RAND · 上限 %2$@ RAND · 高さ %3$@ で期限切れ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "수수료: %1$@ RAND · 최대 %2$@ RAND · 높이 %3$@에서 만료"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yuran: %1$@ RAND · paling banyak %2$@ RAND · tamat tempoh pada ketinggian %3$@"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opłata: %1$@ RAND · najwyżej %2$@ RAND · wygasa na wysokości %3$@"
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فیس: %1$@ RAND · تر ډېره %2$@ RAND · په %3$@ لوړوالي کې پای ته رسېږي"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taxa: %1$@ RAND · no máximo %2$@ RAND · expira na altura %3$@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Комиссия: %1$@ RAND · не более %2$@ RAND · истекает на высоте %3$@"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "கட்டணம்: %1$@ RAND · அதிகபட்சம் %2$@ RAND · உயரம் %3$@-இல் காலாவதியாகும்"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فیس: %1$@ RAND · زیادہ سے زیادہ %2$@ RAND · اونچائی %3$@ پر ختم"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手续费：%1$@ RAND · 最多 %2$@ RAND · 在高度 %3$@ 过期"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手續費：%1$@ RAND · 最多 %2$@ RAND · 於高度 %3$@ 過期"
+          }
+        }
+      }
+    },
+    "Highest fee this signer accepts, in RAND" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highest fee this signer accepts, in RAND"
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أعلى رسوم يقبلها هذا الموقّع، بالـ RAND"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Höchste Gebühr, die dieser Unterzeichner akzeptiert, in RAND"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comisión máxima que acepta este firmante, en RAND"
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بیشترین کارمزدی که این امضاکننده می‌پذیرد، به RAND"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frais maximaux que ce signataire accepte, en RAND"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस हस्ताक्षरकर्ता द्वारा स्वीकार्य अधिकतम शुल्क, RAND में"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biaya tertinggi yang diterima penanda tangan ini, dalam RAND"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commissione massima che questo firmatario accetta, in RAND"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この署名者が受け入れる手数料の上限（RAND）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 서명자가 받아들이는 최대 수수료(RAND)"
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yuran tertinggi yang diterima penandatangan ini, dalam RAND"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Najwyższa opłata, jaką akceptuje ten sygnatariusz, w RAND"
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تر ټولو لوړ فیس چې دا لاسلیک کوونکی یې مني، په RAND کې"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taxa mais alta que este signatário aceita, em RAND"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Наибольшая комиссия, которую принимает этот подписант, в RAND"
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்தக் கையொப்பமிடுபவர் ஏற்கும் அதிகபட்சக் கட்டணம், RAND-இல்"
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سب سے زیادہ فیس جو یہ دستخط کنندہ قبول کرتا ہے، RAND میں"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此签名人接受的最高手续费（RAND）"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此簽署人接受的最高手續費（RAND）"
+          }
+        }
+      }
+    },
+    "The fee of %@ RAND is more than this signer allows (%@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The fee of %1$@ RAND is more than this signer allows (%2$@ RAND), so this proposal is not signed. Raise the signer's fee limit or ask for a new proposal."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسوم %1$@ RAND أكثر مما يسمح به هذا الموقّع (%2$@ RAND)، لذا لن يُوقَّع هذا الاقتراح. ارفع حد رسوم الموقّع أو اطلب اقتراحًا جديدًا."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Gebühr von %1$@ RAND ist höher, als dieser Unterzeichner erlaubt (%2$@ RAND), daher wird dieser Vorschlag nicht signiert. Erhöhe das Gebührenlimit des Unterzeichners oder fordere einen neuen Vorschlag an."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La comisión de %1$@ RAND es mayor de lo que permite este firmante (%2$@ RAND), así que esta propuesta no se firma. Sube el límite de comisión del firmante o pide una propuesta nueva."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کارمزد %1$@ RAND بیشتر از حدی است که این امضاکننده اجازه می‌دهد (%2$@ RAND)، پس این پیشنهاد امضا نمی‌شود. حد کارمزد امضاکننده را بالا ببرید یا پیشنهاد تازه‌ای بخواهید."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les frais de %1$@ RAND dépassent ce que ce signataire autorise (%2$@ RAND), cette proposition n'est donc pas signée. Relevez la limite de frais du signataire ou demandez une nouvelle proposition."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ RAND का शुल्क इस हस्ताक्षरकर्ता की अनुमति (%2$@ RAND) से अधिक है, इसलिए इस प्रस्ताव पर हस्ताक्षर नहीं किए गए। हस्ताक्षरकर्ता की शुल्क सीमा बढ़ाएँ या नया प्रस्ताव माँगें।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biaya %1$@ RAND lebih besar daripada yang diizinkan penanda tangan ini (%2$@ RAND), sehingga proposal ini tidak ditandatangani. Naikkan batas biaya penanda tangan atau minta proposal baru."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La commissione di %1$@ RAND supera quanto consente questo firmatario (%2$@ RAND), quindi questa proposta non viene firmata. Alza il limite di commissione del firmatario o chiedi una nuova proposta."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手数料 %1$@ RAND がこの署名者の許容額（%2$@ RAND）を上回るため、この提案には署名しません。署名者の手数料上限を上げるか、新しい提案を依頼してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "수수료 %1$@ RAND가 이 서명자가 허용하는 한도(%2$@ RAND)보다 많으므로 이 제안에는 서명하지 않습니다. 서명자의 수수료 한도를 올리거나 새 제안을 요청하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yuran %1$@ RAND melebihi had yang dibenarkan penandatangan ini (%2$@ RAND), jadi cadangan ini tidak ditandatangani. Naikkan had yuran penandatangan atau minta cadangan baharu."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opłata %1$@ RAND przekracza limit tego sygnatariusza (%2$@ RAND), więc ta propozycja nie zostaje podpisana. Podnieś limit opłaty sygnatariusza albo poproś o nową propozycję."
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "د %1$@ RAND فیس له هغه حد څخه زیات دی چې دا لاسلیک کوونکی یې اجازه ورکوي (%2$@ RAND)، نو دا وړاندیز نه لاسلیک کېږي. د لاسلیک کوونکي د فیس حد لوړ کړئ یا نوی وړاندیز وغواړئ."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A taxa de %1$@ RAND é maior do que este signatário permite (%2$@ RAND), então esta proposta não é assinada. Aumente o limite de taxa do signatário ou peça uma nova proposta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Комиссия %1$@ RAND больше, чем допускает этот подписант (%2$@ RAND), поэтому это предложение не подписано. Поднимите лимит комиссии подписанта или запросите новое предложение."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ RAND கட்டணம், இந்தக் கையொப்பமிடுபவர் அனுமதிக்கும் அளவை (%2$@ RAND) விட அதிகம், எனவே இந்த முன்மொழிவில் கையொப்பமிடப்படவில்லை. கையொப்பமிடுபவரின் கட்டண வரம்பை உயர்த்துங்கள் அல்லது புதிய முன்மொழிவைக் கேளுங்கள்."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ RAND کی فیس اس دستخط کنندہ کی اجازت (%2$@ RAND) سے زیادہ ہے، اس لیے اس تجویز پر دستخط نہیں کیے گئے۔ دستخط کنندہ کی فیس کی حد بڑھائیں یا نئی تجویز مانگیں۔"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手续费 %1$@ RAND 高于此签名人允许的上限（%2$@ RAND），因此此提案不会签名。请提高签名人的手续费上限，或索取新的提案。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手續費 %1$@ RAND 高於此簽署人允許的上限（%2$@ RAND），因此此提案不會簽署。請提高簽署人的手續費上限，或索取新的提案。"
+          }
+        }
+      }
+    },
+    "The fee of %@ RAND is more than the %@ RAND this proposal pays out, so this proposal is not signed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The fee of %1$@ RAND is more than the %2$@ RAND this proposal pays out, so this proposal is not signed."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسوم %1$@ RAND أكثر من %2$@ RAND التي يدفعها هذا الاقتراح، لذا لن يُوقَّع هذا الاقتراح."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Gebühr von %1$@ RAND ist höher als die %2$@ RAND, die dieser Vorschlag auszahlt, daher wird dieser Vorschlag nicht signiert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La comisión de %1$@ RAND es mayor que los %2$@ RAND que paga esta propuesta, así que esta propuesta no se firma."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کارمزد %1$@ RAND بیشتر از %2$@ RAND است که این پیشنهاد پرداخت می‌کند، پس این پیشنهاد امضا نمی‌شود."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les frais de %1$@ RAND dépassent les %2$@ RAND que cette proposition verse, cette proposition n'est donc pas signée."
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ RAND का शुल्क इस प्रस्ताव द्वारा भुगतान किए जा रहे %2$@ RAND से अधिक है, इसलिए इस प्रस्ताव पर हस्ताक्षर नहीं किए गए।"
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biaya %1$@ RAND lebih besar daripada %2$@ RAND yang dibayarkan proposal ini, sehingga proposal ini tidak ditandatangani."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La commissione di %1$@ RAND supera i %2$@ RAND che questa proposta paga, quindi questa proposta non viene firmata."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手数料 %1$@ RAND がこの提案の支払額 %2$@ RAND を上回るため、この提案には署名しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "수수료 %1$@ RAND가 이 제안이 지급하는 %2$@ RAND보다 많으므로 이 제안에는 서명하지 않습니다."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yuran %1$@ RAND melebihi %2$@ RAND yang dibayar cadangan ini, jadi cadangan ini tidak ditandatangani."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opłata %1$@ RAND przekracza %2$@ RAND, które wypłaca ta propozycja, więc ta propozycja nie zostaje podpisana."
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "د %1$@ RAND فیس له هغو %2$@ RAND څخه زیات دی چې دا وړاندیز یې ورکوي، نو دا وړاندیز نه لاسلیک کېږي."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A taxa de %1$@ RAND é maior que os %2$@ RAND que esta proposta paga, então esta proposta não é assinada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Комиссия %1$@ RAND больше, чем %2$@ RAND, которые выплачивает это предложение, поэтому это предложение не подписано."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ RAND கட்டணம், இந்த முன்மொழிவு செலுத்தும் %2$@ RAND-ஐ விட அதிகம், எனவே இந்த முன்மொழிவில் கையொப்பமிடப்படவில்லை."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ RAND کی فیس اُن %2$@ RAND سے زیادہ ہے جو یہ تجویز ادا کرتی ہے، اس لیے اس تجویز پر دستخط نہیں کیے گئے۔"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手续费 %1$@ RAND 高于此提案支付的 %2$@ RAND，因此此提案不会签名。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手續費 %1$@ RAND 高於此提案支付的 %2$@ RAND，因此此提案不會簽署。"
           }
         }
       }

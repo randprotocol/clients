@@ -524,6 +524,8 @@
     <string name="msauth_refuse_wrong_chain">هذا الاقتراح للسلسلة %1$s؛ وهذه المحفظة على السلسلة %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">هذا الاقتراح مرتبط بنشأة (genesis) مختلفة عن التي تخدمها عقدة هذه المحفظة.</string>
     <string name="msauth_refuse_expired">ينتهي هذا الاقتراح عند الارتفاع %1$s والسلسلة عند %2$s: فات أوان التوقيع. اطلب اقتراحًا جديدًا.</string>
+    <string name="msauth_refuse_fee_limit">رسوم %1$s RAND أكثر مما يسمح به هذا الموقّع (%2$s RAND)، لذا لن يُوقَّع هذا الاقتراح. ارفع حد رسوم الموقّع أو اطلب اقتراحًا جديدًا.</string>
+    <string name="msauth_refuse_fee_payout">رسوم %1$s RAND أكثر من %2$s RAND التي يدفعها هذا الاقتراح، لذا لن يُوقَّع هذا الاقتراح.</string>
     <string name="msauth_no_profile">لا يوجد ملف موقّع كهذا.</string>
     <string name="msauth_no_seed">ملف الموقّع هذا لا مفتاح له على هذا الجهاز: أزله وأضفه من جديد.</string>
     <string name="msauth_label_length">تسمية الموقّع من 1-64 حرفًا</string>
@@ -568,7 +570,8 @@
     <string name="msauth_row_no_amount">أدخل مبلغ كل دفعة: فهو ما يمنع التجزئة أو تضخيم الدفعة.</string>
     <string name="msauth_row_bad_amount">المبلغ هو عدد من RAND، مثل 1.5.</string>
     <string name="msauth_review_title">ما يفعله هذا الاقتراح، مُتحقَّقًا منه مقابل سياستك</string>
-    <string name="msauth_fee_line">الرسوم: %1$s RAND · تنتهي عند الارتفاع %2$s</string>
+    <string name="msauth_fee_line">الرسوم: %1$s RAND · بحد أقصى %2$s RAND · تنتهي عند الارتفاع %3$s</string>
+    <string name="msauth_max_fee">أعلى رسوم يقبلها هذا الموقّع، بالـ RAND</string>
     <string name="msauth_matched">تطابقت %1$s من أصل %2$s من المدفوعات.</string>
     <string name="msauth_retry">إعادة المحاولة</string>
     <string name="msauth_blocks_left">بقي %1$s كتلة لإثباته.</string>

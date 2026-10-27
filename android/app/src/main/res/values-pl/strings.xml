@@ -508,6 +508,8 @@
     <string name="msauth_refuse_wrong_chain">Ta propozycja jest dla łańcucha %1$s; ten portfel jest w łańcuchu %2$s.</string>
     <string name="msauth_refuse_wrong_genesis">Ta propozycja jest związana z innym genesis niż ten, który obsługuje węzeł tego portfela.</string>
     <string name="msauth_refuse_expired">Ta propozycja wygasa na wysokości %1$s, a łańcuch jest na %2$s: za późno na podpis. Poproś o nową propozycję.</string>
+    <string name="msauth_refuse_fee_limit">Opłata %1$s RAND przekracza limit tego sygnatariusza (%2$s RAND), więc ta propozycja nie zostaje podpisana. Podnieś limit opłaty sygnatariusza albo poproś o nową propozycję.</string>
+    <string name="msauth_refuse_fee_payout">Opłata %1$s RAND przekracza %2$s RAND, które wypłaca ta propozycja, więc ta propozycja nie zostaje podpisana.</string>
     <string name="msauth_no_profile">Nie ma takiego profilu sygnatariusza.</string>
     <string name="msauth_no_seed">Ten profil sygnatariusza nie ma klucza na tym urządzeniu: usuń go i dodaj ponownie.</string>
     <string name="msauth_label_length">etykieta sygnatariusza ma 1-64 znaki</string>
@@ -552,7 +554,8 @@
     <string name="msauth_row_no_amount">Wpisz kwotę każdej płatności: to ona chroni przed podziałem lub zawyżoną płatnością.</string>
     <string name="msauth_row_bad_amount">Kwota to liczba RAND, na przykład 1.5.</string>
     <string name="msauth_review_title">Co robi ta propozycja, sprawdzone względem Twojej polityki</string>
-    <string name="msauth_fee_line">Opłata: %1$s RAND · wygasa na wysokości %2$s</string>
+    <string name="msauth_fee_line">Opłata: %1$s RAND · najwyżej %2$s RAND · wygasa na wysokości %3$s</string>
+    <string name="msauth_max_fee">Najwyższa opłata, jaką akceptuje ten sygnatariusz, w RAND</string>
     <string name="msauth_matched">Zgodnych płatności: %1$s z %2$s.</string>
     <string name="msauth_retry">Ponów</string>
     <string name="msauth_blocks_left">Zostało %1$s bloków, aby to udowodnić.</string>

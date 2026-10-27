@@ -484,6 +484,8 @@
     <string name="msauth_refuse_wrong_chain">이 제안은 체인 %1$s용이며, 이 지갑은 체인 %2$s에 있습니다.</string>
     <string name="msauth_refuse_wrong_genesis">이 제안은 이 지갑의 노드가 제공하는 것과 다른 제네시스에 묶여 있습니다.</string>
     <string name="msauth_refuse_expired">이 제안은 높이 %1$s에서 만료되며 체인은 %2$s에 있습니다: 서명하기에는 너무 늦었습니다. 새 제안을 요청하세요.</string>
+    <string name="msauth_refuse_fee_limit">수수료 %1$s RAND가 이 서명자가 허용하는 한도(%2$s RAND)보다 많으므로 이 제안에는 서명하지 않습니다. 서명자의 수수료 한도를 올리거나 새 제안을 요청하세요.</string>
+    <string name="msauth_refuse_fee_payout">수수료 %1$s RAND가 이 제안이 지급하는 %2$s RAND보다 많으므로 이 제안에는 서명하지 않습니다.</string>
     <string name="msauth_no_profile">해당 서명자 프로필이 없습니다.</string>
     <string name="msauth_no_seed">이 서명자 프로필에는 이 기기에 키가 없습니다. 제거한 뒤 다시 추가하세요.</string>
     <string name="msauth_label_length">서명자 레이블은 1-64자입니다</string>
@@ -528,7 +530,8 @@
     <string name="msauth_row_no_amount">모든 결제의 금액을 입력하세요. 결제를 쪼개거나 부풀리는 것을 막아 주는 것이 금액입니다.</string>
     <string name="msauth_row_bad_amount">금액은 RAND 단위의 숫자입니다. 예: 1.5</string>
     <string name="msauth_review_title">이 제안이 하는 일 (정책과 대조해 확인됨)</string>
-    <string name="msauth_fee_line">수수료: %1$s RAND · 높이 %2$s에서 만료</string>
+    <string name="msauth_fee_line">수수료: %1$s RAND · 최대 %2$s RAND · 높이 %3$s에서 만료</string>
+    <string name="msauth_max_fee">이 서명자가 받아들이는 최대 수수료(RAND)</string>
     <string name="msauth_matched">결제 %2$s건 중 %1$s건이 일치합니다.</string>
     <string name="msauth_retry">다시 시도</string>
     <string name="msauth_blocks_left">증명까지 %1$s 블록 남았습니다.</string>
