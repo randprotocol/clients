@@ -76,6 +76,7 @@ const NEEDED = [
   'core/rand_wallet.js', 'core/rand_wallet_bg.wasm',
   // the page provider (`window.rand`) and its consent window
   'inpage.js', 'content.js', 'provider-host.js', 'connect.html', 'connect.js', 'lib/recipient-hash.js',
+  'lib/site-errors.js', 'lib/address-format.js',
   // the manifest's own strings (`__MSG_…__`, WebExtension i18n): without `default_locale`'s file
   // the browser refuses the manifest outright
   '_locales/en/messages.json', 'ui/i18n.js', 'lib/window-locale.js',

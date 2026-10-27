@@ -24,8 +24,9 @@ import { expectedMs, progressAt, remainingText, recordDuration } from './ui/lib/
 import { explorerLink } from './ui/lib/explorer.js';
 import { feeDecimals, feeSymbol } from './ui/lib/assets.js';
 import { receiveLabel } from './lib/withdraw-label.js';
+import { destinationText } from './lib/address-format.js';
 import { phaseLabel } from './ui/screens/send/state.js';
-import { leavesPoolWarning, PHASE_LABELS, EVM_CHAINS, chainName } from './ui/screens/withdraw.js';
+import { leavesPoolWarning, PHASE_LABELS, chainName } from './ui/screens/withdraw.js';
 import { t } from './ui/i18n.js';
 
 const id = new URLSearchParams(location.search).get('id') || '';
@@ -53,10 +54,6 @@ function amountText(index, units) {
   return `${formatUnits(units, 9, Number(a.decimals) || 0)} ${a.symbol}`;
 }
 
-/** The destination as the chain will read it: an EVM address is `0x` + the last 40 hex, in full. */
-function destinationText(request) {
-  return EVM_CHAINS.includes(request.toChain) ? `0x${request.to.slice(24)}` : request.to;
-}
 
 /** The route line: who makes the large proof. */
 function routeLine(state) {
@@ -140,7 +137,8 @@ function render(state) {
     });
     card.append(line(t('Receive {receive} on {chain}', { receive: got.receive, chain: got.chain }), 'v amount'));
     const dest = el('div', 'address-box');
-    dest.append(el('span', 'mono', destinationText(request)));
+    // In full, in the form that chain's wallets print (base58 on Solana, T… on Tron, 0x on EVM).
+    dest.append(el('span', 'mono', destinationText(request.toChain, request.to)));
     card.append(kv(t('To'), ''), dest);
     card.append(line(t('Fee {fee}', { fee: `${formatUnits(estimate.fee || '0', 9, feeDecimals(assets))} ${feeSymbol(assets)}` }), 'v amount'));
     if (BigInt(estimate.relayerFee || '0') > 0n) {
