@@ -7,6 +7,10 @@
 # also sends from one wallet to another through one real bundle proof (a couple of minutes on a
 # laptop — do not run it beside another proving job). Everything else takes about a minute.
 #
+# Then the same wallet on a chain with every genesis section it reads (node.sections.e2e.test.mjs:
+# chain 21's bridge, zUSD registry and perps market, program state, multisig, vesting, admission by
+# vote, the fee rules) — about twenty seconds; skipped, with the reason, on a node before v0.8.0.
+#
 #   RAND_NODE_BIN=… scripts/e2e-node.sh                       # all but the spend round trip
 #   RAND_NODE_BIN=… RAND_PROVER_BIN=… scripts/e2e-node.sh     # and the spend round trip
 #
@@ -31,4 +35,4 @@ for var in RAND_NODE_BIN RAND_PROVER_BIN; do
 done
 echo "rand-node:   $RAND_NODE_BIN"
 echo "rand-prover: ${RAND_PROVER_BIN:-(not set: the spend round trip is skipped)}"
-exec node --test web/wallet/test/node.e2e.test.mjs
+exec node --test --test-concurrency=1 web/wallet/test/node.e2e.test.mjs web/wallet/test/node.sections.e2e.test.mjs
