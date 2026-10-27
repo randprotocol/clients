@@ -68,6 +68,25 @@ export function parseMaxFee(text) {
   return units.toString();
 }
 
+/**
+ * The signer index a share `"i:hex"` names, read the way the core reads it (randprotocol-msig
+ * `parse_share`: the text before the first `:`, trimmed, a u8) but stricter — decimal digits only,
+ * no sign — and checked against the policy's signer count when it is given. Throws for anything
+ * else: `Number()` read "", " ", "0x1" and "1e0" as indexes, so a pasted share could be counted
+ * under a signer it does not name.
+ */
+export function shareIndexOf(share, signers) {
+  const text = String(share ?? '');
+  const colon = text.indexOf(':');
+  const head = colon < 0 ? '' : text.slice(0, colon).trim();
+  if (!/^\d{1,3}$/.test(head) || Number(head) > 255) throw new Error(t('a share is index:hex'));
+  const index = Number(head);
+  if (Number.isInteger(signers) && index >= signers) {
+    throw new Error(t('signer {index} is not in this policy (it has {count} signers)', { index: String(index), count: String(signers) }));
+  }
+  return index;
+}
+
 export const isZero = (a) => (typeof a === 'string' ? /^0+$/.test(a.trim()) : a === 0);
 
 /** A paying output whose asset is a whole number other than 0. Anything else is RAND (fails closed). */
@@ -286,7 +305,10 @@ export function makeSigners(deps) {
         // wallet-core holds its own copy in Zeroizing. The bytes are wiped here.
         // The same list the check used: the core re-runs the payee check and refuses on its own.
         const share = await c.msauthSign(text, p.policy, hexOf(seed), payees(expectedRecipients));
-        return { share, index: Number(String(share).split(':')[0]) };
+        const index = shareIndexOf(share);
+        // The core signs as the policy position this seed's key holds, which is the profile's.
+        if (index !== p.index) throw new Error(`the core returned a share for signer ${index}; this profile is signer ${p.index}`);
+        return { share: String(share), index };
       } finally {
         seed.fill(0);
       }
@@ -294,8 +316,10 @@ export function makeSigners(deps) {
     async verifyShare(id, proposal, share) {
       const p = await profileOf(id);
       const s = cleanText(share);
+      const info = await c.msauthPolicyInfo(p.policy);
+      const index = shareIndexOf(s, info.signers);
       await c.msauthVerifyShare(cleanText(proposal), p.policy, s);
-      return { index: Number(s.split(':')[0].trim()) };
+      return { index };
     },
   };
 

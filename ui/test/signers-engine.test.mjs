@@ -143,7 +143,7 @@ test('a damaged policies record is never overwritten: unlock works, list/add/rem
   assert.equal(JSON.stringify(storage.local.get('signerSeeds')), seedsBefore, 'seeds untouched');
 });
 
-import { verdict, EXPIRY_MARGIN } from '../engine/signers.js';
+import { verdict, EXPIRY_MARGIN, shareIndexOf } from '../engine/signers.js';
 
 const SUMMARY = { expires_at: 200, chain_id: 13, genesis: GENESIS, binding_domain: 1, lines: ['x'], policy_fingerprint: 'NFYW-K8E9-E5K9-AAK3', recipients_checked: true,
   fee: '1', outputs: [{ to_account: false, amount: '5', needs_payee: true, matches: 'FP' }] };
@@ -217,6 +217,33 @@ test('verifyShare names the position and trims a saved file\'s newline', async (
   const { backend, row } = await unlockedWithSigner({ core: signingCore(), fetch: atHead(100) });
   assert.deepEqual(await backend.signers.verifyShare(row.id, 'P', '0:abcd\n'), { index: 0 });
   await assert.rejects(backend.signers.verifyShare(row.id, 'P', '1:abcd'), /does not verify/);
+});
+
+// Share-index validation: the index a share names is read strictly and inside the policy, before
+// the core is asked; `Number()` used to read "", " ", "0x1" and "1e0" as signer indexes.
+test('a share index is decimal, at most 255, and inside the policy; sign returns the profile\'s own index', async () => {
+  assert.equal(shareIndexOf('2:ab'), 2);
+  assert.equal(shareIndexOf(' 0 :ab'), 0, 'trimmed, as the core trims it');
+  for (const bad of ['', 'ab', ':ab', ' :ab', '0x1:ab', '1e0:ab', '+1:ab', '-1:ab', '1.0:ab', '256:ab', '0001:ab', null, undefined]) {
+    assert.throws(() => shareIndexOf(bad), /a share is index:hex/, JSON.stringify(bad));
+  }
+  assert.throws(() => shareIndexOf('3:ab', 3), /signer 3 is not in this policy \(it has 3 signers\)/);
+  assert.equal(shareIndexOf('2:ab', 3), 2);
+
+  let verified = 0;
+  const core = signingCore({ msauth_verify_share: () => { verified += 1; return true; } });
+  const { backend, row } = await unlockedWithSigner({ core, fetch: atHead(100) });
+  for (const bad of [':abcd', '0x0:abcd', '1e0:abcd', '3:abcd', '9:abcd']) {
+    await assert.rejects(backend.signers.verifyShare(row.id, 'P', bad), /index:hex|not in this policy/, bad);
+  }
+  assert.equal(verified, 0, 'the core was asked about a share whose index was refused');
+  assert.deepEqual(await backend.signers.verifyShare(row.id, 'P', '2:abcd'), { index: 2 });
+
+  // The profile is signer 1: a share the core returns under another index is not handed back.
+  const odd = await unlockedWithSigner({ core: signingCore({ msauth_sign: () => '2:' + 'ab'.repeat(8) }), fetch: atHead(100) });
+  await assert.rejects(odd.backend.signers.sign(odd.row.id, 'P', ['rand1payee:5'], PASSWORD), /signer 2; this profile is signer 1/);
+  const ok = await unlockedWithSigner({ core: signingCore(), fetch: atHead(100) });
+  assert.deepEqual(await ok.backend.signers.sign(ok.row.id, 'P', ['rand1payee:5'], PASSWORD), { share: '1:' + 'ab'.repeat(8), index: 1 });
 });
 
 // ---- fix round 1: fail closed on malformed summaries, re-check after the backoff ----
