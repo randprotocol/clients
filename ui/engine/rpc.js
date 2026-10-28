@@ -56,6 +56,10 @@ export class RpcError extends Error {
    * `failure` is set ONLY where no JSON-RPC reply existed, and it names which kind — which is what
    * decides whether repeating the request on another endpoint is safe:
    *   'connect'  nothing was ever sent (DNS, TLS, connection refused). Safe to repeat anywhere.
+   *              Only a failure whose cause PROVES that is filed here (see `neverSent`).
+   *   'dropped'  the connection failed without saying it never opened: reset or closed after the
+   *              request may have been read, or a browser's bare "Failed to fetch", which says
+   *              nothing either way. Like 'timeout', never safe to repeat for a submission.
    *   'timeout'  something may well have been received and acted on. NEVER safe to repeat for a
    *              submission: a timed-out `rand_sendTransaction` may have landed.
    *   'http'     the endpoint answered with a status, not a JSON-RPC reply.
@@ -183,7 +187,36 @@ function mayRetryElsewhere(err, method) {
   if (!isTransportFailure(err)) return false;          // an answer, or not ours at all
   if (SUBMITS.has(method)) return err.failure === 'connect';
   if (err.failure === 'http') return err.status === undefined || err.status >= 500 || err.status === 408 || err.status === 429;
-  return true; // 'connect', 'timeout', 'body'
+  return true; // 'connect', 'dropped', 'timeout', 'body'
+}
+
+/**
+ * The error codes that prove a request never left this machine: the name did not resolve, the
+ * host was unreachable, the port refused the connection, the connect itself timed out, or the TLS
+ * handshake failed (no request bytes go out before it completes). Node's `fetch` (undici) puts the
+ * code on the `TypeError`'s `cause` — on an `AggregateError` cause, on each of its `errors` when
+ * several addresses were tried.
+ */
+const NEVER_SENT_CODES = new Set([
+  'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EAI_NONAME', 'EAI_FAIL', 'ENETUNREACH', 'EHOSTUNREACH',
+  'EADDRNOTAVAIL', 'UND_ERR_CONNECT_TIMEOUT',
+  'CERT_HAS_EXPIRED', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY', 'ERR_TLS_CERT_ALTNAME_INVALID',
+]);
+
+/**
+ * Whether a `fetch` rejection proves nothing was sent. A connection reset or closed after the
+ * request was written (`ECONNRESET`, undici's `UND_ERR_SOCKET` "other side closed") does not: the
+ * node may have read the request and acted on it before it hung up. Neither does a rejection with
+ * no code at all — a browser's "Failed to fetch" is the same for a refused port and a dropped
+ * connection — so a submission is not repeated elsewhere on one.
+ */
+function neverSent(e) {
+  const cause = e && e.cause;
+  if (!cause) return false;
+  const codes = [cause.code, ...(Array.isArray(cause.errors) ? cause.errors.map((x) => x && x.code) : [])];
+  const known = codes.filter((c) => typeof c === 'string');
+  return known.length > 0 && known.every((c) => NEVER_SENT_CODES.has(c));
 }
 
 /**
@@ -283,9 +316,10 @@ export function makeRpc(urls, { timeoutMs = 20000, fetch: fetchImpl, chainId, ge
       if (signal && signal.aborted) throw abortError();
       // `timedOut` is the ONLY reliable way to tell "we waited and heard nothing" from "the
       // connection was refused before a byte left" — both surface as an AbortError from `fetch`.
-      // The submission rule below turns on exactly that distinction.
+      // The submission rule below turns on exactly that distinction, and on `neverSent`'s: a
+      // connection dropped after the request was read is not a refused one.
       const out = timedOut || e?.name === 'AbortError';
-      throw new RpcError(t('cannot reach {url}: {reason}', { url, reason: out ? t('timed out') : e?.message || e }), -1, out ? 'timeout' : 'connect');
+      throw new RpcError(t('cannot reach {url}: {reason}', { url, reason: out ? t('timed out') : e?.message || e }), -1, out ? 'timeout' : neverSent(e) ? 'connect' : 'dropped');
     } finally {
       clearTimeout(timer);
       if (signal) signal.removeEventListener('abort', onAbort);
