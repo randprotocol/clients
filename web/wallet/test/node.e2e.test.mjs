@@ -912,13 +912,13 @@ test('e. a submit that timed out is never repeated on another endpoint', { skip 
   }
 }));
 
-test('e. a submit to a port that is listening but hangs up is not repeated elsewhere', { skip: 'BUG: rpc.js files a connection dropped after the request was read as failure "connect", and SUBMITS are repeated on the next endpoint after "connect" (rpc.js mayRetryElsewhere)' }, withLogs(async () => {
+test('e. a submit to a port that is listening but hangs up is not repeated elsewhere', { skip }, withLogs(async () => {
   // The request reached the process listening on that port (it accepted the connection and read
   // the whole request) before the connection was dropped, so the wallet cannot know whether it
-  // was acted on. `rpc.js` documents `connect` as "nothing was ever sent" and repeats a submit
-  // only for that; undici reports a dropped connection as a plain fetch error, which `requestOnce`
-  // files as `connect`. Expected: the submit fails with that endpoint's error and the live node
-  // sees nothing.
+  // was acted on. `rpc.js` repeats a submit only on `connect` ("nothing was ever sent"), which
+  // `requestOnce` files only when the fetch error's cause proves it (`neverSent`); undici reports
+  // this one as `UND_ERR_SOCKET`/`ECONNRESET`, so it is `dropped`. The submit fails with that
+  // endpoint's error and the live node sees nothing.
   const reader = await rawServer((socket) => { socket.once('data', () => socket.destroy()); });
   const live = await forwarder(env.rpcUrl);
   try {
@@ -926,6 +926,7 @@ test('e. a submit to a port that is listening but hangs up is not repeated elsew
     const payee = (await env.core.call('keygen')).address;
     await assert.rejects(() => pool.mint(payee), (err) => {
       assert.match(err.message, new RegExp(`^cannot reach ${reader.url}: `));
+      assert.equal(err.failure, 'dropped');
       return true;
     });
     assert.deepEqual(live.seen, [], 'the live node was not asked to mint');

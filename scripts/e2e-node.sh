@@ -14,13 +14,13 @@
 #   RAND_NODE_BIN=… scripts/e2e-node.sh                       # all but the spend round trip
 #   RAND_NODE_BIN=… RAND_PROVER_BIN=… scripts/e2e-node.sh     # and the spend round trip
 #
-#   RAND_NODE_BIN    a `rand-node`: a fullnode release asset (CI downloads the deployed v0.8.2) or a build.
+#   RAND_NODE_BIN    a `rand-node`: a fullnode release asset (CI downloads v0.8.3-rc1, then v0.8.3) or a build.
 #                    Required — without it the suite would only report itself skipped.
 #   RAND_PROVER_BIN  a `rand-prover` from the same release; without it the spend case is skipped.
 #
 # Nothing is built here except the wasm core (extension/shared/core/rand_wallet_bg.wasm), when
 # missing — as chrome/pack.sh does. The node binaries are never built by this script: take a
-# release (`gh release download v0.8.2 -R randprotocol/fullnode`) or see scripts/e2e-prover.sh for
+# release (`gh release download v0.8.3-rc1 -R randprotocol/fullnode`) or see scripts/e2e-prover.sh for
 # building them from the vendored fullnode. The suite must hold on v0.8.0, so it uses no node
 # feature newer than that.
 set -euo pipefail

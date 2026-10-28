@@ -19,10 +19,15 @@ const C = 'https://c.example';
  * A fetch over `{url: {method: handler}}`, recording `url:method` for every request.
  *
  * A handler may be a value (the JSON-RPC result), `ERROR(message, code)` (a JSON-RPC error reply —
- * an ANSWER), `REFUSED` (the connection never opened), `HANG` (nothing ever comes back, so the
+ * an ANSWER), `REFUSED` (the connection never opened: Node's `fetch failed` with an `ECONNREFUSED`
+ * cause), `DROPPED` (reset after the request was read: an `ECONNRESET` cause), `BARE` (a browser's
+ * "Failed to fetch", no cause: says nothing either way), `HANG` (nothing ever comes back, so the
  * per-request timeout fires), `HTTP(status)` or `GARBAGE` (a proxy's HTML error page).
  */
 const REFUSED = Symbol('refused');
+const DROPPED = Symbol('dropped');
+const BARE = Symbol('bare');
+const fetchFailed = (code) => new TypeError('fetch failed', { cause: Object.assign(new Error(code), { code }) });
 const HANG = Symbol('hang');
 const HANG_BODY = Symbol('hang-body');
 const GARBAGE = Symbol('garbage');
@@ -35,10 +40,12 @@ function transports(nodes) {
     const body = JSON.parse(init.body);
     log.push(`${url}:${body.method}`);
     const node = nodes[url];
-    if (!node) throw new TypeError('fetch failed');
+    if (!node) throw fetchFailed('ENOTFOUND');
     let answer = node[body.method];
     if (typeof answer === 'function') answer = answer(body.params);
-    if (answer === REFUSED) throw new TypeError('fetch failed');
+    if (answer === REFUSED) throw fetchFailed('ECONNREFUSED');
+    if (answer === DROPPED) throw fetchFailed('ECONNRESET');
+    if (answer === BARE) throw new TypeError('Failed to fetch');
     if (answer === HANG) {
       return new Promise((resolve, reject) => {
         init.signal.addEventListener('abort', () => {
@@ -238,7 +245,39 @@ test('a timed-out submission is NEVER resubmitted elsewhere; a refused connectio
     const ok = makeRpc([A, B], { fetch: dead, chainId: 13 });
     assert.ok(await ok.rpc(method, ['0xff']));
     assert.deepEqual(dead.to(B), ['rand_chainId', method], 'the endpoint it moved to was used unprobed');
+
+    // Dropped after the request was read (the 2026-10-12 BUG): the node may have acted on it, so
+    // it is 'dropped', not 'connect', and the submission is not repeated. A browser's bare
+    // "Failed to fetch" cannot tell the two apart, so it is treated the same way.
+    for (const how of [DROPPED, BARE]) {
+      const cut = transports({ [A]: chain(13, { [method]: how }), [B]: chain(13) });
+      const once = makeRpc([A, B], { fetch: cut, chainId: 13 });
+      await assert.rejects(() => once.rpc(method, ['0xff']), (err) => err.code === -1 && err.failure === 'dropped' && /^cannot reach /.test(err.message));
+      assert.deepEqual(cut.to(B), [], `${method} was repeated after ${String(how)}`);
+    }
   }
+});
+
+test('a read whose connection was dropped IS asked elsewhere: a read changes nothing', async () => {
+  for (const how of [DROPPED, BARE]) {
+    const fetch = transports({ [A]: chain(13, { rand_getHead: how }), [B]: chain(13) });
+    const pool = makeRpc([A, B], { fetch, chainId: 13 });
+    assert.ok(await pool.getHead());
+    assert.deepEqual(fetch.to(B).slice(-1), ['rand_getHead']);
+  }
+});
+
+test('a refused connection behind several addresses (an AggregateError cause) is still never-sent', async () => {
+  const many = new TypeError('fetch failed', { cause: Object.assign(new AggregateError([Object.assign(new Error('a'), { code: 'ECONNREFUSED' }), Object.assign(new Error('b'), { code: 'ENETUNREACH' })]), { code: 'ECONNREFUSED' }) });
+  const inner = transports({ [A]: chain(13), [B]: chain(13) });
+  const fetch = async (url, init) => {
+    if (url === A && JSON.parse(init.body).method === 'rand_mint') { inner.log.push(`${url}:rand_mint`); throw many; }
+    return inner(url, init);
+  };
+  fetch.to = inner.to;
+  const pool = makeRpc([A, B], { fetch, chainId: 13 });
+  assert.ok(await pool.rpc('rand_mint', ['0xff']));
+  assert.deepEqual(fetch.to(B).slice(-1), ['rand_mint']);
 });
 
 test('a submission that came back as HTTP 502 is not repeated either: bytes were exchanged', async () => {
@@ -297,7 +336,7 @@ test('an endpoint that is merely down comes back; one on another chain does not'
   let downA = true;
   const inner = transports(nodes);
   const fetch = async (url, init) => {
-    if (downA && url === A) { inner.log.push(`${url}:${JSON.parse(init.body).method}`); throw new TypeError('fetch failed'); }
+    if (downA && url === A) { inner.log.push(`${url}:${JSON.parse(init.body).method}`); throw fetchFailed('ECONNREFUSED'); }
     return inner(url, init);
   };
   fetch.to = inner.to;
@@ -314,7 +353,7 @@ test('a pinned client has no path to a second host, whatever happens to its own'
   const inner = transports({ [A]: chain(13), [B]: chain(13) });
   let deadA = false;
   const fetch = async (url, init) => {
-    if (deadA && url === A) { inner.log.push(`${url}:${JSON.parse(init.body).method}`); throw new TypeError('fetch failed'); }
+    if (deadA && url === A) { inner.log.push(`${url}:${JSON.parse(init.body).method}`); throw fetchFailed('ECONNREFUSED'); }
     return inner(url, init);
   };
   fetch.to = inner.to;
@@ -351,7 +390,7 @@ test('an endpoint that names its chain and then drops every real request is step
     const body = JSON.parse(init.body);
     if (url === A && body.method === 'rand_getCommitments') {
       inner.log.push(`${url}:${body.method}`);
-      throw new TypeError('fetch failed');
+      throw fetchFailed('ECONNREFUSED');
     }
     return inner(url, init);
   };
