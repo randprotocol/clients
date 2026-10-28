@@ -59,6 +59,9 @@ pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode
+/// `main` `97bcf4b` (the v0.8.3 batch: #151's counter-mode prover randomness and per-shape
+/// `ProverData` cache, so a bundle proof in the wallet is ~40% faster; proof format, guests and
+/// verifier keys unchanged, so chain 21's v0.8.0–v0.8.2 nodes accept its proofs). Before it: fullnode
 /// tag `v0.8.0` (`c0878c3`: private multisig, constraint set 9, chain 21 onward; over `main`
 /// `a1785c9` it adds the chain-21 cutover runbook and scripts and the release assets, with
 /// `randprotocol-msig`, the proof guests and keys unchanged). Before it: `main` `a1785c9`
@@ -100,7 +103,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
 /// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
 /// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "c0878c3";
+pub const CHAIN_BUILD: &str = "97bcf4b";
 /// The chain the defaults below describe: chain 21 (fullnode v0.8.0, constraint set 9; perps,
 /// multisig, the `fees` section, `hc_auth_multisig`), cut from chain 20's state. Before it, chain
 /// 20, cut 2026-10-01 on fullnode v0.6.8 (`c9c9bd3`) from chain 19's state, with `program_state`, `binding_domain: 1` and `bridge.fees` (10 bps each
@@ -6187,7 +6190,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 21);
-            assert_eq!(v["chain_build"], "c0878c3");
+            assert_eq!(v["chain_build"], "97bcf4b");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
@@ -7445,7 +7448,7 @@ mod tests {
                 exec,
             );
             l.set_tokens(Some(TokenRegistry::new(REG_FEE)));
-            l.set_program_state(Some(program_state::ProgramState::from_config(&program_state::ProgramStateConfig { cell_fee: CELL_FEE })));
+            l.set_program_state(Some(program_state::ProgramState::from_config(&program_state::ProgramStateConfig { cell_fee: CELL_FEE, refuse_panics: false })));
             l.set_genesis_supply(1_000_000_000_000, 10);
             for cm in leaves {
                 l.deposit(*cm, exec).unwrap();
