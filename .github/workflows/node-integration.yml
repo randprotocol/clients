@@ -1,6 +1,7 @@
 # The wallet against a real node: the wallet's real transport, reply validators and flows (the wasm
 # core and engine under Node, real `fetch`) against a real `rand-node` from the fullnode release
-# that is deployed, v0.8.2 (chain 21 onward: constraint set 9, which this wallet's core proves for), on a Test-profile chain the test cuts itself. See scripts/e2e-node.sh for what it covers
+# that is next to deploy, v0.8.3 — its release candidate v0.8.3-rc1 until v0.8.3 is tagged, then
+# FULLNODE_TAG moves to v0.8.3 (chain 21 onward: constraint set 9, which this wallet's core proves for), on a Test-profile chain the test cuts itself. See scripts/e2e-node.sh for what it covers
 # and web/wallet/test/node.e2e.test.mjs for the cases.
 #
 # The node binaries are the release's, not built here: that is what makes this a check of the
@@ -39,7 +40,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_TOOLCHAIN: 1.98.1
-  FULLNODE_TAG: v0.8.2
+  # v0.8.3-rc1: fullnode 9443de63, the whole v0.8.3 batch but #159 (storage only). Set v0.8.3 at the tag.
+  FULLNODE_TAG: v0.8.3-rc1
 
 jobs:
   real-node:
