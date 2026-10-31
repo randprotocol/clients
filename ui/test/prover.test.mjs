@@ -21,6 +21,7 @@ import {
   stubCore, stubFetch, mapStorage, stubPlatform, assertKeyNeverLeaked,
   PASSWORD, ADDRESS, SPEND_KEY, PROVER_URL, PROVER_TOKEN, PROVER_REPLY, PROVED_TX_HASH, SEALED_JOB,
   proverLink, proverInfo, proverEk, proverFingerprint, HC_V2, HC_V3, HC_AUTH, CORE_VERSION, TRUSTED_POOL, poolMember, GENESIS,
+  tokenRegistry, assetRows, USDT_ETH,
 } from './backend-fixtures.mjs';
 
 const ROOT = '1b'.repeat(32);
@@ -1193,4 +1194,79 @@ test('a send through the prover survives one failed connection to it', async () 
   const out = await env.backend.send.send(SEND, () => {});
   assert.equal(out.hash, PROVED_TX_HASH);
   assert.equal(count(env.fetch, 'prover_submit'), 1, 'the retried submit reached the prover once');
+});
+
+
+// ---------------------------------------- clients#1: the extension's (wasm) withdrawal -----------
+//
+// The wasm backend can never prove a bundle (4 GiB), but it withdraws through a prover: the extension
+// shows Withdraw, and the burn is sealed on this device, proved elsewhere, and submitted by the node.
+
+const RPL = {
+  index: 1, note: '11'.repeat(112), cm: '1b'.repeat(32), nf: '1c'.repeat(32),
+  amount: '500', asset: 1, time: 7, from: '00'.repeat(32), height: 7, spent: false, pending: null,
+};
+const BURN = { asset: 1, amount: '400', relayerFee: '100', toChain: 2, token: USDT_ETH, to: '0'.repeat(24) + '11'.repeat(20) };
+
+const planBurn = (p) => ({
+  inputs: (p.notes || []).filter((n) => Number(n.asset) === Number(p.asset)),
+  fee_inputs: (p.notes || []).filter((n) => Number(n.asset) === 0),
+  need: String(p.amount), change: '100', fee_change: '4990000000', fee: String(p.fee ?? '10000000'), proofs: 1,
+});
+
+async function withdrawableWallet(make) {
+  const bridge = {
+    enabled: true, emitter: 'ab'.repeat(32), emitters: { 2: 'aa'.repeat(20), 3: 'bb'.repeat(20) },
+    guardian_set_index: 0, guardians: [], mint_paused: false, burn_sequence: 0, assets: assetRows(),
+  };
+  const table = {
+    rand_getBridgeState: () => bridge,
+    rand_getTokens: () => tokenRegistry(),
+    rand_getBlockByHeight: () => ({ timestamp_ms: 1_700_000_000_000, transactions: [], actions: [] }),
+    prover_status: () => ({ state: 'done', reply: PROVER_REPLY }),
+  };
+  const env = make(table);
+  await env.backend.wallet.create(PASSWORD);
+  await env.backend.sync.scan(() => {});
+  const notes = env.storage.local.get('notes');
+  notes.notes = [NOTE, RPL];
+  env.storage.local.set('notes', notes);
+  return env;
+}
+
+test('clients#1: a wasm wallet with a paired prover can withdraw, and the burn is proved there', async () => {
+  const env = await withdrawableWallet((table) => build({ core: stubCore({ plan_burn: planBurn }), fetch: sendableFetch(table) }));
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  assert.deepEqual(await env.backend.bridge.canWithdraw(), { ok: true, via: 'prover' });
+  const phases = [];
+  const out = await env.backend.bridge.withdraw(BURN, (p) => phases.push(p));
+  assert.equal(out.hash, PROVED_TX_HASH);
+  assert.ok(phases.includes('proving') && phases.includes('submitting'), phases.join());
+  assert.equal(coreCalled(env, 'prepare_burn').length, 1, 'the burn was sealed for the prover');
+  assert.equal(coreCalled(env, 'prove_burn').length, 0, 'the browser tried to prove the bundle');
+  assert.equal(count(env.fetch, 'prover_submit'), 1);
+  assert.equal(count(env.fetch, 'rand_sendTransaction'), 1, 'the node got the finished burn');
+  assertKeyNeverLeaked(env);
+});
+
+test('clients#1: through the RandProtocol provers pool, the withdrawal is offered and completes', async () => {
+  const env = await withdrawableWallet((table) => build({ core: stubCore({ plan_burn: planBurn }), fetch: poolFetch(table) }));
+  await env.backend.prover.acknowledgeDefault();
+  assert.equal((await env.backend.bridge.canWithdraw()).ok, true);
+  assert.equal((await env.backend.bridge.canWithdraw()).via, 'prover');
+  const out = await env.backend.bridge.withdraw(BURN, () => {});
+  assert.equal(out.hash, PROVED_TX_HASH);
+  assert.equal(submittedTo(env).length, 1, 'one pool member got the job');
+  assert.equal(coreCalled(env, 'prove_burn').length, 0);
+  assertKeyNeverLeaked(env);
+});
+
+test('clients#1: with no prover route the withdrawal is refused up front and says where to go', async () => {
+  const env = await withdrawableWallet((table) => build({ core: stubCore({ plan_burn: planBurn }), fetch: poolFetch(table) }));
+  await env.backend.prover.useNone();
+  const answer = await env.backend.bridge.canWithdraw();
+  assert.deepEqual(answer, { ok: false, code: 'PROVER_UNAVAILABLE', reason: CANNOT_PROVE_REASON });
+  await assert.rejects(() => env.backend.bridge.withdraw(BURN, () => {}), (err) => err.definite === true);
+  assert.equal(coreCalled(env, 'prepare_burn').length, 0);
+  assert.equal(count(env.fetch, 'prover_submit'), 0);
 });
