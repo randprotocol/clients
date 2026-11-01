@@ -110,7 +110,7 @@ STARK proof, keys are Poseidon2 hashes, envelopes are ML-KEM-768 + ChaCha20-Poly
 primitives exist only in the fullnode's Rust crates, and a wallet that re-implemented them in
 Swift, Java or JavaScript would have to be byte-identical to the node or every transfer is
 refused. So `core/` vendors the fullnode crates (`core/vendor/fullnode`,
-a submodule at fullnode `main` `97bcf4b` (the v0.8.3 batch; constraint set 9, the `randprotocol-msig` signer checks with the payee check a signer runs, and the verified fold in the verify cache), chain 21 onward: **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key; **BIND-1**, a transaction bound to its chain's genesis; program state and the `Invoke` action (RPL-2); and the chain's bridge fee) and exposes one JSON entry point, `call(method, params)`, that each
+a submodule at fullnode `v0.8.4` `e1f75f1` (the v0.8.3 batch plus the digest log; constraint set 9, the `randprotocol-msig` signer checks with the payee check a signer runs, and the verified fold in the verify cache), chain 21 onward: **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key; **BIND-1**, a transaction bound to its chain's genesis; program state and the `Invoke` action (RPL-2); and the chain's bridge fee) and exposes one JSON entry point, `call(method, params)`, that each
 client wraps: an XCFramework on iOS, a `.so` on Android, WebAssembly in the browser. Everything
 above that line — the RPC client, note store, scan and send flow, key storage and the UI — is
 Swift, Java and JavaScript.
@@ -199,11 +199,11 @@ The first build of any client compiles the prover and takes several minutes.
 ```bash
 git clone --recurse-submodules https://github.com/randprotocol/clients.git
 cd clients
-git checkout v0.8.3 && git submodule update --init   # a release, rather than main
+git checkout v0.8.4 && git submodule update --init   # a release, rather than main
 ```
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
-The submodule is the full node (`core/vendor/fullnode`, at `main` `97bcf4b`, the v0.8.3 batch): the wallet's
+The submodule is the full node (`core/vendor/fullnode`, at `v0.8.4` `e1f75f1`, the v0.8.3 batch plus the digest log): the wallet's
 cryptography is the node's own code.
 
 ### 3. Test the core (optional, about a minute)
