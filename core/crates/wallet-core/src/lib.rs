@@ -103,7 +103,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
 /// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
 /// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "97bcf4b";
+pub const CHAIN_BUILD: &str = "e1f75f1";
 /// The chain the defaults below describe: chain 21 (fullnode v0.8.0, constraint set 9; perps,
 /// multisig, the `fees` section, `hc_auth_multisig`), cut from chain 20's state. Before it, chain
 /// 20, cut 2026-10-01 on fullnode v0.6.8 (`c9c9bd3`) from chain 19's state, with `program_state`, `binding_domain: 1` and `bridge.fees` (10 bps each
@@ -6190,7 +6190,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 21);
-            assert_eq!(v["chain_build"], "97bcf4b");
+            assert_eq!(v["chain_build"], "e1f75f1");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
