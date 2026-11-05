@@ -41,7 +41,7 @@ env:
   CARGO_TERM_COLOR: always
   RUST_TOOLCHAIN: 1.98.1
   # v0.8.3-rc1: fullnode 9443de63, the whole v0.8.3 batch but #159 (storage only). Set v0.8.3 at the tag.
-  FULLNODE_TAG: v0.8.4
+  FULLNODE_TAG: v0.8.5
 
 jobs:
   real-node:
