@@ -199,8 +199,10 @@ The first build of any client compiles the prover and takes several minutes.
 ```bash
 git clone --recurse-submodules https://github.com/randprotocol/clients.git
 cd clients
-git checkout v0.8.5 && git submodule update --init   # a release, rather than main
+git checkout v0.8.3 && git submodule update --init   # the newest clients release, rather than main
 ```
+
+`v0.8.3` is the newest clients release tag. `v0.8.4` and `v0.8.5` are fullnode tags, not clients tags: `main` vendors fullnode v0.8.5, and there is no clients release built on it yet.
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
 The submodule is the full node (`core/vendor/fullnode`, at `v0.8.5` `d8efd47`, v0.8.4 plus the audit v12 node fixes): the wallet's
