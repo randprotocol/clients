@@ -1036,7 +1036,8 @@ test('the walk is budgeted per scan, in requests, and the next scan carries on f
     head: () => ({ height: head, hash: HEX64('ab') }),
     bridgeState: () => ({ enabled: true }),
     getBlocks: headerNode(head, new Set([5, 6]), pages),
-    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [] }; },
+    // One transaction, as its header announced (`headerNode`): a short body is a refusal (CLI-1009).
+    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [{ action: { kind: 'transfer' } }] }; },
     // The spend pass is budgeted by its own rule; keep it out of the way of this count.
     nullifiers: () => [],
   });
@@ -1065,7 +1066,8 @@ test('a budget spent in the middle of a page stops the cursor at the last block 
     head: () => ({ height: 3000, hash: HEX64('ab') }),
     bridgeState: () => ({ enabled: true }),
     getBlocks: headerNode(3000, busy, pages),
-    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [] }; },
+    // One transaction, as its header announced (`headerNode`): a short body is a refusal (CLI-1009).
+    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [{ action: { kind: 'transfer' } }] }; },
   });
   const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
   await wallet.scan(SPEND_KEY, {});
@@ -1174,4 +1176,450 @@ test('on a chain with bridge fees the recipient rebuilds its fee notes, a burn\'
   assert.ok(placed, 'the fee note was placed at its leaf');
   assert.equal(placed.index, 0);
   assert.equal(placed.amount, '22000');
+});
+
+// ====================================================== CLI-1001 (audit v14): monotone merges ===
+// A note's spent flag and its pending mark, and a submission record, are things one writer KNOWS
+// and another may not have seen yet. A merge that keeps one side's copy of a note by index drops
+// what the other side learned about it — a spent note shown as spendable until a rescan, because
+// the height cursor that covered its nullifier was kept all the same.
+
+/** A note store with the optional conditional write, as web/wallet/idb.js provides it. */
+function casStore(initial = emptyNoteStore()) {
+  const backing = memoryStore(initial);
+  let rev = 0;
+  const hooks = { beforeWrite: null };
+  return {
+    backing, hooks,
+    get rev() { return rev; },
+    /** Another tab's write: applies `change` to what is stored and moves the revision. */
+    async otherTabWrites(change) {
+      const current = await backing.getNoteStore();
+      await backing.setNoteStore(change(current) || current);
+      rev += 1;
+    },
+    async getNoteStore() { return { ...(await backing.getNoteStore()), rev }; },
+    async setNoteStore(s) { await backing.setNoteStore(s); },
+    async compareAndSet(value, expectedRev) {
+      if (hooks.beforeWrite) { const fn = hooks.beforeWrite; hooks.beforeWrite = null; await fn(); }
+      if (expectedRev !== rev) { const err = new Error('stale'); err.name = 'StaleStoreError'; throw err; }
+      rev += 1;
+      await backing.setNoteStore(value);
+      return rev;
+    },
+  };
+}
+
+const ownedNote = (index, extra = {}) => ({
+  index, note: '00'.repeat(112), cm: HEX64(`c${index}`), nf: HEX64(`f${index}`),
+  amount: '5000', asset: 0, time: 4, from: '00'.repeat(32), height: 4, spent: false, pending: null, ...extra,
+});
+
+test('CLI-1001: a lost conditional write keeps the spent flag the losing scan found', async () => {
+  const store = casStore({ ...emptyNoteStore(), notes: [ownedNote(0)], chain_id: 13, genesis: GENESIS_A });
+  const client = stubClient({ nullifiers: (from) => (from <= 5 ? [{ height: 5, nullifier: HEX64('f0') }] : []) });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  // Another tab saves (anything at all) between this scan's load and its one save.
+  store.hooks.beforeWrite = () => store.otherTabWrites((s) => { s.last_sync_ms = 1; });
+
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.backing.current.notes[0].spent, true, 'the spent flag was dropped by the merge while the cursor was kept');
+  assert.equal(st.notes[0].spent, true);
+  assert.equal(store.backing.current.scanned_height, 21, 'and the cursor covers the height the flag came from');
+});
+
+test('CLI-1001: a lost conditional write keeps a send\'s pending marks and its submission record', async () => {
+  const store = casStore({ ...emptyNoteStore(), notes: [ownedNote(0), ownedNote(1)], chain_id: 13, genesis: GENESIS_A });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({}), annotate: false });
+  // The send's own save: load, mark the inputs pending, record the submission…
+  const fresh = await wallet.loadStore();
+  fresh.notes[0].pending = 7;
+  fresh.submissions.unshift({ hash: HEX64('ab'), status: 'pending', spent_indices: [0], time: 7, amount: '1' });
+  // …and a scan in another tab lands first, with neither.
+  await store.otherTabWrites((s) => { s.scanned_height = 9; });
+  await wallet.persist(fresh);
+
+  const saved = store.backing.current;
+  assert.equal(saved.notes[0].pending, 7, 'the pending mark was dropped: the note is offered to the next send again');
+  assert.equal(saved.notes[1].pending, null);
+  assert.equal(saved.submissions.length, 1);
+  assert.equal(saved.scanned_height, 9);
+});
+
+test('CLI-1001: the merge never un-spends, never un-pends and never moves a submission back to pending', async () => {
+  const store = casStore({
+    ...emptyNoteStore(), chain_id: 13, genesis: GENESIS_A,
+    notes: [ownedNote(0), ownedNote(1)],
+    submissions: [{ hash: HEX64('ab'), status: 'pending', spent_indices: [0], time: 7 }],
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({}), annotate: false });
+  const mine = await wallet.loadStore();
+  // The winner learned: note 0 is spent, note 1 is pending, the submission committed at 12.
+  await store.otherTabWrites((s) => {
+    s.notes[0].spent = true;
+    s.notes[1].pending = 9;
+    s.submissions[0].status = 'committed';
+    s.submissions[0].height = 12;
+  });
+  // The loser knows none of it and saves its own, older view.
+  await wallet.persist(mine);
+  const saved = store.backing.current;
+  assert.equal(saved.notes[0].spent, true);
+  assert.equal(saved.notes[1].pending, 9);
+  assert.deepEqual([saved.submissions[0].status, saved.submissions[0].height], ['committed', 12]);
+});
+
+test('CLI-1001: a merged height cursor does not cover a note the further-read side never had', async () => {
+  // This scan read nullifiers through height 20 and knows note 0 only. Another tab, at height 3,
+  // found note 1. Nobody has compared note 1 with the nullifiers of heights 3..20, so the merged
+  // cursor must not claim they were read.
+  const store = casStore({ ...emptyNoteStore(), notes: [ownedNote(0)], chain_id: 13, genesis: GENESIS_A, scanned_height: 3 });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({}), annotate: false });
+  store.hooks.beforeWrite = () => store.otherTabWrites((s) => { s.notes.push(ownedNote(1)); });
+  await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.backing.current.notes.length, 2);
+  assert.equal(store.backing.current.scanned_height, 3, 'the cursor passed heights whose nullifiers were never compared with note 1');
+  // The next scan reads them again and catches up; a regressed cursor is not an error.
+  const next = await wallet.scan(SPEND_KEY, {});
+  assert.equal(next.scanned_height, 21);
+});
+
+test('CLI-1001: without a conditional write, a scan that straddles a send\'s save keeps the submission record', async () => {
+  // The extension and the desktop shell: storage is a plain get/set. The scan loads the store,
+  // spends a long time on the network, and used to write its own copy back over whatever a send
+  // had saved meanwhile — the submission record and the pending marks with it.
+  const store = memoryStore({ ...emptyNoteStore(), notes: [ownedNote(0)], chain_id: 13, genesis: GENESIS_A });
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let reached;
+  const atNullifiers = new Promise((r) => { reached = r; });
+  const client = stubClient({
+    nullifiers: async () => { reached(); await gate; return []; },
+    sendTransaction: () => HEX64('dd'),
+  });
+  const core = stubCore({ parse_address: () => ({ valid: true, pk: HEX64('99') }) });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+
+  const scanning = wallet.scan(SPEND_KEY, {});
+  await atNullifiers; // the scan has loaded the store and is waiting on the node
+  const submission = await wallet.completeSend(SPEND_KEY, PROVED, { to: 'rand1payee', wait: false, client });
+  assert.equal(store.current.submissions.length, 1, 'the send saved its record');
+  release();
+  await scanning;
+
+  assert.equal(store.current.submissions.length, 1, 'the scan\'s save erased the submission record');
+  assert.equal(store.current.submissions[0].hash, submission.hash);
+  assert.equal(store.current.notes[0].pending, PROVED.time, 'and the pending mark on the note it spends');
+  assert.equal(store.current.scanned_height, 21, 'while the scan\'s own work is kept too');
+});
+
+test('CLI-1001: without a conditional write, two saves of one loaded store do not overwrite each other', async () => {
+  const store = memoryStore({ ...emptyNoteStore(), notes: [ownedNote(0), ownedNote(1)], chain_id: 13, genesis: GENESIS_A });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({}), annotate: false });
+  const a = await wallet.loadStore();
+  const b = await wallet.loadStore();
+  a.notes[0].spent = true;
+  b.notes[1].pending = 4;
+  await Promise.all([wallet.persist(a), wallet.persist(b)]);
+  assert.equal(store.current.notes[0].spent, true);
+  assert.equal(store.current.notes[1].pending, 4);
+  // A lone writer still clears what it means to clear: nothing else wrote, so nothing is merged back.
+  const c = await wallet.loadStore();
+  c.notes[1].pending = null;
+  await wallet.persist(c);
+  assert.equal(store.current.notes[1].pending, null);
+});
+
+// ============================================ VK-751 (audit v14): who created a "sent" note =====
+// An envelope's sender part opens under the wallet's VIEWING key, and a viewing key is handed out:
+// to the prover of every delegated proof, to an auditor. Whoever holds it can seal a note of their
+// own under it, and the scan used to file that note as a payment this wallet SENT — the planter's
+// payee, amount and memo in the victim's history. What a holder of the viewing key cannot choose
+// is the note's creator: the bundle guest commits every output with `from` = the spender's own pk.
+// So: Sent only when `from` is this wallet's pk; a chain-fixed creator (a relayed deposit, a mint,
+// a program or perp payout — sealed under the submitter's key with a constant `from`, which an ovk
+// holder can also arrange) is kept apart as "sent, sender unverified"; anything else is dropped.
+const OWN_PK = HEX64('a7');
+const PLANTER_PK = HEX64('66');
+const PAYEE_PK = HEX64('9e');
+const FROM_ZERO = '00'.repeat(32);
+const tagFrom = (tag) => (Buffer.from(tag, 'ascii').toString('hex') + '00'.repeat(32)).slice(0, 64);
+const FROM_MINT = tagFrom('rpl-mint');
+const FROM_PROGRAM = tagFrom('rpl2-pay');
+const FROM_PERP = tagFrom('rpl3-pay');
+
+const sentRow = (index, from, extra = {}) => ({
+  index, to_pk: PAYEE_PK, amount: '777', asset: 0, time: 5, height: 5, memo: null, ...(from === undefined ? {} : { from }), ...extra,
+});
+
+/** A wallet whose core "opens" the given rows on the leaf page: `{received, sent, sent_unverified}`. */
+function scanningWallet({ received = [], sent = [], sentUnverified, store = memoryStore(), deposits = null } = {}) {
+  const leaves = [...received, ...sent, ...(sentUnverified || [])].map((r) => r.index);
+  const top = Math.max(0, ...leaves) + 1;
+  const client = stubClient({
+    treeInfo: () => ({ next_index: top, root: HEX64('00'), nullifiers: 0 }),
+    commitments: (from) => (from === 0
+      ? Array.from({ length: top }, (_, i) => ({ index: i, cm: HEX64(`c${i % 10}`), height: 5, envelope: envelope() }))
+      : []),
+    sendTransaction: () => HEX64('dd'),
+    ...(deposits ? deposits.client : {}),
+  });
+  const calls = [];
+  const core = stubCore({
+    wallet_info: (p) => { calls.push(['wallet_info', p]); return { pk: OWN_PK, address: 'rand1own' }; },
+    scan_page: ({ rows }) => ({
+      received: rows.length ? received : [],
+      sent: rows.length ? sent : [],
+      ...(sentUnverified ? { sent_unverified: rows.length ? sentUnverified : [] } : {}),
+      next_index: rows.length ? rows[rows.length - 1].index + 1 : 0, rows: rows.length,
+    }),
+    parse_address: () => ({ valid: true, pk: PAYEE_PK }),
+    ...(deposits ? deposits.core : {}),
+  });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+  return { wallet, store, client, calls };
+}
+
+test('VK-751: a sent row planted under the viewing key never lands in the store', async () => {
+  // The verifier's end-to-end test: the planter seals its own note (creator = the planter) under
+  // the victim's ovk. Payee, amount and memo are all the planter's choice.
+  const planted = sentRow(1, PLANTER_PK, { amount: '123456789', memo: 'invoice 42 — paid in full' });
+  const { wallet, store } = scanningWallet({ sent: [planted] });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.deepEqual(store.current.sent, [], 'the planted payment is in the victim\'s store');
+  const rows = wallet.activity(st);
+  assert.equal(rows.some((r) => r.memo === planted.memo || r.amount === planted.amount || r.to_pk === PAYEE_PK), false, 'and in its history');
+});
+
+test('VK-751: a payment this wallet made is Sent — its creator is the wallet\'s own pk', async () => {
+  const mine = sentRow(2, OWN_PK.toUpperCase(), { memo: 'rent' }); // hex case is not identity
+  const { wallet, store, calls } = scanningWallet({ sent: [mine] });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.current.sent.length, 1);
+  assert.equal(store.current.sent[0].unverified, undefined);
+  const rows = wallet.activity(st).filter((r) => r.kind === 'sent');
+  assert.deepEqual(rows.map((r) => [r.index, r.amount, r.to_pk, r.memo]), [[2, '777', PAYEE_PK, 'rent']]);
+  assert.deepEqual(calls[0], ['wallet_info', { spend_key: SPEND_KEY }], 'the wallet\'s own pk comes from the core, from the key being scanned');
+});
+
+test('VK-751: a chain-fixed creator is "sent, sender unverified" — kept apart, never counted as Sent', async () => {
+  // Relayed deposits, mints and payouts are sealed under the SUBMITTER's key with a constant
+  // `from`, so the row may be this wallet's own doing — and an ovk holder can mint its own token
+  // and seal it the same way. The row is shown as what it is.
+  const rowsIn = [sentRow(1, FROM_ZERO), sentRow(2, FROM_MINT), sentRow(3, FROM_PROGRAM), sentRow(4, FROM_PERP)];
+  for (const shape of ['in sent', 'in sent_unverified']) {
+    const { wallet, store } = shape === 'in sent' ? scanningWallet({ sent: rowsIn }) : scanningWallet({ sentUnverified: rowsIn });
+    const st = await wallet.scan(SPEND_KEY, {});
+    assert.deepEqual(store.current.sent.map((s) => [s.index, s.unverified]), [[1, true], [2, true], [3, true], [4, true]], shape);
+    const rows = wallet.activity(st);
+    assert.equal(rows.filter((r) => r.kind === 'sent').length, 0, `${shape}: none is counted as Sent`);
+    assert.equal(rows.filter((r) => r.kind === 'sent_unverified').length, 4, shape);
+  }
+});
+
+test('VK-751: the core cannot promote a row — a foreign creator under `sent`, or an own-looking one under `sent_unverified`', async () => {
+  const { wallet, store } = scanningWallet({
+    sent: [sentRow(1, PLANTER_PK), sentRow(2, undefined), sentRow(3, 'not hex'), sentRow(4, null)],
+    sentUnverified: [sentRow(5, PLANTER_PK), sentRow(6, OWN_PK)],
+  });
+  await wallet.scan(SPEND_KEY, {});
+  // Row 6 names this wallet as creator, so it is Sent whichever list it arrived in; a row with no
+  // creator at all (a core from before this rule) is not evidence of anything.
+  assert.deepEqual(store.current.sent.map((s) => [s.index, s.unverified === true]), [[6, false]]);
+});
+
+test('VK-751: an unverified row cannot stand in for, or annotate, a submission this wallet made', async () => {
+  const store = memoryStore({
+    ...emptyNoteStore(), chain_id: 13, genesis: GENESIS_A,
+    submissions: [{ hash: HEX64('ab'), to_pk: PAYEE_PK, amount: '777', time: 5, status: 'committed', created_ms: 1 }],
+  });
+  const { wallet } = scanningWallet({ sent: [sentRow(1, FROM_MINT, { height: 99 })], store });
+  const st = await wallet.scan(SPEND_KEY, {});
+  const rows = wallet.activity(st);
+  assert.equal(rows.filter((r) => r.kind === 'sent_unverified').length, 1, 'it is its own row');
+  assert.equal(rows.find((r) => r.kind === 'submission').sub.height, undefined, 'and it did not date the real payment');
+});
+
+test('VK-751: a rescan removes a planted row an older build stored, and keeps the real ones', async () => {
+  // Stored before this rule: no `from` on either row. The rescan re-reads the leaves, and what the
+  // page says now replaces what was stored for those leaves.
+  const store = memoryStore({
+    ...emptyNoteStore(), chain_id: 13, genesis: GENESIS_A, scanned_index: 3,
+    sent: [sentRow(1, undefined, { memo: 'planted' }), sentRow(2, undefined, { memo: 'real' })],
+  });
+  const { wallet } = scanningWallet({ sent: [sentRow(1, PLANTER_PK, { memo: 'planted' }), sentRow(2, OWN_PK, { memo: 'real' })], store });
+  await wallet.rescan(SPEND_KEY, {});
+  assert.deepEqual(store.current.sent.map((s) => [s.index, s.memo]), [[2, 'real']]);
+});
+
+// The reviewer's caution: a creator comparison must not cost a wallet its legitimate history.
+// Each kind of row a wallet really has, through the same scan.
+test('VK-751: legitimate rows survive — a bridge deposit, a faucet mint, a received payment', async () => {
+  // None of these is a "sent" row at all: they are notes this wallet OWNS (pk = own), whatever
+  // their creator — zero for a relayed deposit and a faucet mint, the payer's pk for a payment.
+  const deposit = ownedNote(0, { from: FROM_ZERO, amount: '4000000000', cm: HEX64('c0') });
+  const faucet = ownedNote(1, { from: FROM_ZERO, amount: '100000000000', cm: HEX64('c1') });
+  const payment = ownedNote(2, { from: PLANTER_PK, amount: '5', cm: HEX64('c2'), memo: 'thanks' });
+  const { wallet, store } = scanningWallet({
+    received: [faucet, payment],
+    deposits: {
+      client: {
+        bridgeState: () => ({ enabled: true }),
+        blockByHeight: (h) => ({ height: h, timestamp_ms: 1788000000000, transactions: h === 5 ? [{ action: { kind: 'bridge_attest' } }] : [] }),
+      },
+      core: { rebuilt_deposit: () => ({ ...deposit, index: 18446744073709551615, height: 0 }) },
+    },
+  });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.deepEqual(store.current.notes.map((n) => [n.index, n.amount]).sort(), [[0, '4000000000'], [1, '100000000000'], [2, '5']]);
+  const received = wallet.activity(st).filter((r) => r.kind === 'received');
+  assert.equal(received.length, 3);
+  assert.equal(received.find((r) => r.index === 2).memo, 'thanks');
+});
+
+test('VK-751: legitimate rows survive — a withdrawal, a faucet request, and a send proved by a paired prover', async () => {
+  // A withdrawal (burn) addresses no note to anybody: it is its submission record. A relayed or
+  // delegated send is a bundle THIS wallet's key spends, whoever proved it, so the guest commits
+  // its payment with this wallet's pk as creator — and the chain's copy folds into the record.
+  const store = memoryStore({
+    ...emptyNoteStore(), chain_id: 13, genesis: GENESIS_A, notes: [ownedNote(0)],
+    submissions: [
+      { hash: HEX64('b1'), kind: 'burn', asset: 1, amount: '250', to_chain: 1, status: 'committed', created_ms: 3 },
+      { hash: HEX64('fa'), kind: 'faucet', amount: '100000000000', status: 'committed', created_ms: 2 },
+    ],
+  });
+  const paid = sentRow(1, OWN_PK, { amount: PROVED.amount, time: PROVED.time, height: 8 });
+  const { wallet, client } = scanningWallet({ sent: [paid], store });
+  // The proof came back from a prover (`completeSend` is what `send.resume` runs for one).
+  const submission = await wallet.completeSend(SPEND_KEY, PROVED, { to: 'rand1payee', wait: false, client });
+  const st = await wallet.scan(SPEND_KEY, {});
+  const rows = wallet.activity(st);
+  assert.deepEqual(rows.filter((r) => r.kind === 'submission').map((r) => r.hash).sort(), [HEX64('b1'), submission.hash].sort(), 'the withdrawal and the send are both listed');
+  assert.equal(rows.filter((r) => r.kind === 'faucet').length, 1);
+  assert.equal(rows.filter((r) => r.kind === 'sent').length, 0, 'the chain\'s copy of the send folded into its record, not a second row');
+  assert.equal(rows.find((r) => r.hash === submission.hash).sub.height, 8, 'and dated it');
+  assert.equal(st.sent.length, 1);
+});
+
+
+// ===================================== CLI-1006 (audit v14): no abort after the broadcast ======
+// The invariant the screens' "cancelled" rests on: the engine's LAST abort checkpoint is the one
+// immediately before `rand_sendTransaction`. Once the node has the transaction, an abort changes
+// nothing — the submission is recorded and the call resolves. A checkpoint added anywhere after
+// the broadcast turns these red.
+for (const [name, run, extraCore] of [
+  ['completeSend', (w, opts) => w.completeSend(SPEND_KEY, PROVED, { to: 'rand1payee', ...opts }), { parse_address: () => ({ valid: true, pk: HEX64('99') }) }],
+  ['completeBurn', (w, opts) => w.completeBurn(SPEND_KEY, { ...PROVED, to_chain: 1, token: 'ee'.repeat(32), to: 'ff'.repeat(32), relayer_fee: '0' }, opts), {}],
+  ['completeInvoke', (w, opts) => w.completeInvoke(SPEND_KEY, { ...PROVED, program: HEX64('70'), payouts: [] }, opts), {}],
+]) {
+  test(`CLI-1006: ${name} — an abort signalled once the transaction is broadcast is not a cancellation`, async () => {
+    const store = memoryStore({ ...emptyNoteStore(), notes: [ownedNote(0)], chain_id: 13, genesis: GENESIS_A });
+    const controller = new AbortController();
+    const phases = [];
+    const client = stubClient({
+      // The abort lands while the node is taking the transaction: the latest it can and still
+      // be "during" the call, and every step after it runs with the signal already aborted.
+      sendTransaction: () => { controller.abort(); return HEX64('dd'); },
+      getTransaction: () => ({ hash: HEX64('dd'), height: 9 }),
+    });
+    const wallet = makeWallet({ core: stubCore(extraCore), store, rpc: () => client, settings: async () => ({}), annotate: false });
+    const submission = await run(wallet, { wait: true, signal: controller.signal, client, onPhase: (p) => phases.push(p) });
+    assert.equal(submission.hash, HEX64('dd'), 'the call resolves with the submission; it does not reject with an AbortError');
+    assert.deepEqual(phases, ['submit', 'wait']);
+    assert.equal(store.current.submissions.length, 1, 'and the record of it is on disk');
+    assert.equal(store.current.submissions[0].status, 'committed');
+  });
+
+  test(`CLI-1006: ${name} — an abort before the broadcast sends nothing`, async () => {
+    const store = memoryStore({ ...emptyNoteStore(), notes: [ownedNote(0)], chain_id: 13, genesis: GENESIS_A });
+    const controller = new AbortController();
+    controller.abort();
+    const client = stubClient({ sendTransaction: () => HEX64('dd') });
+    const wallet = makeWallet({ core: stubCore(extraCore), store, rpc: () => client, settings: async () => ({}), annotate: false });
+    const phases = [];
+    await assert.rejects(() => run(wallet, { wait: false, signal: controller.signal, client, onPhase: (p) => phases.push(p) }), (err) => err.name === 'AbortError');
+    assert.equal(client.calls.some(([m]) => m === 'sendTransaction'), false);
+    assert.deepEqual(phases, [], 'and \'submit\' was never reported, which is what lets a screen read the phase');
+  });
+}
+
+// ================== CLI-1009 (audit v14): a header that announced transactions, and no body ====
+// The header said `tx_count > 0`; the block came back `null`, or with fewer transactions than
+// announced. That was read as "no actions" and the deposit cursor moved past the block — a bridge
+// deposit in it is then never looked for again. An honest node answers a pruned height with an
+// error, so this takes a hostile node or replicas that disagree; either way the block was not
+// read, and a cursor moves only over what was.
+for (const [what, body] of [
+  ['null', () => null],
+  ['an empty transaction list', (h) => ({ height: h, transactions: [] })],
+  ['fewer transactions than announced', (h) => ({ height: h, transactions: [{ action: { kind: 'transfer' } }] })],
+  ['no transaction list at all', (h) => ({ height: h })],
+]) {
+  test(`CLI-1009: a block whose header announced 2 transactions and whose body is ${what} does not move the cursor`, async () => {
+    const store = memoryStore();
+    const deposit = ownedNote(0, { cm: HEX64('de'), from: '00'.repeat(32) });
+    let honest = false;
+    const opened = [];
+    const client = stubClient({
+      head: () => ({ height: 3000, hash: HEX64('ab') }),
+      bridgeState: () => ({ enabled: true }),
+      getBlocks: (from, to) => {
+        const rows = [];
+        for (let h = from; h <= Math.min(to, 3000); h += 1) rows.push({ height: h, hash: HEX64('ab'), tx_count: h === 2000 ? 2 : 0 });
+        return rows;
+      },
+      blockByHeight: (h) => {
+        opened.push(h);
+        if (!honest) return body(h);
+        return { height: h, transactions: [{ action: { kind: 'bridge_attest' } }, { action: { kind: 'transfer' } }] };
+      },
+      treeInfo: () => ({ next_index: 1, root: HEX64('00'), nullifiers: 0 }),
+      commitments: (from) => (from === 0 ? [{ index: 0, cm: HEX64('de'), height: 2000, envelope: envelope() }] : []),
+    });
+    const core = stubCore({ rebuilt_deposit: () => ({ ...deposit, index: 18446744073709551615, height: 0 }) });
+    const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+
+    const st = await wallet.scan(SPEND_KEY, {});
+    assert.equal(store.current.scanned_attest_height, 2000, 'the cursor moved past a block that was never read');
+    assert.equal(st.bridgeUnknown, true, 'and the caller is told the deposits could not all be read');
+    assert.equal(store.current.notes.length, 0);
+    assert.ok(store.current.last_sync_ms > 0, 'the rest of the scan still ran');
+
+    // The next scan asks for the same block again; an honest answer is read and the walk goes on.
+    honest = true;
+    const again = await wallet.scan(SPEND_KEY, {});
+    assert.deepEqual(opened, [2000, 2000], 'the block is retried, not skipped');
+    assert.equal(store.current.notes.length, 1, 'the deposit in it is found');
+    assert.equal(store.current.scanned_attest_height, 3001);
+    assert.equal(again.bridgeUnknown, undefined);
+  });
+}
+
+test('CLI-1009: a block with exactly the transactions its header announced is read as before', async () => {
+  const store = memoryStore();
+  const client = stubClient({
+    head: () => ({ height: 100, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    getBlocks: (from, to) => Array.from({ length: Math.min(to, 100) - from + 1 }, (_, i) => ({ height: from + i, hash: HEX64('ab'), tx_count: from + i === 9 ? 3 : 0 })),
+    // More than announced is not this rule's business either: nothing was withheld.
+    blockByHeight: (h) => ({ height: h, transactions: [{ action: { kind: 'transfer' } }, { action: { kind: 'transfer' } }, { action: { kind: 'transfer' } }] }),
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.current.scanned_attest_height, 101);
+  assert.equal(st.bridgeUnknown, undefined);
+});
+
+test('CLI-1009: without rand_getBlocks, a height under the node\'s own tip that comes back null stops the walk there', async () => {
+  const store = memoryStore();
+  const client = stubClient({
+    head: () => ({ height: 5000, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    getBlocks: () => { const e = new Error('unknown method rand_getBlocks'); e.code = -32601; throw e; },
+    blockByHeight: (h) => (h === 40 ? null : { height: h, transactions: [] }),
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.current.scanned_attest_height, 40, 'the cursor passed a block the node did not serve');
+  assert.equal(st.bridgeUnknown, true);
 });

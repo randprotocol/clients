@@ -648,6 +648,7 @@ export default {
   "Sending twice would pay twice.": "二重に送信すると二重に支払うことになります。",
   "Sending…": "送信中…",
   "Sent": "送信済み",
+  "Sent (sender unverified)": "送信済み（送信者未確認）",
   "Sent — view": "送信済み — 表示",
   "Sent.": "送信しました。",
   "Set on this device when this wallet was created.": "このウォレットの作成時にこの端末で設定されました。",
@@ -1120,4 +1121,5 @@ export default {
   "the record is damaged": "レコードが破損しています",
   "the record was saved by a newer version of Rand Wallet": "レコードは新しいバージョンの Rand Wallet で保存されています",
   "the record does not open with this password": "このパスワードではレコードを開けません",
+  "block {height} has {got} of the {n} transactions its header announced": "ブロック {height} には、ヘッダーが示した {n} 件のトランザクションのうち {got} 件しかありません",
 };

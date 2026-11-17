@@ -9,6 +9,13 @@ test('kindOf: in, out and faucet carry a sign and their own tint', () => {
   assert.deepEqual(kindOf({ kind: 'faucet' }), { kind: 'faucet', icon: 'droplet', title: 'Faucet', sign: '+', tint: 'faucet' });
 });
 
+test('kindOf: VK-751 — a sent row whose sender is unverified says so, and carries no sign and no Sent tint', () => {
+  assert.deepEqual(kindOf({ kind: 'out-unverified' }), { kind: 'out-unverified', icon: 'arrowUpRight', title: 'Sent (sender unverified)', sign: '', tint: '' });
+  const html = String(activityRowMarkup({ kind: 'out-unverified', asset: 0, amount: '4200', time: 1 }, new Map()));
+  assert.match(html, /Sent \(sender unverified\)/);
+  assert.doesNotMatch(html, /−/, 'no minus sign: it is not counted as money this wallet sent');
+});
+
 test('kindOf: a pending item is titled by its known status, else "Pending"; no sign', () => {
   assert.equal(kindOf({ kind: 'pending', status: 'Proving' }).title, 'Proving');
   assert.equal(kindOf({ kind: 'pending', status: 'confirming' }).title, 'Confirming');

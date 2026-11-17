@@ -482,6 +482,12 @@ pub struct SentRow {
     /// [`OwnedNote::memo`].
     #[serde(default)]
     pub memo: Option<String>,
+    /// The note's creator (`Note::from`), 64 hex — VK-751. In [`ScanResult::sent`] it is always
+    /// this wallet's own `pk`; in [`ScanResult::sent_unverified`] one of [`FIXED_CREATORS`]. A
+    /// client checks it again before it stores the row. `#[serde(default)]` so a row a client
+    /// stored before the field existed still loads (as the empty string, which matches nothing).
+    #[serde(default)]
+    pub from: String,
 }
 
 fn owned_note(w: &Wallet, index: u64, height: u64, cm: Word8, note: Note) -> OwnedNote {
@@ -532,28 +538,61 @@ impl EnvelopeHex {
     }
 }
 
+/// The creators the chain itself writes into a note (VK-751): a `from` that is one of these names
+/// no sender inside the pool. Zero is a bridge deposit or its fee note, a faucet mint, a genesis
+/// allocation and a staking withdrawal; then an RPL mint (`rpl-mint`), a program payout
+/// (`rpl2-pay`) and a perp payout (`rpl3-pay`).
+pub const FIXED_CREATORS: [Word8; 4] = [
+    [0; 8],
+    randprotocol_core::ledger::tokens::MINT_FROM,
+    PROGRAM_FROM,
+    randprotocol_core::ledger::perps::PERP_FROM,
+];
+
 /// What one leaf turned out to be for this wallet. Mirrors `randprotocol_client::wallet::classify`:
 /// an envelope that opens is not proof of ownership (anyone can seal to a public address), so a
 /// received note is only kept when its `pk` is this wallet's.
+///
+/// **Nor is the sender part opening proof of having sent it (VK-751, audit v14).** It opens under
+/// the *viewing* key, which is handed out — to the prover of every delegated proof, to an auditor,
+/// to a node it is imported into — and whoever holds it can seal a note of their own under it.
+/// What they cannot choose is the note's creator: the bundle guest commits every output with
+/// `from = pk_self`, the spender's own `pk`. So, with `pk_self` this wallet's:
+///
+/// * `note.from == pk_self` — [`Found::Sent`];
+/// * `note.from` one of [`FIXED_CREATORS`] — [`Found::SentUnverified`]: a relayed deposit, a mint
+///   or a payout is sealed under the *submitter's* key with a constant creator, so the row may be
+///   this key's own doing, and an ovk holder can mint its own token and seal it the same way. It
+///   is reported apart and never as Sent;
+/// * anything else that opens — [`Found::Skipped`].
 pub enum Found {
     /// A note this wallet owns, with the memo its sender sealed, if any.
     Received(Note, Option<String>),
-    /// A note this wallet sent, with the memo it sealed, if any.
+    /// A note this wallet sent — its creator is this wallet — with the memo it sealed, if any.
     Sent(Note, Option<String>),
+    /// A note sealed under this wallet's key whose creator is a chain constant: not known to be
+    /// this wallet's doing.
+    SentUnverified(Note, Option<String>),
     Skipped,
 }
 
 pub fn classify(w: &Wallet, cm: Word8, envelope: &Envelope) -> Found {
     let env = envelope_from_core(envelope);
+    let pk_self = w.vk.pk();
     // The memo opens under the same transaction key the note did; a legacy body, an empty field
     // or a malformed one is `None` (a malformed memo never costs the payee the note).
     if let Some((key, note)) = env.open_as_receiver(cm, &w.vk) {
-        if note.pk == w.vk.pk() {
+        if note.pk == pk_self {
             return Found::Received(note, env.memo(cm, &key));
         }
     }
     if let Some((key, note)) = env.open_as_sender(cm, &w.vk) {
-        return Found::Sent(note, env.memo(cm, &key));
+        if note.from == pk_self {
+            return Found::Sent(note, env.memo(cm, &key));
+        }
+        if FIXED_CREATORS.contains(&note.from) {
+            return Found::SentUnverified(note, env.memo(cm, &key));
+        }
     }
     Found::Skipped
 }
@@ -561,7 +600,11 @@ pub fn classify(w: &Wallet, cm: Word8, envelope: &Envelope) -> Found {
 #[derive(Serialize, Default)]
 pub struct ScanResult {
     pub received: Vec<OwnedNote>,
+    /// Notes this wallet sent: each one's `from` is this wallet's `pk`.
     pub sent: Vec<SentRow>,
+    /// Notes sealed under this wallet's key whose creator is a chain constant (VK-751) — "sent,
+    /// sender unverified". A separate list, so a client that reads only `sent` never counts one.
+    pub sent_unverified: Vec<SentRow>,
     /// One past the highest leaf index in the page, for the client's cursor.
     pub next_index: u64,
     pub rows: usize,
@@ -574,19 +617,22 @@ pub fn scan_page(w: &Wallet, rows: &[CommitmentRow]) -> Result<ScanResult> {
     for r in rows {
         let cm = word8_from_hex(&r.cm).ok_or("cm is not 64 hex characters")?;
         let env = r.envelope.decode()?;
+        let sent_row = |note: &Note, memo: Option<String>| SentRow {
+            index: r.index,
+            to_pk: word8_to_hex(&note.pk),
+            amount: note.amount.to_string(),
+            asset: note.asset,
+            time: note.time,
+            height: r.height,
+            memo,
+            from: word8_to_hex(&note.from),
+        };
         match classify(w, cm, &env) {
             Found::Received(note, memo) => {
                 out.received.push(OwnedNote { memo, ..owned_note(w, r.index, r.height, cm, note) })
             }
-            Found::Sent(note, memo) => out.sent.push(SentRow {
-                index: r.index,
-                to_pk: word8_to_hex(&note.pk),
-                amount: note.amount.to_string(),
-                asset: note.asset,
-                time: note.time,
-                height: r.height,
-                memo,
-            }),
+            Found::Sent(note, memo) => out.sent.push(sent_row(&note, memo)),
+            Found::SentUnverified(note, memo) => out.sent_unverified.push(sent_row(&note, memo)),
             Found::Skipped => {}
         }
         out.next_index = out.next_index.max(r.index + 1);
@@ -4077,8 +4123,10 @@ fn asset_param(p: &Value) -> Result<u32> {
 /// - `uri_parse` `{uri}` → `{address, amount, asset, memo, fingerprint}`; absent parameters are
 ///   `null`, `amount` is the display decimal as written, `fingerprint` is recomputed
 /// - `uri_format` `{address, amount?, asset?, memo?}` → `{uri}`; all strings, empty = absent
-/// - `scan_page` `{spend_key, rows: [getCommitments rows]}` → `{received, sent, next_index, rows}`;
-///   every received note and sent row carries `memo` (a string, or `null` for none)
+/// - `scan_page` `{spend_key, rows: [getCommitments rows]}` → `{received, sent, sent_unverified,
+///   next_index, rows}`; every received note and sent row carries `memo` (a string, or `null` for
+///   none), and every sent row `from`, the note's creator: this wallet's `pk` in `sent`, a chain
+///   constant in `sent_unverified` (VK-751 — see [`classify`])
 /// - `rebuilt_deposit` `{spend_key, action}` → owned note or null
 /// - `rebuilt_notes` `{spend_key, action}` → owned notes (an array): a `bridge_attest`'s deposit,
 ///   or every note an RPL-2 `invoke` paid out to this wallet, from the action's public fields
@@ -4592,6 +4640,70 @@ mod tests {
         let opened = open_with_tx_key(&rows[0].cm, &rows[0].envelope, &hex::encode(key1.0)).unwrap().unwrap();
         assert_eq!(opened["amount"], "1500000000");
         assert!(open_with_tx_key(&rows[1].cm, &rows[1].envelope, &hex::encode(key1.0)).unwrap().is_none());
+    }
+
+    /// [`sealed_row`] for a note whose creator (`from`) is chosen by the caller: `sealer`'s
+    /// viewing key seals it, which is all the sender part opening says.
+    fn sealed_row_from(sealer: &Wallet, to: &Wallet, from: Word8, amount: u64, index: u64, memo: &str) -> CommitmentRow {
+        let note = Note::new(to.vk.pk(), from, amount, 0, 3);
+        let env = seal_note_as(EnvelopeFormat::Memo, &sealer.vk, &to.address, &note, &TxKey::random(), memo).unwrap();
+        CommitmentRow {
+            index,
+            cm: word8_to_hex(&note.commitment()),
+            height: 9,
+            envelope: EnvelopeHex {
+                kem_ct: hex::encode(&env.kem_ct),
+                to_receiver: hex::encode(&env.to_receiver),
+                to_sender: hex::encode(&env.to_sender),
+                body: hex::encode(&env.body),
+            },
+        }
+    }
+
+    /// VK-751: a holder of the victim's viewing key seals a note of its own under it. The note's
+    /// creator is the planter (the guest commits `from = pk_self` for whoever spends), so the
+    /// victim's scan must not file the planter's payee, amount and memo as a payment it sent.
+    #[test]
+    fn scan_page_does_not_file_a_note_planted_under_the_viewing_key_as_sent() {
+        let victim = wallet(1);
+        let planter = wallet(2);
+        let payee = wallet(3);
+        // Everything the planter needs of the victim is the viewing key: a wallet with the
+        // victim's `vk` seals exactly as the victim's own would.
+        let planted = sealed_row_from(&victim, &payee, planter.vk.pk(), 123_456_789, 10, "invoice 42");
+        let real = sealed_row_from(&victim, &payee, victim.vk.pk(), 5, 11, "rent");
+        let scan = scan_page(&victim, &[planted, real]).unwrap();
+        assert_eq!(scan.sent.len(), 1, "exactly the victim's own payment is sent");
+        assert_eq!((scan.sent[0].index, scan.sent[0].amount.as_str(), scan.sent[0].memo.as_deref()), (11, "5", Some("rent")));
+        assert_eq!(scan.sent[0].from, word8_to_hex(&victim.vk.pk()));
+        assert!(scan.sent_unverified.is_empty());
+        assert_eq!(scan.next_index, 12, "the cursor still passes the planted leaf");
+        // The payee is unaffected: both notes are its own, whoever created them.
+        assert_eq!(scan_page(&payee, &[sealed_row_from(&victim, &payee, planter.vk.pk(), 1, 10, "")]).unwrap().received.len(), 1);
+    }
+
+    /// VK-751: a chain-fixed creator (a relayed deposit, a mint, a program or perp payout) under
+    /// this wallet's key is reported apart — never in `sent` — and any other creator is dropped.
+    #[test]
+    fn scan_page_reports_a_chain_fixed_creator_apart_and_never_as_sent() {
+        let relayer = wallet(1);
+        let payee = wallet(2);
+        let rows: Vec<CommitmentRow> = FIXED_CREATORS
+            .iter()
+            .enumerate()
+            .map(|(i, from)| sealed_row_from(&relayer, &payee, *from, 7 + i as u64, 20 + i as u64, ""))
+            .chain(std::iter::once(sealed_row_from(&relayer, &payee, [9; 8], 1, 30, "")))
+            .collect();
+        let scan = scan_page(&relayer, &rows).unwrap();
+        assert!(scan.sent.is_empty(), "none is a payment this wallet is known to have sent");
+        assert_eq!(scan.sent_unverified.iter().map(|s| s.index).collect::<Vec<_>>(), vec![20, 21, 22, 23]);
+        for (row, from) in scan.sent_unverified.iter().zip(FIXED_CREATORS.iter()) {
+            assert_eq!(row.from, word8_to_hex(from));
+        }
+        // The tags are the chain's, readable in a hex dump.
+        assert_eq!(&word8_to_hex(&FIXED_CREATORS[1])[..16], hex::encode(b"rpl-mint"));
+        assert_eq!(&word8_to_hex(&FIXED_CREATORS[2])[..16], hex::encode(b"rpl2-pay"));
+        assert_eq!(&word8_to_hex(&FIXED_CREATORS[3])[..16], hex::encode(b"rpl3-pay"));
     }
 
     #[test]
@@ -5705,6 +5817,7 @@ mod tests {
                         // A note this wallet *sent*: the payment, addressed to somebody else.
                         Found::Sent(n, _) if n.pk == to.pk => "pay",
                         Found::Sent(..) => "sent-elsewhere",
+                        Found::SentUnverified(..) => "sent-unverified",
                         Found::Skipped => "nobody",
                     }
                 })

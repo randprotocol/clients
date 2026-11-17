@@ -191,6 +191,80 @@ public class DepositWalkTest {
         assertTrue(r[0].unknown);
     }
 
+    /** {@code honest}'s headers, with the body of block {@code at} replaced by {@code body}. */
+    private static DepositWalk.Node withBody(Node honest, long at, JSONObject body) {
+        return new DepositWalk.Node() {
+            @Override
+            public JSONArray headers(long from, long to) throws RpcException {
+                return honest.headers(from, to);
+            }
+
+            @Override
+            public JSONObject block(long height) throws RpcException {
+                JSONObject real = honest.block(height);
+                return height == at ? body : real;
+            }
+        };
+    }
+
+    /**
+     * CLI-1009 (audit v14): the header said the block carries a transaction and the body came back
+     * null, or with none. That is a block the node did not serve; the cursor stays under it.
+     */
+    @Test
+    public void aBlockWhoseHeaderAnnouncedTransactionsAndWhoseBodyIsNullOrShortDoesNotMoveTheCursor() throws Exception {
+        JSONObject[] bodies = {
+            null,
+            new JSONObject().put("height", 2000),
+            new JSONObject().put("height", 2000).put("transactions", new JSONArray()),
+        };
+        for (int i = 0; i < bodies.length; i++) {
+            Node honest = new Node(3000, 7L, 2000L);
+            DepositWalk.Result[] r = new DepositWalk.Result[1];
+            List<Long> seen = offered(withBody(honest, 2000, bodies[i]), 0, 3000, r);
+            assertEquals("body " + i, Arrays.asList(7L), seen);
+            assertEquals("body " + i + " moved the cursor past a block that was not read", 1999, r[0].through);
+            assertTrue("body " + i + " was not reported", r[0].unknown);
+            assertEquals("body " + i + ": the block was asked for", Arrays.asList(7L, 2000L), honest.opened);
+        }
+        // The same node answering honestly on the next scan is read from where the walk stopped.
+        Node honest = new Node(3000, 7L, 2000L);
+        DepositWalk.Result[] r = new DepositWalk.Result[1];
+        assertEquals(Arrays.asList(2000L), offered(honest, 2000, 3000, r));
+        assertEquals(3000, r[0].through);
+        assertFalse(r[0].unknown);
+    }
+
+    @Test
+    public void servedHoldsABodyToItsHeader() throws Exception {
+        JSONObject two = new JSONObject().put("transactions", new JSONArray().put(new JSONObject()).put(new JSONObject()));
+        assertFalse(DepositWalk.served(null, 1));
+        assertFalse(DepositWalk.served(new JSONObject(), 1));
+        assertFalse(DepositWalk.served(two, 3));
+        assertTrue(DepositWalk.served(two, 2));
+        assertTrue("more than announced withholds nothing", DepositWalk.served(two, 1));
+    }
+
+    /** CLI-1009, the one-at-a-time path: a null block under the node's own tip stops the walk. */
+    @Test
+    public void withoutGetBlocksANullBlockUnderTheTipStopsTheWalkThere() throws Exception {
+        Node honest = new Node(5000);
+        DepositWalk.Node node = new DepositWalk.Node() {
+            @Override
+            public JSONArray headers(long from, long to) throws RpcException {
+                throw new RpcException(-32601, "unknown method rand_getBlocks");
+            }
+
+            @Override
+            public JSONObject block(long height) throws RpcException {
+                return height == 40 ? null : honest.block(height);
+            }
+        };
+        DepositWalk.Result r = DepositWalk.run(node, 0, 5000, action -> { });
+        assertEquals(39, r.through);
+        assertTrue(r.unknown);
+    }
+
     @Test
     public void aNodeWithNoGetBlocksIsReadOneBlockAtATimeAndCapped() throws Exception {
         Node honest = new Node(5000);

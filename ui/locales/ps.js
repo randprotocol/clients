@@ -655,6 +655,7 @@ export default {
   "Sending twice would pay twice.": "دوه ځله لېږل به دوه ځله ورکړه وي.",
   "Sending…": "لېږل کېږي…",
   "Sent": "ولېږل شو",
+  "Sent (sender unverified)": "ولېږل شو (لېږونکی نه دی تایید شوی)",
   "Sent — view": "ولېږل شو — وګورئ",
   "Sent.": "ولېږل شو.",
   "Set on this device when this wallet was created.": "په دې وسیله کې هغه وخت ټاکل شوی کله چې دا والټ جوړ شو.",
@@ -1127,4 +1128,5 @@ export default {
   "the record is damaged": "ریکارډ خراب شوی",
   "the record was saved by a newer version of Rand Wallet": "ریکارډ د Rand Wallet د نوې نسخې لخوا خوندي شوی",
   "the record does not open with this password": "ریکارډ د دې پاسورډ سره نه خلاصېږي",
+  "block {height} has {got} of the {n} transactions its header announced": "بلاک {height} د هغو {n} راکړو ورکړو څخه {got} لري چې سرلیک یې اعلان کړې وې",
 };

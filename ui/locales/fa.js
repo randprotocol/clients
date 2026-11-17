@@ -656,6 +656,7 @@ export default {
   "Sending twice would pay twice.": "ارسال دوباره یعنی دو بار پرداخت.",
   "Sending…": "در حال ارسال…",
   "Sent": "ارسال‌شده",
+  "Sent (sender unverified)": "ارسال‌شده (فرستنده تأییدنشده)",
   "Sent — view": "ارسال شد — مشاهده",
   "Sent.": "ارسال شد.",
   "Set on this device when this wallet was created.": "هنگام ساختن این کیف پول روی این دستگاه تعیین شد.",
@@ -1128,4 +1129,5 @@ export default {
   "the record is damaged": "رکورد آسیب دیده است",
   "the record was saved by a newer version of Rand Wallet": "رکورد با نسخه‌ی جدیدتری از Rand Wallet ذخیره شده است",
   "the record does not open with this password": "رکورد با این گذرواژه باز نمی‌شود",
+  "block {height} has {got} of the {n} transactions its header announced": "بلوک {height} تنها {got} تراکنش از {n} تراکنشی را دارد که سرآیندش اعلام کرده بود",
 };

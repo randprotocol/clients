@@ -655,6 +655,7 @@ export default {
   "Sending twice would pay twice.": "இருமுறை அனுப்பினால் இருமுறை பணம் செலுத்தப்படும்.",
   "Sending…": "அனுப்புகிறது…",
   "Sent": "அனுப்பப்பட்டது",
+  "Sent (sender unverified)": "அனுப்பப்பட்டது (அனுப்புநர் சரிபார்க்கப்படவில்லை)",
   "Sent — view": "அனுப்பப்பட்டது — பார்",
   "Sent.": "அனுப்பப்பட்டது.",
   "Set on this device when this wallet was created.": "இந்த வாலட் உருவாக்கப்பட்டபோது இந்தச் சாதனத்தில் அமைக்கப்பட்டது.",
@@ -1127,4 +1128,5 @@ export default {
   "the record is damaged": "பதிவு சேதமடைந்துள்ளது",
   "the record was saved by a newer version of Rand Wallet": "பதிவு Rand Wallet இன் புதிய பதிப்பால் சேமிக்கப்பட்டது",
   "the record does not open with this password": "இந்தக் கடவுச்சொல்லால் பதிவு திறக்கவில்லை",
+  "block {height} has {got} of the {n} transactions its header announced": "தொகுதி {height} அதன் தலைப்பு அறிவித்த {n} பரிவர்த்தனைகளில் {got} மட்டுமே கொண்டுள்ளது",
 };

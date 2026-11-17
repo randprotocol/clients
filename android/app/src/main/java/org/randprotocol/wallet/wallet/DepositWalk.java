@@ -30,6 +30,9 @@ import org.randprotocol.wallet.rpc.RpcException;
  *       blocks together; a longer gap is closed over several scans.</li>
  *   <li>A node with no {@code rand_getBlocks} is read one block at a time, at most
  *       {@link #MAX_HEIGHTS_WITHOUT_HEADERS} a scan.</li>
+ *   <li>A block whose header announced transactions and whose body is null, or carries fewer, was
+ *       not served (CLI-1009): the walk stops under it, {@link Result#unknown}. So does a null
+ *       block under the node's own tip on the one-at-a-time path.</li>
  * </ul>
  * The core refusing an action it was handed is this wallet's own failure and is thrown, not
  * reported as unknown.
@@ -98,6 +101,10 @@ final class DepositWalk {
                     } catch (RpcException e) {
                         return new Result(examined, true);
                     }
+                    // CLI-1009: the header announced `counts[i]` transactions. A body that is
+                    // null, or carries fewer, is a block the node did not serve — not one with
+                    // no actions. The cursor stays under it and the next scan asks again.
+                    if (!served(block, counts[i])) return new Result(examined, true);
                     offerAttests(block, sink);
                 }
                 examined = height;
@@ -118,6 +125,9 @@ final class DepositWalk {
             } catch (RpcException e) {
                 return new Result(examined, true);
             }
+            // CLI-1009: `h` is at or under the tip this node named, so null is a block it did not
+            // serve (an honest node answers a pruned height with an error), not an empty one.
+            if (block == null) return new Result(examined, true);
             offerAttests(block, sink);
             examined = h;
         }
@@ -156,6 +166,17 @@ final class DepositWalk {
             if (n >= 0) return n;
         }
         throw new RpcException(0, "rand_getBlocks: header " + i + " " + name + " is not a non-negative integer");
+    }
+
+    /**
+     * Whether {@code block} is the body its header announced: there at all, and with at least
+     * {@code announced} transactions (CLI-1009, audit v14). More than announced withholds nothing.
+     */
+    static boolean served(JSONObject block, long announced) {
+        if (block == null) return false;
+        JSONArray txs = block.optJSONArray("transactions");
+        long got = txs == null ? 0 : txs.length();
+        return got >= announced;
     }
 
     private static void offerAttests(JSONObject block, Sink sink) throws CoreException, JSONException {

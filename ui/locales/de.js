@@ -655,6 +655,7 @@ export default {
   "Sending twice would pay twice.": "Zweimal senden heißt zweimal zahlen.",
   "Sending…": "Sende …",
   "Sent": "Gesendet",
+  "Sent (sender unverified)": "Gesendet (Absender unbestätigt)",
   "Sent — view": "Gesendet – ansehen",
   "Sent.": "Gesendet.",
   "Set on this device when this wallet was created.": "Auf diesem Gerät festgelegt, als diese Wallet erstellt wurde.",
@@ -1127,4 +1128,5 @@ export default {
   "the record is damaged": "der Datensatz ist beschädigt",
   "the record was saved by a newer version of Rand Wallet": "der Datensatz wurde von einer neueren Version von Rand Wallet gespeichert",
   "the record does not open with this password": "der Datensatz lässt sich mit diesem Passwort nicht öffnen",
+  "block {height} has {got} of the {n} transactions its header announced": "Block {height} enthält {got} der {n} Transaktionen, die sein Header angekündigt hat",
 };

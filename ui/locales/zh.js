@@ -648,6 +648,7 @@ export default {
   "Sending twice would pay twice.": "发送两次就会付款两次。",
   "Sending…": "正在发送…",
   "Sent": "已发送",
+  "Sent (sender unverified)": "已发送（发送方未验证）",
   "Sent — view": "已发送——查看",
   "Sent.": "已发送。",
   "Set on this device when this wallet was created.": "在此设备上创建此钱包时设置。",
@@ -1120,4 +1121,5 @@ export default {
   "the record is damaged": "记录已损坏",
   "the record was saved by a newer version of Rand Wallet": "记录由更新版本的 Rand Wallet 保存",
   "the record does not open with this password": "此密码无法打开该记录",
+  "block {height} has {got} of the {n} transactions its header announced": "区块 {height} 只有 {got} 笔交易，而其区块头声明了 {n} 笔",
 };

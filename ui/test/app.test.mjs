@@ -422,3 +422,112 @@ test('a screen that bypasses the helpers and calls backend.wallet.lock() still e
   assert.ok(app.session.id > before);
   assert.equal(ctx.state.sentinel, undefined);
 });
+
+// ------------------------------------------------- CLI-1002 (audit v14): the double submit ----
+// A double click (or Enter twice) on "Create wallet" used to start two creates. With a backend
+// that writes its vault only after a slow key derivation — the real one's PBKDF2 at 600 000
+// iterations — both succeeded with different keys: the backup screen revealed the first and the
+// vault ended on the second. `racyWalletBackend` is that backend, reduced to the race: nothing in
+// it refuses a second create, so only the screen's own in-flight guard can make these pass.
+function racyWalletBackend() {
+  const vault = { key: null, address: null };
+  let session = null;
+  let made = 0;
+  const provision = async (key) => {
+    const exists = !!vault.key;          // the existence check…
+    await new Promise((r) => setTimeout(r, 25)); // …the slow derivation…
+    if (exists) throw new Error('a wallet already exists on this device');
+    vault.key = key;                     // …and only then the write: last writer wins
+    vault.address = `rand1${key}`;
+    session = key;
+    return { address: vault.address, pk: key };
+  };
+  const b = fakeBackend({
+    wallet: {
+      exists: () => !!vault.key,
+      isUnlocked: () => session !== null,
+      create: () => { made += 1; return provision(`key${made}-${'k'.repeat(40)}`); },
+      import: (secret) => { made += 1; return provision(`${secret}-${made}`); },
+      info: () => ({ address: vault.address, pk: vault.key }),
+      exportSpendKey: () => session,
+    },
+  });
+  return { b, vault };
+}
+
+const submitOnce = (root) => root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+const settle = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+
+/** Holds the reveal button for longer than its 650 ms and returns the key the screen wrote. */
+async function revealBackupKey(root) {
+  root.querySelector('[data-role="hold"]').dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }));
+  await settle(720);
+  return root.querySelector('[data-role="key"]').textContent;
+}
+
+test('CLI-1002: a double submit on Create wallet makes one backend call, and the key backed up is the vault\'s', async (t) => {
+  const { b, vault } = racyWalletBackend();
+  const { app, root } = await mountApp(t, b);
+  await app.go('#create');
+  root.querySelector('input[name=password]').value = 'correct horse battery';
+  root.querySelector('input[name=confirm]').value = 'correct horse battery';
+  const button = root.querySelector('form button[type=submit]');
+
+  submitOnce(root);
+  submitOnce(root); // the second click, 0 ms later
+  await Promise.resolve();
+  assert.equal(button.disabled, true, 'the button is disabled while the wallet is being made');
+  assert.equal(button.getAttribute('aria-busy'), 'true');
+  await settle();
+  await app.idle();
+
+  assert.equal(b.calls.filter((c) => c[0] === 'wallet.create').length, 1, 'one create reached the backend');
+  assert.match(location.hash, /^#backup/);
+  const revealed = await revealBackupKey(root);
+  assert.ok(revealed && revealed === vault.key, `the key revealed (${revealed}) is the key in the vault (${vault.key})`);
+  // …and the confirmation the screen accepts is of that same key.
+  root.querySelector('input[name=check]').value = vault.key.slice(0, 4);
+  root.querySelector('[data-role="check-form"]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await app.idle();
+  assert.match(location.hash, /^#home/);
+});
+
+test('CLI-1002: a double submit on Import wallet makes one backend call', async (t) => {
+  const { b, vault } = racyWalletBackend();
+  const { app, root } = await mountApp(t, b);
+  await app.go('#import');
+  root.querySelector('textarea[name=key]').value = 'imported-recovery-key';
+  root.querySelector('input[name=password]').value = 'correct horse battery';
+  root.querySelector('input[name=confirm]').value = 'correct horse battery';
+  const button = root.querySelector('form button[type=submit]');
+  submitOnce(root);
+  submitOnce(root);
+  await Promise.resolve();
+  assert.equal(button.disabled, true);
+  await settle();
+  await app.idle();
+  assert.equal(b.calls.filter((c) => c[0] === 'wallet.import').length, 1, 'one import reached the backend');
+  assert.equal(vault.key, 'imported-recovery-key-1');
+  assert.match(location.hash, /^#backup/);
+});
+
+test('CLI-1002: a create the backend refuses re-enables the button, so the user can try again', async (t) => {
+  let fail = true;
+  const b = fakeBackend({
+    wallet: { create: async () => { if (fail) throw new Error('storage is full'); return { address: 'rand1x', pk: 'x' }; } },
+  });
+  const { app, root } = await mountApp(t, b);
+  await app.go('#create');
+  root.querySelector('input[name=password]').value = 'correct horse battery';
+  root.querySelector('input[name=confirm]').value = 'correct horse battery';
+  const button = root.querySelector('form button[type=submit]');
+  submitOnce(root);
+  await settle(20);
+  assert.equal(button.disabled, false, 'a failed create leaves the form usable');
+  assert.equal(button.hasAttribute('aria-busy'), false);
+  assert.match(location.hash, /^#create/);
+  fail = false;
+  submitOnce(root);
+  await settle(20);
+  assert.equal(b.calls.filter((c) => c[0] === 'wallet.create').length, 2, 'the retry reaches the backend');
+});

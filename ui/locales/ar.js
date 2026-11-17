@@ -655,6 +655,7 @@ export default {
   "Sending twice would pay twice.": "الإرسال مرتين يعني الدفع مرتين.",
   "Sending…": "جارٍ الإرسال…",
   "Sent": "أُرسل",
+  "Sent (sender unverified)": "أُرسل (المُرسِل غير مُتحقَّق منه)",
   "Sent — view": "أُرسل — عرض",
   "Sent.": "أُرسل.",
   "Set on this device when this wallet was created.": "عُيّنت على هذا الجهاز عند إنشاء هذه المحفظة.",
@@ -1127,4 +1128,5 @@ export default {
   "the record is damaged": "السجل تالف",
   "the record was saved by a newer version of Rand Wallet": "حُفظ السجل بإصدار أحدث من Rand Wallet",
   "the record does not open with this password": "لا يُفتح السجل بكلمة المرور هذه",
+  "block {height} has {got} of the {n} transactions its header announced": "الكتلة {height} تحتوي على {got} من أصل {n} معاملة أعلنت عنها ترويستها",
 };

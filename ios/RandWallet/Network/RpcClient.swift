@@ -301,10 +301,28 @@ final class RpcClient {
         try await call("rand_getBlocks", [from, to])
     }
 
-    func blockActions(height: UInt64) async throws -> [Any] {
-        let b = try await call("rand_getBlockByHeight", [height]) as? [String: Any]
-        let txs = b?["transactions"] as? [[String: Any]] ?? []
-        return txs.compactMap { $0["action"] }
+    /// The actions of the block at `height`, held to what its header said (CLI-1009, audit v14).
+    /// `announced` is the header's `tx_count` when `DepositWalk` read one, `nil` when it is
+    /// reading block by block.
+    func blockActions(height: UInt64, announced: UInt64? = nil) async throws -> [Any] {
+        try Self.actions(ofBlock: try await call("rand_getBlockByHeight", [height]), height: height, announced: announced)
+    }
+
+    /// The actions in a `rand_getBlockByHeight` reply — or an error when the reply is not the
+    /// block that was asked for: `null` (or anything that is not an object) for a height at or
+    /// under the tip the node named, or fewer transactions than its header announced. Read as "no
+    /// actions", either moved the deposit cursor past a block that was never served, and a bridge
+    /// deposit in it was never looked for again. An honest node answers a pruned height with an
+    /// error, never with `null`. More transactions than announced withholds nothing.
+    static func actions(ofBlock reply: Any?, height: UInt64, announced: UInt64?) throws -> [Any] {
+        guard let block = reply as? [String: Any] else {
+            throw RpcError(code: 0, message: "rand_getBlockByHeight: the node has no block \(height) under the tip it named")
+        }
+        let txs = block["transactions"] as? [Any] ?? []
+        if let n = announced, UInt64(txs.count) < n {
+            throw RpcError(code: 0, message: "rand_getBlockByHeight: block \(height) has \(txs.count) of the \(n) transactions its header announced")
+        }
+        return txs.compactMap { ($0 as? [String: Any])?["action"] }
     }
 
     // MARK: RPL-2 program state (fullnode v0.6.8, `docs/rpc.md`)

@@ -118,8 +118,24 @@ function wirePasswordForm(ctx, root, { mode }) {
     if (input.value.length >= 10) markValid(pwWrap, pwField, 'password-hint');
   });
 
+  // CLI-1002 (audit v14): one create/import at a time. The backend derives the vault key for a
+  // few hundred milliseconds before anything is stored, and a second submit in that window (a
+  // double click, Enter held down) used to start a second wallet — the backup screen then showed
+  // a recovery key the vault did not hold. The backend refuses that itself now; this guard is the
+  // screen's own half, and the disabled button is what tells the user the first click was heard.
+  const submitBtn = form.querySelector('button[type=submit]');
+  let inFlight = false;
+  function setBusy(busy) {
+    inFlight = busy;
+    if (!submitBtn) return;
+    submitBtn.disabled = busy;
+    if (busy) submitBtn.setAttribute('aria-busy', 'true');
+    else submitBtn.removeAttribute('aria-busy');
+  }
+
   async function onSubmit(evt) {
     evt.preventDefault();
+    if (inFlight) return;
     let ok = true;
     if (keyField) {
       if (!keyField.value.trim()) { markInvalid(keyWrap, keyField, 'key-error'); ok = false; }
@@ -132,17 +148,20 @@ function wirePasswordForm(ctx, root, { mode }) {
     } else markValid(confirmWrap, confirmField, 'confirm-hint');
     if (!ok) return;
 
-    // Defence in depth: resolveRoute already refuses to route here once a wallet exists, so this
-    // should be unreachable in normal use — but this handler must never call wallet.create/import
-    // a second time over an existing wallet (that overwrites, i.e. destroys, the current keys),
-    // so it checks again itself rather than trust routing alone.
-    if (await ctx.backend.wallet.exists()) {
-      ctx.toast(t('A wallet already exists on this device.'), { kind: 'negative' });
-      ctx.go('#home');
-      return;
-    }
-
+    // Taken synchronously, before the first await: a second submit event dispatched in the same
+    // turn finds it set.
+    setBusy(true);
     try {
+      // Defence in depth: resolveRoute already refuses to route here once a wallet exists, so this
+      // should be unreachable in normal use — but this handler must never call wallet.create/import
+      // a second time over an existing wallet (that overwrites, i.e. destroys, the current keys),
+      // so it checks again itself rather than trust routing alone.
+      if (await ctx.backend.wallet.exists()) {
+        ctx.toast(t('A wallet already exists on this device.'), { kind: 'negative' });
+        ctx.go('#home');
+        return;
+      }
+
       // Through the shell, not backend.wallet.create/import directly: a new wallet is a new
       // session, and ctx.createWallet/importWallet start it *before* this returns, so #backup
       // below renders inside the new session (and can still read its own spend key).
@@ -151,12 +170,15 @@ function wirePasswordForm(ctx, root, { mode }) {
       pwField.value = '';
       confirmField.value = '';
       if (keyField) keyField.value = '';
-      ctx.go('#backup');
+      // Awaited, so the button stays disabled until this form has been replaced by #backup.
+      await ctx.go('#backup');
     } catch (err) {
       const message = (err && err.message) || t('Could not create the wallet.');
       pwWrap.querySelector('.error').textContent = message;
       markInvalid(pwWrap, pwField, 'password-error');
       ctx.toast(message, { kind: 'negative' });
+    } finally {
+      setBusy(false);
     }
   }
   form.addEventListener('submit', onSubmit);

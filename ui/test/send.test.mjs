@@ -18,7 +18,9 @@ import { registerScreen } from '../app.js';
 import { unlockedBackend, NO_SPENDABLE_RAND_TEXT, fakeFingerprint } from './fake-backend.mjs';
 import { mountApp } from './helpers.mjs';
 import { explainProvingError } from '../screens/send.js';
-import { markUnknownOutcome, unknownOutcome } from '../screens/send/state.js';
+import { markUnknownOutcome, unknownOutcome, outcomeOf, isAbortError, AFTER_BROADCAST, CANCELLABLE } from '../screens/send/state.js';
+import { outcomeOf as withdrawOutcomeOf } from '../screens/withdraw.js';
+import { RpcError } from '../engine/rpc.js';
 import { UNLISTED_TEXT } from '../lib/assets.js';
 
 const TO = `rand1${'p'.repeat(40)}`;
@@ -1769,4 +1771,63 @@ test('Cancel on a resumed proof whose prover has no name still cancels the pendi
   root.querySelector('[data-role="cancel"]').click();
   await turns(6);
   assert.equal(ctl.cancelled, 1);
+});
+
+
+// ================================================= CLI-1006 (audit v14): the phase decides =====
+// `outcomeOf` used to test the abort BEFORE the phase. That was safe only because the engine's
+// last abort checkpoint sits immediately before the broadcast — one more checkpoint anywhere after
+// it and a broadcast transfer would read "cancelled", with every test still green. And it had one
+// real hole: `isAbortError` took `code === 20` (a DOMException's legacy ABORT_ERR) for an abort,
+// so a node answering the confirmation read with JSON-RPC error code 20 made a transfer that HAD
+// been broadcast read as cancelled while Activity listed it pending.
+const abortErr = () => Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' });
+
+test('CLI-1006: once the phase is submitting or confirming, nothing reads as cancelled', () => {
+  for (const outcome of [outcomeOf, withdrawOutcomeOf]) {
+    for (const phase of AFTER_BROADCAST) {
+      // An abort signalled after the broadcast — by Cancel, by a lock, by a checkpoint somebody
+      // adds to the engine one day — is "submitted, confirmation unknown".
+      assert.equal(outcome({ phase, error: abortErr() }), 'unknown', `${phase}: an AbortError`);
+      assert.equal(outcome({ phase, error: abortErr(), cancelling: true }), 'unknown', `${phase}: while cancelling`);
+      assert.equal(outcome({ phase, error: new Error('socket dropped'), cancelling: true }), 'unknown');
+      assert.equal(outcome({ phase, error: Object.assign(new Error('x'), { code: 'ABORT_ERR' }) }), 'unknown');
+      assert.equal(outcome({ phase, error: Object.assign(new Error('x'), { code: 20 }) }), 'unknown');
+      // The one thing that is still known after 'submitting': the node answered and refused.
+      assert.equal(outcome({ phase, error: Object.assign(new Error('refused'), { definite: true }) }), 'not-sent');
+    }
+    for (const phase of CANCELLABLE) {
+      assert.equal(outcome({ phase, error: abortErr() }), 'cancelled', `${phase}: nothing had left this device`);
+      assert.equal(outcome({ phase, error: new Error('x'), cancelling: true }), 'cancelled');
+      assert.equal(outcome({ phase, error: new Error('the prover gave up') }), 'not-sent');
+    }
+    assert.equal(outcome({ phase: 'confirming' }), 'ok');
+  }
+});
+
+test('CLI-1006: a node\'s own JSON-RPC error code is never an abort, whatever the number', () => {
+  assert.equal(isAbortError(new RpcError('the node says no', 20)), false);
+  assert.equal(isAbortError(new RpcError('the node says no', 'ABORT_ERR')), false);
+  assert.equal(isAbortError(abortErr()), true);
+  assert.equal(isAbortError(Object.assign(new Error('legacy DOMException shape'), { code: 20 })), true);
+  // …so before the broadcast it is an ordinary failure, not a cancellation nobody asked for.
+  assert.equal(outcomeOf({ phase: 'witness', error: new RpcError('the node says no', 20) }), 'not-sent');
+});
+
+test('CLI-1006: the confirmation read answered with JSON-RPC code 20 says "outcome unknown", not "cancelled"', async (t) => {
+  const { b, ctl } = controlledSend();
+  const { root } = await review(t, b);
+  root.querySelector('[data-action="prove"]').click();
+  await turns();
+  ctl.emit('submitting');
+  ctl.emit('confirming'); // the transaction is with the node; the wallet is reading for it
+  await turns();
+  ctl.fail(new RpcError('rand_getTransaction: try later', 20));
+  await turns();
+
+  assert.match(root.textContent, /We couldn.t confirm this transfer/i);
+  assert.match(root.textContent, /may already have been sent/i);
+  assert.ok(root.querySelector('[data-role="check-activity"]'), 'the way out is Activity');
+  assertGone(root.querySelector('[data-action="prove"]'), 'no way to prove it again');
+  assertGone(root.querySelector('[data-role="retry"]'), 'and no retry');
 });

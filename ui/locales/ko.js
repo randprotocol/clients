@@ -648,6 +648,7 @@ export default {
   "Sending twice would pay twice.": "두 번 보내면 두 번 지불됩니다.",
   "Sending…": "보내는 중…",
   "Sent": "보냄",
+  "Sent (sender unverified)": "보냄 (보낸 사람 미확인)",
   "Sent — view": "보냄 — 보기",
   "Sent.": "보냈습니다.",
   "Set on this device when this wallet was created.": "이 지갑을 만들 때 이 기기에서 설정했습니다.",
@@ -1120,4 +1121,5 @@ export default {
   "the record is damaged": "레코드가 손상되었습니다",
   "the record was saved by a newer version of Rand Wallet": "레코드가 더 새로운 버전의 Rand Wallet에서 저장되었습니다",
   "the record does not open with this password": "이 비밀번호로는 레코드가 열리지 않습니다",
+  "block {height} has {got} of the {n} transactions its header announced": "블록 {height}에는 헤더가 알린 트랜잭션 {n}개 중 {got}개만 있습니다",
 };

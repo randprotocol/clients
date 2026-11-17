@@ -650,6 +650,7 @@ export default {
   "Sending twice would pay twice.": "Menghantar dua kali akan membayar dua kali.",
   "Sending…": "Menghantar…",
   "Sent": "Dihantar",
+  "Sent (sender unverified)": "Dihantar (penghantar belum disahkan)",
   "Sent — view": "Dihantar — lihat",
   "Sent.": "Dihantar.",
   "Set on this device when this wallet was created.": "Ditetapkan pada peranti ini semasa dompet ini dicipta.",
@@ -1122,4 +1123,5 @@ export default {
   "the record is damaged": "rekod rosak",
   "the record was saved by a newer version of Rand Wallet": "rekod disimpan oleh versi Rand Wallet yang lebih baharu",
   "the record does not open with this password": "rekod tidak terbuka dengan kata laluan ini",
+  "block {height} has {got} of the {n} transactions its header announced": "blok {height} mengandungi {got} daripada {n} transaksi yang diumumkan oleh pengepalanya",
 };

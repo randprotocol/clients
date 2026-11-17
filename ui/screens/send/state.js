@@ -193,12 +193,20 @@ export function proveCost(proofs, via) {
  *  - `'not-sent'`  — it failed before anything was broadcast, or the backend says it *knows* the
  *                    transfer did not happen (`err.definite`). Safe to try again.
  *  - `'unknown'`   — it failed at or after `'submitting'`. It may be on chain. Not safe to retry.
+ *
+ * **The phase is read first (CLI-1006, audit v14).** From `'submitting'` on the transaction is
+ * with the node, and nothing that happens afterwards can make it "cancelled": not an abort (the
+ * user's, a lock's, or a checkpoint somebody adds to the engine one day), not `store.cancelling`,
+ * and not a node answering the confirmation read with an error that happens to look like one. The
+ * only thing still knowable there is `err.definite` — the node answered the broadcast and refused.
+ * Testing the abort first was safe only because the engine's last abort checkpoint comes
+ * immediately before the broadcast; this order does not depend on that.
  */
 export function outcomeOf(store) {
   if (!store || !store.error) return 'ok';
+  if (AFTER_BROADCAST.includes(store.phase)) return store.error.definite === true ? 'not-sent' : 'unknown';
   if (store.cancelling || isAbortError(store.error)) return 'cancelled';
-  if (store.error.definite === true) return 'not-sent';
-  return AFTER_BROADCAST.includes(store.phase) ? 'unknown' : 'not-sent';
+  return 'not-sent';
 }
 
 /**
@@ -234,7 +242,12 @@ export function explainProvingError(msg) {
 
 /** An error that means "this was cancelled", not "it failed" — see ui/backend.js. */
 export function isAbortError(err) {
-  return !!err && (err.name === 'AbortError' || err.code === 'ABORT_ERR' || err.code === 20);
+  if (!err) return false;
+  if (err.name === 'AbortError') return true;
+  // A node's own JSON-RPC error carries the node's own `code`, and a node may answer 20 or
+  // "ABORT_ERR" like any other value (CLI-1006): that is a refusal, never a cancellation.
+  if (err.name === 'RpcError') return false;
+  return err.code === 'ABORT_ERR' || err.code === 20;
 }
 
 // ------------------------------------------------------------------- the transaction key ------

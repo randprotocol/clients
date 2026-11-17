@@ -81,6 +81,89 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     await assert.rejects(() => backend.wallet.create(PASSWORD), /already exists/);
   });
 
+  // ---- CLI-1002 (audit v14): a double click on "Create wallet" must not make two wallets ----
+  // The vault is written only after PBKDF2 at 600 000 iterations, so a second `create` used to
+  // pass the existence check while the first was still deriving: both succeeded with different
+  // keys, the backup screen revealed one and the vault ended on the other.
+  /** A core whose every `keygen` is a different wallet, as the real one's is. */
+  function distinctKeysCore(overrides = {}) {
+    let n = 0;
+    const infoOf = (i) => ({ spend_key: `spend-key-${i}-${'ab'.repeat(16)}`, viewing_key: `viewing-key-${i}`, pk: `pk-${i}`, address: `rand1wallet${i}`, key_file: '{"version":2}' });
+    const byKey = (spend_key) => infoOf(Number(String(spend_key).split('-')[2]));
+    return stubCore({
+      keygen: () => { n += 1; return infoOf(n); },
+      wallet_info: ({ spend_key }) => byKey(spend_key),
+      import_key: ({ input }) => byKey(input),
+      ...overrides,
+    });
+  }
+  const vaultWrites = (storage) => storage.writes.filter(([key]) => key === 'vault');
+
+  scoped('CLI-1002: two concurrent creates make ONE wallet, and the key revealed opens the vault', async () => {
+    const core = distinctKeysCore();
+    const { backend, storage } = build({ core });
+    const results = await Promise.allSettled([backend.wallet.create(PASSWORD), backend.wallet.create(PASSWORD)]);
+    const made = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+    assert.ok(made.length >= 1, 'the first create succeeds');
+    assert.equal(new Set(made.map((m) => m.address)).size, 1, 'every caller that was answered was answered with the same wallet');
+    assert.equal(core.calls.filter(([m]) => m === 'keygen').length, 1, 'one key was generated');
+    assert.equal(vaultWrites(storage).length, 1, 'one vault was written');
+
+    // What the backup screen reveals is the key the vault holds, the session holds and the stored
+    // address names.
+    const revealed = await backend.wallet.exportSpendKey();
+    assert.equal((await backend.wallet.info()).address, made[0].address);
+    await backend.wallet.lock();
+    const reopened = await backend.wallet.unlock(PASSWORD);
+    assert.equal(reopened.address, made[0].address, 'the vault opens to the wallet that was shown');
+    assert.equal(await backend.wallet.exportSpendKey(), revealed, 'the revealed key is the vault\'s key');
+  });
+
+  scoped('CLI-1002: a second create that differs from the one in flight is refused, and changes nothing', async () => {
+    const core = distinctKeysCore();
+    const { backend, storage } = build({ core });
+    const first = backend.wallet.create(PASSWORD);
+    await assert.rejects(() => backend.wallet.create(`${PASSWORD}-another`), /already exists/);
+    await assert.rejects(() => backend.wallet.import('spend-key-9-zz', PASSWORD), /already exists/);
+    const made = await first;
+    assert.equal(vaultWrites(storage).length, 1);
+    assert.equal(core.calls.filter(([m]) => m === 'keygen' || m === 'import_key').length, 1);
+    await backend.wallet.lock();
+    assert.equal((await backend.wallet.unlock(PASSWORD)).address, made.address);
+    // …and once it has landed, the guard is released: a later create is refused for the ordinary reason.
+    await assert.rejects(() => backend.wallet.create(PASSWORD), /already exists/);
+  });
+
+  scoped('CLI-1002: two concurrent imports of one key make one wallet', async () => {
+    const core = distinctKeysCore();
+    const { backend, storage } = build({ core });
+    const key = 'spend-key-4-imported';
+    const results = await Promise.allSettled([backend.wallet.import(key, PASSWORD), backend.wallet.import(key, PASSWORD)]);
+    assert.ok(results.some((r) => r.status === 'fulfilled'));
+    assert.equal(vaultWrites(storage).length, 1, 'one vault was written');
+    assert.equal(core.calls.filter(([m]) => m === 'import_key').length, 1);
+    assert.equal((await backend.wallet.info()).address, 'rand1wallet4');
+  });
+
+  scoped('CLI-1002: a vault that appears while the key is being derived is never overwritten', async () => {
+    // Another context (a second tab, the extension's other window) finished its own create between
+    // this one's existence check and its write. The check is repeated at the write.
+    const theirs = { v: 1, kdf: 'pbkdf2-sha256', iter: 600000, salt: 'theirs', iv: 'theirs', ct: 'theirs' };
+    let storage;
+    const core = distinctKeysCore({
+      keygen: () => {
+        storage.local.set('vault', theirs); // after create()'s first check, before its write
+        return { spend_key: `spend-key-1-${'ab'.repeat(16)}`, viewing_key: 'viewing-key-1', pk: 'pk-1', address: 'rand1wallet1', key_file: '{}' };
+      },
+    });
+    const env = build({ core });
+    storage = env.storage;
+    await assert.rejects(() => env.backend.wallet.create(PASSWORD), /already exists/);
+    assert.deepEqual(storage.local.get('vault'), theirs, 'the other wallet\'s vault is untouched');
+    assert.equal(vaultWrites(storage).length, 0);
+    assert.equal(await env.backend.wallet.isUnlocked(), false, 'and no session was started for a wallet that was not stored');
+  });
+
   scoped('unlock rejects a wrong password with a constant message, and the delay grows', async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const { backend, storage } = build();
@@ -2283,7 +2366,8 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
       amount: '2500000000', asset: 0, time: 7, from: '00'.repeat(32), height: 7, spent: false, pending: null, memo: 'rent',
     };
     const without = { ...withMemo, index: 0, cm: '0a'.repeat(32), nf: '0d'.repeat(32), height: 5, memo: null };
-    const sent = { index: 9, amount: '100', asset: 0, height: 7, to_pk: 'ee'.repeat(32), time: 3, memo: 'thanks' };
+    // `from: PK` — the note's creator is this wallet, which is what makes the row Sent (VK-751).
+    const sent = { index: 1, amount: '100', asset: 0, height: 7, to_pk: 'ee'.repeat(32), time: 3, memo: 'thanks', from: PK };
     const core = stubCore({
       scan_page: ({ rows: page }) => ({
         received: page.length ? [without, withMemo] : [], sent: page.length ? [sent] : [],
@@ -2304,5 +2388,35 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.deepEqual(ins.map((a) => a.memo ?? null).sort(), ['rent', null].sort());
     const out = result.activity.find((a) => a.kind === 'out');
     assert.equal(out.memo, 'thanks');
+  });
+
+  scoped('VK-751: a planted sent row reaches neither the store nor sync; a constant-creator row is `out-unverified`, never `out`', async () => {
+    const rows = [0, 1, 2].map((index) => ({ index, cm: `0${index}`.repeat(32), height: 5, envelope: { kem_ct: '', to_receiver: '', to_sender: '', body: '' } }));
+    let served = false;
+    const row = (index, from, memo) => ({ index, amount: '4200', asset: 0, height: 5, to_pk: 'ee'.repeat(32), time: 3, memo, from });
+    const core = stubCore({
+      scan_page: ({ rows: page }) => ({
+        received: [],
+        // Leaf 0: sealed by a holder of the viewing key (its own pk as creator). Leaf 1: a mint
+        // sealed under this wallet's key. Leaf 2: a payment this wallet made.
+        sent: page.length ? [row(0, '66'.repeat(32), 'planted'), row(2, PK, 'mine')] : [],
+        sent_unverified: page.length ? [row(1, `${Buffer.from('rpl-mint').toString('hex')}${'00'.repeat(24)}`, 'minted')] : [],
+        next_index: page.length ? page[page.length - 1].index + 1 : 0, rows: page.length,
+      }),
+    });
+    const fetch = stubFetch({
+      rand_getCommitments: ([from]) => { if (from === 0 && !served) { served = true; return rows; } return []; },
+      rand_getBlockByHeight: ([h]) => ({ height: h, timestamp_ms: 1788000000000 }),
+      rand_getTreeInfo: () => ({ next_index: 3, root: '00'.repeat(32), nullifiers: 0 }),
+    });
+    const { backend, storage } = build({ core, fetch });
+    await backend.wallet.create(PASSWORD);
+    const result = await backend.sync.scan(() => {});
+    assert.equal(JSON.stringify(storage.local.get('notes')).includes('planted'), false, 'the planted row is in the store');
+    assert.equal(JSON.stringify(result).includes('planted'), false, 'the planted row reached the screens');
+    assert.deepEqual(result.activity.filter((a) => a.kind === 'out').map((a) => a.memo), ['mine'], 'exactly the wallet\'s own payment is Sent');
+    const unverified = result.activity.filter((a) => a.kind === 'out-unverified');
+    assert.deepEqual(unverified.map((a) => [a.memo, a.amount, a.block]), [['minted', '4200', 5]]);
+    assert.equal(result.activity.some((a) => a.kind === 'pending'), false, 'and it is not mistaken for a submission');
   });
 }

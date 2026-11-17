@@ -653,6 +653,7 @@ export default {
   "Sending twice would pay twice.": "Повторная отправка заплатит дважды.",
   "Sending…": "Отправка…",
   "Sent": "Отправлено",
+  "Sent (sender unverified)": "Отправлено (отправитель не подтверждён)",
   "Sent — view": "Отправлено — открыть",
   "Sent.": "Отправлено.",
   "Set on this device when this wallet was created.": "Задан на этом устройстве при создании кошелька.",
@@ -1125,4 +1126,5 @@ export default {
   "the record is damaged": "запись повреждена",
   "the record was saved by a newer version of Rand Wallet": "запись сохранена более новой версией Rand Wallet",
   "the record does not open with this password": "запись не открывается этим паролем",
+  "block {height} has {got} of the {n} transactions its header announced": "блок {height} содержит {got} из {n} транзакций, объявленных в его заголовке",
 };

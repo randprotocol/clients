@@ -657,6 +657,7 @@ export default {
   "Sending twice would pay twice.": "Envoyer deux fois paierait deux fois.",
   "Sending…": "Envoi…",
   "Sent": "Envoyé",
+  "Sent (sender unverified)": "Envoyé (expéditeur non vérifié)",
   "Sent — view": "Envoyé : afficher",
   "Sent.": "Envoyé.",
   "Set on this device when this wallet was created.": "Défini sur cet appareil lors de la création de ce portefeuille.",
@@ -1129,4 +1130,5 @@ export default {
   "the record is damaged": "l'enregistrement est endommagé",
   "the record was saved by a newer version of Rand Wallet": "l'enregistrement a été sauvegardé par une version plus récente de Rand Wallet",
   "the record does not open with this password": "l'enregistrement ne s'ouvre pas avec ce mot de passe",
+  "block {height} has {got} of the {n} transactions its header announced": "le bloc {height} contient {got} des {n} transactions annoncées par son en-tête",
 };

@@ -33,7 +33,7 @@ import { parseUnits, formatUnits, shortHex, elapsed } from '../lib/format.js';
 import { markInvalid, markValid } from '../lib/forms.js';
 import { explorerLink, TX_HASH_RE } from '../lib/explorer.js';
 import { unlistedText, isUnlisted, backingsOf, feeDecimals, feeSymbol } from '../lib/assets.js';
-import { plainUnits, proveCost, provingLabel, phaseLabel, recordPhase, provingBanner } from './send/state.js';
+import { plainUnits, proveCost, provingLabel, phaseLabel, recordPhase, provingBanner, isAbortError } from './send/state.js';
 import { proverNoticeMarkup, proverUnreachableMarkup, proverDeclinedMarkup } from './send/markup.js';
 
 // ============================================================================ the vocabulary ===
@@ -122,9 +122,11 @@ export function currentWithdrawal(ctx) {
 export function outcomeOf(store) {
   if (!store || !store.error) return 'ok';
   const err = store.error;
-  if (store.cancelling || err.name === 'AbortError' || err.code === 'ABORT_ERR') return 'cancelled';
-  if (err.definite === true) return 'not-sent';
-  return AFTER_BROADCAST.includes(store.phase) ? 'unknown' : 'not-sent';
+  // The phase first (CLI-1006): once the burn is with the node, no abort and no error a node
+  // answers with can make it "cancelled" — see `outcomeOf` in screens/send/state.js.
+  if (AFTER_BROADCAST.includes(store.phase)) return err.definite === true ? 'not-sent' : 'unknown';
+  if (store.cancelling || isAbortError(err)) return 'cancelled';
+  return 'not-sent';
 }
 
 function safeHash(hash) {

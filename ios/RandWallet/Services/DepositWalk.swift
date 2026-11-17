@@ -23,6 +23,9 @@ import Foundation
 ///   together; a longer gap is closed over several scans.
 /// * A node with no `rand_getBlocks` is read one block at a time, at most
 ///   `maxHeightsWithoutHeaders` a scan.
+/// * A block whose header announced transactions and whose body is `null`, or carries fewer, was
+///   not served (CLI-1009): the walk stops under it, `unknown`. So does a `null` block under the
+///   node's own tip on the one-at-a-time path.
 ///
 /// The core refusing an action it was handed is this wallet's own failure and is thrown, not
 /// reported as unknown.
@@ -48,13 +51,17 @@ enum DepositWalk {
 
     /// - Parameters:
     ///   - headers: `rand_getBlocks(from, to)`, raw.
-    ///   - actions: the actions of the block at a height (`rand_getBlockByHeight`).
+    ///   - actions: the actions of the block at a height (`rand_getBlockByHeight`). Its second
+    ///     argument is the `tx_count` the block's header announced, `nil` when no header was read
+    ///     (a node without `rand_getBlocks`). It throws for a block that was not served — `null`,
+    ///     or fewer transactions than announced (CLI-1009; `RpcClient.actions(ofBlock:…)`) — and
+    ///     the walk then stops under that block, as for any other read the node refused.
     ///   - offer: where each `bridge_attest` action found goes; what it throws is thrown.
     static func run(
         start: UInt64,
         head: UInt64,
         headers: (UInt64, UInt64) async throws -> Any,
-        actions: (UInt64) async throws -> [Any],
+        actions: (UInt64, UInt64?) async throws -> [Any],
         offer: (Any) throws -> Void
     ) async throws -> Result {
         var next = start
@@ -83,7 +90,7 @@ enum DepositWalk {
                     budget -= 1
                     let found: [Any]
                     do {
-                        found = try await actions(height)
+                        found = try await actions(height, count)
                     } catch is CancellationError {
                         throw CancellationError()
                     } catch {
@@ -102,7 +109,7 @@ enum DepositWalk {
     private static func oneByOne(
         start: UInt64,
         head: UInt64,
-        actions: (UInt64) async throws -> [Any],
+        actions: (UInt64, UInt64?) async throws -> [Any],
         offer: (Any) throws -> Void
     ) async throws -> Result {
         var next = start
@@ -111,7 +118,7 @@ enum DepositWalk {
         for h in start...last {
             let found: [Any]
             do {
-                found = try await actions(h)
+                found = try await actions(h, nil)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {

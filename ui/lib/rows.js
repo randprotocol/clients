@@ -84,6 +84,11 @@ export function kindOf(item) {
   if (kind === 'in' || kind === 'out' || kind === 'faucet') {
     return { kind, icon: KIND_ICON[kind], title: KIND_TITLE[kind](), sign: KIND_SIGN[kind], tint: kind };
   }
+  if (kind === 'out-unverified') {
+    // VK-751: a note sealed under this wallet's key whose creator is a chain constant. Shown as
+    // what it is — no sign and no Sent tint, because it is not known to be money this wallet sent.
+    return { kind, icon: 'arrowUpRight', title: t('Sent (sender unverified)'), sign: '', tint: '' };
+  }
   if (kind === 'pending') {
     const titled = PENDING_TITLE[String(item.status || '').toLowerCase()];
     const title = titled ? titled() : t('Pending');
