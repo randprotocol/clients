@@ -76,7 +76,9 @@
  *    `'AbortError'`); the UI treats that as "no longer wanted", never as a node failure. A backend
  *    that ignores it is still correct — the UI discards the result either way.
  * An **activity item** is `{kind, asset, amount, time, hash?, index?}` where `kind` is one of
- * `'in' | 'out' | 'faucet' | 'pending'`, `asset` is an asset index, `amount` is a units string and
+ * `'in' | 'out' | 'faucet' | 'pending' | 'out-unverified'` (the last: a note sealed under this
+ * wallet's key whose creator is a chain constant — VK-751; a screen must not present it as money
+ * this wallet sent), `asset` is an asset index, `amount` is a units string and
  * `time` is a unix timestamp in **seconds** (`lastSyncMs` and every other `*Ms` field is
  * milliseconds, as named). These further fields are **OPTIONAL** — a backend may supply none of
  * them, and every screen renders each one only when it is present:

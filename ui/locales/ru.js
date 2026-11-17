@@ -653,6 +653,7 @@ export default {
   "Sending twice would pay twice.": "Повторная отправка заплатит дважды.",
   "Sending…": "Отправка…",
   "Sent": "Отправлено",
+  "Sent (sender unverified)": "Отправлено (отправитель не подтверждён)",
   "Sent — view": "Отправлено — открыть",
   "Sent.": "Отправлено.",
   "Set on this device when this wallet was created.": "Задан на этом устройстве при создании кошелька.",

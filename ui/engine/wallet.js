@@ -266,6 +266,54 @@ const MAX_ATTEST_REQUESTS_PER_SCAN = 96;
  */
 export const DEPOSIT_ACTIONS = Object.freeze({ kinds: Object.freeze(['bridge_attest', 'bridge_burn']), maxActionChars: 65536 });
 
+/**
+ * VK-751 (audit v14) — WHO CREATED A "SENT" NOTE.
+ *
+ * An envelope's sender part opens under the wallet's *viewing* key, and that key is handed out: to
+ * the prover of every delegated proof, to an auditor, to a node it is imported into. Whoever holds
+ * it can seal a note of their own under it, so "the sender part opens" is not "this wallet sent
+ * it" — it used to be read as exactly that, and a planted payment (the planter's payee, amount and
+ * memo) landed in the victim's history. What a holder of the viewing key cannot choose is the
+ * note's **creator**: the bundle guest commits every output with `from` = the spender's own `pk`
+ * (`hidden.rs`, `HiddenOutput::note`), a private multisig account's bundle included (its `pk`).
+ *
+ * The rule, the same one the node's viewing rows and the explorer apply. With `pk_self` the pk of
+ * the key being scanned, a row whose sender part opened is:
+ *
+ *   `from == pk_self`              → **Sent**.
+ *   `from` a chain-fixed constant  → **sent, sender unverified** (`unverified: true`): a relayed
+ *                                    bridge deposit or fee / faucet mint / staking withdrawal
+ *                                    (zero), an RPL mint (`rpl-mint`), a program payout
+ *                                    (`rpl2-pay`), a perp payout (`rpl3-pay`). These are sealed
+ *                                    under the SUBMITTER's key with a constant creator, so the row
+ *                                    may be this key's own doing — and an ovk holder can mint its
+ *                                    own token and seal it the same way. Kept apart; never counted
+ *                                    as Sent, never matched to a submission.
+ *   anything else                  → dropped. A row with no `from` at all (a core from before
+ *                                    this rule) is evidence of nothing and is dropped too.
+ *
+ * The core applies the same rule (`wallet-core`'s `classify`) and reports `from` on every row; it
+ * is applied again here because this is the last thing between a row and the store.
+ */
+const fixedCreator = (tag) => (Array.from(tag, (ch) => ch.charCodeAt(0).toString(16).padStart(2, '0')).join('') + '0'.repeat(64)).slice(0, 64);
+export const FIXED_CREATORS = Object.freeze({
+  zero: '0'.repeat(64),          // bridge deposit and fee, faucet mint, genesis, staking withdrawal
+  mint: fixedCreator('rpl-mint'),    // `tokens::MINT_FROM`
+  program: fixedCreator('rpl2-pay'), // `program_state::PROGRAM_FROM`
+  perp: fixedCreator('rpl3-pay'),    // `perps::PERP_FROM`
+});
+const FIXED_CREATOR_SET = new Set(Object.values(FIXED_CREATORS));
+const HEX64_RE = /^[0-9a-f]{64}$/;
+
+/** `'sent' | 'unverified' | null` for one row whose sender part opened, against this wallet's pk. */
+export function sentRole(row, ownPk) {
+  const from = row && typeof row.from === 'string' ? row.from.trim().toLowerCase().replace(/^0x/, '') : '';
+  const own = typeof ownPk === 'string' ? ownPk.trim().toLowerCase().replace(/^0x/, '') : '';
+  if (!HEX64_RE.test(from) || !HEX64_RE.test(own)) return null;
+  if (from === own) return 'sent';
+  return FIXED_CREATOR_SET.has(from) ? 'unverified' : null;
+}
+
 export function emptyNoteStore() {
   return {
     scanned_index: 0, scanned_height: 0, scanned_attest_height: 0,
@@ -1054,6 +1102,14 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
       leafCount = total;
     } catch { /* a node without it: the continuity checks still apply, this one is skipped */ }
 
+    // This wallet's own pk, from the core and from the key being scanned — asked for once, and
+    // only by a scan that found a row to judge with it.
+    let ownPkHex;
+    const ownPk = async () => {
+      if (ownPkHex === undefined) ownPkHex = String((await c.walletInfo(spendKey)).pk || '');
+      return ownPkHex;
+    };
+
     const placePage = async (rows) => {
       const res = await c.scanPage(spendKey, rows);
       // A rebuilt deposit takes precedence over whatever its envelope says.
@@ -1062,7 +1118,23 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
         if (dep) { deposits.delete(r.cm); mergeNotes(st, [{ ...dep, index: r.index, height: r.height }]); }
       }
       mergeNotes(st, res.received);
-      mergeSent(st, res.sent);
+      // VK-751: a row is Sent only when the note's creator is this wallet (see `sentRole`). What
+      // this page says about its own leaves REPLACES what was stored for them, so a rescan also
+      // removes a planted row a build from before the rule had kept.
+      const opened = [...(Array.isArray(res.sent) ? res.sent : []), ...(Array.isArray(res.sent_unverified) ? res.sent_unverified : [])];
+      const kept = [];
+      if (opened.length) {
+        const pk = await ownPk();
+        for (const row of opened) {
+          const role = sentRole(row, pk);
+          if (role === 'sent') { const { unverified: _drop, ...clean } = row; kept.push(clean); }
+          else if (role === 'unverified') kept.push({ ...row, unverified: true });
+        }
+      }
+      const first = rows[0].index;
+      const last = rows[rows.length - 1].index;
+      st.sent = st.sent.filter((x) => !(x.index >= first && x.index <= last));
+      mergeSent(st, kept);
       const next = intField('scan_page', 'next_index', res.next_index);
       // Our own trust boundary, so it costs nothing to close: the core cannot have seen a leaf
       // past the page it was handed, and one before `from` would move the cursor backwards.
@@ -1705,6 +1777,12 @@ export function activity(store) {
   }
   const subs = store.submissions || [];
   for (const s of store.sent) {
+    // VK-751: a row whose creator is a chain constant is not known to be this wallet's doing. It
+    // is its own kind, and it neither stands in for a submission nor dates one.
+    if (s.unverified) {
+      rows.push({ kind: 'sent_unverified', index: s.index, amount: s.amount, asset: s.asset, height: s.height, to_pk: s.to_pk, memo: s.memo ?? null, sort: s.height });
+      continue;
+    }
     const sub = subs.find((x) => x.to_pk === s.to_pk && x.amount === s.amount && x.time === s.time);
     if (sub) { if (!sub.height) sub.height = s.height; continue; }
     rows.push({ kind: 'sent', index: s.index, amount: s.amount, asset: s.asset, height: s.height, to_pk: s.to_pk, memo: s.memo ?? null, sort: s.height });

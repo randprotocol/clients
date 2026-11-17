@@ -1327,3 +1327,174 @@ test('CLI-1001: without a conditional write, two saves of one loaded store do no
   await wallet.persist(c);
   assert.equal(store.current.notes[1].pending, null);
 });
+
+// ============================================ VK-751 (audit v14): who created a "sent" note =====
+// An envelope's sender part opens under the wallet's VIEWING key, and a viewing key is handed out:
+// to the prover of every delegated proof, to an auditor. Whoever holds it can seal a note of their
+// own under it, and the scan used to file that note as a payment this wallet SENT — the planter's
+// payee, amount and memo in the victim's history. What a holder of the viewing key cannot choose
+// is the note's creator: the bundle guest commits every output with `from` = the spender's own pk.
+// So: Sent only when `from` is this wallet's pk; a chain-fixed creator (a relayed deposit, a mint,
+// a program or perp payout — sealed under the submitter's key with a constant `from`, which an ovk
+// holder can also arrange) is kept apart as "sent, sender unverified"; anything else is dropped.
+const OWN_PK = HEX64('a7');
+const PLANTER_PK = HEX64('66');
+const PAYEE_PK = HEX64('9e');
+const FROM_ZERO = '00'.repeat(32);
+const tagFrom = (tag) => (Buffer.from(tag, 'ascii').toString('hex') + '00'.repeat(32)).slice(0, 64);
+const FROM_MINT = tagFrom('rpl-mint');
+const FROM_PROGRAM = tagFrom('rpl2-pay');
+const FROM_PERP = tagFrom('rpl3-pay');
+
+const sentRow = (index, from, extra = {}) => ({
+  index, to_pk: PAYEE_PK, amount: '777', asset: 0, time: 5, height: 5, memo: null, ...(from === undefined ? {} : { from }), ...extra,
+});
+
+/** A wallet whose core "opens" the given rows on the leaf page: `{received, sent, sent_unverified}`. */
+function scanningWallet({ received = [], sent = [], sentUnverified, store = memoryStore(), deposits = null } = {}) {
+  const leaves = [...received, ...sent, ...(sentUnverified || [])].map((r) => r.index);
+  const top = Math.max(0, ...leaves) + 1;
+  const client = stubClient({
+    treeInfo: () => ({ next_index: top, root: HEX64('00'), nullifiers: 0 }),
+    commitments: (from) => (from === 0
+      ? Array.from({ length: top }, (_, i) => ({ index: i, cm: HEX64(`c${i % 10}`), height: 5, envelope: envelope() }))
+      : []),
+    sendTransaction: () => HEX64('dd'),
+    ...(deposits ? deposits.client : {}),
+  });
+  const calls = [];
+  const core = stubCore({
+    wallet_info: (p) => { calls.push(['wallet_info', p]); return { pk: OWN_PK, address: 'rand1own' }; },
+    scan_page: ({ rows }) => ({
+      received: rows.length ? received : [],
+      sent: rows.length ? sent : [],
+      ...(sentUnverified ? { sent_unverified: rows.length ? sentUnverified : [] } : {}),
+      next_index: rows.length ? rows[rows.length - 1].index + 1 : 0, rows: rows.length,
+    }),
+    parse_address: () => ({ valid: true, pk: PAYEE_PK }),
+    ...(deposits ? deposits.core : {}),
+  });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+  return { wallet, store, client, calls };
+}
+
+test('VK-751: a sent row planted under the viewing key never lands in the store', async () => {
+  // The verifier's end-to-end test: the planter seals its own note (creator = the planter) under
+  // the victim's ovk. Payee, amount and memo are all the planter's choice.
+  const planted = sentRow(1, PLANTER_PK, { amount: '123456789', memo: 'invoice 42 — paid in full' });
+  const { wallet, store } = scanningWallet({ sent: [planted] });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.deepEqual(store.current.sent, [], 'the planted payment is in the victim\'s store');
+  const rows = wallet.activity(st);
+  assert.equal(rows.some((r) => r.memo === planted.memo || r.amount === planted.amount || r.to_pk === PAYEE_PK), false, 'and in its history');
+});
+
+test('VK-751: a payment this wallet made is Sent — its creator is the wallet\'s own pk', async () => {
+  const mine = sentRow(2, OWN_PK.toUpperCase(), { memo: 'rent' }); // hex case is not identity
+  const { wallet, store, calls } = scanningWallet({ sent: [mine] });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.current.sent.length, 1);
+  assert.equal(store.current.sent[0].unverified, undefined);
+  const rows = wallet.activity(st).filter((r) => r.kind === 'sent');
+  assert.deepEqual(rows.map((r) => [r.index, r.amount, r.to_pk, r.memo]), [[2, '777', PAYEE_PK, 'rent']]);
+  assert.deepEqual(calls[0], ['wallet_info', { spend_key: SPEND_KEY }], 'the wallet\'s own pk comes from the core, from the key being scanned');
+});
+
+test('VK-751: a chain-fixed creator is "sent, sender unverified" — kept apart, never counted as Sent', async () => {
+  // Relayed deposits, mints and payouts are sealed under the SUBMITTER's key with a constant
+  // `from`, so the row may be this wallet's own doing — and an ovk holder can mint its own token
+  // and seal it the same way. The row is shown as what it is.
+  const rowsIn = [sentRow(1, FROM_ZERO), sentRow(2, FROM_MINT), sentRow(3, FROM_PROGRAM), sentRow(4, FROM_PERP)];
+  for (const shape of ['in sent', 'in sent_unverified']) {
+    const { wallet, store } = shape === 'in sent' ? scanningWallet({ sent: rowsIn }) : scanningWallet({ sentUnverified: rowsIn });
+    const st = await wallet.scan(SPEND_KEY, {});
+    assert.deepEqual(store.current.sent.map((s) => [s.index, s.unverified]), [[1, true], [2, true], [3, true], [4, true]], shape);
+    const rows = wallet.activity(st);
+    assert.equal(rows.filter((r) => r.kind === 'sent').length, 0, `${shape}: none is counted as Sent`);
+    assert.equal(rows.filter((r) => r.kind === 'sent_unverified').length, 4, shape);
+  }
+});
+
+test('VK-751: the core cannot promote a row — a foreign creator under `sent`, or an own-looking one under `sent_unverified`', async () => {
+  const { wallet, store } = scanningWallet({
+    sent: [sentRow(1, PLANTER_PK), sentRow(2, undefined), sentRow(3, 'not hex'), sentRow(4, null)],
+    sentUnverified: [sentRow(5, PLANTER_PK), sentRow(6, OWN_PK)],
+  });
+  await wallet.scan(SPEND_KEY, {});
+  // Row 6 names this wallet as creator, so it is Sent whichever list it arrived in; a row with no
+  // creator at all (a core from before this rule) is not evidence of anything.
+  assert.deepEqual(store.current.sent.map((s) => [s.index, s.unverified === true]), [[6, false]]);
+});
+
+test('VK-751: an unverified row cannot stand in for, or annotate, a submission this wallet made', async () => {
+  const store = memoryStore({
+    ...emptyNoteStore(), chain_id: 13, genesis: GENESIS_A,
+    submissions: [{ hash: HEX64('ab'), to_pk: PAYEE_PK, amount: '777', time: 5, status: 'committed', created_ms: 1 }],
+  });
+  const { wallet } = scanningWallet({ sent: [sentRow(1, FROM_MINT, { height: 99 })], store });
+  const st = await wallet.scan(SPEND_KEY, {});
+  const rows = wallet.activity(st);
+  assert.equal(rows.filter((r) => r.kind === 'sent_unverified').length, 1, 'it is its own row');
+  assert.equal(rows.find((r) => r.kind === 'submission').sub.height, undefined, 'and it did not date the real payment');
+});
+
+test('VK-751: a rescan removes a planted row an older build stored, and keeps the real ones', async () => {
+  // Stored before this rule: no `from` on either row. The rescan re-reads the leaves, and what the
+  // page says now replaces what was stored for those leaves.
+  const store = memoryStore({
+    ...emptyNoteStore(), chain_id: 13, genesis: GENESIS_A, scanned_index: 3,
+    sent: [sentRow(1, undefined, { memo: 'planted' }), sentRow(2, undefined, { memo: 'real' })],
+  });
+  const { wallet } = scanningWallet({ sent: [sentRow(1, PLANTER_PK, { memo: 'planted' }), sentRow(2, OWN_PK, { memo: 'real' })], store });
+  await wallet.rescan(SPEND_KEY, {});
+  assert.deepEqual(store.current.sent.map((s) => [s.index, s.memo]), [[2, 'real']]);
+});
+
+// The reviewer's caution: a creator comparison must not cost a wallet its legitimate history.
+// Each kind of row a wallet really has, through the same scan.
+test('VK-751: legitimate rows survive — a bridge deposit, a faucet mint, a received payment', async () => {
+  // None of these is a "sent" row at all: they are notes this wallet OWNS (pk = own), whatever
+  // their creator — zero for a relayed deposit and a faucet mint, the payer's pk for a payment.
+  const deposit = ownedNote(0, { from: FROM_ZERO, amount: '4000000000', cm: HEX64('c0') });
+  const faucet = ownedNote(1, { from: FROM_ZERO, amount: '100000000000', cm: HEX64('c1') });
+  const payment = ownedNote(2, { from: PLANTER_PK, amount: '5', cm: HEX64('c2'), memo: 'thanks' });
+  const { wallet, store } = scanningWallet({
+    received: [faucet, payment],
+    deposits: {
+      client: {
+        bridgeState: () => ({ enabled: true }),
+        blockByHeight: (h) => ({ height: h, timestamp_ms: 1788000000000, transactions: h === 5 ? [{ action: { kind: 'bridge_attest' } }] : [] }),
+      },
+      core: { rebuilt_deposit: () => ({ ...deposit, index: 18446744073709551615, height: 0 }) },
+    },
+  });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.deepEqual(store.current.notes.map((n) => [n.index, n.amount]).sort(), [[0, '4000000000'], [1, '100000000000'], [2, '5']]);
+  const received = wallet.activity(st).filter((r) => r.kind === 'received');
+  assert.equal(received.length, 3);
+  assert.equal(received.find((r) => r.index === 2).memo, 'thanks');
+});
+
+test('VK-751: legitimate rows survive — a withdrawal, a faucet request, and a send proved by a paired prover', async () => {
+  // A withdrawal (burn) addresses no note to anybody: it is its submission record. A relayed or
+  // delegated send is a bundle THIS wallet's key spends, whoever proved it, so the guest commits
+  // its payment with this wallet's pk as creator — and the chain's copy folds into the record.
+  const store = memoryStore({
+    ...emptyNoteStore(), chain_id: 13, genesis: GENESIS_A, notes: [ownedNote(0)],
+    submissions: [
+      { hash: HEX64('b1'), kind: 'burn', asset: 1, amount: '250', to_chain: 1, status: 'committed', created_ms: 3 },
+      { hash: HEX64('fa'), kind: 'faucet', amount: '100000000000', status: 'committed', created_ms: 2 },
+    ],
+  });
+  const paid = sentRow(1, OWN_PK, { amount: PROVED.amount, time: PROVED.time, height: 8 });
+  const { wallet, client } = scanningWallet({ sent: [paid], store });
+  // The proof came back from a prover (`completeSend` is what `send.resume` runs for one).
+  const submission = await wallet.completeSend(SPEND_KEY, PROVED, { to: 'rand1payee', wait: false, client });
+  const st = await wallet.scan(SPEND_KEY, {});
+  const rows = wallet.activity(st);
+  assert.deepEqual(rows.filter((r) => r.kind === 'submission').map((r) => r.hash).sort(), [HEX64('b1'), submission.hash].sort(), 'the withdrawal and the send are both listed');
+  assert.equal(rows.filter((r) => r.kind === 'faucet').length, 1);
+  assert.equal(rows.filter((r) => r.kind === 'sent').length, 0, 'the chain\'s copy of the send folded into its record, not a second row');
+  assert.equal(rows.find((r) => r.hash === submission.hash).sub.height, 8, 'and dated it');
+  assert.equal(st.sent.length, 1);
+});

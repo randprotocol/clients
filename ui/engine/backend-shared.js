@@ -338,6 +338,14 @@ function uiActivity(row, st) {
     if (row.height) item.block = Number(row.height);
     return item;
   }
+  if (row.kind === 'sent_unverified') {
+    // VK-751: the sender part opened under this wallet's key, but the note's creator is a chain
+    // constant (a relayed deposit, a mint, a payout), so it is not known to be this wallet's
+    // doing. Its own kind — a screen titles it as such and never counts it as money sent.
+    const item = { kind: 'out-unverified', asset: Number(row.asset) || 0, amount: String(row.amount), time: at(row.height), ...memoField(row.memo) };
+    if (row.height) item.block = Number(row.height);
+    return item;
+  }
   // A submission this wallet made: the faucet, a burn withdrawal, or (on a shell that can prove)
   // a transfer.
   const sub = row.sub || {};

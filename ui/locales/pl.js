@@ -651,6 +651,7 @@ export default {
   "Sending twice would pay twice.": "Dwukrotne wysłanie oznacza dwukrotną płatność.",
   "Sending…": "Wysyłanie…",
   "Sent": "Wysłano",
+  "Sent (sender unverified)": "Wysłano (nadawca niezweryfikowany)",
   "Sent — view": "Wysłano — zobacz",
   "Sent.": "Wysłano.",
   "Set on this device when this wallet was created.": "Ustawione na tym urządzeniu przy tworzeniu portfela.",

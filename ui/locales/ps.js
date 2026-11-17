@@ -655,6 +655,7 @@ export default {
   "Sending twice would pay twice.": "دوه ځله لېږل به دوه ځله ورکړه وي.",
   "Sending…": "لېږل کېږي…",
   "Sent": "ولېږل شو",
+  "Sent (sender unverified)": "ولېږل شو (لېږونکی نه دی تایید شوی)",
   "Sent — view": "ولېږل شو — وګورئ",
   "Sent.": "ولېږل شو.",
   "Set on this device when this wallet was created.": "په دې وسیله کې هغه وخت ټاکل شوی کله چې دا والټ جوړ شو.",

@@ -655,6 +655,7 @@ export default {
   "Sending twice would pay twice.": "الإرسال مرتين يعني الدفع مرتين.",
   "Sending…": "جارٍ الإرسال…",
   "Sent": "أُرسل",
+  "Sent (sender unverified)": "أُرسل (المُرسِل غير مُتحقَّق منه)",
   "Sent — view": "أُرسل — عرض",
   "Sent.": "أُرسل.",
   "Set on this device when this wallet was created.": "عُيّنت على هذا الجهاز عند إنشاء هذه المحفظة.",

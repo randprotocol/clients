@@ -657,6 +657,7 @@ export default {
   "Sending twice would pay twice.": "Envoyer deux fois paierait deux fois.",
   "Sending…": "Envoi…",
   "Sent": "Envoyé",
+  "Sent (sender unverified)": "Envoyé (expéditeur non vérifié)",
   "Sent — view": "Envoyé : afficher",
   "Sent.": "Envoyé.",
   "Set on this device when this wallet was created.": "Défini sur cet appareil lors de la création de ce portefeuille.",

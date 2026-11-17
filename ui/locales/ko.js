@@ -648,6 +648,7 @@ export default {
   "Sending twice would pay twice.": "두 번 보내면 두 번 지불됩니다.",
   "Sending…": "보내는 중…",
   "Sent": "보냄",
+  "Sent (sender unverified)": "보냄 (보낸 사람 미확인)",
   "Sent — view": "보냄 — 보기",
   "Sent.": "보냈습니다.",
   "Set on this device when this wallet was created.": "이 지갑을 만들 때 이 기기에서 설정했습니다.",

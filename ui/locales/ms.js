@@ -650,6 +650,7 @@ export default {
   "Sending twice would pay twice.": "Menghantar dua kali akan membayar dua kali.",
   "Sending…": "Menghantar…",
   "Sent": "Dihantar",
+  "Sent (sender unverified)": "Dihantar (penghantar belum disahkan)",
   "Sent — view": "Dihantar — lihat",
   "Sent.": "Dihantar.",
   "Set on this device when this wallet was created.": "Ditetapkan pada peranti ini semasa dompet ini dicipta.",

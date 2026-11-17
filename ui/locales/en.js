@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1120 strings.
+// 1121 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -658,6 +658,7 @@ export default {
   "Sending…": "Sending…",
   "Sent": "Sent",
   "Sent — view": "Sent — view",
+  "Sent (sender unverified)": "Sent (sender unverified)",
   "Sent.": "Sent.",
   "Set on this device when this wallet was created.": "Set on this device when this wallet was created.",
   "Settings": "Settings",

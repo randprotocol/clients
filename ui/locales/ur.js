@@ -656,6 +656,7 @@ export default {
   "Sending twice would pay twice.": "دو بار بھیجنے سے دو بار ادائیگی ہو گی۔",
   "Sending…": "بھیجا جا رہا ہے…",
   "Sent": "بھیج دیا گیا",
+  "Sent (sender unverified)": "بھیج دیا گیا (بھیجنے والا غیر تصدیق شدہ)",
   "Sent — view": "بھیج دیا گیا — دیکھیں",
   "Sent.": "بھیج دیا گیا۔",
   "Set on this device when this wallet was created.": "یہ والیٹ بنتے وقت اسی ڈیوائس پر مقرر کیا گیا۔",

@@ -656,6 +656,7 @@ export default {
   "Sending twice would pay twice.": "ارسال دوباره یعنی دو بار پرداخت.",
   "Sending…": "در حال ارسال…",
   "Sent": "ارسال‌شده",
+  "Sent (sender unverified)": "ارسال‌شده (فرستنده تأییدنشده)",
   "Sent — view": "ارسال شد — مشاهده",
   "Sent.": "ارسال شد.",
   "Set on this device when this wallet was created.": "هنگام ساختن این کیف پول روی این دستگاه تعیین شد.",

@@ -648,6 +648,7 @@ export default {
   "Sending twice would pay twice.": "Mengirim dua kali berarti membayar dua kali.",
   "Sending…": "Mengirim…",
   "Sent": "Terkirim",
+  "Sent (sender unverified)": "Terkirim (pengirim belum terverifikasi)",
   "Sent — view": "Terkirim — lihat",
   "Sent.": "Terkirim.",
   "Set on this device when this wallet was created.": "Ditetapkan di perangkat ini saat dompet ini dibuat.",

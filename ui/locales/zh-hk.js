@@ -648,6 +648,7 @@ export default {
   "Sending twice would pay twice.": "重複傳送會付款兩次。",
   "Sending…": "正在傳送…",
   "Sent": "已傳送",
+  "Sent (sender unverified)": "已傳送（寄件人未驗證）",
   "Sent — view": "已傳送，查看",
   "Sent.": "已傳送。",
   "Set on this device when this wallet was created.": "於此錢包建立時在此裝置上設定。",

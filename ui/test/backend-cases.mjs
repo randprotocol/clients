@@ -2366,7 +2366,8 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
       amount: '2500000000', asset: 0, time: 7, from: '00'.repeat(32), height: 7, spent: false, pending: null, memo: 'rent',
     };
     const without = { ...withMemo, index: 0, cm: '0a'.repeat(32), nf: '0d'.repeat(32), height: 5, memo: null };
-    const sent = { index: 9, amount: '100', asset: 0, height: 7, to_pk: 'ee'.repeat(32), time: 3, memo: 'thanks' };
+    // `from: PK` — the note's creator is this wallet, which is what makes the row Sent (VK-751).
+    const sent = { index: 1, amount: '100', asset: 0, height: 7, to_pk: 'ee'.repeat(32), time: 3, memo: 'thanks', from: PK };
     const core = stubCore({
       scan_page: ({ rows: page }) => ({
         received: page.length ? [without, withMemo] : [], sent: page.length ? [sent] : [],
@@ -2387,5 +2388,35 @@ const scoped = (name, fn) => test(`${label}: ${name}`, fn);
     assert.deepEqual(ins.map((a) => a.memo ?? null).sort(), ['rent', null].sort());
     const out = result.activity.find((a) => a.kind === 'out');
     assert.equal(out.memo, 'thanks');
+  });
+
+  scoped('VK-751: a planted sent row reaches neither the store nor sync; a constant-creator row is `out-unverified`, never `out`', async () => {
+    const rows = [0, 1, 2].map((index) => ({ index, cm: `0${index}`.repeat(32), height: 5, envelope: { kem_ct: '', to_receiver: '', to_sender: '', body: '' } }));
+    let served = false;
+    const row = (index, from, memo) => ({ index, amount: '4200', asset: 0, height: 5, to_pk: 'ee'.repeat(32), time: 3, memo, from });
+    const core = stubCore({
+      scan_page: ({ rows: page }) => ({
+        received: [],
+        // Leaf 0: sealed by a holder of the viewing key (its own pk as creator). Leaf 1: a mint
+        // sealed under this wallet's key. Leaf 2: a payment this wallet made.
+        sent: page.length ? [row(0, '66'.repeat(32), 'planted'), row(2, PK, 'mine')] : [],
+        sent_unverified: page.length ? [row(1, `${Buffer.from('rpl-mint').toString('hex')}${'00'.repeat(24)}`, 'minted')] : [],
+        next_index: page.length ? page[page.length - 1].index + 1 : 0, rows: page.length,
+      }),
+    });
+    const fetch = stubFetch({
+      rand_getCommitments: ([from]) => { if (from === 0 && !served) { served = true; return rows; } return []; },
+      rand_getBlockByHeight: ([h]) => ({ height: h, timestamp_ms: 1788000000000 }),
+      rand_getTreeInfo: () => ({ next_index: 3, root: '00'.repeat(32), nullifiers: 0 }),
+    });
+    const { backend, storage } = build({ core, fetch });
+    await backend.wallet.create(PASSWORD);
+    const result = await backend.sync.scan(() => {});
+    assert.equal(JSON.stringify(storage.local.get('notes')).includes('planted'), false, 'the planted row is in the store');
+    assert.equal(JSON.stringify(result).includes('planted'), false, 'the planted row reached the screens');
+    assert.deepEqual(result.activity.filter((a) => a.kind === 'out').map((a) => a.memo), ['mine'], 'exactly the wallet\'s own payment is Sent');
+    const unverified = result.activity.filter((a) => a.kind === 'out-unverified');
+    assert.deepEqual(unverified.map((a) => [a.memo, a.amount, a.block]), [['minted', '4200', 5]]);
+    assert.equal(result.activity.some((a) => a.kind === 'pending'), false, 'and it is not mistaken for a submission');
   });
 }

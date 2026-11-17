@@ -648,6 +648,7 @@ export default {
   "Sending twice would pay twice.": "发送两次就会付款两次。",
   "Sending…": "正在发送…",
   "Sent": "已发送",
+  "Sent (sender unverified)": "已发送（发送方未验证）",
   "Sent — view": "已发送——查看",
   "Sent.": "已发送。",
   "Set on this device when this wallet was created.": "在此设备上创建此钱包时设置。",

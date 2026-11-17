@@ -648,6 +648,7 @@ export default {
   "Sending twice would pay twice.": "二重に送信すると二重に支払うことになります。",
   "Sending…": "送信中…",
   "Sent": "送信済み",
+  "Sent (sender unverified)": "送信済み（送信者未確認）",
   "Sent — view": "送信済み — 表示",
   "Sent.": "送信しました。",
   "Set on this device when this wallet was created.": "このウォレットの作成時にこの端末で設定されました。",

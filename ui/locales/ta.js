@@ -655,6 +655,7 @@ export default {
   "Sending twice would pay twice.": "இருமுறை அனுப்பினால் இருமுறை பணம் செலுத்தப்படும்.",
   "Sending…": "அனுப்புகிறது…",
   "Sent": "அனுப்பப்பட்டது",
+  "Sent (sender unverified)": "அனுப்பப்பட்டது (அனுப்புநர் சரிபார்க்கப்படவில்லை)",
   "Sent — view": "அனுப்பப்பட்டது — பார்",
   "Sent.": "அனுப்பப்பட்டது.",
   "Set on this device when this wallet was created.": "இந்த வாலட் உருவாக்கப்பட்டபோது இந்தச் சாதனத்தில் அமைக்கப்பட்டது.",
