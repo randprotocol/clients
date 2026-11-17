@@ -204,6 +204,16 @@ git checkout v0.8.3 && git submodule update --init   # the newest clients releas
 
 `v0.8.3` is the newest clients release tag. `v0.8.4` and `v0.8.5` are fullnode tags, not clients tags: `main` vendors fullnode v0.8.5, and there is no clients release built on it yet.
 
+**A `v0.8.x` tag on this repository is not always a wallet release.** At a node release every
+repository of the project is tagged with the node's version, as a snapshot of the whole at that
+moment. `v0.8.6` here is such a tag: it marks this repository as it stood when fullnode v0.8.6 was
+released, on a commit whose manifests say wallet 0.8.3 and whose vendored node is v0.8.5. It names
+no wallet version, nothing was built from it, and it is not what to check out to build a wallet.
+The wallet releases are the tags that have a
+[GitHub release](https://github.com/randprotocol/clients/releases) with its installers and
+`SHA256SUMS` — the newest is `v0.8.3` — and a tag matching no wallet version in the manifests is a
+snapshot tag.
+
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
 The submodule is the full node (`core/vendor/fullnode`, at `v0.8.5` `d8efd47`, v0.8.4 plus the audit v12 node fixes): the wallet's
 cryptography is the node's own code.
