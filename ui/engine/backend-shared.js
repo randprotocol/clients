@@ -997,9 +997,63 @@ export function makeSharedBackend({
     }
   }
 
+  // --------------------------------------------------------------- one wallet, made once -------
+  // CLI-1002 (audit v14). The vault is written only after PBKDF2 at 600 000 iterations, so for a
+  // few hundred milliseconds a wallet is being made and `wallet.exists()` still says no. A second
+  // `create` in that window (a double click, Enter held down) used to pass the check too: both
+  // succeeded with DIFFERENT keys, the backup screen revealed the first and the vault, the session
+  // and the stored address ended on the second — a recovery key that does not open the wallet.
+  //
+  // Two rules close it, and neither relies on a screen behaving:
+  //
+  //   1. **Single flight.** While a create/import is in flight in this backend, the identical
+  //      call is answered with the SAME promise — one keygen, one vault, one answer — and any
+  //      other create/import is refused as if the wallet already existed, which by the time the
+  //      caller could act on it, it does.
+  //   2. **The existence check is repeated at the write.** `storeNewVault` reads the vault key
+  //      again immediately before writing it — under an exclusive Web Lock where the platform has
+  //      one, so two tabs (or the extension's two windows) cannot both pass — and never writes
+  //      over a vault that is there. The session is started only for a vault this call stored.
+  const VAULT_LOCK = 'rand-wallet-vault';
+  let provisioning = null; // { key, promise } while a create/import is in flight
+
+  function alreadyExists() {
+    return new Error(t('a wallet already exists on this device'));
+  }
+
+  function provisionOnce(key, run) {
+    if (provisioning) {
+      // Same request, same answer. Anything else would be a second wallet.
+      return provisioning.key === key ? provisioning.promise : Promise.reject(alreadyExists());
+    }
+    const flight = { key, promise: null };
+    flight.promise = (async () => {
+      try {
+        return await run();
+      } finally {
+        if (provisioning === flight) provisioning = null;
+      }
+    })();
+    provisioning = flight;
+    return flight.promise;
+  }
+
+  /** Writes `vault` only if no vault is stored — the check and the write as close as storage allows. */
+  async function storeNewVault(vault) {
+    const write = async () => {
+      if (await storage.get(K.vault)) throw alreadyExists();
+      await storage.set(K.vault, vault);
+    };
+    if (locksApi && typeof locksApi.request === 'function') {
+      await locksApi.request(VAULT_LOCK, { mode: 'exclusive' }, write);
+    } else {
+      await write();
+    }
+  }
+
   async function createFrom(info, password) {
     const vault = await encryptSecret(password, info.spend_key);
-    await storage.set(K.vault, vault);
+    await storeNewVault(vault); // throws, having written nothing, if a wallet appeared meanwhile
     await storage.set(K.wallet, { address: info.address, pk: info.pk, created_ms: Date.now() });
     await storage.set(K.notes, emptyNoteStore());
     await clearFailures();
@@ -1013,18 +1067,24 @@ export function makeSharedBackend({
       return !!(await storage.get(K.vault));
     },
 
-    async create(password) {
-      requirePassword(password);
-      if (await wallet.exists()) throw new Error(t('a wallet already exists on this device'));
-      const info = await c.keygen();
-      return createFrom(info, password);
+    create(password) {
+      // Not `async`: the identical call in flight must get back the very same promise.
+      try { requirePassword(password); } catch (err) { return Promise.reject(err); }
+      return provisionOnce(JSON.stringify(['create', password]), async () => {
+        if (await wallet.exists()) throw alreadyExists();
+        const info = await c.keygen();
+        return createFrom(info, password);
+      });
     },
 
-    async import(secret, password) {
-      requirePassword(password);
-      if (await wallet.exists()) throw new Error(t('a wallet already exists on this device'));
-      const info = await c.importKey(String(secret || '').trim());
-      return createFrom(info, password);
+    import(secret, password) {
+      try { requirePassword(password); } catch (err) { return Promise.reject(err); }
+      const input = String(secret || '').trim();
+      return provisionOnce(JSON.stringify(['import', input, password]), async () => {
+        if (await wallet.exists()) throw alreadyExists();
+        const info = await c.importKey(input);
+        return createFrom(info, password);
+      });
     },
 
     async unlock(password) {
