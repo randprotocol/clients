@@ -514,3 +514,19 @@ test('bridge state: v0.6.8 fees are read when the chain has them, and held to th
   rejects(() => checkBridgeState({ enabled: true, fees: { mint_bps: 10, burn_bps: 10, recipient: '<script>' } }), /fees.recipient/);
   rejects(() => checkBridgeState({ enabled: true, fees: { mint_bps: -1, burn_bps: 10, recipient } }), /mint_bps/);
 });
+
+// CLI-1009 (audit v14): told what the header announced, a block that does not carry it is refused.
+test('checkBlockActions: a null or short block is refused when the header announced transactions', async () => {
+  const { checkBlockActions, NodeReplyError } = await import('../engine/validate.js');
+  const tx = { action: { kind: 'bridge_attest' } };
+  const announced = (n) => ({ announced: n, height: 77 });
+  for (const reply of [null, undefined, {}, { transactions: [] }, { transactions: [tx] }, { transactions: 'two' }]) {
+    assert.throws(() => checkBlockActions(reply, announced(2)), (err) => err instanceof NodeReplyError && /block 77/.test(err.message), JSON.stringify(reply));
+  }
+  assert.equal(checkBlockActions({ transactions: [tx, tx] }, announced(2)).length, 2);
+  assert.equal(checkBlockActions({ transactions: [tx, tx, tx] }, announced(2)).length, 3);
+  // Nothing announced, nothing demanded: the reading every other caller has always had.
+  assert.deepEqual(checkBlockActions(null), []);
+  assert.deepEqual(checkBlockActions(null, announced(0)), []);
+  assert.deepEqual(checkBlockActions({ transactions: [] }, announced(0)), []);
+});

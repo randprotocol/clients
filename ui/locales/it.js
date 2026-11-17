@@ -1128,4 +1128,5 @@ export default {
   "the record is damaged": "il record è danneggiato",
   "the record was saved by a newer version of Rand Wallet": "il record è stato salvato da una versione più recente di Rand Wallet",
   "the record does not open with this password": "il record non si apre con questa password",
+  "block {height} has {got} of the {n} transactions its header announced": "il blocco {height} contiene {got} delle {n} transazioni annunciate dalla sua intestazione",
 };

@@ -1121,4 +1121,5 @@ export default {
   "the record is damaged": "記錄已損壞",
   "the record was saved by a newer version of Rand Wallet": "記錄由較新版本的 Rand Wallet 儲存",
   "the record does not open with this password": "此密碼無法開啟該記錄",
+  "block {height} has {got} of the {n} transactions its header announced": "區塊 {height} 只有 {got} 筆交易，而其區塊頭宣告了 {n} 筆",
 };

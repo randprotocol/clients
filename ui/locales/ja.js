@@ -1121,4 +1121,5 @@ export default {
   "the record is damaged": "レコードが破損しています",
   "the record was saved by a newer version of Rand Wallet": "レコードは新しいバージョンの Rand Wallet で保存されています",
   "the record does not open with this password": "このパスワードではレコードを開けません",
+  "block {height} has {got} of the {n} transactions its header announced": "ブロック {height} には、ヘッダーが示した {n} 件のトランザクションのうち {got} 件しかありません",
 };

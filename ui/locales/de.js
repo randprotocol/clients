@@ -1128,4 +1128,5 @@ export default {
   "the record is damaged": "der Datensatz ist beschädigt",
   "the record was saved by a newer version of Rand Wallet": "der Datensatz wurde von einer neueren Version von Rand Wallet gespeichert",
   "the record does not open with this password": "der Datensatz lässt sich mit diesem Passwort nicht öffnen",
+  "block {height} has {got} of the {n} transactions its header announced": "Block {height} enthält {got} der {n} Transaktionen, die sein Header angekündigt hat",
 };

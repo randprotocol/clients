@@ -33,7 +33,7 @@ final class DepositWalkTests: XCTestCase {
         let r = try await DepositWalk.run(
             start: start, head: node.head,
             headers: { node.headers($0, $1) },
-            actions: { node.actions($0) },
+            actions: { h, _ in node.actions(h) },
             offer: { found.append(($0 as? [String: Any])?["at"] as? UInt64 ?? 0) })
         seen = found
         return r
@@ -99,7 +99,7 @@ final class DepositWalkTests: XCTestCase {
             let r = try await DepositWalk.run(
                 start: 0, head: 50,
                 headers: { forge(honest.headers($0, $1) as! [[String: Any]]) },
-                actions: { _ in XCTFail("a page that \(why) led to a block being opened"); return [] },
+                actions: { _, _ in XCTFail("a page that \(why) led to a block being opened"); return [] },
                 offer: { _ in })
             XCTAssertEqual(r, DepositWalk.Result(next: 0, unknown: true), "a page that \(why)")
         }
@@ -111,7 +111,7 @@ final class DepositWalkTests: XCTestCase {
         let r = try await DepositWalk.run(
             start: 0, head: 3000,
             headers: { node.headers($0, $1) },
-            actions: { h in
+            actions: { h, _ in
                 if h == 2000 { throw RpcClient.RpcError(code: 429, message: "node answered HTTP 429", isHTTP: true) }
                 return node.actions(h)
             },
@@ -125,7 +125,7 @@ final class DepositWalkTests: XCTestCase {
         let r = try await DepositWalk.run(
             start: 0, head: 5000,
             headers: { _, _ in throw RpcClient.RpcError(code: -32601, message: "unknown method rand_getBlocks") },
-            actions: { node.actions($0) },
+            actions: { h, _ in node.actions(h) },
             offer: { _ in })
         XCTAssertEqual(UInt64(node.opened.count), DepositWalk.maxHeightsWithoutHeaders)
         XCTAssertEqual(r, DepositWalk.Result(next: DepositWalk.maxHeightsWithoutHeaders, unknown: false))
@@ -137,7 +137,7 @@ final class DepositWalkTests: XCTestCase {
         let r = try await DepositWalk.run(
             start: 0, head: 3,
             headers: { node.headers($0, $1) },
-            actions: { _ in [["kind": "bundle"], "not an action", ["kind": "bridge_attest", "at": UInt64(2)], ["kind": "bridge_burn", "at": UInt64(3)]] },
+            actions: { _, _ in [["kind": "bundle"], "not an action", ["kind": "bridge_attest", "at": UInt64(2)], ["kind": "bridge_burn", "at": UInt64(3)]] },
             offer: { seen.append(($0 as? [String: Any])?["at"] as? UInt64 ?? 0) })
         XCTAssertEqual(seen, [2, 3], "a burn is offered too: its fee note is the fee recipient's (v0.6.8)")
         XCTAssertEqual(r.next, 4)
@@ -150,10 +150,65 @@ final class DepositWalkTests: XCTestCase {
             _ = try await DepositWalk.run(
                 start: 0, head: 10,
                 headers: { node.headers($0, $1) },
-                actions: { node.actions($0) },
+                actions: { h, _ in node.actions(h) },
                 offer: { _ in throw CoreSaidNo() })
             XCTFail("the core's refusal was swallowed")
         } catch is CoreSaidNo {}
+    }
+
+    // MARK: CLI-1009 — a header that announced transactions, and no body
+
+    /// A `rand_getBlockByHeight` reply is held to the header that announced it: `null`, or fewer
+    /// transactions than `tx_count`, is a block the node did not serve.
+    func testABlockReplyIsHeldToItsHeader() throws {
+        let tx: [String: Any] = ["action": ["kind": "bridge_attest"]]
+        let short: [Any?] = [nil, NSNull(), "block", [String: Any](), ["transactions": [Any]()], ["transactions": [tx]]]
+        for reply in short {
+            XCTAssertThrowsError(try RpcClient.actions(ofBlock: reply as Any?, height: 77, announced: 2), "\(String(describing: reply))") {
+                XCTAssertTrue(($0 as? RpcClient.RpcError)?.message.contains("77") ?? false)
+            }
+        }
+        XCTAssertEqual(try RpcClient.actions(ofBlock: ["transactions": [tx, tx]], height: 77, announced: 2).count, 2)
+        XCTAssertEqual(try RpcClient.actions(ofBlock: ["transactions": [tx, tx, tx]], height: 77, announced: 2).count, 3, "more than announced withholds nothing")
+        // No header read (a node without rand_getBlocks): the block must still be there.
+        XCTAssertEqual(try RpcClient.actions(ofBlock: ["transactions": [Any]()], height: 77, announced: nil).count, 0)
+        XCTAssertThrowsError(try RpcClient.actions(ofBlock: NSNull(), height: 77, announced: nil))
+    }
+
+    /// The walk hands the header's `tx_count` to the block read, and a block that read refuses
+    /// (as `RpcClient.actions(ofBlock:…)` does for a null or short body) stops the cursor under it.
+    func testABlockWhoseHeaderAnnouncedTransactionsAndWhoseBodyIsNullDoesNotMoveTheCursor() async throws {
+        let node = Node(head: 3000, busy: [7, 2000])
+        var seen: [UInt64] = []
+        var announced: [UInt64?] = []
+        let r = try await DepositWalk.run(
+            start: 0, head: 3000,
+            headers: { node.headers($0, $1) },
+            actions: { h, count in
+                announced.append(count)
+                _ = node.actions(h)
+                // Block 2000 comes back `null`; every other block carries what its header said.
+                let reply: Any = h == 2000 ? NSNull() : ["transactions": [["action": ["kind": "bridge_attest", "at": h] as [String: Any]]]]
+                return try RpcClient.actions(ofBlock: reply, height: h, announced: count)
+            },
+            offer: { seen.append(($0 as? [String: Any])?["at"] as? UInt64 ?? 0) })
+        XCTAssertEqual(seen, [7])
+        XCTAssertEqual(announced, [1, 1], "the header's tx_count reaches the block read")
+        XCTAssertEqual(node.opened, [7, 2000], "the block was asked for")
+        XCTAssertEqual(r, DepositWalk.Result(next: 2000, unknown: true), "the cursor moved past a block that was never read")
+    }
+
+    func testWithoutGetBlocksANullBlockUnderTheTipStopsTheWalkThere() async throws {
+        let r = try await DepositWalk.run(
+            start: 0, head: 5000,
+            headers: { _, _ in throw RpcClient.RpcError(code: -32601, message: "unknown method rand_getBlocks") },
+            actions: { h, count in
+                XCTAssertNil(count, "no header was read, so nothing was announced")
+                let reply: Any = h == 40 ? NSNull() : ["transactions": [Any]()]
+                return try RpcClient.actions(ofBlock: reply, height: h, announced: count)
+            },
+            offer: { _ in })
+        XCTAssertEqual(r, DepositWalk.Result(next: 40, unknown: true))
     }
 
     // MARK: HTTP 429 in the RPC client

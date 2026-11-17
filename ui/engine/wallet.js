@@ -778,8 +778,13 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
     let examined = start - 1;
     for (let h = start; h <= last; h++) {
       throwIfAborted(signal);
+      const raw = await client.blockByHeight(h, { signal });
+      // No header here to say what the block holds, but `h` is at or under the tip this node just
+      // named: `null` for it is a block the node did not serve, not an empty one (CLI-1009). The
+      // walk stops under it and the next scan asks again.
+      if (raw === null || raw === undefined) return { deposits: out, through: examined, unknown: true };
       // Every action is re-parsed into a plain, size-bounded object before it reaches the core.
-      for (const action of checkBlockActions(await client.blockByHeight(h, { signal }), DEPOSIT_ACTIONS)) {
+      for (const action of checkBlockActions(raw, DEPOSIT_ACTIONS)) {
         for (const note of await notesOf(spendKey, action, feeRecipient)) out.set(note.cm, note);
       }
       examined = h;
@@ -841,7 +846,14 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
           throwIfAborted(signal);
           budget -= 1;
           // Every action is re-parsed into a plain, size-bounded object before it reaches the core.
-          const block = await ask(async () => checkBlockActions(await client.blockByHeight(header.height, { signal }), DEPOSIT_ACTIONS));
+          // …and held to the header that announced it (CLI-1009): a body that is `null` or short
+          // of `tx_count` is a block that was not served. It is refused like any other reply the
+          // node did not give — the cursor stays under it, the caller is told (`unknown`), and the
+          // next scan asks for the same block again.
+          const block = await ask(async () => checkBlockActions(
+            await client.blockByHeight(header.height, { signal }),
+            { ...DEPOSIT_ACTIONS, announced: header.tx_count, height: header.height },
+          ));
           if (block.failed) return { deposits: out, through: examined, unknown: true };
           for (const action of block.value) {
             for (const note of await notesOf(spendKey, action, feeRecipient)) out.set(note.cm, note);

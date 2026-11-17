@@ -464,12 +464,25 @@ export function checkGenesisHash(reply) {
  * the cursor under the block, and asked for the same block on every scan after. Only an oversize
  * action of a kind that IS read still refuses, and that cap is the caller's to size for what the
  * core can take.
+ *
+ * `announced` and `height`, when given, hold the body to its header — see the first lines below.
  */
-export function checkBlockActions(reply, { maxTransactions = 4096, maxActionChars = 8192, kinds = null } = {}) {
+export function checkBlockActions(reply, { maxTransactions = 4096, maxActionChars = 8192, kinds = null, announced = 0, height = null } = {}) {
   const m = 'rand_getBlockByHeight';
-  if (reply === null || reply === undefined) return [];
+  // CLI-1009 (audit v14). `announced` is the `tx_count` the block's HEADER gave, when the caller
+  // read one: a body that is `null`, or carries fewer transactions than that, is not a block with
+  // no actions — it is a block that was not served, and reading it as empty moved the deposit
+  // cursor past it for good. An honest node answers a pruned height with an error, never with
+  // `null`. More transactions than announced withholds nothing and is left alone.
+  const want = Number.isSafeInteger(announced) && announced > 0 ? announced : 0;
+  const short = (got) => fail(m, t('block {height} has {got} of the {n} transactions its header announced', { height: height ?? '?', got, n: want }));
+  if (reply === null || reply === undefined) {
+    if (want) short(0);
+    return [];
+  }
   if (typeof reply !== 'object' || Array.isArray(reply)) fail(m, t('the reply is not an object'), reply);
   const list = Array.isArray(reply.transactions) ? reply.transactions : [];
+  if (list.length < want) short(list.length);
   if (list.length > maxTransactions) fail(m, t('the block has {n} transactions', { n: list.length }));
   const wanted = Array.isArray(kinds) ? new Set(kinds) : null;
   const actions = [];

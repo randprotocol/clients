@@ -1036,7 +1036,8 @@ test('the walk is budgeted per scan, in requests, and the next scan carries on f
     head: () => ({ height: head, hash: HEX64('ab') }),
     bridgeState: () => ({ enabled: true }),
     getBlocks: headerNode(head, new Set([5, 6]), pages),
-    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [] }; },
+    // One transaction, as its header announced (`headerNode`): a short body is a refusal (CLI-1009).
+    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [{ action: { kind: 'transfer' } }] }; },
     // The spend pass is budgeted by its own rule; keep it out of the way of this count.
     nullifiers: () => [],
   });
@@ -1065,7 +1066,8 @@ test('a budget spent in the middle of a page stops the cursor at the last block 
     head: () => ({ height: 3000, hash: HEX64('ab') }),
     bridgeState: () => ({ enabled: true }),
     getBlocks: headerNode(3000, busy, pages),
-    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [] }; },
+    // One transaction, as its header announced (`headerNode`): a short body is a refusal (CLI-1009).
+    blockByHeight: (h) => { opened.push(h); return { height: h, transactions: [{ action: { kind: 'transfer' } }] }; },
   });
   const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
   await wallet.scan(SPEND_KEY, {});
@@ -1540,3 +1542,84 @@ for (const [name, run, extraCore] of [
     assert.deepEqual(phases, [], 'and \'submit\' was never reported, which is what lets a screen read the phase');
   });
 }
+
+// ================== CLI-1009 (audit v14): a header that announced transactions, and no body ====
+// The header said `tx_count > 0`; the block came back `null`, or with fewer transactions than
+// announced. That was read as "no actions" and the deposit cursor moved past the block — a bridge
+// deposit in it is then never looked for again. An honest node answers a pruned height with an
+// error, so this takes a hostile node or replicas that disagree; either way the block was not
+// read, and a cursor moves only over what was.
+for (const [what, body] of [
+  ['null', () => null],
+  ['an empty transaction list', (h) => ({ height: h, transactions: [] })],
+  ['fewer transactions than announced', (h) => ({ height: h, transactions: [{ action: { kind: 'transfer' } }] })],
+  ['no transaction list at all', (h) => ({ height: h })],
+]) {
+  test(`CLI-1009: a block whose header announced 2 transactions and whose body is ${what} does not move the cursor`, async () => {
+    const store = memoryStore();
+    const deposit = ownedNote(0, { cm: HEX64('de'), from: '00'.repeat(32) });
+    let honest = false;
+    const opened = [];
+    const client = stubClient({
+      head: () => ({ height: 3000, hash: HEX64('ab') }),
+      bridgeState: () => ({ enabled: true }),
+      getBlocks: (from, to) => {
+        const rows = [];
+        for (let h = from; h <= Math.min(to, 3000); h += 1) rows.push({ height: h, hash: HEX64('ab'), tx_count: h === 2000 ? 2 : 0 });
+        return rows;
+      },
+      blockByHeight: (h) => {
+        opened.push(h);
+        if (!honest) return body(h);
+        return { height: h, transactions: [{ action: { kind: 'bridge_attest' } }, { action: { kind: 'transfer' } }] };
+      },
+      treeInfo: () => ({ next_index: 1, root: HEX64('00'), nullifiers: 0 }),
+      commitments: (from) => (from === 0 ? [{ index: 0, cm: HEX64('de'), height: 2000, envelope: envelope() }] : []),
+    });
+    const core = stubCore({ rebuilt_deposit: () => ({ ...deposit, index: 18446744073709551615, height: 0 }) });
+    const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+
+    const st = await wallet.scan(SPEND_KEY, {});
+    assert.equal(store.current.scanned_attest_height, 2000, 'the cursor moved past a block that was never read');
+    assert.equal(st.bridgeUnknown, true, 'and the caller is told the deposits could not all be read');
+    assert.equal(store.current.notes.length, 0);
+    assert.ok(store.current.last_sync_ms > 0, 'the rest of the scan still ran');
+
+    // The next scan asks for the same block again; an honest answer is read and the walk goes on.
+    honest = true;
+    const again = await wallet.scan(SPEND_KEY, {});
+    assert.deepEqual(opened, [2000, 2000], 'the block is retried, not skipped');
+    assert.equal(store.current.notes.length, 1, 'the deposit in it is found');
+    assert.equal(store.current.scanned_attest_height, 3001);
+    assert.equal(again.bridgeUnknown, undefined);
+  });
+}
+
+test('CLI-1009: a block with exactly the transactions its header announced is read as before', async () => {
+  const store = memoryStore();
+  const client = stubClient({
+    head: () => ({ height: 100, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    getBlocks: (from, to) => Array.from({ length: Math.min(to, 100) - from + 1 }, (_, i) => ({ height: from + i, hash: HEX64('ab'), tx_count: from + i === 9 ? 3 : 0 })),
+    // More than announced is not this rule's business either: nothing was withheld.
+    blockByHeight: (h) => ({ height: h, transactions: [{ action: { kind: 'transfer' } }, { action: { kind: 'transfer' } }, { action: { kind: 'transfer' } }] }),
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.current.scanned_attest_height, 101);
+  assert.equal(st.bridgeUnknown, undefined);
+});
+
+test('CLI-1009: without rand_getBlocks, a height under the node\'s own tip that comes back null stops the walk there', async () => {
+  const store = memoryStore();
+  const client = stubClient({
+    head: () => ({ height: 5000, hash: HEX64('ab') }),
+    bridgeState: () => ({ enabled: true }),
+    getBlocks: () => { const e = new Error('unknown method rand_getBlocks'); e.code = -32601; throw e; },
+    blockByHeight: (h) => (h === 40 ? null : { height: h, transactions: [] }),
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.current.scanned_attest_height, 40, 'the cursor passed a block the node did not serve');
+  assert.equal(st.bridgeUnknown, true);
+});

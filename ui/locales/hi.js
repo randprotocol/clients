@@ -1128,4 +1128,5 @@ export default {
   "the record is damaged": "रिकॉर्ड खराब है",
   "the record was saved by a newer version of Rand Wallet": "रिकॉर्ड Rand Wallet के नए संस्करण से सहेजा गया था",
   "the record does not open with this password": "रिकॉर्ड इस पासवर्ड से नहीं खुलता",
+  "block {height} has {got} of the {n} transactions its header announced": "ब्लॉक {height} में उसके हेडर द्वारा घोषित {n} लेनदेन में से {got} हैं",
 };

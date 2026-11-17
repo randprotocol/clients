@@ -1129,4 +1129,5 @@ export default {
   "the record is damaged": "رکورد آسیب دیده است",
   "the record was saved by a newer version of Rand Wallet": "رکورد با نسخه‌ی جدیدتری از Rand Wallet ذخیره شده است",
   "the record does not open with this password": "رکورد با این گذرواژه باز نمی‌شود",
+  "block {height} has {got} of the {n} transactions its header announced": "بلوک {height} تنها {got} تراکنش از {n} تراکنشی را دارد که سرآیندش اعلام کرده بود",
 };

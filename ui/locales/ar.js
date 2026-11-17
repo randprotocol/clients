@@ -1128,4 +1128,5 @@ export default {
   "the record is damaged": "السجل تالف",
   "the record was saved by a newer version of Rand Wallet": "حُفظ السجل بإصدار أحدث من Rand Wallet",
   "the record does not open with this password": "لا يُفتح السجل بكلمة المرور هذه",
+  "block {height} has {got} of the {n} transactions its header announced": "الكتلة {height} تحتوي على {got} من أصل {n} معاملة أعلنت عنها ترويستها",
 };

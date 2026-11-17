@@ -1128,4 +1128,5 @@ export default {
   "the record is damaged": "பதிவு சேதமடைந்துள்ளது",
   "the record was saved by a newer version of Rand Wallet": "பதிவு Rand Wallet இன் புதிய பதிப்பால் சேமிக்கப்பட்டது",
   "the record does not open with this password": "இந்தக் கடவுச்சொல்லால் பதிவு திறக்கவில்லை",
+  "block {height} has {got} of the {n} transactions its header announced": "தொகுதி {height} அதன் தலைப்பு அறிவித்த {n} பரிவர்த்தனைகளில் {got} மட்டுமே கொண்டுள்ளது",
 };

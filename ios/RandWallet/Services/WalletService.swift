@@ -171,7 +171,7 @@ final class WalletService: ObservableObject {
                     start: s.scannedAttestHeight,
                     head: head0,
                     headers: { try await rpc.blockHeaders(from: $0, to: $1) },
-                    actions: { try await rpc.blockActions(height: $0) },
+                    actions: { try await rpc.blockActions(height: $0, announced: $1) },
                     offer: { action in
                         let kind = (action as? [String: Any])?["kind"] as? String
                         if let fr = feeRecipient {

@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1121 strings.
+// 1122 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -181,6 +181,7 @@ export default {
   "Balance": "Balance",
   "Before the first send through the RandProtocol provers, read what they can see: the one that proves it gets this wallet's viewing key. Continue on the send screen, or pair your own prover in Settings.": "Before the first send through the RandProtocol provers, read what they can see: the one that proves it gets this wallet's viewing key. Continue on the send screen, or pair your own prover in Settings.",
   "Block": "Block",
+  "block {height} has {got} of the {n} transactions its header announced": "block {height} has {got} of the {n} transactions its header announced",
   "block {height} has {n} or more nullifiers; this wallet cannot page inside one block": "block {height} has {n} or more nullifiers; this wallet cannot page inside one block",
   "Bridge": "Bridge",
   "Bridge fee": "Bridge fee",
