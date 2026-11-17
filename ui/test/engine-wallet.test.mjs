@@ -1498,3 +1498,45 @@ test('VK-751: legitimate rows survive — a withdrawal, a faucet request, and a 
   assert.equal(rows.find((r) => r.hash === submission.hash).sub.height, 8, 'and dated it');
   assert.equal(st.sent.length, 1);
 });
+
+
+// ===================================== CLI-1006 (audit v14): no abort after the broadcast ======
+// The invariant the screens' "cancelled" rests on: the engine's LAST abort checkpoint is the one
+// immediately before `rand_sendTransaction`. Once the node has the transaction, an abort changes
+// nothing — the submission is recorded and the call resolves. A checkpoint added anywhere after
+// the broadcast turns these red.
+for (const [name, run, extraCore] of [
+  ['completeSend', (w, opts) => w.completeSend(SPEND_KEY, PROVED, { to: 'rand1payee', ...opts }), { parse_address: () => ({ valid: true, pk: HEX64('99') }) }],
+  ['completeBurn', (w, opts) => w.completeBurn(SPEND_KEY, { ...PROVED, to_chain: 1, token: 'ee'.repeat(32), to: 'ff'.repeat(32), relayer_fee: '0' }, opts), {}],
+  ['completeInvoke', (w, opts) => w.completeInvoke(SPEND_KEY, { ...PROVED, program: HEX64('70'), payouts: [] }, opts), {}],
+]) {
+  test(`CLI-1006: ${name} — an abort signalled once the transaction is broadcast is not a cancellation`, async () => {
+    const store = memoryStore({ ...emptyNoteStore(), notes: [ownedNote(0)], chain_id: 13, genesis: GENESIS_A });
+    const controller = new AbortController();
+    const phases = [];
+    const client = stubClient({
+      // The abort lands while the node is taking the transaction: the latest it can and still
+      // be "during" the call, and every step after it runs with the signal already aborted.
+      sendTransaction: () => { controller.abort(); return HEX64('dd'); },
+      getTransaction: () => ({ hash: HEX64('dd'), height: 9 }),
+    });
+    const wallet = makeWallet({ core: stubCore(extraCore), store, rpc: () => client, settings: async () => ({}), annotate: false });
+    const submission = await run(wallet, { wait: true, signal: controller.signal, client, onPhase: (p) => phases.push(p) });
+    assert.equal(submission.hash, HEX64('dd'), 'the call resolves with the submission; it does not reject with an AbortError');
+    assert.deepEqual(phases, ['submit', 'wait']);
+    assert.equal(store.current.submissions.length, 1, 'and the record of it is on disk');
+    assert.equal(store.current.submissions[0].status, 'committed');
+  });
+
+  test(`CLI-1006: ${name} — an abort before the broadcast sends nothing`, async () => {
+    const store = memoryStore({ ...emptyNoteStore(), notes: [ownedNote(0)], chain_id: 13, genesis: GENESIS_A });
+    const controller = new AbortController();
+    controller.abort();
+    const client = stubClient({ sendTransaction: () => HEX64('dd') });
+    const wallet = makeWallet({ core: stubCore(extraCore), store, rpc: () => client, settings: async () => ({}), annotate: false });
+    const phases = [];
+    await assert.rejects(() => run(wallet, { wait: false, signal: controller.signal, client, onPhase: (p) => phases.push(p) }), (err) => err.name === 'AbortError');
+    assert.equal(client.calls.some(([m]) => m === 'sendTransaction'), false);
+    assert.deepEqual(phases, [], 'and \'submit\' was never reported, which is what lets a screen read the phase');
+  });
+}

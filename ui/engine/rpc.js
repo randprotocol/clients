@@ -67,6 +67,10 @@ export class RpcError extends Error {
    */
   constructor(message, code, failure) {
     super(message);
+    // Named, so a screen can tell a node's own error from anything else by `name` alone — the
+    // node chooses `code`, and must not be able to choose one that reads as something it is not
+    // (CLI-1006: code 20 used to read as a cancelled transfer).
+    this.name = 'RpcError';
     this.code = code;
     if (failure) this.failure = failure;
   }
