@@ -303,14 +303,71 @@ export function assetIndexes(store) {
   return [...new Set((store.notes || []).map((n) => Number(n.asset) || 0))].sort((a, b) => a - b);
 }
 
+/**
+ * Merges notes into `store` by leaf index, **monotonically** (CLI-1001, audit v14): a note both
+ * sides hold keeps the store's copy, but never loses a mark the other side put on it. A spent flag
+ * is evidence (a nullifier some scan read), and a pending mark is a send that may still land; the
+ * side that lacks one has simply not seen it yet. Keeping one copy whole dropped the other's mark
+ * while the height cursor that covered it was kept — a spent note offered as spendable until a
+ * rescan. A mark kept one scan too long costs nothing: the next scan clears a pending mark through
+ * `pending_cleared` exactly as it would have.
+ */
 function mergeNotes(store, received) {
   for (const n of received) {
-    const i = store.notes.findIndex((x) => x.index === n.index);
-    if (i < 0) store.notes.push(n);
+    const mine = store.notes.find((x) => x.index === n.index);
+    if (!mine) { store.notes.push(n); continue; }
+    if (n.spent) mine.spent = true;
+    if (mine.pending == null && n.pending != null) mine.pending = n.pending;
   }
 }
 function mergeSent(store, sent) {
   for (const s of sent) if (!store.sent.some((x) => x.index === s.index)) store.sent.push(s);
+}
+
+/** A submission only ever moves forward: pending, then expired or (on evidence) committed. */
+const SUBMISSION_RANK = { pending: 0, expired: 1, committed: 2 };
+function mergeSubmissions(store, submissions) {
+  for (const sub of submissions) {
+    const mine = store.submissions.find((x) => x.hash === sub.hash);
+    if (!mine) { store.submissions.push(sub); continue; }
+    if ((SUBMISSION_RANK[sub.status] ?? 0) > (SUBMISSION_RANK[mine.status] ?? 0)) mine.status = sub.status;
+    if (!mine.height && sub.height) mine.height = sub.height;
+  }
+}
+
+/**
+ * Folds `st` — a writer's view that lost a race — into `fresh`, the store that won it. Every part
+ * is a union, so doing it twice is a no-op and nothing either side learned is lost.
+ *
+ * The cursors: `scanned_index` and `scanned_attest_height` take the further of the two, because
+ * the notes each side found below its own cursor are all in the union. `scanned_height` is
+ * different. It says "every nullifier below here was compared with this store's notes", and that
+ * is true of the merged notes only if the side that read further HELD them all: a note the other
+ * side found was never compared with those heights. Then the merged cursor is the nearer of the
+ * two — a cursor that moves down only costs reading those heights again.
+ */
+function mergeStores(fresh, st) {
+  const cur = (v) => (isCursor(v) ? v : 0);
+  const freshHas = new Set(fresh.notes.map((n) => n.index));
+  const stHas = new Set(st.notes.map((n) => n.index));
+  const freshLacks = st.notes.some((n) => !freshHas.has(n.index));
+  const stLacks = fresh.notes.some((n) => !stHas.has(n.index));
+  mergeNotes(fresh, st.notes);
+  mergeSent(fresh, st.sent);
+  mergeSubmissions(fresh, st.submissions);
+  Object.assign(fresh.block_times, st.block_times);
+  Object.assign(fresh.note_tx, st.note_tx);
+  for (const key of ['scanned_index', 'scanned_attest_height']) fresh[key] = Math.max(cur(fresh[key]), cur(st[key]));
+  const fh = cur(fresh.scanned_height);
+  const sh = cur(st.scanned_height);
+  const furtherLacks = fh > sh ? freshLacks : (sh > fh ? stLacks : false);
+  fresh.scanned_height = furtherLacks ? Math.min(fh, sh) : Math.max(fh, sh);
+  fresh.reset_epoch = Math.max(fresh.reset_epoch || 0, st.reset_epoch || 0);
+  fresh.head = isCursor(st.head) ? st.head : cur(fresh.head);
+  fresh.chain_id = st.chain_id ?? fresh.chain_id ?? null;
+  fresh.genesis = st.genesis ?? fresh.genesis ?? null;
+  fresh.last_sync_ms = Math.max(Number(fresh.last_sync_ms) || 0, Number(st.last_sync_ms) || 0);
+  return fresh;
 }
 
 /** The shape ui/ recognises as "this was cancelled", not "the node failed" (ui/backend.js). */
@@ -332,6 +389,9 @@ function throwIfAborted(signal) {
 export function isStaleStoreError(err) {
   return !!err && err.name === 'StaleStoreError';
 }
+
+/** How many times one save is merged and retried after losing a race before it gives up. */
+const MERGE_RETRIES = 3;
 
 function staleAfterRetry() {
   const err = new Error(t('another tab changed this wallet while it was syncing; try again'));
@@ -533,54 +593,79 @@ export function makeWallet({ core, store, rpc, settings, annotate = true, onRese
         throw new Error(`refusing to save the note store: ${key} moved backwards, ${previous[key]} → ${st[key]}`);
       }
     }
-    const clean = {};
-    for (const [key, value] of Object.entries(st)) if (!TRANSIENT.includes(key)) clean[key] = value;
-
-    if (typeof store.compareAndSet !== 'function') {
-      await store.setNoteStore(clean);
-      return st;
-    }
-    try {
-      st.rev = await store.compareAndSet(clean, st.rev);
-      return st;
-    } catch (err) {
-      if (!isStaleStoreError(err)) throw err;
-      // A RESET is never merged. Merging a reset into the winner's store is exactly how a rescan
-      // silently no-ops: the cursors get re-maxed and the notes re-added. `rescan` catches this,
-      // re-reads and applies the reset to the new store instead.
-      if (reset) throw err;
-      // Another tab wrote while this scan was running. Take its store, re-apply this scan's own
-      // findings onto it (every merge here is by index, so doing it twice is a no-op) and try
-      // once more. A second loss means the tabs are fighting; that is the user's to retry.
-      const fresh = await loadStore();
-      if (!reset && (fresh.reset_epoch || 0) > (st.reset_epoch || 0)) {
-        const stop = new Error(t('this wallet was rescanned while the scan was running; the scan was discarded'));
-        stop.name = 'StoreResetError';
-        stop.retryable = true;
-        throw stop;
-      }
-      mergeNotes(fresh, st.notes);
-      mergeSent(fresh, st.sent);
-      for (const sub of st.submissions) if (!fresh.submissions.some((x) => x.hash === sub.hash)) fresh.submissions.push(sub);
-      Object.assign(fresh.block_times, st.block_times);
-      Object.assign(fresh.note_tx, st.note_tx);
-      for (const key of WORK_CURSORS) fresh[key] = Math.max(isCursor(fresh[key]) ? fresh[key] : 0, st[key]);
-      fresh.reset_epoch = Math.max(fresh.reset_epoch || 0, st.reset_epoch || 0);
-      fresh.head = isCursor(st.head) ? st.head : (isCursor(fresh.head) ? fresh.head : 0);
-      fresh.chain_id = st.chain_id ?? fresh.chain_id ?? null;
-      fresh.genesis = st.genesis ?? fresh.genesis ?? null;
-      fresh.last_sync_ms = Math.max(Number(fresh.last_sync_ms) || 0, Number(st.last_sync_ms) || 0);
-      const merged = {};
-      for (const [key, value] of Object.entries(fresh)) if (!TRANSIENT.includes(key)) merged[key] = value;
+    const cleanOf = (value) => {
+      const clean = {};
+      for (const [key, v] of Object.entries(value)) if (!TRANSIENT.includes(key)) clean[key] = v;
+      return clean;
+    };
+    for (let attempt = 0; ; attempt += 1) {
       try {
-        const rev = await store.compareAndSet(merged, fresh.rev);
-        Object.assign(st, fresh, { rev });
+        await conditionalWrite(cleanOf(st), st);
         return st;
-      } catch (again) {
-        if (isStaleStoreError(again)) throw staleAfterRetry();
-        throw again;
+      } catch (err) {
+        if (!isStaleStoreError(err)) throw err;
+        // A RESET is never merged. Merging a reset into the winner's store is exactly how a rescan
+        // silently no-ops: the cursors get re-maxed and the notes re-added. `rescan` catches this,
+        // re-reads and applies the reset to the new store instead.
+        if (reset) throw err;
+        // Losing again and again means the writers are fighting; that is the user's to retry.
+        if (attempt >= MERGE_RETRIES) throw staleAfterRetry();
+        // Somebody else wrote while this one was working — another tab, or (CLI-1001) a send that
+        // saved its submission while this scan was on the network. Take their store and fold this
+        // writer's findings into it: every merge is a union (`mergeStores`), so nothing either
+        // side learned is lost and doing it twice is a no-op.
+        const fresh = await loadStore();
+        if ((fresh.reset_epoch || 0) > (st.reset_epoch || 0)) {
+          const stop = new Error(t('this wallet was rescanned while the scan was running; the scan was discarded'));
+          stop.name = 'StoreResetError';
+          stop.retryable = true;
+          throw stop;
+        }
+        mergeStores(fresh, st);
+        // `fresh` carries the revision it was read at, which is what the next attempt is held to.
+        Object.assign(st, fresh);
+        // A merge may move `scanned_height` DOWN (see `mergeStores`), on purpose. The caller's
+        // "before" snapshot is only this function's monotonicity reference, so it follows.
+        if (previous) for (const key of WORK_CURSORS) if (isCursor(previous[key])) previous[key] = Math.min(previous[key], st[key]);
       }
     }
+  }
+
+  /**
+   * One conditional write of the note store: it lands only if nobody wrote since `st` was loaded,
+   * and otherwise rejects with a `StaleStoreError` for `persist` to merge and retry.
+   *
+   * Where the shell's storage has `compareAndSet` (web/wallet/idb.js: one IndexedDB transaction)
+   * that is the whole of it. Where it has not — the extension and the desktop shell, a plain
+   * get/set — the same contract is kept HERE (CLI-1001): the store carries a `write_seq`, bumped
+   * by every write, and the read-compare-write runs under this engine's own lock, so a scan and a
+   * send of one backend can no longer overwrite each other. It is not a transaction — two
+   * processes can still interleave between the read and the write — but the window is those two
+   * storage calls rather than the whole length of a scan.
+   */
+  let writeChain = Promise.resolve();
+  function exclusive(fn) {
+    const run = writeChain.then(fn, fn);
+    writeChain = run.catch(() => {});
+    return run;
+  }
+  async function conditionalWrite(clean, st) {
+    if (typeof store.compareAndSet === 'function') {
+      st.rev = await store.compareAndSet(clean, st.rev);
+      return;
+    }
+    await exclusive(async () => {
+      const current = (await store.getNoteStore()) || {};
+      const found = isCursor(current.write_seq) ? current.write_seq : 0;
+      const expected = isCursor(st.write_seq) ? st.write_seq : 0;
+      if (found !== expected) {
+        const err = new Error(`the note store changed underneath this write (expected write ${expected}, found ${found})`);
+        err.name = 'StaleStoreError';
+        throw err;
+      }
+      await store.setNoteStore({ ...clean, write_seq: found + 1 });
+      st.write_seq = found + 1;
+    });
   }
 
   /**

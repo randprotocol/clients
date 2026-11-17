@@ -1175,3 +1175,155 @@ test('on a chain with bridge fees the recipient rebuilds its fee notes, a burn\'
   assert.equal(placed.index, 0);
   assert.equal(placed.amount, '22000');
 });
+
+// ====================================================== CLI-1001 (audit v14): monotone merges ===
+// A note's spent flag and its pending mark, and a submission record, are things one writer KNOWS
+// and another may not have seen yet. A merge that keeps one side's copy of a note by index drops
+// what the other side learned about it — a spent note shown as spendable until a rescan, because
+// the height cursor that covered its nullifier was kept all the same.
+
+/** A note store with the optional conditional write, as web/wallet/idb.js provides it. */
+function casStore(initial = emptyNoteStore()) {
+  const backing = memoryStore(initial);
+  let rev = 0;
+  const hooks = { beforeWrite: null };
+  return {
+    backing, hooks,
+    get rev() { return rev; },
+    /** Another tab's write: applies `change` to what is stored and moves the revision. */
+    async otherTabWrites(change) {
+      const current = await backing.getNoteStore();
+      await backing.setNoteStore(change(current) || current);
+      rev += 1;
+    },
+    async getNoteStore() { return { ...(await backing.getNoteStore()), rev }; },
+    async setNoteStore(s) { await backing.setNoteStore(s); },
+    async compareAndSet(value, expectedRev) {
+      if (hooks.beforeWrite) { const fn = hooks.beforeWrite; hooks.beforeWrite = null; await fn(); }
+      if (expectedRev !== rev) { const err = new Error('stale'); err.name = 'StaleStoreError'; throw err; }
+      rev += 1;
+      await backing.setNoteStore(value);
+      return rev;
+    },
+  };
+}
+
+const ownedNote = (index, extra = {}) => ({
+  index, note: '00'.repeat(112), cm: HEX64(`c${index}`), nf: HEX64(`f${index}`),
+  amount: '5000', asset: 0, time: 4, from: '00'.repeat(32), height: 4, spent: false, pending: null, ...extra,
+});
+
+test('CLI-1001: a lost conditional write keeps the spent flag the losing scan found', async () => {
+  const store = casStore({ ...emptyNoteStore(), notes: [ownedNote(0)], chain_id: 13, genesis: GENESIS_A });
+  const client = stubClient({ nullifiers: (from) => (from <= 5 ? [{ height: 5, nullifier: HEX64('f0') }] : []) });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => client, settings: async () => ({}), annotate: false });
+  // Another tab saves (anything at all) between this scan's load and its one save.
+  store.hooks.beforeWrite = () => store.otherTabWrites((s) => { s.last_sync_ms = 1; });
+
+  const st = await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.backing.current.notes[0].spent, true, 'the spent flag was dropped by the merge while the cursor was kept');
+  assert.equal(st.notes[0].spent, true);
+  assert.equal(store.backing.current.scanned_height, 21, 'and the cursor covers the height the flag came from');
+});
+
+test('CLI-1001: a lost conditional write keeps a send\'s pending marks and its submission record', async () => {
+  const store = casStore({ ...emptyNoteStore(), notes: [ownedNote(0), ownedNote(1)], chain_id: 13, genesis: GENESIS_A });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({}), annotate: false });
+  // The send's own save: load, mark the inputs pending, record the submission…
+  const fresh = await wallet.loadStore();
+  fresh.notes[0].pending = 7;
+  fresh.submissions.unshift({ hash: HEX64('ab'), status: 'pending', spent_indices: [0], time: 7, amount: '1' });
+  // …and a scan in another tab lands first, with neither.
+  await store.otherTabWrites((s) => { s.scanned_height = 9; });
+  await wallet.persist(fresh);
+
+  const saved = store.backing.current;
+  assert.equal(saved.notes[0].pending, 7, 'the pending mark was dropped: the note is offered to the next send again');
+  assert.equal(saved.notes[1].pending, null);
+  assert.equal(saved.submissions.length, 1);
+  assert.equal(saved.scanned_height, 9);
+});
+
+test('CLI-1001: the merge never un-spends, never un-pends and never moves a submission back to pending', async () => {
+  const store = casStore({
+    ...emptyNoteStore(), chain_id: 13, genesis: GENESIS_A,
+    notes: [ownedNote(0), ownedNote(1)],
+    submissions: [{ hash: HEX64('ab'), status: 'pending', spent_indices: [0], time: 7 }],
+  });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({}), annotate: false });
+  const mine = await wallet.loadStore();
+  // The winner learned: note 0 is spent, note 1 is pending, the submission committed at 12.
+  await store.otherTabWrites((s) => {
+    s.notes[0].spent = true;
+    s.notes[1].pending = 9;
+    s.submissions[0].status = 'committed';
+    s.submissions[0].height = 12;
+  });
+  // The loser knows none of it and saves its own, older view.
+  await wallet.persist(mine);
+  const saved = store.backing.current;
+  assert.equal(saved.notes[0].spent, true);
+  assert.equal(saved.notes[1].pending, 9);
+  assert.deepEqual([saved.submissions[0].status, saved.submissions[0].height], ['committed', 12]);
+});
+
+test('CLI-1001: a merged height cursor does not cover a note the further-read side never had', async () => {
+  // This scan read nullifiers through height 20 and knows note 0 only. Another tab, at height 3,
+  // found note 1. Nobody has compared note 1 with the nullifiers of heights 3..20, so the merged
+  // cursor must not claim they were read.
+  const store = casStore({ ...emptyNoteStore(), notes: [ownedNote(0)], chain_id: 13, genesis: GENESIS_A, scanned_height: 3 });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({}), annotate: false });
+  store.hooks.beforeWrite = () => store.otherTabWrites((s) => { s.notes.push(ownedNote(1)); });
+  await wallet.scan(SPEND_KEY, {});
+  assert.equal(store.backing.current.notes.length, 2);
+  assert.equal(store.backing.current.scanned_height, 3, 'the cursor passed heights whose nullifiers were never compared with note 1');
+  // The next scan reads them again and catches up; a regressed cursor is not an error.
+  const next = await wallet.scan(SPEND_KEY, {});
+  assert.equal(next.scanned_height, 21);
+});
+
+test('CLI-1001: without a conditional write, a scan that straddles a send\'s save keeps the submission record', async () => {
+  // The extension and the desktop shell: storage is a plain get/set. The scan loads the store,
+  // spends a long time on the network, and used to write its own copy back over whatever a send
+  // had saved meanwhile — the submission record and the pending marks with it.
+  const store = memoryStore({ ...emptyNoteStore(), notes: [ownedNote(0)], chain_id: 13, genesis: GENESIS_A });
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let reached;
+  const atNullifiers = new Promise((r) => { reached = r; });
+  const client = stubClient({
+    nullifiers: async () => { reached(); await gate; return []; },
+    sendTransaction: () => HEX64('dd'),
+  });
+  const core = stubCore({ parse_address: () => ({ valid: true, pk: HEX64('99') }) });
+  const wallet = makeWallet({ core, store, rpc: () => client, settings: async () => ({}), annotate: false });
+
+  const scanning = wallet.scan(SPEND_KEY, {});
+  await atNullifiers; // the scan has loaded the store and is waiting on the node
+  const submission = await wallet.completeSend(SPEND_KEY, PROVED, { to: 'rand1payee', wait: false, client });
+  assert.equal(store.current.submissions.length, 1, 'the send saved its record');
+  release();
+  await scanning;
+
+  assert.equal(store.current.submissions.length, 1, 'the scan\'s save erased the submission record');
+  assert.equal(store.current.submissions[0].hash, submission.hash);
+  assert.equal(store.current.notes[0].pending, PROVED.time, 'and the pending mark on the note it spends');
+  assert.equal(store.current.scanned_height, 21, 'while the scan\'s own work is kept too');
+});
+
+test('CLI-1001: without a conditional write, two saves of one loaded store do not overwrite each other', async () => {
+  const store = memoryStore({ ...emptyNoteStore(), notes: [ownedNote(0), ownedNote(1)], chain_id: 13, genesis: GENESIS_A });
+  const wallet = makeWallet({ core: stubCore(), store, rpc: () => stubClient(), settings: async () => ({}), annotate: false });
+  const a = await wallet.loadStore();
+  const b = await wallet.loadStore();
+  a.notes[0].spent = true;
+  b.notes[1].pending = 4;
+  await Promise.all([wallet.persist(a), wallet.persist(b)]);
+  assert.equal(store.current.notes[0].spent, true);
+  assert.equal(store.current.notes[1].pending, 4);
+  // A lone writer still clears what it means to clear: nothing else wrote, so nothing is merged back.
+  const c = await wallet.loadStore();
+  c.notes[1].pending = null;
+  await wallet.persist(c);
+  assert.equal(store.current.notes[1].pending, null);
+});
