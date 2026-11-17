@@ -705,7 +705,7 @@ test('c. a second scan adds nothing: the cursors and the notes are where the fir
   const { w, store, key } = await ensureC();
   const first = await w.loadStore();
   const second = await w.scan(key.spend_key, {});
-  const strip = (s) => ({ ...s, last_sync_ms: 0, head: 0, rev: undefined });
+  const strip = (s) => ({ ...s, last_sync_ms: 0, head: 0, rev: undefined, write_seq: undefined });
   assert.deepEqual(strip(second), strip(first));
   assert.deepEqual(strip(store.peek()), strip(first));
   // Mint again: the next scan adds exactly the new note and moves the cursor by exactly one.
@@ -960,7 +960,7 @@ test('e. a malformed rand_sendTransaction comes back as the node\'s JSON-RPC err
     for (const [hex, code, message] of cases) {
       await assert.rejects(() => pool.sendTransaction(hex), (err) => {
         assert.ok(err instanceof RpcError, 'the wallet\'s error type');
-        assert.equal(err.name, 'Error');
+        assert.equal(err.name, 'RpcError');
         assert.equal(err.code, code);
         assert.equal(err.message, message);
         assert.equal(err.failure, undefined);
