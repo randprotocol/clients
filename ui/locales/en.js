@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1122 strings.
+// 1123 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -982,6 +982,7 @@ export default {
   "This prover does not know this pairing. Pair it again in Settings.": "This prover does not know this pairing. Pair it again in Settings.",
   "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.": "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.",
   "This prover will be able to read this wallet's whole history. It cannot spend.": "This prover will be able to read this wallet's whole history. It cannot spend.",
+  "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.",
   "This Rand Wallet cannot run programs.": "This Rand Wallet cannot run programs.",
   "This Rand Wallet cannot withdraw to another chain.": "This Rand Wallet cannot withdraw to another chain.",
   "this record is {n} bytes; the most it may be is {max}": "this record is {n} bytes; the most it may be is {max}",

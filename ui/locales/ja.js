@@ -1122,4 +1122,5 @@ export default {
   "the record was saved by a newer version of Rand Wallet": "レコードは新しいバージョンの Rand Wallet で保存されています",
   "the record does not open with this password": "このパスワードではレコードを開けません",
   "block {height} has {got} of the {n} transactions its header announced": "ブロック {height} には、ヘッダーが示した {n} 件のトランザクションのうち {got} 件しかありません",
+  "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "このプルーバーの鍵は廃止され、もう使われていません。設定で別のプルーバーをペアリングするか、Rand Wallet を最新バージョンに更新してください。",
 };

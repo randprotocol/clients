@@ -227,6 +227,15 @@ pins the four old keys, so it finds no member it trusts and has to prove locally
 the user pairs; from 0.8.2 a wallet in that state (a pinned member answering with another key)
 says to update Rand Wallet rather than to try again later.
 
+**Retired keys** (VK-9). The keys the pool no longer uses — the one key shared until 0.6.9 and
+the four members 0.6.9–0.8.0 pinned — are listed in the engine (`RETIRED_PROVER_KEYS`,
+`ui/engine/backend-shared.js`; `rand` carries the same list). A listed key is never paired (a
+link that names one is refused before the prover is asked), a pairing stored before its key was
+retired is sent nothing after the update, and a pinned member whose key is listed is skipped:
+"This prover's key was retired and is no longer used. Pair another prover in Settings, or update
+Rand Wallet to the latest version." A wallet released before a key was retired cannot learn of it;
+`docs/retired-prover-keys.md` has what that means and the notice to publish.
+
 The wallet pins it from data (`core/crates/wallet-core/src/trusted-prover-pool.json`, copied from
 the operators' `pool.json`; the same descriptor is served at
 `https://prover.randprotocol.org/.well-known/rand-prover-pool.json` for people and tools — a wallet

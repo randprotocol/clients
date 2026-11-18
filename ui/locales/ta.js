@@ -1129,4 +1129,5 @@ export default {
   "the record was saved by a newer version of Rand Wallet": "பதிவு Rand Wallet இன் புதிய பதிப்பால் சேமிக்கப்பட்டது",
   "the record does not open with this password": "இந்தக் கடவுச்சொல்லால் பதிவு திறக்கவில்லை",
   "block {height} has {got} of the {n} transactions its header announced": "தொகுதி {height} அதன் தலைப்பு அறிவித்த {n} பரிவர்த்தனைகளில் {got} மட்டுமே கொண்டுள்ளது",
+  "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "இந்த நிரூபிப்பானின் விசை நீக்கப்பட்டது, இனி பயன்படுத்தப்படாது. அமைப்புகளில் வேறொரு நிரூபிப்பானை இணைக்கவும், அல்லது Rand Wallet ஐச் சமீபத்திய பதிப்புக்குப் புதுப்பிக்கவும்.",
 };

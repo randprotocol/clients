@@ -1130,4 +1130,5 @@ export default {
   "the record was saved by a newer version of Rand Wallet": "رکورد با نسخه‌ی جدیدتری از Rand Wallet ذخیره شده است",
   "the record does not open with this password": "رکورد با این گذرواژه باز نمی‌شود",
   "block {height} has {got} of the {n} transactions its header announced": "بلوک {height} تنها {got} تراکنش از {n} تراکنشی را دارد که سرآیندش اعلام کرده بود",
+  "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "کلید این اثبات‌گر بازنشسته شده و دیگر استفاده نمی‌شود. اثبات‌گر دیگری را در تنظیمات جفت کنید، یا Rand Wallet را به آخرین نسخه به‌روزرسانی کنید.",
 };

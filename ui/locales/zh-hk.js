@@ -1122,4 +1122,5 @@ export default {
   "the record was saved by a newer version of Rand Wallet": "記錄由較新版本的 Rand Wallet 儲存",
   "the record does not open with this password": "此密碼無法開啟該記錄",
   "block {height} has {got} of the {n} transactions its header announced": "區塊 {height} 只有 {got} 筆交易，而其區塊頭宣告了 {n} 筆",
+  "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "此證明器的密鑰已停用，不再使用。請在設定中配對另一個證明器，或將 Rand Wallet 更新至最新版本。",
 };

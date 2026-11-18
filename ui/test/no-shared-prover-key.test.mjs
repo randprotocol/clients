@@ -30,7 +30,10 @@ test('no shipped source names the 0.6.8 shared prover key or its link', () => {
     for (const f of files(join(ROOT, d))) {
       seen += 1;
       // A test that asserts the key's ABSENCE may name it (core's inline tests).
-      const text = readFileSync(f, 'utf8').split('\n').filter((l) => !/assert/.test(l)).join('\n');
+      // …and so may the one list of RETIRED keys (VK-9), whose entries are refused, never paired:
+      // a line of exactly that shape, `{ fingerprint: '…', retiredOn: '…' },`.
+      const text = readFileSync(f, 'utf8').split('\n')
+        .filter((l) => !/assert/.test(l) && !/^\s*\{ fingerprint: '[A-Z0-9-]+', retiredOn: '\d{4}-\d{2}-\d{2}' \},\s*$/.test(l)).join('\n');
       assert.equal(text.includes(SHARED_KEY), false, `${f.slice(ROOT.length)} names the shared key ${SHARED_KEY}`);
       assert.equal(text.includes(SHARED_LINK), false, `${f.slice(ROOT.length)} carries the shared key's link`);
     }

@@ -13,6 +13,8 @@ import assert from 'node:assert/strict';
 import { makeWasmBackend, CANNOT_PROVE_REASON } from '../engine/backend-wasm.js';
 import { makeNativeBackend } from '../engine/backend-native.js';
 import { decryptSecret } from '../engine/crypto.js';
+import { RETIRED_PROVER_KEYS } from '../engine/backend-shared.js';
+import { readFileSync } from 'node:fs';
 import {
   pollRemoteProof, startRemoteProof, ProverError, PENDING_PROOF_KEY, CLAIMED_PROOF_KEY, MAX_QUEUE_WAIT_MS, MAX_PROVING_MS,
   SUBMIT_TRIES, SUBMIT_BACKOFF_MS,
@@ -48,7 +50,7 @@ function sendableFetch(table = {}) {
   });
 }
 
-function build({ core, storage, fetch, native, systemMemoryGiB, locks = null, memberOrder, online } = {}) {
+function build({ core, storage, fetch, native, systemMemoryGiB, locks = null, memberOrder, online, retiredKeys } = {}) {
   const env = {
     core: core || stubCore(),
     storage: storage || mapStorage(),
@@ -59,7 +61,7 @@ function build({ core, storage, fetch, native, systemMemoryGiB, locks = null, me
   const make = native ? makeNativeBackend : makeWasmBackend;
   env.backend = make({
     ...env, locks, broadcast: null,
-    proverOptions: { poll: 1, maxWait: 5000, ...(memberOrder ? { memberOrder } : {}) },
+    proverOptions: { poll: 1, maxWait: 5000, ...(memberOrder ? { memberOrder } : {}), ...(retiredKeys ? { retiredKeys } : {}) },
     ...(native ? { systemMemoryGiB: systemMemoryGiB ?? (() => 4) } : {}),
   });
   return env;
@@ -1269,4 +1271,66 @@ test('clients#1: with no prover route the withdrawal is refused up front and say
   await assert.rejects(() => env.backend.bridge.withdraw(BURN, () => {}), (err) => err.definite === true);
   assert.equal(coreCalled(env, 'prepare_burn').length, 0);
   assert.equal(count(env.fetch, 'prover_submit'), 0);
+});
+
+// ------------------------------------------- retired prover keys (VK-9, monorepo#18) ----------
+
+const RETIRED_TEXT = /This prover's key was retired and is no longer used\. Pair another prover in Settings, or update Rand Wallet to the latest version\./;
+
+test('the retired pool keys are listed, and the pinned pool names none of them', () => {
+  assert.deepEqual(RETIRED_PROVER_KEYS.map((k) => k.fingerprint), [
+    'RGTF-7HKJ-XZFV-GQ1J', 'ZEXQ-1JHV-ZT60-KFB5', 'D2XV-WXVT-PZRC-D7G8', 'SR28-MYT0-GR6A-03DE', 'GMNX-Q1QD-FEXG-JHJM',
+  ]);
+  assert.ok(Object.isFrozen(RETIRED_PROVER_KEYS) && RETIRED_PROVER_KEYS.every(Object.isFrozen));
+  // The descriptor every shell ships (the real one, not the stub core's).
+  const pinned = JSON.parse(readFileSync(new URL('../../core/crates/wallet-core/src/trusted-prover-pool.json', import.meta.url), 'utf8'));
+  assert.ok(pinned.members.length > 0);
+  for (const m of pinned.members) {
+    assert.equal(RETIRED_PROVER_KEYS.some((k) => k.fingerprint === m.fingerprint), false, `pinned member ${m.name} is a retired key`);
+  }
+});
+
+test('a link that names a retired key is not paired, and nothing is asked of it', async () => {
+  const retiredKeys = [{ fingerprint: proverFingerprint('KEY'), retiredOn: '2026-10-22' }];
+  const env = build({ retiredKeys });
+  await env.backend.wallet.create(PASSWORD);
+  await assert.rejects(() => env.backend.prover.pair(proverLink(), PASSWORD), RETIRED_TEXT);
+  assert.equal(count(env.fetch, 'prover_info'), 0, 'the retired key was asked');
+  assert.equal(env.storage.local.get('proverToken'), undefined, 'a pairing was stored');
+  assert.deepEqual((await env.backend.settings.get()).prover, DEFAULT_SETTING);
+  // The control: the same link, on a build whose list does not name its key, pairs.
+  const plain = build();
+  await plain.backend.wallet.create(PASSWORD);
+  await plain.backend.prover.pair(proverLink(), PASSWORD);
+  assert.ok(plain.storage.local.get('proverToken'));
+});
+
+test('a pairing stored before its key was retired is sent nothing after the update', async () => {
+  // Paired on a build that did not know the key was retired…
+  const env = await sendableWallet();
+  await env.backend.prover.pair(proverLink(), PASSWORD);
+  // …then the wallet is updated: the same storage, a build whose list names the key.
+  const updated = build({ storage: env.storage, core: env.core, retiredKeys: [{ fingerprint: proverFingerprint('KEY'), retiredOn: '2026-10-22' }] });
+  await assert.rejects(() => updated.backend.send.send(SEND, () => {}), (err) => {
+    assert.equal(err.definite, true);
+    assert.match(err.message, RETIRED_TEXT);
+    return true;
+  });
+  assert.equal(count(updated.fetch, 'prover_info'), 0, 'the retired key was asked');
+  assert.equal(count(updated.fetch, 'prover_submit'), 0);
+  const probe = await updated.backend.prover.probe();
+  assert.equal(probe.ok, false);
+  assert.match(probe.reason, RETIRED_TEXT);
+  assert.equal(count(updated.fetch, 'prover_info'), 0, 'the probe asked the retired key');
+});
+
+test('a pool member whose key is on the retired list is never asked; the others still are', async () => {
+  const env = await sendableWallet({
+    fetch: poolFetch(), memberOrder: inOrder('a', 'b', 'c'),
+    retiredKeys: [{ fingerprint: poolMember('a').fingerprint, retiredOn: '2026-10-22' }],
+  });
+  await env.backend.prover.acknowledgeDefault();
+  await env.backend.send.send(SEND, () => {});
+  assert.equal(env.fetch.requests.some((r) => r.url === poolMember('a').url), false, 'the retired member was asked');
+  assert.deepEqual(submittedTo(env), [poolMember('b').url]);
 });

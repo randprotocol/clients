@@ -1122,4 +1122,5 @@ export default {
   "the record was saved by a newer version of Rand Wallet": "rekaman disimpan oleh versi Rand Wallet yang lebih baru",
   "the record does not open with this password": "rekaman tidak terbuka dengan kata sandi ini",
   "block {height} has {got} of the {n} transactions its header announced": "blok {height} berisi {got} dari {n} transaksi yang diumumkan header-nya",
+  "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "Kunci prover ini telah dipensiunkan dan tidak lagi digunakan. Pasangkan prover lain di Pengaturan, atau perbarui Rand Wallet ke versi terbaru.",
 };
