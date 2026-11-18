@@ -113,6 +113,23 @@ import { t } from '../i18n.js';
  * two strings that drift. Nothing about *where* storage lives belongs in this file: it is handed
  * a `storage` and never asks what is behind it.
  */
+/**
+ * RandProtocol prover keys that were retired (VK-9, randprotocol/monorepo#18): the key every pool
+ * machine shared until wallet 0.6.9, and the four members wallets 0.6.9 to 0.8.0 pinned. A wallet
+ * released before a key was retired still pins it and cannot be told otherwise; this list is what
+ * every release after the retirement carries. A listed key is never paired, never probed, never
+ * sent a job and never used as a pool member, whatever a link, a stored pairing or the pinned
+ * descriptor says. `rand` carries the same list (fullnode `retired-provers.txt`). Add an entry in
+ * the change that retires a key; never remove one.
+ */
+export const RETIRED_PROVER_KEYS = Object.freeze([
+  { fingerprint: 'RGTF-7HKJ-XZFV-GQ1J', retiredOn: '2026-10-01' },
+  { fingerprint: 'ZEXQ-1JHV-ZT60-KFB5', retiredOn: '2026-10-22' },
+  { fingerprint: 'D2XV-WXVT-PZRC-D7G8', retiredOn: '2026-10-22' },
+  { fingerprint: 'SR28-MYT0-GR6A-03DE', retiredOn: '2026-10-22' },
+  { fingerprint: 'GMNX-Q1QD-FEXG-JHJM', retiredOn: '2026-10-22' },
+].map(Object.freeze));
+
 export const UNLOCKED_SESSION_KEY = 'unlocked';
 
 // Storage keys. `unlocked` is the only session one.
@@ -1636,6 +1653,12 @@ export function makeSharedBackend({
     return typeof fp === 'string' && fp === fingerprint;
   }
 
+  /** The retired keys this build refuses: [`RETIRED_PROVER_KEYS`], or the test seam's list. */
+  const retiredKeys = proverOptions && Array.isArray(proverOptions.retiredKeys) ? proverOptions.retiredKeys : RETIRED_PROVER_KEYS;
+  /** Whether `fingerprint` is a retired prover key (VK-9). */
+  const isRetiredProverKey = (fingerprint) => retiredKeys.some((k) => k.fingerprint === String(fingerprint));
+  const retiredProverText = () => t('This prover\'s key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.');
+
   function proverClientFor(url) {
     return makeProverClient({ fetch: fetchImpl, url });
   }
@@ -1682,6 +1705,8 @@ export function makeSharedBackend({
     if (!p || typeof p.url !== 'string' || !p.url || (p.mode !== undefined && p.mode !== 'remote')) {
       return { ok: false, reason: t('No prover is paired.') };
     }
+    // A retired key is not asked anything (VK-9).
+    if (isRetiredProverKey(p.fingerprint)) return { ok: false, reason: retiredProverText() };
     let info;
     try {
       info = readInfo(await proverClientFor(p.url).info());
@@ -1711,6 +1736,7 @@ export function makeSharedBackend({
       let parsed;
       try { parsed = await c.parseProverLink(m.link); } catch { continue; }
       if (!m.fingerprint || String(parsed.fingerprint) !== m.fingerprint) continue;
+      if (isRetiredProverKey(m.fingerprint)) continue;
       if (parsed.own === true) continue;
       const checked = checkProverUrl(parsed.url);
       if (checked.error || checked.url !== checkProverUrl(m.url).url) continue;
@@ -1847,6 +1873,8 @@ export function makeSharedBackend({
       const key = await openVault(password);
       if (!key) throw new Error('wrong password');
       const parsed = await readProverLink(link);
+      // Before any network: a link that names a retired key is not paired (VK-9).
+      if (isRetiredProverKey(parsed.fingerprint)) throw new Error(retiredProverText());
       const checked = checkProverUrl(parsed.url);
       if (checked.error) throw new Error(checked.error);
       let info;
@@ -2088,6 +2116,8 @@ export function makeSharedBackend({
     }
     const { token, kemEk, url, fingerprint, own } = pairing;
     const refuse = (message) => { const err = new Error(message); err.definite = true; return err; };
+    // A pairing stored before its key was retired: nothing is built for it or sent to it (VK-9).
+    if (isRetiredProverKey(fingerprint)) throw refuse(retiredProverText());
     return async ({ kind, request, maxProofBytes, hcBundle, hcAuth, meta, onPhase, signal }) => {
       // What this chain's bundle guest takes, from the core, before anything is built: the viewing
       // key on a split-authorisation chain, the spend key on an older one. It also refuses, here,

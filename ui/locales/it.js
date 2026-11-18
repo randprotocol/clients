@@ -1129,4 +1129,5 @@ export default {
   "the record was saved by a newer version of Rand Wallet": "il record è stato salvato da una versione più recente di Rand Wallet",
   "the record does not open with this password": "il record non si apre con questa password",
   "block {height} has {got} of the {n} transactions its header announced": "il blocco {height} contiene {got} delle {n} transazioni annunciate dalla sua intestazione",
+  "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "La chiave di questo prover è stata ritirata e non è più in uso. Associa un altro prover nelle Impostazioni, oppure aggiorna Rand Wallet all'ultima versione.",
 };

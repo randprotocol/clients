@@ -1129,4 +1129,5 @@ export default {
   "the record was saved by a newer version of Rand Wallet": "रिकॉर्ड Rand Wallet के नए संस्करण से सहेजा गया था",
   "the record does not open with this password": "रिकॉर्ड इस पासवर्ड से नहीं खुलता",
   "block {height} has {got} of the {n} transactions its header announced": "ब्लॉक {height} में उसके हेडर द्वारा घोषित {n} लेनदेन में से {got} हैं",
+  "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "इस प्रूवर की की हटा दी गई है और अब इस्तेमाल नहीं होती। सेटिंग्स में कोई दूसरा प्रूवर पेयर करें, या Rand Wallet को नवीनतम संस्करण में अपडेट करें।",
 };
