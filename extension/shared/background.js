@@ -113,9 +113,11 @@ ext.runtime.onStartup?.addListener(() => {});
 
 // ---- the page provider (`window.rand`) ----
 //
-// inpage.js/content.js relay a Rand site's requests here; provider-host.js decides. Chrome's
-// service worker pulls that file in with importScripts; Firefox's event page lists it before this
-// one in the manifest's `background.scripts`, so the factory is already on the global there.
+// inpage.js/content.js relay a Rand site's requests here; provider-host.js decides, and
+// lib/derive-key.js makes the key a site's `deriveKey` gets. Chrome's service worker pulls both in
+// with importScripts; Firefox's event page lists them before this one in the manifest's
+// `background.scripts`, so they are already on the global there.
+if (typeof importScripts === 'function' && typeof globalThis.RandSiteKey !== 'object') importScripts('lib/derive-key.js');
 if (typeof importScripts === 'function' && typeof globalThis.makeRandProviderHost !== 'function') importScripts('provider-host.js');
 
 const providerHost = globalThis.makeRandProviderHost({
@@ -142,6 +144,14 @@ const providerHost = globalThis.makeRandProviderHost({
     const win = await ext.windows.create({ url: ext.runtime.getURL(`withdraw.html?${query}`), type: 'popup', width: 400, height: 660 });
     return win && Number.isInteger(win.id) ? win.id : null;
   },
+  // The approval window for a site's first `deriveKey` of a purpose (derive.html): one yes or no,
+  // but parked and answered like an invoke's, so closing it answers the site (`windowClosed`).
+  openDerive: async ({ id, origin }) => {
+    const query = new URLSearchParams({ id, origin });
+    const win = await ext.windows.create({ url: ext.runtime.getURL(`derive.html?${query}`), type: 'popup', width: 380, height: 600 });
+    return win && Number.isInteger(win.id) ? win.id : null;
+  },
+  deriveSiteKey: globalThis.RandSiteKey && globalThis.RandSiteKey.deriveSiteKey,
 });
 
 ext.windows?.onRemoved?.addListener((windowId) => { void providerHost.windowClosed(windowId); });

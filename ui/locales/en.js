@@ -4,7 +4,7 @@
 // value, or an object of CLDR plural categories ({one, few, many, other}) for a key with an
 // {n} hole whose translation inflects by number. `{name}` holes and the words in the glossary
 // at the top of each dictionary are kept as they are.
-// 1123 strings.
+// 1132 strings.
 export default {
   "{amount} {symbol}": "{amount} {symbol}",
   "{blocks} blocks left to prove it.": "{blocks} blocks left to prove it.",
@@ -27,6 +27,7 @@ export default {
   "{field} is not hex of at most {max} characters": "{field} is not hex of at most {max} characters",
   "{field} is not none, deposit or burn": "{field} is not none, deposit or burn",
   "{field} is zero": "{field} is zero",
+  "{host} asks Rand Wallet for a key of its own.": "{host} asks Rand Wallet for a key of its own.",
   "{host} asks Rand Wallet to send this transaction.": "{host} asks Rand Wallet to send this transaction.",
   "{host} has the transaction {tx}.": "{host} has the transaction {tx}.",
   "{host} wants to connect to Rand Wallet.": "{host} wants to connect to Rand Wallet.",
@@ -338,6 +339,7 @@ export default {
   "Get test RAND": "Get test RAND",
   "Get test RAND from the faucet": "Get test RAND from the faucet",
   "Give the contact a name.": "Give the contact a name.",
+  "Give this site a key?": "Give this site a key?",
   "Good": "Good",
   "Guardian set": "Guardian set",
   "has a different genesis hash": "has a different genesis hash",
@@ -474,6 +476,7 @@ export default {
   "Nothing found": "Nothing found",
   "Nothing left the pool": "Nothing left the pool",
   "Nothing scanned": "Nothing scanned",
+  "Nothing to approve": "Nothing to approve",
   "Nothing to connect": "Nothing to connect",
   "Nothing was sent": "Nothing was sent",
   "Nothing was sent.": "Nothing was sent.",
@@ -567,6 +570,7 @@ export default {
   "proving the spend authorisation failed: {reason}": "proving the spend authorisation failed: {reason}",
   "Proving.": "Proving.",
   "Proving… {elapsed}": "Proving… {elapsed}",
+  "Purpose": "Purpose",
   "QR code of the pairing link": "QR code of the pairing link",
   "QR code of your payment link": "QR code of your payment link",
   "RAND is not a bridged asset, so it cannot be withdrawn.": "RAND is not a bridged asset, so it cannot be withdrawn.",
@@ -579,6 +583,7 @@ export default {
   "Rand Wallet could not start": "Rand Wallet could not start",
   "Rand Wallet could not tell whether the burn was sent. Check its activity before trying again.": "Rand Wallet could not tell whether the burn was sent. Check its activity before trying again.",
   "Rand Wallet does not hold enough to cover this and its network fee: {reason}": "Rand Wallet does not hold enough to cover this and its network fee: {reason}",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.",
   "rand1… or randpay:…": "rand1… or randpay:…",
   "rand1…, randpay:… or a contact": "rand1…, randpay:… or a contact",
   "Rate": "Rate",
@@ -681,6 +686,7 @@ export default {
   "Signer {index}'s share verifies. {have} of {threshold} in hand: signers {list}.": "Signer {index}'s share verifies. {have} of {threshold} in hand: signers {list}.",
   "signer {index}'s signature does not verify over this proposal": "signer {index}'s signature does not verify over this proposal",
   "Signer key file, or its 64-hex seed": "Signer key file, or its 64-hex seed",
+  "Site": "Site",
   "So the address above is one you have actually read.": "So the address above is one you have actually read.",
   "Something went wrong": "Something went wrong",
   "Something went wrong.": "Something went wrong.",
@@ -754,6 +760,7 @@ export default {
   "the inflow is `none` exactly when the bundle burns no token (inflow.amount == 0)": "the inflow is `none` exactly when the bundle burns no token (inflow.amount == 0)",
   "the key file's address is not the one its seed derives": "the key file's address is not the one its seed derives",
   "the key file's public_key is not the one its seed derives": "the key file's public_key is not the one its seed derives",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "The key gives no access to this wallet’s funds, notes or address keys.",
   "The key you exported when this wallet was created.": "The key you exported when this wallet was created.",
   "The language could not be saved.": "The language could not be saved.",
   "The link asks for {linked} {symbol}; you typed {typed} {symbol}.": "The link asks for {linked} {symbol}; you typed {typed} {symbol}.",
@@ -879,6 +886,7 @@ export default {
   "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key": "the saved signer profiles could not be opened ({reason}); nothing was changed. Restore this device's storage or wipe the wallet and restore it from its key",
   "The scan was cancelled.": "The scan was cancelled.",
   "The side panel could not be opened.": "The side panel could not be opened.",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "The site can use the key to act for you on that site, for example to sign trades in your trading account there.",
   "The site sent an invoke this wallet cannot read: {reason}.": "The site sent an invoke this wallet cannot read: {reason}.",
   "The spend key could not be read.": "The spend key could not be read.",
   "The spend key is the wallet. Export it to move to another device, or to send from the desktop app, which can prove a transfer natively.": "The spend key is the wallet. Export it to move to another device, or to send from the desktop app, which can prove a transfer natively.",
@@ -1104,6 +1112,7 @@ export default {
   "would not name its genesis": "would not name its genesis",
   "Yes": "Yes",
   "Yesterday": "Yesterday",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "You are asked once for each purpose; disconnecting the site forgets your answer.",
   "You are asked once; to keep your history to yourself, pair your own prover in the wallet's Settings.": "You are asked once; to keep your history to yourself, pair your own prover in the wallet's Settings.",
   "You can look at other screens": "You can look at other screens",
   "You have {amount} {symbol}.": "You have {amount} {symbol}.",

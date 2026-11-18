@@ -1123,4 +1123,13 @@ export default {
   "the record does not open with this password": "rekaman tidak terbuka dengan kata sandi ini",
   "block {height} has {got} of the {n} transactions its header announced": "blok {height} berisi {got} dari {n} transaksi yang diumumkan header-nya",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "Kunci prover ini telah dipensiunkan dan tidak lagi digunakan. Pasangkan prover lain di Pengaturan, atau perbarui Rand Wallet ke versi terbaru.",
+  "{host} asks Rand Wallet for a key of its own.": "{host} meminta Rand Wallet sebuah kunci miliknya sendiri.",
+  "Give this site a key?": "Beri situs ini sebuah kunci?",
+  "Nothing to approve": "Tidak ada yang perlu disetujui",
+  "Purpose": "Tujuan",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "Rand Wallet memberi situs ini kunci yang sama setiap kali, di perangkat mana pun yang memiliki dompet ini, dan tidak memberikannya ke situs lain.",
+  "Site": "Situs",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "Kunci ini tidak memberi akses ke dana, catatan, atau kunci alamat dompet ini.",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "Situs dapat memakai kunci ini untuk bertindak atas nama Anda di situs tersebut, misalnya untuk menandatangani transaksi di akun trading Anda di sana.",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "Anda ditanya sekali untuk setiap tujuan; memutus koneksi situs akan menghapus jawaban Anda.",
 };

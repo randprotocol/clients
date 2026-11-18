@@ -1123,4 +1123,13 @@ export default {
   "the record does not open with this password": "此密碼無法開啟該記錄",
   "block {height} has {got} of the {n} transactions its header announced": "區塊 {height} 只有 {got} 筆交易，而其區塊頭宣告了 {n} 筆",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "此證明器的密鑰已停用，不再使用。請在設定中配對另一個證明器，或將 Rand Wallet 更新至最新版本。",
+  "{host} asks Rand Wallet for a key of its own.": "{host} 向 Rand Wallet 索取一個屬於它自己的密鑰。",
+  "Give this site a key?": "要給這個網站一個密鑰嗎？",
+  "Nothing to approve": "沒有需要批准的項目",
+  "Purpose": "用途",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "Rand Wallet 每次都給這個網站同一個密鑰（在任何載有此錢包的裝置上都一樣），而且不會把它給任何其他網站。",
+  "Site": "網站",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "此密鑰無法存取此錢包的資金、票據或地址密鑰。",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "該網站可以用這個密鑰在該網站上代你操作，例如在你於該處的交易帳戶中簽署交易。",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "每種用途只會問你一次；與該網站中斷連接會清除你的答覆。",
 };

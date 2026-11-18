@@ -1,6 +1,7 @@
 // The relay between the page's `window.rand` (inpage.js, in the page's world) and the extension
-// (background.js). Isolated world, classic script, no imports. It forwards exactly six method
-// names, and nothing the page put in the message except the request of `invoke` or `withdraw`:
+// (background.js). Isolated world, classic script, no imports. It forwards exactly seven method
+// names, and nothing the page put in the message except the request of `invoke` or `withdraw`
+// and the `purpose` string of `deriveKey` (that one field, at most `MAX_PURPOSE_CHARS`):
 // the background decides everything else from who is asking (`sender`), never from what they
 // said, and that request is data the user is shown and approves in the wallet's own window,
 // capped here at `MAX_INVOKE_CHARS` of JSON. A connect or an invoke that needs the user comes back as
@@ -26,7 +27,9 @@
   const FROM_PAGE = 'rand-wallet:page';
   const TO_PAGE = 'rand-wallet:content';
   const TAKEOVER = 'rand-wallet:content-takeover';
-  const METHODS = new Set(['connect', 'getAddress', 'getRecipientHash', 'disconnect', 'invoke', 'withdraw']);
+  const METHODS = new Set(['connect', 'getAddress', 'getRecipientHash', 'disconnect', 'invoke', 'withdraw', 'deriveKey']);
+  /** The background checks a purpose in full (`^[a-z0-9./-]{1,64}$`); here only its type and length. */
+  const MAX_PURPOSE_CHARS = 64;
   /** An invoke request (a withdraw's is smaller still) is a few kilobytes (eight cells, a few dozen input words); 256 KiB of JSON
    *  is far past any real one and well short of a page using the relay to push megabytes. */
   const MAX_INVOKE_CHARS = 256 * 1024;
@@ -59,6 +62,13 @@
         return;
       }
       msg.params = d.params;
+    } else if (d.method === 'deriveKey') {
+      const purpose = d.params && typeof d.params === 'object' ? d.params.purpose : undefined;
+      if (typeof purpose !== 'string' || purpose.length > MAX_PURPOSE_CHARS) {
+        reply(d.id, { ok: false, error: { code: 'BAD_REQUEST', message: 'Rand Wallet could not read that request.' } });
+        return;
+      }
+      msg.params = { purpose };
     }
     let res, why = '';
     try { res = await ext.runtime.sendMessage(msg); } catch (e) { res = null; why = String((e && e.message) || e); }

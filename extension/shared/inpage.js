@@ -7,11 +7,14 @@
 // `invoke(request) → {tx}`, an RPL-2 program call (durian.market's `web/lib/rand/provider.ts`),
 // which the user approves in the wallet's own window before anything is proved, and
 // `withdraw(request) → {tx}`, a bridge burn (randbridge.org), approved the same way, whose proof
-// phases arrive as `withdrawPhase` events while it works.
+// phases arrive as `withdrawPhase` events while it works, and `deriveKey({purpose}) → {key}`, a
+// key of the site's own (durian.market's trading key), derived by the extension from this wallet,
+// this origin and the purpose, after the user has said yes once to that origin and purpose.
 //
-// What is never here: keys, balances, notes, signing. The extension answers with the address and
+// What is never here: the wallet's keys, balances, notes, signing. The extension answers with the address and
 // its bridge recipient hash, after the user has said yes to this origin, and — for an `invoke` or `withdraw` the
-// user approved — the transaction hash and the phase it has reached; nothing else.
+// user approved — the transaction hash and the phase it has reached, and for a `deriveKey` the
+// user approved, the site's own key; nothing else.
 (() => {
   if (window.rand && window.rand.isRandWallet) return;
   const TO_CONTENT = 'rand-wallet:page';
@@ -69,6 +72,14 @@
         return Promise.reject(refused('BAD_REQUEST', 'Rand Wallet could not read that request.'));
       }
       return request('withdraw', params);
+    },
+    // A key of this site's own, for `purpose` (1–64 of a-z 0-9 . / -): the same 32 bytes (hex)
+    // every time for this wallet and this site, and to no other site. Only the purpose string is
+    // sent; the site is the page's origin as the extension sees it.
+    deriveKey: (req) => {
+      const purpose = req && typeof req === 'object' ? req.purpose : undefined;
+      if (typeof purpose !== 'string') return Promise.reject(refused('BAD_REQUEST', 'Rand Wallet could not read that request.'));
+      return request('deriveKey', { purpose });
     },
     disconnect: () => request('disconnect').then(() => { emit('disconnect', null); }),
     on(event, cb) {

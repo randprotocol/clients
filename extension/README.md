@@ -99,10 +99,10 @@ A Rand site — randbridge.org, and a local build of it — sees this wallet as 
 contract in randbridge.org/web/lib/rand/provider.ts. Three files, each in its own world:
 
 - `inpage.js` runs in the page's own world (`world: "MAIN"`, document_start) and defines the
-  object: `connect`, `getAddress`, `getRecipientHash`, `invoke`, `withdraw`, `disconnect`, `on`, plus the
+  object: `connect`, `getAddress`, `getRecipientHash`, `invoke`, `withdraw`, `deriveKey`, `disconnect`, `on`, plus the
   `rand:announceProvider` / `rand:requestProvider` handshake. It knows nothing and can reach nothing.
-- `content.js` relays those six method names — and none of the page's data except an `invoke`'s
-  or a `withdraw`'s request — to the background.
+- `content.js` relays those seven method names — and none of the page's data except an `invoke`'s
+  or a `withdraw`'s request and a `deriveKey`'s `purpose` string — to the background.
 - `provider-host.js`, loaded by `background.js`, decides from the *sender's* origin: `connect`
   needs a wallet, unlocked, and the user's yes in `connect.html` for that origin; the approval
   (address plus its bridge recipient hash, `lib/recipient-hash.js`) is stored under `sites` in
@@ -112,6 +112,36 @@ contract in randbridge.org/web/lib/rand/provider.ts. Three files, each in its ow
   withdrawal while it works. The wallet's balance, notes, history and keys stay in the wallet;
   a refusal or a closed window tells the site only that nothing was sent. `node --test extension/test/provider-host.test.mjs` is the policy's suite;
   `recipient-hash.test.mjs` pins the hash to the bridge's own fixture.
+
+### `deriveKey` — a key of the site's own
+
+`window.rand.deriveKey({ purpose }) → Promise<{ key }>` gives a site a key it can use to act for
+itself — durian.market signs the orders of its own trading account with it — so "sign in with the
+wallet" needs no password and nothing new to back up. `key` is 32 bytes as 64 lowercase hex.
+
+- **Policy** (provider-host.js): the origin must already be connected (else `NOT_CONNECTED`) and
+  the wallet unlocked (else `LOCKED`; `NO_WALLET` with no wallet at all); `purpose` must match
+  `^[a-z0-9./-]{1,64}$` (else `BAD_REQUEST`). The first request for an (origin, purpose) opens
+  derive.html, which says which site asks, that it asks for a key it can use to act for itself,
+  that it gets the same key every time and no other site gets it, and that the key gives no access
+  to the wallet's funds, notes or address keys. Approve stores the yes under the site's entry in
+  `sites` (`siteKeys[purpose] = {address, at}`), tied to the address it was given for; later
+  requests answer at once. `disconnect` deletes the site's entry and so the yes with it, and a
+  new wallet's connect replaces the entry. Reject or a closed window is `USER_REJECTED`; a request
+  while another of the site's requests (of any kind) is waiting is `BUSY`.
+- **Derivation** (lib/derive-key.js, WebCrypto in the background):
+  `HKDF-SHA-256(IKM = the spend key's 32 bytes, salt = "rand-wallet/site-key/v1",
+  info = LP("rand-wallet/site-key/v1") ‖ LP(origin) ‖ LP(purpose) ‖ LP(address), L = 32)`, where
+  LP is a 4-byte big-endian length then the UTF-8 bytes. `origin` is the *sender's*
+  (`URL.origin`: scheme, host, and a port only when it is not the default) — never a value from
+  the page; `address` is the connected `rand1…` address. The spend key is the wallet's root
+  secret, the one thing a backup holds, so a wallet restored on another device gives every site
+  the same key again; the viewing key, which a prover is given, is never an input. HKDF is one-way:
+  the key says nothing about the spend key, nor about the key of any other site, purpose or
+  wallet. `extension/test/derive-key.test.mjs` pins a vector and recomputes it with node:crypto.
+- **What a site learns**: its own key, for the purposes the user approved, and nothing else. The
+  key is made when it is answered and is in no store and in no other message — not the window's,
+  not storage's, only the answer to the frame that asked.
 
 When the extension itself is reloaded — a store update, or Reload at chrome://extensions on an
 unpacked build — the browser orphans `content.js` in every tab that has it and never puts a new

@@ -1130,4 +1130,13 @@ export default {
   "the record does not open with this password": "der Datensatz lässt sich mit diesem Passwort nicht öffnen",
   "block {height} has {got} of the {n} transactions its header announced": "Block {height} enthält {got} der {n} Transaktionen, die sein Header angekündigt hat",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "Der Schlüssel dieses Provers wurde außer Betrieb genommen und wird nicht mehr verwendet. Kopple in den Einstellungen einen anderen Prover oder aktualisiere Rand Wallet auf die neueste Version.",
+  "{host} asks Rand Wallet for a key of its own.": "{host} bittet Rand Wallet um einen eigenen Schlüssel.",
+  "Give this site a key?": "Dieser Website einen Schlüssel geben?",
+  "Nothing to approve": "Nichts zu genehmigen",
+  "Purpose": "Zweck",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "Rand Wallet gibt dieser Website jedes Mal denselben Schlüssel, auf jedem Gerät mit dieser Wallet, und keiner anderen Website.",
+  "Site": "Website",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "Der Schlüssel gibt keinen Zugriff auf das Guthaben, die Noten oder die Adressschlüssel dieser Wallet.",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "Die Website kann den Schlüssel nutzen, um auf dieser Website für dich zu handeln, zum Beispiel um Trades in deinem Handelskonto dort zu signieren.",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "Du wirst für jeden Zweck einmal gefragt; trennst du die Website, wird deine Antwort vergessen.",
 };

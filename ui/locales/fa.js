@@ -1131,4 +1131,13 @@ export default {
   "the record does not open with this password": "رکورد با این گذرواژه باز نمی‌شود",
   "block {height} has {got} of the {n} transactions its header announced": "بلوک {height} تنها {got} تراکنش از {n} تراکنشی را دارد که سرآیندش اعلام کرده بود",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "کلید این اثبات‌گر بازنشسته شده و دیگر استفاده نمی‌شود. اثبات‌گر دیگری را در تنظیمات جفت کنید، یا Rand Wallet را به آخرین نسخه به‌روزرسانی کنید.",
+  "{host} asks Rand Wallet for a key of its own.": "{host} از Rand Wallet یک کلید مخصوص خودش می‌خواهد.",
+  "Give this site a key?": "به این سایت کلید داده شود؟",
+  "Nothing to approve": "چیزی برای تأیید نیست",
+  "Purpose": "کاربرد",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "Rand Wallet هر بار همان کلید را به این سایت می‌دهد، روی هر دستگاهی که این کیف پول را دارد، و آن را به هیچ سایت دیگری نمی‌دهد.",
+  "Site": "سایت",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "این کلید هیچ دسترسی‌ای به دارایی‌ها، نوت‌ها یا کلیدهای آدرس این کیف پول نمی‌دهد.",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "سایت می‌تواند با این کلید در همان سایت از طرف شما عمل کند؛ برای نمونه، معامله‌ها را در حساب معاملاتی شما در آنجا امضا کند.",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "برای هر کاربرد فقط یک بار از شما پرسیده می‌شود؛ با قطع اتصال سایت، پاسخ شما فراموش می‌شود.",
 };

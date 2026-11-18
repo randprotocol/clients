@@ -47,6 +47,7 @@
   },
   "background": {
     "scripts": [
+      "lib/derive-key.js",
       "provider-host.js",
       "background.js"
     ]

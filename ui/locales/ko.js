@@ -1123,4 +1123,13 @@ export default {
   "the record does not open with this password": "이 비밀번호로는 레코드가 열리지 않습니다",
   "block {height} has {got} of the {n} transactions its header announced": "블록 {height}에는 헤더가 알린 트랜잭션 {n}개 중 {got}개만 있습니다",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "이 프루버의 키는 폐기되어 더 이상 사용되지 않습니다. 설정에서 다른 프루버를 페어링하거나 Rand Wallet을 최신 버전으로 업데이트하세요.",
+  "{host} asks Rand Wallet for a key of its own.": "{host}이(가) Rand Wallet에 자체 키를 요청합니다.",
+  "Give this site a key?": "이 사이트에 키를 줄까요?",
+  "Nothing to approve": "승인할 항목 없음",
+  "Purpose": "용도",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "Rand Wallet은 이 지갑이 있는 어떤 기기에서든 이 사이트에 매번 같은 키를 주며, 다른 어떤 사이트에도 주지 않습니다.",
+  "Site": "사이트",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "이 키로는 이 지갑의 자금, 노트 또는 주소 키에 접근할 수 없습니다.",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "사이트는 이 키로 해당 사이트에서 사용자를 대신해 작업할 수 있습니다. 예를 들어 그곳의 거래 계정에서 거래에 서명할 수 있습니다.",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "용도마다 한 번만 묻습니다. 사이트 연결을 해제하면 답변이 지워집니다.",
 };

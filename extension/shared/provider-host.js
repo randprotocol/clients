@@ -2,7 +2,7 @@
 // background.js can load it in both browsers (Chrome's service worker via importScripts, Firefox's
 // event page from the manifest's `scripts` list). It puts one factory on the global:
 //
-//     makeRandProviderHost({ ext, openConsent, openInvoke, openWithdraw }) → { handle(msg, sender), windowClosed(id) }
+//     makeRandProviderHost({ ext, openConsent, openInvoke, openWithdraw, openDerive }) → { handle(msg, sender), windowClosed(id) }
 //
 // What a site can learn, and when:
 //   * `connect`      — the address, once the user has approved THIS origin in the consent window
@@ -28,12 +28,24 @@
 //                      burn on the user. The window's proof phases are also forwarded to the
 //                      asking tab (`rand:phase`), display only, for the site's progress view.
 //                      A window of one kind cannot read or answer the other kind's record.
+//   * `deriveKey`    — a key of the site's own (durian.market's trading key): 32 bytes derived by
+//                      lib/derive-key.js from this wallet's spend key, the SENDER's origin, the
+//                      request's `purpose` and the connected address — so the same wallet gives
+//                      a site the same key on any device, and no other site that key. For an
+//                      origin already approved and a wallet that is unlocked. The first request for
+//                      an (origin, purpose) is parked like an invoke (`kind: 'derive'`, so the
+//                      one-request-per-site rule covers it too) and approved in derive.html; the
+//                      yes is kept under the site's entry (`siteKeys[purpose]`, with the address it
+//                      was given for), and later requests answer at once. The key itself is
+//                      computed when it is answered and is in no store and no other message: not
+//                      the window's, not storage's — only the answer to the tab that asked.
 // What a site is told when the wallet refuses: a code and a FIXED sentence for that code
 // (`SITE_ERRORS`, the same table as lib/site-errors.js), never the window's own reason, which can
 // name a balance, a note's value or the user's own prover host. A window's answer is re-worded
 // here whatever it says, so nothing the window computed but the code and the hash reaches a page.
 // The origin is always `sender`'s — the page's own message carries no parameters at all except an
-// invoke's or a withdraw's request, which is the thing the user is asked to approve and nothing else. An
+// invoke's or a withdraw's request, which is the thing the user is asked to approve and nothing else,
+// and a deriveKey's `purpose`. An
 // approval is tied to the address it was given for: import a different wallet and every site is
 // disconnected until it asks again. Approvals live in storage.local under `sites`, so a wipe
 // clears them with the rest.
@@ -44,7 +56,7 @@
   const SITES_KEY = 'sites';
   const WALLET_KEY = 'wallet';     // ui/engine/backend-shared.js K.wallet: {address, pk}
   const UNLOCKED_KEY = 'unlocked'; // its UNLOCKED_SESSION_KEY, in storage.session
-  const INVOKES_KEY = 'invokes';   // storage.session: id → {kind, origin, tabId, request, windowId, phase, at}; no kind reads as 'invoke'
+  const INVOKES_KEY = 'invokes';   // storage.session: id → {kind, origin, tabId, frameId?, request, windowId, phase, at}; no kind reads as 'invoke'
   const HEX32_RE = /^[0-9a-fA-F]{64}$/;
   const AMOUNT_RE = /^[1-9][0-9]{0,29}$/;
   const WORD8_RE = /^(0x)?[0-9a-fA-F]{64}$/;
@@ -93,7 +105,7 @@
   const fail = (code, message) => ({ ok: false, error: { code, message } });
   const one = (bag, key) => (bag && Object.prototype.hasOwnProperty.call(bag, key) ? bag[key] : undefined);
 
-  function makeRandProviderHost({ ext, openConsent, openInvoke, openWithdraw, newId }) {
+  function makeRandProviderHost({ ext, openConsent, openInvoke, openWithdraw, openDerive, deriveSiteKey, newId }) {
     const local = ext.storage.local;
     const session = ext.storage.session;
     const id = newId || (() => (globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`));
@@ -152,7 +164,7 @@
       const rootUrl = extensionRoot();
       return !!rootUrl && !!sender && typeof sender.url === 'string' && sender.url.startsWith(rootUrl);
     };
-    const kindOf = (rec) => (rec && rec.kind === 'withdraw' ? 'withdraw' : 'invoke');
+    const kindOf = (rec) => (rec && (rec.kind === 'withdraw' || rec.kind === 'derive') ? rec.kind : 'invoke');
     /** Answer the tab that asked, and forget the request. Idempotent: a second answer finds nothing. */
     async function settle(invokeId, verdict) {
       const all = await invokes();
@@ -161,7 +173,9 @@
       delete all[invokeId];
       await saveInvokes(all);
       if (Number.isInteger(rec.tabId)) {
-        try { await ext.tabs.sendMessage(rec.tabId, { type: 'rand:decision', id: invokeId, ...verdict }); } catch { /* the tab is gone */ }
+        // A key request remembers the frame that asked, and its answer goes to that frame only.
+        const to = Number.isInteger(rec.frameId) ? [{ frameId: rec.frameId }] : [];
+        try { await ext.tabs.sendMessage(rec.tabId, { type: 'rand:decision', id: invokeId, ...verdict }, ...to); } catch { /* the tab is gone */ }
       }
       return true;
     }
@@ -226,9 +240,10 @@
       if (!fromExtensionPage(sender)) return fail('FORBIDDEN', 'not the approval window');
       const invokeId = msg.id;
       if (typeof invokeId !== 'string') return fail('BAD_REQUEST', 'malformed invoke message');
-      const m = /^rand:(invoke|withdraw)(Request|Progress|Result)$/.exec(msg.type);
+      const m = /^rand:(invoke|withdraw|derive)(Request|Progress|Result)$/.exec(msg.type);
       const kind = m[1];
       const gone = () => fail('GONE', 'That request is no longer waiting.');
+      if (kind === 'derive' && m[2] !== 'Request') return deriveAnswered(msg, invokeId, gone);
       if (m[2] === 'Request') {
         const rec = (await invokes())[invokeId];
         return rec && kindOf(rec) === kind ? { ok: true, result: { origin: rec.origin, request: rec.request } } : gone();
@@ -262,6 +277,95 @@
       return { ok: true };
     }
 
+    // ---- deriveKey ----
+    const derive = () => deriveSiteKey || (root.RandSiteKey && root.RandSiteKey.deriveSiteKey);
+    const PURPOSE_RE = /^[a-z0-9./-]{1,64}$/;
+    const lockedFail = () => fail('LOCKED', 'Rand Wallet is locked.');
+    /** The unlocked spend key, or null. Read when a key is made, and kept nowhere. */
+    async function spendKey() {
+      try {
+        const u = one(await session.get(UNLOCKED_KEY), UNLOCKED_KEY);
+        return u && typeof u.spend_key === 'string' && HEX32_RE.test(u.spend_key) ? u.spend_key : null;
+      } catch { return null; }
+    }
+    /** Whether `g` (this origin's grant) holds a yes for `purpose`, given to the address it has now. */
+    const keyApproved = (g, purpose) => {
+      const k = g.siteKeys && Object.prototype.hasOwnProperty.call(g.siteKeys, purpose) ? g.siteKeys[purpose] : null;
+      return !!k && k.address === g.address;
+    };
+    /** The site's answer: `{key}`, or LOCKED when there is no spend key to make it from. */
+    async function keyFor(origin, purpose, g) {
+      const sk = await spendKey();
+      if (!sk) return lockedFail();
+      try {
+        return { ok: true, result: { key: await derive()({ spendKey: sk, origin, purpose, address: g.address }) } };
+      } catch {
+        return fail('UNAVAILABLE', 'Rand Wallet could not make the key.');
+      }
+    }
+
+    async function deriveKey(origin, sender, params) {
+      const w = await wallet();
+      if (!w || !w.address) return fail('NO_WALLET', 'Rand Wallet has no wallet yet.');
+      if (!(await unlocked())) return lockedFail();
+      const g = await grant(origin);
+      if (!g) return fail('NOT_CONNECTED', 'Rand Wallet is not connected to this site.');
+      const purpose = params && typeof params === 'object' && !Array.isArray(params) ? params.purpose : undefined;
+      if (typeof purpose !== 'string' || !PURPOSE_RE.test(purpose)) return fail('BAD_REQUEST', 'Rand Wallet could not read that request.');
+      if (keyApproved(g, purpose)) return keyFor(origin, purpose, g);
+      const all = await invokes();
+      if (Object.values(all).some((r) => r && r.origin === origin)) {
+        return fail('BUSY', 'Rand Wallet is already showing a request from this site. Finish or cancel it first.');
+      }
+      const reqId = id();
+      const tabId = sender && sender.tab && Number.isInteger(sender.tab.id) ? sender.tab.id : undefined;
+      const frameId = sender && Number.isInteger(sender.frameId) ? sender.frameId : undefined;
+      all[reqId] = { kind: 'derive', origin, tabId, frameId, request: { purpose }, windowId: null, phase: null, at: Date.now() };
+      await saveInvokes(all);
+      let windowId = null;
+      try {
+        windowId = await openDerive({ id: reqId, origin });
+      } catch {
+        delete all[reqId];
+        await saveInvokes(all);
+        return fail('UNAVAILABLE', 'Rand Wallet could not open its window.');
+      }
+      if (Number.isInteger(windowId)) {
+        const now = await invokes();
+        if (now[reqId]) { now[reqId].windowId = windowId; await saveInvokes(now); }
+      }
+      return { pending: reqId };
+    }
+
+    /**
+     * derive.html's yes or no (`rand:deriveResult`, `{id, approved}`); a key request has no
+     * progress. On yes the grant is checked again — the site may have been disconnected, or the
+     * wallet locked or changed, while the window was open — the yes is stored, and the key goes
+     * to the asking tab. The window hears only `{ok: true}`.
+     */
+    async function deriveAnswered(msg, reqId, gone) {
+      if (msg.type !== 'rand:deriveResult') return fail('BAD_REQUEST', 'A key request has no progress.');
+      const rec = (await invokes())[reqId];
+      if (!rec || kindOf(rec) !== 'derive') return gone();
+      let verdict = fail('USER_REJECTED', 'The request was not approved in Rand Wallet.');
+      if (msg.approved === true) {
+        const { origin } = rec;
+        const purpose = rec.request && rec.request.purpose;
+        const g = await grant(origin);
+        verdict = g ? await keyFor(origin, purpose, g) : fail('NOT_CONNECTED', 'Rand Wallet is not connected to this site.');
+        if (verdict.ok) {
+          const all = await sites();
+          const entry = all[origin];
+          if (entry && entry.address === g.address) {
+            entry.siteKeys = { ...(entry.siteKeys || {}), [purpose]: { address: g.address, at: Date.now() } };
+            await local.set({ [SITES_KEY]: all });
+          }
+        }
+      }
+      await settle(reqId, verdict);
+      return { ok: true };
+    }
+
     /**
      * The approval window `windowId` closed. A request it had not answered is answered here: never
      * approved, or stopped before anything left the device, is a refusal; closed once the
@@ -289,7 +393,7 @@
     async function handle(msg, sender) {
       if (!msg || typeof msg.type !== 'string' || !msg.type.startsWith('rand:')) return undefined;
       if (msg.type === 'rand:decision') return decide(msg, sender);
-      if (/^rand:(invoke|withdraw)(Request|Progress|Result)$/.test(msg.type)) return fromWindow(msg, sender);
+      if (/^rand:(invoke|withdraw|derive)(Request|Progress|Result)$/.test(msg.type)) return fromWindow(msg, sender);
       const origin = originOf(sender);
       if (!origin) return fail('UNSUPPORTED_ORIGIN', 'This page cannot connect to Rand Wallet.');
       switch (msg.type) {
@@ -317,6 +421,9 @@
         case 'rand:withdraw':
           if (typeof openWithdraw !== 'function') return fail('UNKNOWN_METHOD', 'This Rand Wallet does not support withdraw.');
           return start('withdraw', origin, sender, msg.params);
+        case 'rand:deriveKey':
+          if (typeof openDerive !== 'function' || typeof derive() !== 'function') return fail('UNKNOWN_METHOD', 'This Rand Wallet does not support deriveKey.');
+          return deriveKey(origin, sender, msg.params);
         case 'rand:disconnect': {
           const all = await sites();
           if (all[origin]) { delete all[origin]; await local.set({ [SITES_KEY]: all }); }
