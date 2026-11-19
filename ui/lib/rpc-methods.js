@@ -104,6 +104,11 @@ export const METHODS = {
   getPerpAccounts: { params: ['page'] },
   getPerpInputs: { params: ['height'] },
   getMultisig: { params: ['id'] },
+  // -- the reference-block window and the randomness beacon (fullnode 60a7d03, issue #168;
+  // genesis-gated, `{"enabled": false}` on a chain without the section). Nothing in the wallet
+  // calls these yet.
+  getBlockContext: { params: ['height'] },
+  getBeacon: { params: ['validator'] },
 
   // -- block aggregation ------------------------------------------------------------------------
   getAggregate: { params: ['hash'] },

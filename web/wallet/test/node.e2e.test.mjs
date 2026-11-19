@@ -54,7 +54,7 @@ import {
 const NODE_BIN = process.env.RAND_NODE_BIN || '';
 const PROVER_BIN = process.env.RAND_PROVER_BIN || '';
 const PASSWORD = 'an-e2e-password-for-a-real-vault';
-const CHAIN_ID = 21; // the chain this build's core was made for (`version.default_chain_id`)
+const CHAIN_ID = 22; // the chain this build's core was made for (`version.default_chain_id`)
 const FAUCET_UNITS = 100_000_000_000n; // one `rand_mint`: 100 RAND
 const SEND_UNITS = '2000000000'; // 2 RAND out of the faucet's 100
 const ZERO32 = '00'.repeat(32);
@@ -369,7 +369,7 @@ test('b. before any note: the empty shapes of every read the wallet makes', { sk
   const limits = checkLimits(await call('getLimits'));
   assert.equal(limits.envelopeBytes, env.envelopeBytes);
   if (env.envelopeBytes) assert.ok(limits.envelopeBytes > 0);
-  assert.equal(limits.bundleGasLimit, 20479);
+  assert.equal(limits.bundleGasLimit, 22527);
   assert.equal(limits.programState, null);
   if (splitAuthorisation(NODE_BIN)) assert.equal(limits.maxProofBytes, 4194304);
   // The fee is a decimal string, and the node and the core agree on what a bundle costs.

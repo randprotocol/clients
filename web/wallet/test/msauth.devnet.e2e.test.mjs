@@ -57,7 +57,7 @@ test('a web wallet signs a private-multisig proposal on a devnet', { skip, timeo
   const checked = await backend.signers.check(row.id, proposal, [payment]);
   assert.equal(checked.signable, true, JSON.stringify(checked.refusal));
   assert.equal(checked.summary.recipients_checked, true);
-  assert.equal(checked.summary.chain_id, 21);
+  assert.equal(checked.summary.chain_id, 22);
 
   const { share, index } = await backend.signers.sign(row.id, proposal, [payment], PASSWORD);
   assert.equal(index, Number(SIGNER));

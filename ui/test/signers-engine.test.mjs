@@ -18,7 +18,7 @@ export const KEY = '{"seed":"' + '22'.repeat(32) + '","address":"A","public_key"
 export const SEED_HEX = '22'.repeat(32);
 export function msauthCore(extra = {}) {
   return stubCore({
-    msauth_policy_info: () => ({ fingerprint: 'NFYW-K8E9-E5K9-AAK3', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(60), policy_hash: '33'.repeat(32) }),
+    msauth_policy_info: () => ({ fingerprint: 'SSJG-ERXD-74B6-SS8Z', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(60), policy_hash: '33'.repeat(32) }),
     msauth_signer_import: ({ input, policy }) => {
       if (!String(input).includes(SEED_HEX)) throw new Error('this key is not one of the policy\'s signers');
       return { seed: SEED_HEX, public_key: 'bb', address: 'A', index: policy ? 1 : null };
@@ -38,7 +38,7 @@ export async function unlockedWithSigner(opts = {}) {
 
 test('adding a signer keeps policy and seed only in vault records', async () => {
   const { storage, row } = await unlockedWithSigner();
-  assert.deepEqual({ ...row, id: 'x' }, { id: 'x', label: 'treasury', index: 1, fingerprint: 'NFYW-K8E9-E5K9-AAK3', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(60), maxFee: '100000000' });
+  assert.deepEqual({ ...row, id: 'x' }, { id: 'x', label: 'treasury', index: 1, fingerprint: 'SSJG-ERXD-74B6-SS8Z', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(60), maxFee: '100000000' });
   const everything = JSON.stringify([...storage.local.entries()]);
   assert.ok(!everything.includes(SEED_HEX), 'no seed in plain storage');
   assert.ok(!everything.includes('11'.repeat(32)), 'no msk in plain storage');
@@ -93,7 +93,7 @@ test('real 2-of-3 policies survive a lock: one, then three (the record is sized 
   const hashes = new Map();
   const core = msauthCore({ msauth_policy_info: ({ policy }) => {
     if (!hashes.has(policy)) hashes.set(policy, String(hashes.size + 1).padStart(64, '0'));
-    return { fingerprint: 'NFYW-K8E9-E5K9-AAK3', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(60), policy_hash: hashes.get(policy) };
+    return { fingerprint: 'SSJG-ERXD-74B6-SS8Z', threshold: 2, signers: 3, address: 'rand1' + 'm'.repeat(60), policy_hash: hashes.get(policy) };
   } });
   const storage = mapStorage();
   const backend = makeWasmBackend({ core, storage, platform: stubPlatform(), fetch: stubFetch(), locks: null, broadcast: null });
@@ -145,7 +145,7 @@ test('a damaged policies record is never overwritten: unlock works, list/add/rem
 
 import { verdict, EXPIRY_MARGIN, shareIndexOf } from '../engine/signers.js';
 
-const SUMMARY = { expires_at: 200, chain_id: 13, genesis: GENESIS, binding_domain: 1, lines: ['x'], policy_fingerprint: 'NFYW-K8E9-E5K9-AAK3', recipients_checked: true,
+const SUMMARY = { expires_at: 200, chain_id: 13, genesis: GENESIS, binding_domain: 1, lines: ['x'], policy_fingerprint: 'SSJG-ERXD-74B6-SS8Z', recipients_checked: true,
   fee: '1', outputs: [{ to_account: false, amount: '5', needs_payee: true, matches: 'FP' }] };
 const signingCore = (extra = {}) => msauthCore({
   msauth_check: () => ({ ...SUMMARY }),

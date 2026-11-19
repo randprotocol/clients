@@ -45,7 +45,7 @@ import {
 
 const NODE_BIN = process.env.RAND_NODE_BIN || '';
 const PASSWORD = 'an-e2e-password-for-a-real-vault';
-const CHAIN_ID = 21;
+const CHAIN_ID = 22;
 const FAUCET_UNITS = 100_000_000_000n; // one `rand_mint`: 100 RAND
 const ZERO32 = '00'.repeat(32);
 const NODE_ENV = { ...process.env, RAND_ALLOW_TEST_FRI_PROFILE: '1' };
@@ -186,7 +186,7 @@ test('a. rand_getLimits on a chain-21-shaped chain, through checkLimits and raw'
   assert.deepEqual(checkLimits(raw), {
     envelopeBytes: 1860,
     maxProofBytes: 4194304,
-    bundleGasLimit: 20479,
+    bundleGasLimit: 22527,
     programState: { cellFee: String(FIXTURE.program_state.cell_fee), maxReads: raw.program_state.max_reads, maxWrites: raw.program_state.max_writes, maxPayouts: raw.program_state.max_payouts },
     proofWindowBlocks: 1024,
   });

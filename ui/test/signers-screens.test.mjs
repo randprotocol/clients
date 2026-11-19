@@ -12,9 +12,9 @@ const signerBackend = (over = {}) => {
 };
 
 test('confirmation is the fingerprint\'s last four, without case or dashes', () => {
-  assert.equal(lastFourOf('NFYW-K8E9-E5K9-AAK3'), 'aak3');
-  assert.ok(confirmsFingerprint('NFYW-K8E9-E5K9-AAK3', ' aak3 '));
-  assert.ok(!confirmsFingerprint('NFYW-K8E9-E5K9-AAK3', 'AAK'));
+  assert.equal(lastFourOf('SSJG-ERXD-74B6-SS8Z'), 'ss8z');
+  assert.ok(confirmsFingerprint('SSJG-ERXD-74B6-SS8Z', ' ss8z '));
+  assert.ok(!confirmsFingerprint('SSJG-ERXD-74B6-SS8Z', 'AAK'));
   assert.ok(!confirmsFingerprint('', ''));
 });
 
@@ -48,7 +48,7 @@ test('sign stays disabled until the last four are typed, and asks for the passwo
   const sign = root.querySelector('[data-role="sign"]');
   assert.equal(sign.disabled, true);
   const confirm = root.querySelector('input[data-role="confirm"]');
-  confirm.value = 'aak3'; confirm.dispatchEvent(new Event('input', { bubbles: true }));
+  confirm.value = 'ss8z'; confirm.dispatchEvent(new Event('input', { bubbles: true }));
   assert.equal(sign.disabled, false);
   root.querySelector('input[data-role="password"]').value = 'unlocked-password-1';
   sign.click();
@@ -81,7 +81,7 @@ test('every paying output asks for its payee, and the typed addresses reach chec
 test('a refused check names the node and offers Retry, and nothing can be signed', async (t) => {
   const b = signerBackend();
   await b.signers.add({ label: 'treasury', policy: 'P', key: 'K', password: 'unlocked-password-1' });
-  b.signers.check = async () => ({ summary: { outputs: [], recipients_checked: true, lines: ['fee 0.001 RAND'], policy_fingerprint: 'NFYW-K8E9-E5K9-AAK3', expires_at: 2024, fee: '1000000', burns: { burn_a: '0', burn_asset: 0, burn_r: '0' } },
+  b.signers.check = async () => ({ summary: { outputs: [], recipients_checked: true, lines: ['fee 0.001 RAND'], policy_fingerprint: 'SSJG-ERXD-74B6-SS8Z', expires_at: 2024, fee: '1000000', burns: { burn_a: '0', burn_asset: 0, burn_r: '0' } },
     signable: false, refusal: { code: 'no-node', node: 'https://rpc.example', message: 'No node answered at https://rpc.example, so the expiry cannot be checked and this proposal is not signed. Retry when the node is reachable.' } });
   const { app, root } = await mountApp(t, b, { hash: '#signer/s1' });
   await app.idle();
@@ -146,7 +146,7 @@ test('a share can be saved as a file where the platform can', async (t) => {
   root.querySelector('[data-role="check"]').click();
   await app.idle(); await tick();
   const confirm = root.querySelector('input[data-role="confirm"]');
-  confirm.value = 'AAK3'; confirm.dispatchEvent(new Event('input', { bubbles: true }));
+  confirm.value = 'SS8Z'; confirm.dispatchEvent(new Event('input', { bubbles: true }));
   root.querySelector('input[data-role="password"]').value = 'unlocked-password-1';
   root.querySelector('[data-role="sign"]').click();
   await app.idle(); await tick();
@@ -213,7 +213,7 @@ test('a failing save shows the error and a good one shows the path', async (t) =
   root.querySelector('[data-role="check"]').click();
   await app.idle(); await tick();
   const confirm = root.querySelector('input[data-role="confirm"]');
-  confirm.value = 'aak3'; confirm.dispatchEvent(new Event('input', { bubbles: true }));
+  confirm.value = 'ss8z'; confirm.dispatchEvent(new Event('input', { bubbles: true }));
   root.querySelector('input[data-role="password"]').value = 'unlocked-password-1';
   root.querySelector('[data-role="sign"]').click();
   await app.idle(); await tick();
@@ -339,7 +339,7 @@ test('editing a payment after a check disarms Sign until the payments are checke
   type(root.querySelector('input[data-role="payee"]'), 'rand1a');
   type(root.querySelector('input[data-role="payee-amount"]'), '1');
   await submit(app, root);
-  const arm = () => { const c = root.querySelector('input[data-role="confirm"]'); c.value = 'aak3'; c.dispatchEvent(new Event('input', { bubbles: true })); };
+  const arm = () => { const c = root.querySelector('input[data-role="confirm"]'); c.value = 'ss8z'; c.dispatchEvent(new Event('input', { bubbles: true })); };
   arm();
   assert.equal(root.querySelector('[data-role="sign"]').disabled, false);
   assert.equal(root.querySelector('[data-role="stale-note"]').hasAttribute('hidden'), true);
@@ -364,7 +364,7 @@ test('the top Check does not re-arm Sign after a row was edited', async (t) => {
   type(root.querySelector('input[data-role="payee-amount"]'), '2');
   root.querySelector('[data-role="check"]').click();
   await app.idle(); await tick();
-  const c = root.querySelector('input[data-role="confirm"]'); c.value = 'aak3'; c.dispatchEvent(new Event('input', { bubbles: true }));
+  const c = root.querySelector('input[data-role="confirm"]'); c.value = 'ss8z'; c.dispatchEvent(new Event('input', { bubbles: true }));
   assert.equal(root.querySelector('[data-role="sign"]').disabled, true);
   assert.equal(root.querySelector('[data-role="stale-note"]').hasAttribute('hidden'), false);
 });
@@ -381,7 +381,7 @@ test('an edit while a check is in flight leaves Sign disabled when it lands', as
   type(root.querySelector('input[data-role="payee-amount"]'), '2');
   release();
   await app.idle(); await tick();
-  const c = root.querySelector('input[data-role="confirm"]'); c.value = 'aak3'; c.dispatchEvent(new Event('input', { bubbles: true }));
+  const c = root.querySelector('input[data-role="confirm"]'); c.value = 'ss8z'; c.dispatchEvent(new Event('input', { bubbles: true }));
   assert.equal(root.querySelector('[data-role="sign"]').disabled, true);
 });
 
@@ -409,7 +409,7 @@ test('editing the proposal after a check clears the review and disarms Sign', as
   type(root.querySelector('input[data-role="payee"]'), 'rand1a');
   type(root.querySelector('input[data-role="payee-amount"]'), '1');
   await submit(app, root);
-  const c = root.querySelector('input[data-role="confirm"]'); c.value = 'aak3'; c.dispatchEvent(new Event('input', { bubbles: true }));
+  const c = root.querySelector('input[data-role="confirm"]'); c.value = 'ss8z'; c.dispatchEvent(new Event('input', { bubbles: true }));
   assert.equal(root.querySelector('[data-role="sign"]').disabled, false);
   const ta = root.querySelector('textarea[data-role="proposal"]');
   ta.value = `${ta.value} `; ta.dispatchEvent(new Event('input', { bubbles: true }));

@@ -335,13 +335,13 @@ public class SignFlowTest {
     }
 
     @Test public void confirmationIsTheLastFour() {
-        assertTrue(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", " aak3"));
-        assertTrue(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", "a-ak3"));
-        assertFalse(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", "aak"));
-        assertFalse(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", "9aak3"));
+        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", " ss8z"));
+        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "a-ak3"));
+        assertFalse(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "aak"));
+        assertFalse(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "9ss8z"));
         assertFalse(SignFlow.confirms("", ""));
-        assertFalse(SignFlow.confirms(null, "aak3"));
-        assertFalse(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", null));
+        assertFalse(SignFlow.confirms(null, "ss8z"));
+        assertFalse(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", null));
     }
 
     @Test public void linesAreTheCoresVerbatimAndFilesAreCleaned() throws Exception {
@@ -562,13 +562,13 @@ public class SignFlowTest {
 
     @Test public void aCoreRefusalStillZeroesTheSeed() throws Exception {
         FakeCore core = new FakeCore(summary());
-        core.signError = new Exception("output 2 pays b9856a063c1fb742, not an expected recipient");
+        core.signError = new Exception("output 2 pays ae362e71c853c30f, not an expected recipient");
         FakeSeeds seeds = new FakeSeeds();
         try {
             flow(core, new FakeNode(2000L), seeds).sign("a1", PROPOSAL, payees(), null);
             fail();
         } catch (Exception e) {
-            assertEquals("output 2 pays b9856a063c1fb742, not an expected recipient", e.getMessage());
+            assertEquals("output 2 pays ae362e71c853c30f, not an expected recipient", e.getMessage());
         }
         assertZeroed(seeds.handed);
     }
@@ -620,7 +620,7 @@ public class SignFlowTest {
         SignFlow.Check c = flow(core, new FakeNode(2000L), new FakeSeeds()).check("a1", PROPOSAL, payees());
         assertEquals(Verdict.SIGNABLE, c.judgement.verdict);
         assertEquals(24, c.judgement.blocksLeft);
-        assertEquals("NFYW-K8E9-E5K9-AAK3", c.summary.getString("policy_fingerprint"));
+        assertEquals("SSJG-ERXD-74B6-SS8Z", c.summary.getString("policy_fingerprint"));
     }
 
     @Test public void anUnknownProfileOrAShareWithoutAnIndexRefuses() throws Exception {
@@ -754,9 +754,9 @@ public class SignFlowTest {
     }
 
     @Test public void theConfirmationIgnoresInnerWhitespaceAsTheWebDoes() {
-        assertTrue(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", "a a k 3"));
-        assertTrue(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", " A-A\tk3\n"));
-        assertTrue(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", "aa\u00A0k3"));
-        assertFalse(SignFlow.confirms("NFYW-K8E9-E5K9-AAK3", "a a k"));
+        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "a a k 3"));
+        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", " A-A\tk3\n"));
+        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "aa\u00A0k3"));
+        assertFalse(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "a a k"));
     }
 }

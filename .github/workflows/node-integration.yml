@@ -40,15 +40,18 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_TOOLCHAIN: 1.98.1
-  # v0.8.3-rc1: fullnode 9443de63, the whole v0.8.3 batch but #159 (storage only). Set v0.8.3 at the tag.
-  FULLNODE_TAG: v0.8.5
+  # Empty until fullnode v0.8.7 is tagged: this core is constraint set 11 (chain 22), which no
+  # fullnode release verifies yet (v0.8.5/v0.8.6 are set 9), so the real-node job builds rand-node
+  # and rand-prover from the vendored fullnode (core/vendor/fullnode, feat/cs11-revendor 60a7d03)
+  # instead of downloading a release. Set v0.8.7 at the tag.
+  FULLNODE_TAG: ""
 
 jobs:
   real-node:
     name: real-node
     if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,7 +79,21 @@ jobs:
           restore-keys: core-target-${{ env.RUST_TOOLCHAIN }}-
       - name: The wasm core
         run: core/scripts/build-wasm.sh
+      - name: System dependencies (building the vendored fullnode)
+        if: env.FULLNODE_TAG == ''
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev
+      - name: rand-node and rand-prover from the vendored fullnode (no release on this constraint set yet)
+        if: env.FULLNODE_TAG == ''
+        working-directory: core/vendor/fullnode
+        run: |
+          cargo build --release --locked -p randprotocol-node -p randprotocol-prover
+          target/release/rand-node --version
+          {
+            echo "RAND_NODE_BIN=$PWD/target/release/rand-node"
+            echo "RAND_PROVER_BIN=$PWD/target/release/rand-prover"
+          } >> "$GITHUB_ENV"
       - name: Download the fullnode ${{ env.FULLNODE_TAG }} release
+        if: env.FULLNODE_TAG != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

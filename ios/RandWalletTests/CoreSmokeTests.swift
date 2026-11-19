@@ -5,17 +5,17 @@ import XCTest
 final class CoreSmokeTests: XCTestCase {
     func testVersionReportsChainDefaults() throws {
         let c = try RandCore.constants()
-        XCTAssertEqual(c.defaultChainId, 21)
-        XCTAssertEqual(c.chainBuild, "d8efd47", "fullnode main 97bcf4b (the v0.8.3 batch, constraint set 9), chain 21")
+        XCTAssertEqual(c.defaultChainId, 22)
+        XCTAssertEqual(c.chainBuild, "60a7d03", "fullnode main 97bcf4b (the v0.8.3 batch, constraint set 9), chain 21")
         XCTAssertEqual(c.tokenSymbol, "RAND")
         XCTAssertEqual(c.bundleBaseFee, "1000000")
         // Constraint set 8: the gas every bundle proof declares — chain 18's genesis pin.
-        XCTAssertEqual(c.bundleGasLimit, 20479)
+        XCTAssertEqual(c.bundleGasLimit, 22527)
         XCTAssertEqual(c.legacyEnvelopeChainIds, [14, 15, 16, 17])
         // Split authorisation (fullnode v0.6.3): bundle guest v3 and the auth guest, chain 17's and
         // 18's `hc_bundle` / `hc_auth` — the pair `prove_*` and `prepare_*` default to.
-        XCTAssertEqual(c.hcBundle, "60af094acfe65d85fdb18fb3d06cf9085dcf28c96e59e87f1ee527226e6e3fce")
-        XCTAssertEqual(c.hcAuth, "1e4e347f44cf86750b30a9a4bdf9ec9256efe353d4ff8017451eca7d195639c1")
+        XCTAssertEqual(c.hcBundle, "00782b22b1efdf6bbc4d9001b27baa28c03e75732090c6ccd494ddd1365c141e")
+        XCTAssertEqual(c.hcAuth, "8373994c200819c899236f822f0315efea213b3506a1df0785544a6c90a46078")
         XCTAssertEqual(c.splitAuthorisation, true)
         XCTAssertEqual(c.proverHistoryWarning, ProverPairingService.historyWarningFallback)
         XCTAssertEqual(ProverPairingService.warning, ProverPairingService.historyWarningFallback)
