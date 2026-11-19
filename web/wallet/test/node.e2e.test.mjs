@@ -472,6 +472,10 @@ test('b. before any note: the empty shapes of every read the wallet makes', { sk
   assert.deepEqual(await call('importViewingKey', ZERO32), { imported: true, rescan_from_height: 0, viewing_keys: 1 });
   assert.deepEqual(await call('getViewingNotes', ZERO32), { complete: true, next_index: 0, notes: [], scanned_index: 0 });
   assert.deepEqual(await call('removeViewingKey', ZERO32), { removed: true, viewing_keys: 0 });
+  // Issue #168's block context and the #189 beacon are genesis-gated; this test chain sets
+  // neither (no `program_state.reference_block_window`, no `beacon`), so both say so.
+  assert.deepEqual(await call('getBlockContext', null), { enabled: false });
+  assert.deepEqual(await call('getBeacon', null), { enabled: false });
 }));
 
 test('b. after a faucet mint: the populated shapes, exact values, and the validators accept them', { skip }, withLogs(async () => {
