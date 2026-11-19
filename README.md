@@ -110,7 +110,7 @@ STARK proof, keys are Poseidon2 hashes, envelopes are ML-KEM-768 + ChaCha20-Poly
 primitives exist only in the fullnode's Rust crates, and a wallet that re-implemented them in
 Swift, Java or JavaScript would have to be byte-identical to the node or every transfer is
 refused. So `core/` vendors the fullnode crates (`core/vendor/fullnode`,
-a submodule at fullnode `v0.8.5` `d8efd47` (v0.8.4 plus the audit v12 node fixes; constraint set 9, the `randprotocol-msig` signer checks with the payee check a signer runs, and the verified fold in the verify cache), chain 21 onward: **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key; **BIND-1**, a transaction bound to its chain's genesis; program state and the `Invoke` action (RPL-2); and the chain's bridge fee) and exposes one JSON entry point, `call(method, params)`, that each
+a submodule at fullnode `feat/cs11-revendor` `60a7d03` (fullnode PR #194, the v0.8.7 candidate: **constraint set 11**, new Poseidon2 constants, so every commitment, nullifier, key and genesis hash moves; chain 22 only; before it `v0.8.5` `d8efd47`, constraint set 9, chain 21), with the `randprotocol-msig` signer checks with the payee check a signer runs, and the verified fold in the verify cache: **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key; **BIND-1**, a transaction bound to its chain's genesis; program state and the `Invoke` action (RPL-2); and the chain's bridge fee) and exposes one JSON entry point, `call(method, params)`, that each
 client wraps: an XCFramework on iOS, a `.so` on Android, WebAssembly in the browser. Everything
 above that line — the RPC client, note store, scan and send flow, key storage and the UI — is
 Swift, Java and JavaScript.
@@ -202,7 +202,7 @@ cd clients
 git checkout v0.8.3 && git submodule update --init   # the newest clients release, rather than main
 ```
 
-`v0.8.3` is the newest clients release tag. `v0.8.4` and `v0.8.5` are fullnode tags, not clients tags: `main` vendors fullnode v0.8.5, and there is no clients release built on it yet.
+`v0.8.3` is the newest clients release tag. `v0.8.4` and `v0.8.5` are fullnode tags, not clients tags: `main` vendors fullnode `feat/cs11-revendor` `60a7d03` (constraint set 11, chain 22, the v0.8.7 candidate; v0.8.5 before it), and there is no clients release built on it yet.
 
 **A `v0.8.x` tag on this repository is not always a wallet release.** At a node release every
 repository of the project is tagged with the node's version, as a snapshot of the whole at that
@@ -215,7 +215,7 @@ The wallet releases are the tags that have a
 snapshot tag.
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
-The submodule is the full node (`core/vendor/fullnode`, at `v0.8.5` `d8efd47`, v0.8.4 plus the audit v12 node fixes): the wallet's
+The submodule is the full node (`core/vendor/fullnode`, at `feat/cs11-revendor` `60a7d03`, constraint set 11 for chain 22): the wallet's
 cryptography is the node's own code.
 
 ### 3. Test the core (optional, about a minute)

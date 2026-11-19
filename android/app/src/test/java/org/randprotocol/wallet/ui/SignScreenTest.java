@@ -252,7 +252,7 @@ public class SignScreenTest {
         CheckSession c = new CheckSession();
         CheckSession.Ticket t = c.begin("{p}");
         c.land(t, summary(), signable());
-        c.setTyped("aak3");
+        c.setTyped("ss8z");
         assertTrue(c.canSign("{p}"));
         c.gate().rows().get(0).addr = recipient();
         assertFalse("the editor holds other text", c.canSign("{p} "));
@@ -317,14 +317,14 @@ public class SignScreenTest {
         c.gate().rows().get(0).amount = "12";
         c.gate().edited();
         c.land(t, summary(), signable());
-        c.setTyped("AAK3");
+        c.setTyped("SS8Z");
         assertTrue(c.gate().stale());
         assertFalse(c.canSign("{p}"));
         c.gate().rows().get(0).amount = "10";
         c.gate().edited();
         CheckSession.Ticket t2 = c.begin("{p}");
         c.land(t2, summary(), signable());
-        c.setTyped("AAK3");
+        c.setTyped("SS8Z");
         assertTrue(c.canSign("{p}"));
         assertEquals("Sign sends the list the review was checked with", payees(), c.reviewedPayees());
         c.gate().adopt(List.of("rand1other:1"));
@@ -335,7 +335,7 @@ public class SignScreenTest {
         CheckSession c = new CheckSession();
         CheckSession.Ticket t = c.begin("{p}");
         c.land(t, summary(), signable());
-        c.setTyped("aak3");
+        c.setTyped("ss8z");
         c.refused(judge(summary(), 2020L));
         assertEquals(Verdict.EXPIRED, c.review().judgement.verdict);
         assertTrue(c.review().showsSummary());
@@ -346,16 +346,16 @@ public class SignScreenTest {
     // ------------------------------------------------------------------ the confirmation
 
     @Test public void theLastFourIgnoreDashesAndCase() throws Exception {
-        SignReview r = new SignReview(summary(), signable()); // NFYW-K8E9-E5K9-AAK3
-        assertTrue(r.canSign("aak3", false));
-        assertTrue(r.canSign("AAK3", false));
+        SignReview r = new SignReview(summary(), signable()); // SSJG-ERXD-74B6-SS8Z
+        assertTrue(r.canSign("ss8z", false));
+        assertTrue(r.canSign("SS8Z", false));
         assertTrue(r.canSign("a-ak3", false));
         assertTrue(r.canSign(" AA-K3 ", false));
         assertFalse(r.canSign("aak", false));
-        assertFalse(r.canSign("9aak3", false));
+        assertFalse(r.canSign("9ss8z", false));
         assertFalse(r.canSign("", false));
-        assertFalse("stale", r.canSign("aak3", true));
-        assertFalse(new SignReview(summary().put("policy_fingerprint", 5), signable()).canSign("aak3", false));
+        assertFalse("stale", r.canSign("ss8z", true));
+        assertFalse(new SignReview(summary().put("policy_fingerprint", 5), signable()).canSign("ss8z", false));
     }
 
     // ------------------------------------------------------------------ the review and refusals
@@ -401,7 +401,7 @@ public class SignScreenTest {
             SignReview r = new SignReview(s, judge(bad, 2000L));
             assertFalse(r.judgement.signable());
             assertNotNull(r.refusal());
-            assertFalse(r.canSign("aak3", false));
+            assertFalse(r.canSign("ss8z", false));
             r.lines();
             r.fee();
             r.expiresAt();

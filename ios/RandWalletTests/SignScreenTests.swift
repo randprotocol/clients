@@ -12,7 +12,7 @@ final class SignScreenTests: XCTestCase {
     private let genesis = String(repeating: "aa", count: 32)
     private func summary(_ outputs: [[String: Any]], expected: [[String: Any]] = []) -> MsauthSummary {
         MsauthSummary(json: ["expires_at": 200, "chain_id": 13, "genesis": genesis, "binding_domain": 1, "lines": ["line one", "line two"],
-                             "policy_fingerprint": "NFYW-K8E9-E5K9-AAK3", "recipients_checked": true, "fee": "1000000",
+                             "policy_fingerprint": "SSJG-ERXD-74B6-SS8Z", "recipients_checked": true, "fee": "1000000",
                              "outputs": outputs, "expected": expected])
     }
     private func verdict(_ s: MsauthSummary, head: UInt64? = 1, recipients: [String] = ["rand1payee:5"]) -> MsauthVerdict {
@@ -64,7 +64,7 @@ final class SignScreenTests: XCTestCase {
     func testLinesMissingOrNotAllStringsIsMalformed() {
         for lines in [nil, "x", ["x", 1], [NSNull()], ["a": "b"]] as [Any?] {
             var json: [String: Any] = ["expires_at": 200, "chain_id": 13, "genesis": genesis, "binding_domain": 1,
-                                       "policy_fingerprint": "NFYW-K8E9-E5K9-AAK3", "recipients_checked": true, "fee": "1000000",
+                                       "policy_fingerprint": "SSJG-ERXD-74B6-SS8Z", "recipients_checked": true, "fee": "1000000",
                                        "outputs": [rand5], "expected": []]
             if let lines { json["lines"] = lines }
             XCTAssertEqual(verdict(MsauthSummary(json: json), recipients: ["rand1g:5"]), .malformedSummary, String(describing: lines))
@@ -73,9 +73,9 @@ final class SignScreenTests: XCTestCase {
     }
 
     func testTheConfirmationIgnoresInnerWhitespaceAsTheWebDoes() {
-        XCTAssertTrue(MsauthRules.confirms(fingerprint: "NFYW-K8E9-E5K9-AAK3", typed: "a a k 3"))
-        XCTAssertTrue(MsauthRules.confirms(fingerprint: "NFYW-K8E9-E5K9-AAK3", typed: " A-A\tk3\n"))
-        XCTAssertFalse(MsauthRules.confirms(fingerprint: "NFYW-K8E9-E5K9-AAK3", typed: "a a k"))
+        XCTAssertTrue(MsauthRules.confirms(fingerprint: "SSJG-ERXD-74B6-SS8Z", typed: "a a k 3"))
+        XCTAssertTrue(MsauthRules.confirms(fingerprint: "SSJG-ERXD-74B6-SS8Z", typed: " A-A\tk3\n"))
+        XCTAssertFalse(MsauthRules.confirms(fingerprint: "SSJG-ERXD-74B6-SS8Z", typed: "a a k"))
     }
 
     // MARK: rows to entries
@@ -209,25 +209,25 @@ final class SignScreenTests: XCTestCase {
         XCTAssertFalse(m.canSign(typed: "", stale: false))
         XCTAssertFalse(m.canSign(typed: "e5k9", stale: false))
         XCTAssertFalse(m.canSign(typed: "aak", stale: false))
-        XCTAssertTrue(m.canSign(typed: "AAK3", stale: false))
-        XCTAssertTrue(m.canSign(typed: " aak3 ", stale: false))
-        XCTAssertTrue(m.canSign(typed: "e5k9-aak3", stale: false) == false, "more than the last four is not the last four")
+        XCTAssertTrue(m.canSign(typed: "SS8Z", stale: false))
+        XCTAssertTrue(m.canSign(typed: " ss8z ", stale: false))
+        XCTAssertTrue(m.canSign(typed: "e5k9-ss8z", stale: false) == false, "more than the last four is not the last four")
         XCTAssertTrue(m.canSign(typed: "a-a-k-3", stale: false), "dashes are ignored")
     }
 
     func testStaleDisarmsSignEvenWhenConfirmed() {
         let m = SignProposalModel(summary: summary([rand5]), verdict: .signable(blocksLeft: 100))
-        XCTAssertTrue(m.canSign(typed: "aak3", stale: false))
-        XCTAssertFalse(m.canSign(typed: "aak3", stale: true))
+        XCTAssertTrue(m.canSign(typed: "ss8z", stale: false))
+        XCTAssertFalse(m.canSign(typed: "ss8z", stale: true))
     }
 
     func testARefusedVerdictNeverSigns() {
         let s = summary([rand5])
         for v: MsauthVerdict in [.malformedSummary, .uncheckedRecipient, .noNode(url: "u"), .wrongChain(proposal: 1, wallet: 2), .wrongGenesis, .expired(head: 5, expiresAt: 3)] {
-            XCTAssertFalse(SignProposalModel(summary: s, verdict: v).canSign(typed: "aak3", stale: false), "\(v)")
+            XCTAssertFalse(SignProposalModel(summary: s, verdict: v).canSign(typed: "ss8z", stale: false), "\(v)")
             XCTAssertNotNil(SignProposalModel(summary: s, verdict: v).refusal, "\(v)")
         }
-        XCTAssertFalse(SignProposalModel(summary: nil, verdict: .signable(blocksLeft: 1)).canSign(typed: "aak3", stale: false))
+        XCTAssertFalse(SignProposalModel(summary: nil, verdict: .signable(blocksLeft: 1)).canSign(typed: "ss8z", stale: false))
     }
 
     func testEveryRefusalIsShownByItsMessage() {
@@ -260,7 +260,7 @@ final class SignScreenTests: XCTestCase {
             XCTAssertFalse(m.verdict.isSignable)   // malformed, or unchecked first when recipients_checked is absent
             XCTAssertFalse(m.showsSummary)
             XCTAssertNotNil(m.refusal)
-            XCTAssertFalse(m.canSign(typed: "aak3", stale: false))
+            XCTAssertFalse(m.canSign(typed: "ss8z", stale: false))
         }
         // A summary refused before the core was asked has none at all.
         XCTAssertFalse(SignProposalModel(summary: nil, verdict: .uncheckedRecipient).showsSummary)
@@ -287,7 +287,7 @@ final class SignScreenTests: XCTestCase {
         var c = CheckSession()
         let t = c.begin(proposal: "A")
         c.land(t, signable())
-        c.typed = "aak3"
+        c.typed = "ss8z"
         XCTAssertTrue(c.canSign(editor: "A"))
         XCTAssertEqual(c.reviewedProposal, "A", "what Sign signs is the checked text")
         // Paste B over A: the review is dropped, and Sign is off even though A's lines were shown.
@@ -298,7 +298,7 @@ final class SignScreenTests: XCTestCase {
         XCTAssertEqual(c.typed, "")
         // Even a model that survived would not arm Sign for a different editor text.
         var d = CheckSession()
-        d.land(d.begin(proposal: "A"), signable()); d.typed = "aak3"
+        d.land(d.begin(proposal: "A"), signable()); d.typed = "ss8z"
         XCTAssertFalse(d.canSign(editor: "B"))
     }
 
@@ -341,7 +341,7 @@ final class SignScreenTests: XCTestCase {
 
     func testANewCheckClearsTheTypedConfirmation() {
         var c = CheckSession()
-        c.land(c.begin(proposal: "A"), signable()); c.typed = "aak3"
+        c.land(c.begin(proposal: "A"), signable()); c.typed = "ss8z"
         c.land(c.begin(proposal: "A"), signable())
         XCTAssertEqual(c.typed, "")
     }
@@ -358,14 +358,14 @@ final class SignScreenTests: XCTestCase {
         c.gate.rows[0] = PaymentRow(addr: "a", amount: "5"); c.gate.edited()
         XCTAssertTrue(c.gate.stale)
         c.gate.adopt(entries: ["a:5"])                      // Check payments
-        c.land(c.begin(proposal: "A"), signable()); c.typed = "aak3"
+        c.land(c.begin(proposal: "A"), signable()); c.typed = "ss8z"
         XCTAssertEqual(c.gate.payees, ["a:5"], "the rows survived the second begin")
         XCTAssertFalse(c.gate.stale)
         XCTAssertTrue(c.canSign(editor: "A"))
         c.gate.rows[0].amount = "6"; c.gate.edited()
         XCTAssertFalse(c.canSign(editor: "A"))
         // Retry (the top Check) resends the old payments and cannot re-arm it.
-        c.land(c.begin(proposal: "A"), signable()); c.typed = "aak3"
+        c.land(c.begin(proposal: "A"), signable()); c.typed = "ss8z"
         XCTAssertFalse(c.canSign(editor: "A"))
     }
 

@@ -200,12 +200,12 @@ mod tests {
     fn a_substituted_recipient_is_refused_naming_the_output() {
         let (prop, pol) = (fx("proposal-substituted-recipient"), fx("policy"));
         let e = check(&prop, &pol, &[payee()]).unwrap_err();
-        assert_eq!(e, "output 2 pays b9856a063c1fb742, not an expected recipient");
+        assert_eq!(e, "output 2 pays ae362e71c853c30f, not an expected recipient");
         assert_eq!(e, expected()["substituted_refusal"].as_str().unwrap());
         assert_eq!(check(&prop, &pol, &[format!("{}:10", payee())]).unwrap_err(), e, "an amount pin changes nothing");
         let plain = check(&prop, &pol, &[]).unwrap();
         assert_eq!(plain["recipients_checked"], false);
-        assert_eq!(plain["outputs"][2]["owner_fingerprint"], "b9856a063c1fb742");
+        assert_eq!(plain["outputs"][2]["owner_fingerprint"], "ae362e71c853c30f");
         assert!(plain["outputs"][2]["matches"].is_null());
         assert_eq!(plain["outputs"][2]["needs_payee"], true);
         assert_eq!(plain["lines"][1], randprotocol_msig::NO_EXPECTATION);
@@ -215,8 +215,8 @@ mod tests {
     fn the_valid_proposal_matches_its_payee_and_nothing_given_checks_nothing() {
         let v = check(&fx("proposal-valid"), &fx("policy"), &[payee()]).unwrap();
         assert_eq!(v["recipients_checked"], true);
-        assert_eq!(v["outputs"][2]["matches"], "A5SR-HRMB-SY4M-5ZYF (10 RAND)");
-        assert!(v["lines"][3].as_str().unwrap().contains(" matches A5SR-HRMB-SY4M-5ZYF (10 RAND) "), "{}", v["lines"][3]);
+        assert_eq!(v["outputs"][2]["matches"], "FYM6-E7FN-N6FF-YFKS (10 RAND)");
+        assert!(v["lines"][3].as_str().unwrap().contains(" matches FYM6-E7FN-N6FF-YFKS (10 RAND) "), "{}", v["lines"][3]);
         let none = check(&fx("proposal-valid"), &fx("policy"), &[]).unwrap();
         assert_eq!(none["recipients_checked"], false);
         assert!(none["outputs"].as_array().unwrap().iter().all(|o| o["matches"].is_null()));
@@ -233,7 +233,7 @@ mod tests {
         for ok in [format!("{}:10", payee()), format!("{}:10.0", payee()), format!(" {}:10 \n", payee())] {
             assert_eq!(check(&prop, &pol, &[ok.clone()]).unwrap()["recipients_checked"], true, "{ok:?}");
         }
-        assert_eq!(check(&prop, &pol, &[format!("{}:9", payee())]).unwrap_err(), "expected recipient A5SR-HRMB-SY4M-5ZYF is paid 10 RAND, not 9 RAND");
+        assert_eq!(check(&prop, &pol, &[format!("{}:9", payee())]).unwrap_err(), "expected recipient FYM6-E7FN-N6FF-YFKS is paid 10 RAND, not 9 RAND");
         let e = check(&prop, &pol, &[format!("{}:ten", payee())]).unwrap_err();
         assert!(e.starts_with("expected recipient 0 has a malformed amount"), "{e}");
     }
@@ -243,7 +243,7 @@ mod tests {
     #[test]
     fn expected_names_each_entry_with_its_owner_fingerprint() {
         let fp = expected()["recipient_owner_fingerprint"].as_str().unwrap().to_string();
-        assert_eq!(fp, "35bad5bd21a6f0f7");
+        assert_eq!(fp, "01d4e78ab6788c5a");
         let entries = [payee(), format!("{}:10", payee())];
         let v = check(&fx("proposal-valid"), &fx("policy"), &entries).unwrap();
         assert_eq!(v["expected"], json!([{ "entry": entries[0], "fingerprint": fp }, { "entry": entries[1], "fingerprint": fp }]));
@@ -292,7 +292,7 @@ mod tests {
         assert_eq!(v["burns"], json!({ "burn_a": "0", "burn_asset": 0, "burn_r": "0" }));
         assert_eq!(v["expires_at"], 2024);
         assert_eq!(v["signing_message"], expected()["signing_message"]);
-        assert_eq!(v["policy_fingerprint"], "NFYW-K8E9-E5K9-AAK3");
+        assert_eq!(v["policy_fingerprint"], "SSJG-ERXD-74B6-SS8Z");
         assert_eq!((&v["chain_id"], &v["binding_domain"], &v["genesis"]), (&json!(7), &json!(0), &json!("0".repeat(64))));
         let lines = randprotocol_msig::check_proposal_expecting(&fx("proposal-valid"), &fx("policy"), &[payee()]).unwrap().lines();
         assert_eq!(v["lines"], json!(lines), "fullnode's lines, verbatim");
@@ -301,7 +301,7 @@ mod tests {
         for l in &lines[1..5] {
             assert!(l.contains("(owner key verified; delivery key NOT verifiable from this proposal)"), "{l}");
         }
-        assert!(lines[4].contains("this account 4333dd507bcc4286"), "change is labelled: {}", lines[4]);
+        assert!(lines[4].contains("this account e5bd99d6fa68638e"), "change is labelled: {}", lines[4]);
         assert!(lines.iter().all(|l| !l.contains("rand1")), "no address from the proposal's summary");
         let none = check(&fx("proposal-valid"), &fx("policy"), &[]).unwrap();
         assert_eq!(none["lines"], expected()["lines"]);
@@ -347,7 +347,7 @@ mod tests {
     #[test]
     fn policy_info_names_the_account_every_signer_compares() {
         let v = policy_info(&fx("policy")).unwrap();
-        assert_eq!((&v["fingerprint"], &v["threshold"], &v["signers"]), (&json!("NFYW-K8E9-E5K9-AAK3"), &json!(2), &json!(3)));
+        assert_eq!((&v["fingerprint"], &v["threshold"], &v["signers"]), (&json!("SSJG-ERXD-74B6-SS8Z"), &json!(2), &json!(3)));
         let prop: Value = serde_json::from_str(&fx("proposal-valid")).unwrap();
         assert_eq!(v["policy_hash"], prop["policy"], "the hash a proposal names");
         assert!(v["address"].as_str().unwrap().starts_with("rand1"));
@@ -361,7 +361,7 @@ mod tests {
         let r: Value = serde_json::from_str(&crate::call("msauth_check", &p.to_string())).unwrap();
         assert_eq!(r["ok"], true, "{r}");
         assert_eq!(r["value"]["recipients_checked"], true);
-        assert_eq!(r["value"]["expected"][0]["fingerprint"], "35bad5bd21a6f0f7");
+        assert_eq!(r["value"]["expected"][0]["fingerprint"], "01d4e78ab6788c5a");
         let p = json!({ "proposal": fx("proposal-valid"), "policy": fx("policy") });
         let r: Value = serde_json::from_str(&crate::call("msauth_check", &p.to_string())).unwrap();
         assert_eq!(r["value"]["recipients_checked"], false, "{r}");
@@ -418,7 +418,7 @@ mod tests {
         );
         assert_eq!(
             sign(&fx("proposal-valid"), &fx("policy"), &m[0], &[format!("{}:9", payee())]).unwrap_err(),
-            "expected recipient A5SR-HRMB-SY4M-5ZYF is paid 10 RAND, not 9 RAND"
+            "expected recipient FYM6-E7FN-N6FF-YFKS is paid 10 RAND, not 9 RAND"
         );
         assert!(sign(&fx("proposal-valid"), &fx("policy"), &m[0], &["rand1nope".into()]).unwrap_err().starts_with("expected recipient 0 is not a shielded address"));
     }

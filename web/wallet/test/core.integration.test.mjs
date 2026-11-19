@@ -245,14 +245,14 @@ test('the artefact this wallet loads is built for chain 21 on the hidden-asset b
   // chain no longer runs. These are the constants that moved, and a stale build fails here.
   const core = await realCore();
   const k = await core.call('version');
-  assert.equal(k.default_chain_id, 21, 'chain 21 from e34117b (constraint set 9); 20 from 2026-10-01 before that');
+  assert.equal(k.default_chain_id, 22, 'chain 22 from 60a7d03 (constraint set 11); 21 from e34117b (constraint set 9); 20 from 2026-10-01 before that');
   // Fullnode v0.6.7 (constraint set 8 and split authorisation — the build chains 18 and 19 run):
   // every bundle proof declares the guest's ceiling, which the genesis pins; the chains on which a
   // memo claim is never believed; the two guests chain 18's `rand_status` names (2026-09-30).
-  assert.equal(k.chain_build, 'd8efd47');
-  assert.equal(k.bundle_gas_limit, 20479);
-  assert.equal(k.hc_bundle, '60af094acfe65d85fdb18fb3d06cf9085dcf28c96e59e87f1ee527226e6e3fce', 'bundle guest v3');
-  assert.equal(k.hc_auth, '1e4e347f44cf86750b30a9a4bdf9ec9256efe353d4ff8017451eca7d195639c1', 'the auth guest');
+  assert.equal(k.chain_build, '60a7d03');
+  assert.equal(k.bundle_gas_limit, 22527);
+  assert.equal(k.hc_bundle, '00782b22b1efdf6bbc4d9001b27baa28c03e75732090c6ccd494ddd1365c141e', 'bundle guest v3 (constraint set 11)');
+  assert.equal(k.hc_auth, '8373994c200819c899236f822f0315efea213b3506a1df0785544a6c90a46078', 'the auth guest (constraint set 11)');
   assert.equal(k.split_authorisation, true);
   assert.deepEqual(k.prover_witness_kinds, ['viewing_key', 'spend_key']);
   // The sentence the settings screen shows before a pairing is saved is the core's own.
@@ -448,7 +448,7 @@ test('the wasm core checks and signs fullnode\'s private-multisig vectors exactl
   const expected_recipients = [`${payee}:10`];
   const s = await core.call('msauth_check', { proposal, policy, expected_recipients });
   assert.equal(s.recipients_checked, true);
-  assert.equal(s.policy_fingerprint, 'NFYW-K8E9-E5K9-AAK3');
+  assert.equal(s.policy_fingerprint, 'SSJG-ERXD-74B6-SS8Z');
   assert.equal(s.outputs[2].amount, '10000000000');
   assert.deepEqual(s.lines, expected.lines_expecting_recipient);
   for (const [i, want] of [[0, expected.share_0], [2, expected.share_2]]) {

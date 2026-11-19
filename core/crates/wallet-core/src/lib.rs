@@ -59,7 +59,15 @@ pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode
-/// `main` `97bcf4b` (the v0.8.3 batch: #151's counter-mode prover randomness and per-shape
+/// `feat/cs11-revendor` `60a7d03` (PR #194, the v0.8.7 candidate for chain 22): **constraint set
+/// 11**, circuits `76a48dca` — new Poseidon2 round constants (Grain), so every note commitment,
+/// nullifier, scan key, Merkle and state root and the genesis hash move; the proof header declares
+/// its Poseidon2 height; bundle guest v3 `hc_bundle` `00782b22…`, `hc_auth` `8373994c…`,
+/// `hc_auth_multisig` `41db73c5…`; `gas_max(14,0,0)` = `bundle_gas_limit` 22 527 (was 20 479),
+/// auth 1 407, msauth 355 775; the msauth key blob `168d79a8…`. A node on it refuses every chain
+/// 14–21 genesis, so this build is chain-22-only (chain 21 fixes go to the v0.8.6 line). Before
+/// it: fullnode `v0.8.5` `d8efd47` (v0.8.4 plus the audit v12 node fixes, constraint set 9). Before
+/// that: fullnode `main` `97bcf4b` (the v0.8.3 batch: #151's counter-mode prover randomness and per-shape
 /// `ProverData` cache, so a bundle proof in the wallet is ~40% faster; proof format, guests and
 /// verifier keys unchanged, so chain 21's v0.8.0–v0.8.2 nodes accept its proofs). Before it: fullnode
 /// tag `v0.8.0` (`c0878c3`: private multisig, constraint set 9, chain 21 onward; over `main`
@@ -103,9 +111,11 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
 /// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
 /// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "d8efd47";
-/// The chain the defaults below describe: chain 21 (fullnode v0.8.0, constraint set 9; perps,
-/// multisig, the `fees` section, `hc_auth_multisig`), cut from chain 20's state. Before it, chain
+pub const CHAIN_BUILD: &str = "60a7d03";
+/// The chain the defaults below describe: chain 22 (fullnode v0.8.7, constraint set 11), cut from
+/// chain 21's state. A wallet built against it refuses a node on any other chain until 22 is up,
+/// then adopts 22's genesis on its first scan. Before it, chain 21 (fullnode v0.8.0, constraint
+/// set 9; perps, multisig, the `fees` section, `hc_auth_multisig`), cut from chain 20's state. Before it, chain
 /// 20, cut 2026-10-01 on fullnode v0.6.8 (`c9c9bd3`) from chain 19's state, with `program_state`, `binding_domain: 1` and `bridge.fees` (10 bps each
 /// way) in its genesis. Before it, chain 19, the next cut (not live on 2026-09-30; the
 /// public node answered chain 18, genesis `a7cb020c…`, that day; chain 18 was the aim from
@@ -123,7 +133,7 @@ pub const CHAIN_BUILD: &str = "d8efd47";
 /// never built with either: without them both constants are the ones written here.
 pub const DEFAULT_CHAIN_ID: u64 = match option_env!("RAND_WALLET_CHAIN_ID") {
     Some(id) => parse_chain_id(id),
-    None => 21,
+    None => 22,
 };
 pub const DEFAULT_RPC_URL: &str = match option_env!("RAND_WALLET_RPC_URL") {
     Some(url) => url,
@@ -1774,7 +1784,7 @@ pub fn envelope_format_on(chain_id: u64, envelope_bytes: Option<u32>) -> Envelop
 /// Constraint set 8 (spec 2026-09-28 §4.3): under a `gas` section every bundle proof must declare
 /// the chain's `bundle_gas_limit` as its `GAS_LIMIT`, exactly, or the ledger refuses it
 /// (`TxError::BundleGasLimit`, permanent). This build's bundle guest declares its header ceiling,
-/// `gas::bundle_gas_limit_pin()` = `gas_max(14, 0, 0)` = 20 479 — the prover's default and the one
+/// `gas::bundle_gas_limit_pin()` = `gas_max(14, 0, 0)` = 22 527 (constraint set 11; 20 479 under set 9) — the prover's default and the one
 /// value genesis accepts. A chain naming any other value runs a bundle guest this wallet does not
 /// have: refused here, before a proof is paid for. `None` is a chain without the section (or a node
 /// that predates the field), on which no limit is checked.
@@ -5458,7 +5468,7 @@ mod tests {
         assert_eq!(ADDRESS_HRP, "rand1");
         // The wire names come from upstream, not from a second literal here.
         assert_eq!(ADDRESS_HRP, randprotocol_core::notes::ADDRESS_PREFIX);
-        assert_eq!(v["default_chain_id"], 21);
+        assert_eq!(v["default_chain_id"], 22);
         assert!(v.get("units_per_rand").is_some());
     }
 
@@ -5472,7 +5482,7 @@ mod tests {
     fn json_entry_point_reports_errors_as_json() {
         let v: Value = serde_json::from_str(&call("version", "{}")).unwrap();
         assert_eq!(v["ok"], true);
-        assert_eq!(v["value"]["default_chain_id"], 21);
+        assert_eq!(v["value"]["default_chain_id"], 22);
         assert_eq!(v["value"]["bundle_base_fee"], "1000000");
         let v: Value = serde_json::from_str(&call("wallet_info", r#"{"spend_key":"zz"}"#)).unwrap();
         assert_eq!(v["ok"], false);
@@ -6302,8 +6312,8 @@ mod tests {
         #[test]
         fn version_reports_chain_fourteen() {
             let v = constants();
-            assert_eq!(v["default_chain_id"], 21);
-            assert_eq!(v["chain_build"], "d8efd47");
+            assert_eq!(v["default_chain_id"], 22);
+            assert_eq!(v["chain_build"], "60a7d03");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
@@ -6312,11 +6322,12 @@ mod tests {
             assert_eq!(v["bundle_slots"], BUNDLE_SLOTS);
             assert_eq!(v["bundle_asset_slots"], A_SLOTS);
             assert_eq!(v["bundle_inputs"], BUNDLE_INPUTS, "still two notes per group");
-            // The guests chains 18 and 19 pin in their genesis (fullnode v0.6.7, `rand_status` on
-            // chain 18, 2026-09-30): bundle guest v3 and the auth guest. A vendored build that
-            // assembled either differently could prove nothing those chains accept.
-            assert_eq!(v["hc_bundle"], "60af094acfe65d85fdb18fb3d06cf9085dcf28c96e59e87f1ee527226e6e3fce");
-            assert_eq!(v["hc_auth"], "1e4e347f44cf86750b30a9a4bdf9ec9256efe353d4ff8017451eca7d195639c1");
+            // The guests chain 22 pins in its genesis (constraint set 11, fullnode PR #194's
+            // `guest_provenance.rs`): bundle guest v3 and the auth guest. A vendored build that
+            // assembled either differently could prove nothing that chain accepts. (Set 9, chains
+            // 18–21: `60af094a…3fce` and `1e4e347f…39c1`.)
+            assert_eq!(v["hc_bundle"], "00782b22b1efdf6bbc4d9001b27baa28c03e75732090c6ccd494ddd1365c141e");
+            assert_eq!(v["hc_auth"], "8373994c200819c899236f822f0315efea213b3506a1df0785544a6c90a46078");
             assert_eq!(v["hc_bundles"].as_array().unwrap().len(), 3);
             assert!(v["hc_bundles"].as_array().unwrap().contains(&v["hc_bundle"]));
             assert_eq!(v["split_authorisation"], true);
@@ -6496,14 +6507,14 @@ mod tests {
 
         /// Constraint set 8 (spec 2026-09-28 §4.3): under a `gas` section every bundle proof must
         /// declare the chain's `bundle_gas_limit` exactly, and this wallet's guest declares its
-        /// header ceiling, 20 479. A chain pinning any other value runs a guest this build does not
+        /// header ceiling, 22 527 under constraint set 11. A chain pinning any other value runs a guest this build does not
         /// have — refused before a proof is paid for, on both request shapes and the prover path.
         #[test]
         fn a_chain_pinning_another_bundle_gas_limit_is_refused_before_building() {
-            assert_eq!(gas::bundle_gas_limit_pin(), 20_479);
-            assert_eq!(constants()["bundle_gas_limit"], 20_479);
+            assert_eq!(gas::bundle_gas_limit_pin(), 22_527);
+            assert_eq!(constants()["bundle_gas_limit"], 22_527);
             let refused = |e: String| {
-                assert!(e.contains("16383") && e.contains("20479") && e.contains("update the wallet"), "{e}");
+                assert!(e.contains("16383") && e.contains("22527") && e.contains("update the wallet"), "{e}");
             };
             let mut req = fixture_prove_request("test", 0).unwrap();
             req["bundle_gas_limit"] = json!(16_383);
@@ -6512,7 +6523,7 @@ mod tests {
             req["prover"] = json!({ "kem_ek": hex::encode(randprotocol_prover::key::ProverKey::from_seed([7u8; 64]).kem_ek()), "token": hex::encode([9u8; 32]) });
             let r: PrepareTransferRequest = serde_json::from_value(req.clone()).unwrap();
             refused(prepare_transfer(&r).err().unwrap());
-            req["bundle_gas_limit"] = json!(20_479);
+            req["bundle_gas_limit"] = json!(22_527);
             let r: ProveRequest = serde_json::from_value(req.clone()).unwrap();
             assert!(transfer_unproven(&r).is_ok(), "the pin itself");
             req["bundle_gas_limit"] = Value::Null;
@@ -7561,7 +7572,7 @@ mod tests {
                 exec,
             );
             l.set_tokens(Some(TokenRegistry::new(REG_FEE)));
-            l.set_program_state(Some(program_state::ProgramState::from_config(&program_state::ProgramStateConfig { cell_fee: CELL_FEE, refuse_panics: false })));
+            l.set_program_state(Some(program_state::ProgramState::from_config(&program_state::ProgramStateConfig { cell_fee: CELL_FEE, refuse_panics: false, reference_block_window: 0 })));
             l.set_genesis_supply(1_000_000_000_000, 10);
             for cm in leaves {
                 l.deposit(*cm, exec).unwrap();

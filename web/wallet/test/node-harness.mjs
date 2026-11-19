@@ -152,7 +152,7 @@ export async function stopAndWait(child, ms = 10_000) {
 
 /**
  * What chain 18's genesis has beyond the defaults (fullnode v0.6.7): the `gas` section — the
- * prices, the bundle guest's pinned gas (20 479, the one value genesis accepts) and the in-circuit
+ * prices, the bundle guest's pinned gas (22 527 under constraint set 11 — 20 479 under set 9 — the one value genesis accepts) and the in-circuit
  * meter (constraint set 8, spec 2026-09-28 §4.2) — and **split authorisation** (v0.6.3): bundle
  * guest v3 with the auth guest, which needs a block cap of at least three proof caps plus a MiB
  * (chain 18's 4 MiB proofs and 20 MiB blocks). So the node holds every transaction this wallet
@@ -163,7 +163,7 @@ export async function stopAndWait(child, ms = 10_000) {
  */
 export function chainArgs(nodeBin) {
   const help = execFileSync(nodeBin, ['genesis', '--help'], { stdio: 'pipe' }).toString();
-  const gas = help.includes('--bundle-gas-limit') ? ['--gas-price', '100', '--byte-price', '800', '--bundle-gas-limit', '20479'] : [];
+  const gas = help.includes('--bundle-gas-limit') ? ['--gas-price', '100', '--byte-price', '800', '--bundle-gas-limit', '22527'] : [];
   const auth = help.includes('--auth-guest')
     ? ['--bundle-guest', 'v3', '--auth-guest', '--max-proof-bytes', '4194304', '--max-block-bytes', '20971520']
     : [];

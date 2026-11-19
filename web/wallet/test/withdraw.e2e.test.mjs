@@ -52,7 +52,7 @@ process.env.RAND_ALLOW_TEST_FRI_PROFILE ??= '1';
  */
 function chainArgs(nodeBin) {
   const help = execFileSync(nodeBin, ['genesis', '--help'], { stdio: 'pipe' }).toString();
-  const gas = help.includes('--bundle-gas-limit') ? ['--gas-price', '100', '--byte-price', '800', '--bundle-gas-limit', '20479'] : [];
+  const gas = help.includes('--bundle-gas-limit') ? ['--gas-price', '100', '--byte-price', '800', '--bundle-gas-limit', '22527'] : [];
   const auth = help.includes('--auth-guest')
     ? ['--bundle-guest', 'v3', '--auth-guest', '--max-proof-bytes', '4194304', '--max-block-bytes', '20971520']
     : [];
@@ -72,7 +72,7 @@ const PROVER_BIN = process.env.RAND_PROVER_BIN || '';
 const CLI_BIN = process.env.RAND_CLI_BIN || '';
 const FIXTURES_BIN = process.env.RAND_FIXTURES_BIN || '';
 const PASSWORD = 'an-e2e-password-for-a-real-vault';
-const CHAIN_ID = 21; // the chain this build's core was made for (`version.default_chain_id`)
+const CHAIN_ID = 22; // the chain this build's core was made for (`version.default_chain_id`)
 const SOURCE_CHAIN = 2; // Ethereum's bridge chain id
 // Chain 2 USDT, the mainnet wire address: twelve zero bytes then the contract. The genesis
 // `e2e-fixtures` writes lists zUSD backed by exactly this coin.

@@ -26,13 +26,13 @@ final class MsauthTests: XCTestCase {
     func testTheCoreChecksAndSignsTheVectors() throws {
         let s = try RandCore.msauthCheck(proposal: try fx("proposal-valid"), policy: try fx("policy"), expectedRecipients: [try payment()])
         XCTAssertTrue(s.recipientsChecked)
-        XCTAssertEqual(s.policyFingerprint, "NFYW-K8E9-E5K9-AAK3")
+        XCTAssertEqual(s.policyFingerprint, "SSJG-ERXD-74B6-SS8Z")
         XCTAssertEqual(s.chainId, 7)
         XCTAssertEqual(s.expiresAt, 2024)
         XCTAssertEqual(s.bindingDomain, 0)
         XCTAssertEqual(s.outputs.count, 4)
         XCTAssertEqual(s.outputs[2].amount, "10000000000")
-        XCTAssertEqual(s.outputs[2].matches, "A5SR-HRMB-SY4M-5ZYF (10 RAND)")
+        XCTAssertEqual(s.outputs[2].matches, "FYM6-E7FN-N6FF-YFKS (10 RAND)")
         XCTAssertTrue(s.outputs[2].needsPayee)
         XCTAssertTrue(s.outputs[3].toAccount)
         XCTAssertEqual(s.expected, [MsauthExpected(entry: try payment(), fingerprint: try json("expected")["recipient_owner_fingerprint"] as? String)])
@@ -48,7 +48,7 @@ final class MsauthTests: XCTestCase {
             XCTAssertTrue((e as! RandCore.CoreError).message.contains("does not hash to the proposal's binding"))
         }
         let info = try RandCore.msauthPolicyInfo(try fx("policy"))
-        XCTAssertEqual(info.fingerprint, "NFYW-K8E9-E5K9-AAK3")
+        XCTAssertEqual(info.fingerprint, "SSJG-ERXD-74B6-SS8Z")
         XCTAssertEqual(info.signers, 3)
         XCTAssertEqual(try RandCore.msauthSignerImport(try seeds()[1], policy: try fx("policy")).index, 1)
         XCTAssertNil(try RandCore.msauthSignerImport(try seeds()[1], policy: nil).index)
@@ -89,9 +89,9 @@ final class MsauthTests: XCTestCase {
     }
 
     func testConfirmsAndClean() {
-        XCTAssertTrue(MsauthRules.confirms(fingerprint: "NFYW-K8E9-E5K9-AAK3", typed: " aak3"))
-        XCTAssertFalse(MsauthRules.confirms(fingerprint: "NFYW-K8E9-E5K9-AAK3", typed: "aak"))
-        XCTAssertFalse(MsauthRules.confirms(fingerprint: "NFYW-K8E9-E5K9-AAK3", typed: "e5k9"))
+        XCTAssertTrue(MsauthRules.confirms(fingerprint: "SSJG-ERXD-74B6-SS8Z", typed: " ss8z"))
+        XCTAssertFalse(MsauthRules.confirms(fingerprint: "SSJG-ERXD-74B6-SS8Z", typed: "aak"))
+        XCTAssertFalse(MsauthRules.confirms(fingerprint: "SSJG-ERXD-74B6-SS8Z", typed: "e5k9"))
         XCTAssertEqual(MsauthRules.clean("\u{FEFF} {\"a\":1}\r\n"), "{\"a\":1}")
         XCTAssertEqual(MsauthRules.payees([" rand1a:5 ", "rand1b:2\n"]), ["rand1a:5", "rand1b:2"])
     }
@@ -101,7 +101,7 @@ final class MsauthTests: XCTestCase {
     private let genesis = String(repeating: "aa", count: 32)
     private func summary(_ changes: [String: Any?] = [:]) -> [String: Any] {
         var s: [String: Any] = ["expires_at": 200, "chain_id": 13, "genesis": genesis, "binding_domain": 1, "lines": ["x"],
-                                "policy_fingerprint": "NFYW-K8E9-E5K9-AAK3", "recipients_checked": true, "fee": "1",
+                                "policy_fingerprint": "SSJG-ERXD-74B6-SS8Z", "recipients_checked": true, "fee": "1",
                                 "outputs": [["to_account": false, "amount": "5", "needs_payee": true, "matches": "FP"]]]
         for (k, v) in changes { s[k] = v }   // nil removes the field
         return s
@@ -282,7 +282,7 @@ final class MsauthTests: XCTestCase {
         let p = try store.add(label: " treasury ", policy: try fx("policy"), key: try seeds()[0])
         XCTAssertEqual(p.index, 0)
         XCTAssertEqual(p.label, "treasury")
-        XCTAssertEqual(p.fingerprint, "NFYW-K8E9-E5K9-AAK3")
+        XCTAssertEqual(p.fingerprint, "SSJG-ERXD-74B6-SS8Z")
         XCTAssertEqual(secrets.items["msauth.\(p.id).seed"]?.presence, true)
         XCTAssertEqual(secrets.items["msauth.\(p.id).seed"]?.data, Data(hex: try seeds()[0]))
         XCTAssertEqual(secrets.items["msauth.\(p.id).policy"]?.presence, false)

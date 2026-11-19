@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Private-multisig signing end to end (spec 2026-10-11-msauth-signing-design.md §6.5): a 2-of-3
-# account on a one-validator Test-profile devnet (chain 21's shape: split authorisation + the
+# account on a one-validator Test-profile devnet (chain 22 shape, constraint set 11: split authorisation + the
 # multisig auth guest), the CLI prepares, signer 0 signs in the web wallet's engine
 # (ui/engine/signers.js over the real wasm core), signer 2 in iOS through MsauthSigning and RandCore
 # on the simulator (FakeSignerSecrets: a simulator has no passcode), the CLI proves (msauth tier 18
@@ -60,8 +60,8 @@ R --key "$DIR/p.key.json" keygen >/dev/null
 addr() { R --key "$1" address 2>/dev/null | grep -Eo '^rand1[1-9A-HJ-NP-Za-km-z]+' | head -1; }
 V=$(addr "$DIR/v.key.json")
 P=$(addr "$DIR/p.key.json")
-"$RAND_NODE_BIN" genesis --chain-id 21 --fri-profile test --faucet --validator "$DIR/node.key.json,1000,$V" \
-  --gas-price 100 --byte-price 800 --bundle-gas-limit 20479 --bundle-guest v3 --auth-guest --auth-multisig-guest \
+"$RAND_NODE_BIN" genesis --chain-id 22 --fri-profile test --faucet --validator "$DIR/node.key.json,1000,$V" \
+  --gas-price 100 --byte-price 800 --bundle-gas-limit 22527 --bundle-guest v3 --auth-guest --auth-multisig-guest \
   --max-proof-bytes 4194304 --max-block-bytes 20971520 --binding-domain 1 --proof-window-blocks 1024 --out "$DIR/genesis.json"
 "$RAND_NODE_BIN" init --datadir "$DIR/data" --genesis "$DIR/genesis.json"
 "$RAND_NODE_BIN" run --datadir "$DIR/data" --key "$DIR/node.key.json" --validator --rpc "127.0.0.1:$PORT" \
@@ -96,7 +96,7 @@ else
   step "signer 2: iOS on the simulator ($SIM)"
   ( cd ios && TEST_RUNNER_RAND_MSAUTH_PROPOSAL="$(cat "$DIR/proposal.json")" TEST_RUNNER_RAND_MSAUTH_POLICY="$(cat "$DIR/policy.json")" \
     TEST_RUNNER_RAND_MSAUTH_KEY="$(cat "$DIR/signer2.key.json")" TEST_RUNNER_RAND_MSAUTH_RPC="$RPC" \
-    TEST_RUNNER_RAND_MSAUTH_PAYEE="$P:$AMOUNT" TEST_RUNNER_RAND_MSAUTH_CHAIN_ID=21 \
+    TEST_RUNNER_RAND_MSAUTH_PAYEE="$P:$AMOUNT" TEST_RUNNER_RAND_MSAUTH_CHAIN_ID=22 \
     xcodebuild -project RandWallet.xcodeproj -scheme RandWallet -destination "platform=iOS Simulator,name=$SIM" \
     -derivedDataPath "$DIR/ios-dd" test -only-testing:RandWalletTests/LiveMsauthTests ) > "$DIR/ios.log" 2>&1 || { tail -40 "$DIR/ios.log"; exit 1; }
   grep -E 'Test (Case|Suite).*(passed|failed|skipped)|Executed' "$DIR/ios.log" | tail -4

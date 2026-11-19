@@ -64,6 +64,6 @@ public class CoreErrorsTest {
             same(m);
         }
         // The crate's payee refusals are shown verbatim, by design (Task 3).
-        same("output 2 pays b9856a063c1fb742, not an expected recipient");
+        same("output 2 pays ae362e71c853c30f, not an expected recipient");
     }
 }
