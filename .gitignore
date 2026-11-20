@@ -31,3 +31,7 @@ desktop/dist-ui/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
 extension/node_modules/
+
+# Local agent worktrees and Python bytecode
+.claude/
+__pycache__/
