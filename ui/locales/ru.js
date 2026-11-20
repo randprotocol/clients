@@ -1128,4 +1128,13 @@ export default {
   "the record does not open with this password": "запись не открывается этим паролем",
   "block {height} has {got} of the {n} transactions its header announced": "блок {height} содержит {got} из {n} транзакций, объявленных в его заголовке",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "Ключ этого прувера выведен из обращения и больше не используется. Подключите другой прувер в настройках или обновите Rand Wallet до последней версии.",
+  "{host} asks Rand Wallet for a key of its own.": "{host} просит у Rand Wallet собственный ключ.",
+  "Give this site a key?": "Выдать этому сайту ключ?",
+  "Nothing to approve": "Нечего подтверждать",
+  "Purpose": "Назначение",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "Rand Wallet каждый раз выдаёт этому сайту один и тот же ключ — на любом устройстве с этим кошельком — и не выдаёт его никакому другому сайту.",
+  "Site": "Сайт",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "Ключ не даёт доступа к средствам, нотам или ключам адреса этого кошелька.",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "Сайт может использовать этот ключ, чтобы действовать от вашего имени на этом сайте, например подписывать сделки в вашем торговом аккаунте на нём.",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "Вас спрашивают один раз для каждого назначения; при отключении сайта ваш ответ забывается.",
 };

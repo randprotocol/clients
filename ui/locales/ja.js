@@ -1123,4 +1123,13 @@ export default {
   "the record does not open with this password": "このパスワードではレコードを開けません",
   "block {height} has {got} of the {n} transactions its header announced": "ブロック {height} には、ヘッダーが示した {n} 件のトランザクションのうち {got} 件しかありません",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "このプルーバーの鍵は廃止され、もう使われていません。設定で別のプルーバーをペアリングするか、Rand Wallet を最新バージョンに更新してください。",
+  "{host} asks Rand Wallet for a key of its own.": "{host} が Rand Wallet に専用のキーを求めています。",
+  "Give this site a key?": "このサイトにキーを渡しますか？",
+  "Nothing to approve": "承認するものがありません",
+  "Purpose": "用途",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "Rand Wallet は、このウォレットがあるどの端末でも、このサイトに毎回同じキーを渡し、ほかのサイトには渡しません。",
+  "Site": "サイト",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "このキーでは、このウォレットの資金、ノート、アドレスのキーにはアクセスできません。",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "サイトはこのキーを使って、そのサイト上であなたの代わりに操作できます。たとえば、そこでのトレード口座で取引に署名します。",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "用途ごとに一度だけ確認されます。サイトとの接続を解除すると、その回答は消去されます。",
 };

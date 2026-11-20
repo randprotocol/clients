@@ -167,3 +167,27 @@ test('withdraw is relayed with its params, and a rand:phase for a waiting reques
   assert.equal(replies(win, 'w2')[0].error.code, 'BAD_REQUEST');
   assert.equal(replies(win, 'w3')[0].error.code, 'BAD_REQUEST');
 });
+
+test('deriveKey is relayed with its purpose and nothing else; anything but a short string purpose never reaches the background', async () => {
+  const win = fakeWindow();
+  const chrome = fakeChrome({ answer: () => ({ pending: 'd1' }) });
+  inject(win, chrome);
+  win.postMessage({ target: 'rand-wallet:page', id: 'k1', method: 'deriveKey', params: { purpose: 'perps/trading', origin: 'https://durian.market', extra: { a: 1 } } }, ORIGIN);
+  await tick();
+  assert.deepEqual(plain(chrome.sent), [{ type: 'rand:deriveKey', params: { purpose: 'perps/trading' } }]);
+  for (const fn of chrome.decisions) fn({ type: 'rand:decision', id: 'd1', ok: true, result: { key: 'ab'.repeat(32) } });
+  await tick();
+  assert.deepEqual(replies(win, 'k1'), [{ target: 'rand-wallet:content', id: 'k1', ok: true, result: { key: 'ab'.repeat(32) } }]);
+
+  for (const [id, params] of [['k2', undefined], ['k3', { purpose: 7 }], ['k4', { purpose: 'a'.repeat(65) }], ['k5', 'perps'], ['k6', { purpose: { toString: 1 } }]]) {
+    win.postMessage({ target: 'rand-wallet:page', id, method: 'deriveKey', params }, ORIGIN);
+  }
+  await tick();
+  assert.equal(chrome.sent.length, 1, 'none reached the background');
+  for (const id of ['k2', 'k3', 'k4', 'k5', 'k6']) assert.equal(replies(win, id)[0].error.code, 'BAD_REQUEST', id);
+});
+
+test('the relayed method names are exactly the provider\'s, deriveKey the one new one', () => {
+  const names = /const METHODS = new Set\(\[([^\]]*)\]\)/.exec(SOURCE)[1].match(/'[^']+'/g).map((s) => s.slice(1, -1));
+  assert.deepEqual(names.sort(), ['connect', 'deriveKey', 'disconnect', 'getAddress', 'getRecipientHash', 'invoke', 'withdraw']);
+});

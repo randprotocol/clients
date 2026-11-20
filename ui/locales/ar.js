@@ -1130,4 +1130,13 @@ export default {
   "the record does not open with this password": "لا يُفتح السجل بكلمة المرور هذه",
   "block {height} has {got} of the {n} transactions its header announced": "الكتلة {height} تحتوي على {got} من أصل {n} معاملة أعلنت عنها ترويستها",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "أُوقف العمل بمفتاح هذا المُثبِت ولم يعد مستخدمًا. اقرن مُثبِتًا آخر في الإعدادات، أو حدّث Rand Wallet إلى أحدث إصدار.",
+  "{host} asks Rand Wallet for a key of its own.": "يطلب {host} من Rand Wallet مفتاحًا خاصًا به.",
+  "Give this site a key?": "هل تعطي هذا الموقع مفتاحًا؟",
+  "Nothing to approve": "لا شيء للموافقة عليه",
+  "Purpose": "الغرض",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "يعطي Rand Wallet هذا الموقع المفتاح نفسه في كل مرة، على أي جهاز فيه هذه المحفظة، ولا يعطيه لأي موقع آخر.",
+  "Site": "الموقع",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "لا يمنح المفتاح أي وصول إلى أموال هذه المحفظة أو سنداتها أو مفاتيح عنوانها.",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "يمكن للموقع استخدام المفتاح للتصرف نيابةً عنك على ذلك الموقع، مثل توقيع الصفقات في حساب التداول الخاص بك هناك.",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "يُطلب منك ذلك مرة واحدة لكل غرض، وقطع الاتصال بالموقع يُنسي إجابتك.",
 };

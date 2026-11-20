@@ -77,6 +77,8 @@ const NEEDED = [
   // the page provider (`window.rand`) and its consent window
   'inpage.js', 'content.js', 'provider-host.js', 'connect.html', 'connect.js', 'lib/recipient-hash.js',
   'lib/site-errors.js', 'lib/address-format.js',
+  // deriveKey: the background's KDF and its approval window
+  'lib/derive-key.js', 'derive.html', 'derive.js',
   // the manifest's own strings (`__MSG_…__`, WebExtension i18n): without `default_locale`'s file
   // the browser refuses the manifest outright
   '_locales/en/messages.json', 'ui/i18n.js', 'lib/window-locale.js',

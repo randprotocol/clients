@@ -42,7 +42,7 @@ function boot({ tabs = [], refuse = () => false, browser = {} } = {}) {
   sandbox.importScripts = (f) => vm.runInContext(read(f), ctx);
   const ctx = vm.createContext(sandbox);
   vm.runInContext(read('background.js'), ctx);
-  return { calls, fire: (details) => calls.listeners.installed(details) };
+  return { calls, sandbox, fire: (details) => calls.listeners.installed(details) };
 }
 
 test('an update re-injects inpage.js (page world) then content.js into every open bridge tab', async () => {
@@ -107,4 +107,12 @@ test('the toolbar button opens the side panel: Chrome is told to, Firefox toggle
     const m = JSON.parse(readFileSync(new URL(`../../${which}/manifest.json`, import.meta.url), 'utf8'));
     assert.equal(m.action.default_popup, undefined, `${which}: no popup, so the click is ours to answer`);
   }
+});
+
+test('deriveKey\'s KDF is loaded before the provider host, in Chrome\'s worker and in Firefox\'s event page', () => {
+  const { sandbox } = boot();
+  assert.equal(typeof sandbox.RandSiteKey.deriveSiteKey, 'function');
+  assert.equal(typeof sandbox.makeRandProviderHost, 'function');
+  const scripts = JSON.parse(readFileSync(new URL('../../firefox/manifest.json', import.meta.url), 'utf8')).background.scripts;
+  assert.deepEqual(scripts, ['lib/derive-key.js', 'provider-host.js', 'background.js']);
 });

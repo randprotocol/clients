@@ -1130,4 +1130,13 @@ export default {
   "the record does not open with this password": "रिकॉर्ड इस पासवर्ड से नहीं खुलता",
   "block {height} has {got} of the {n} transactions its header announced": "ब्लॉक {height} में उसके हेडर द्वारा घोषित {n} लेनदेन में से {got} हैं",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "इस प्रूवर की की हटा दी गई है और अब इस्तेमाल नहीं होती। सेटिंग्स में कोई दूसरा प्रूवर पेयर करें, या Rand Wallet को नवीनतम संस्करण में अपडेट करें।",
+  "{host} asks Rand Wallet for a key of its own.": "{host} Rand Wallet से अपनी खुद की एक की माँग रही है।",
+  "Give this site a key?": "इस साइट को की दें?",
+  "Nothing to approve": "स्वीकृत करने के लिए कुछ नहीं",
+  "Purpose": "उद्देश्य",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "Rand Wallet इस साइट को हर बार वही की देता है, इस वॉलेट वाले किसी भी डिवाइस पर, और किसी दूसरी साइट को यह की नहीं देता।",
+  "Site": "साइट",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "यह की इस वॉलेट के फ़ंड, नोट या पते की कीज़ तक कोई पहुँच नहीं देती।",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "साइट इस की से उसी साइट पर आपकी ओर से काम कर सकती है, उदाहरण के लिए वहाँ आपके ट्रेडिंग खाते में ट्रेड पर हस्ताक्षर करना।",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "हर उद्देश्य के लिए आपसे एक बार पूछा जाता है; साइट को डिस्कनेक्ट करने पर आपका जवाब भुला दिया जाता है।",
 };

@@ -1130,4 +1130,13 @@ export default {
   "the record does not open with this password": "இந்தக் கடவுச்சொல்லால் பதிவு திறக்கவில்லை",
   "block {height} has {got} of the {n} transactions its header announced": "தொகுதி {height} அதன் தலைப்பு அறிவித்த {n} பரிவர்த்தனைகளில் {got} மட்டுமே கொண்டுள்ளது",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "இந்த நிரூபிப்பானின் விசை நீக்கப்பட்டது, இனி பயன்படுத்தப்படாது. அமைப்புகளில் வேறொரு நிரூபிப்பானை இணைக்கவும், அல்லது Rand Wallet ஐச் சமீபத்திய பதிப்புக்குப் புதுப்பிக்கவும்.",
+  "{host} asks Rand Wallet for a key of its own.": "{host} Rand Wallet-இடம் தனக்கென ஒரு விசையைக் கேட்கிறது.",
+  "Give this site a key?": "இந்தத் தளத்துக்கு ஒரு விசையைக் கொடுக்கவா?",
+  "Nothing to approve": "ஒப்புதல் அளிக்க எதுவும் இல்லை",
+  "Purpose": "நோக்கம்",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "இந்த வாலட் உள்ள எந்தச் சாதனத்திலும், Rand Wallet இந்தத் தளத்துக்கு ஒவ்வொரு முறையும் அதே விசையைக் கொடுக்கும்; வேறு எந்தத் தளத்துக்கும் அதைக் கொடுக்காது.",
+  "Site": "தளம்",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "இந்த விசை இந்த வாலட்டின் நிதி, நோட்டுகள் அல்லது முகவரி விசைகளுக்கு எந்த அணுகலையும் தராது.",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "அந்தத் தளத்தில் உங்கள் சார்பாகச் செயல்பட தளம் இந்த விசையைப் பயன்படுத்தலாம், எடுத்துக்காட்டாக அங்குள்ள உங்கள் வர்த்தகக் கணக்கில் வர்த்தகங்களில் கையொப்பமிட.",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "ஒவ்வொரு நோக்கத்துக்கும் ஒருமுறை மட்டுமே கேட்கப்படும்; தளத்தைத் துண்டித்தால் உங்கள் பதில் மறக்கப்படும்.",
 };

@@ -1130,4 +1130,13 @@ export default {
   "the record does not open with this password": "ریکارډ د دې پاسورډ سره نه خلاصېږي",
   "block {height} has {got} of the {n} transactions its header announced": "بلاک {height} د هغو {n} راکړو ورکړو څخه {got} لري چې سرلیک یې اعلان کړې وې",
   "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "د دې ثبوت جوړوونکي کیلي له کاره ایستل شوې او نوره نه کارول کېږي. په امستنو کې بل ثبوت جوړوونکی جوړه کړئ، یا Rand Wallet وروستۍ نسخې ته تازه کړئ.",
+  "{host} asks Rand Wallet for a key of its own.": "{host} له Rand Wallet څخه خپله ځانګړې کیلي غواړي.",
+  "Give this site a key?": "دې وېبپاڼې ته کیلي ورکړئ؟",
+  "Nothing to approve": "د تصویب لپاره هېڅ نشته",
+  "Purpose": "موخه",
+  "Rand Wallet gives this site the same key every time, on any device with this wallet, and gives it to no other site.": "Rand Wallet دې وېبپاڼې ته هر ځل همغه کیلي ورکوي، په هره هغه وسیله چې دا والټ پرې وي، او بلې هېڅ وېبپاڼې ته يې نه ورکوي.",
+  "Site": "وېبپاڼه",
+  "The key gives no access to this wallet’s funds, notes or address keys.": "دا کیلي د دې والټ پیسو، نوټونو یا د پتې کیلیو ته هېڅ لاسرسی نه ورکوي.",
+  "The site can use the key to act for you on that site, for example to sign trades in your trading account there.": "وېبپاڼه کولی شي په دې کیلي سره په همدغه وېبپاڼه کې ستاسو په استازیتوب کار وکړي، د بېلګې په توګه هلته ستاسو د سوداګرۍ په حساب کې پر معاملو لاسلیک وکړي.",
+  "You are asked once for each purpose; disconnecting the site forgets your answer.": "د هرې موخې لپاره یو ځل پوښتل کېږئ؛ د وېبپاڼې پرې کول ستاسو ځواب هېروي.",
 };
