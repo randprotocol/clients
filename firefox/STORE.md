@@ -7,6 +7,13 @@ stores': one document, so that what the four listings say about the wallet canno
 The file to upload is `rand-wallet-firefox-<version>.zip`, built by `firefox/pack.sh` and
 attached to every [release](https://github.com/randprotocol/clients/releases/latest).
 
+## Version 0.8.7
+
+For Rand testnet chain 22 (fullnode v0.8.7, constraint set 11): every address and key moves, so the
+wallet rescans and shows its new chain-22 address. Sites can ask for an origin-bound key
+(`deriveKey`, used by durian.market's perps), and the audit v14 fixes to the note store, sends and
+history are in. The permissions, the hosts and the content scripts are the same as in 0.8.3.
+
 ## Version 0.8.3
 
 A bundle proof made in the wallet is about 40% faster (its core vendors fullnode `97bcf4b`, the
