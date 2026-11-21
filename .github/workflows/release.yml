@@ -206,7 +206,7 @@ jobs:
           [ "v$VER" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME, but the manifests say $VER"; exit 1; }
           mkdir out
           find artifacts -type f -name 'rand-wallet-*' -exec cp {} out/ \;
-          ( cd out && LC_ALL=C ls | xargs sha256sum > SHA256SUMS && cat SHA256SUMS )
+          ( cd out && LC_ALL=C ls | xargs sha256sum > ../SHA256SUMS && mv ../SHA256SUMS SHA256SUMS && cat SHA256SUMS )   # written outside out/, or it lists itself (empty)
           [ "$(ls out | wc -l)" -eq 16 ] || { echo "expected 15 packages and SHA256SUMS"; ls -la out; exit 1; }
       - name: Create or refill the draft
         env:
