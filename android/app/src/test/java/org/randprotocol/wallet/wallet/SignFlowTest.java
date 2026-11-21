@@ -336,8 +336,8 @@ public class SignFlowTest {
 
     @Test public void confirmationIsTheLastFour() {
         assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", " ss8z"));
-        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "a-ak3"));
-        assertFalse(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "aak"));
+        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "s-s8z"));
+        assertFalse(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "ss8"));
         assertFalse(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "9ss8z"));
         assertFalse(SignFlow.confirms("", ""));
         assertFalse(SignFlow.confirms(null, "ss8z"));
@@ -754,9 +754,9 @@ public class SignFlowTest {
     }
 
     @Test public void theConfirmationIgnoresInnerWhitespaceAsTheWebDoes() {
-        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "a a k 3"));
-        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", " A-A\tk3\n"));
-        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "aa\u00A0k3"));
-        assertFalse(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "a a k"));
+        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "s s 8 z"));
+        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", " S-S\t8z\n"));
+        assertTrue(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "ss\u00A08z"));
+        assertFalse(SignFlow.confirms("SSJG-ERXD-74B6-SS8Z", "s s 8"));
     }
 }

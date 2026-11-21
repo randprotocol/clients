@@ -349,9 +349,9 @@ public class SignScreenTest {
         SignReview r = new SignReview(summary(), signable()); // SSJG-ERXD-74B6-SS8Z
         assertTrue(r.canSign("ss8z", false));
         assertTrue(r.canSign("SS8Z", false));
-        assertTrue(r.canSign("a-ak3", false));
-        assertTrue(r.canSign(" AA-K3 ", false));
-        assertFalse(r.canSign("aak", false));
+        assertTrue(r.canSign("s-s8z", false));
+        assertTrue(r.canSign(" SS-8Z ", false));
+        assertFalse(r.canSign("ss8", false));
         assertFalse(r.canSign("9ss8z", false));
         assertFalse(r.canSign("", false));
         assertFalse("stale", r.canSign("ss8z", true));
