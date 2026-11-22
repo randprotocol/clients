@@ -44,7 +44,7 @@ Design: `docs/superpowers/specs/2026-09-13-rand-wallet-clients-design.md`.
 
 Every release is on [GitHub Releases](https://github.com/randprotocol/clients/releases/latest),
 and https://randprotocol.org/clients links the same files with their checksums. `<v>` below is
-the version, `0.8.7` today.
+the version, `0.8.8` today.
 
 | you have | download | then |
 |---|---|---|
@@ -77,7 +77,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing     # macOS
 sha256sum -c SHA256SUMS --ignore-missing         # Linux
 ```
 ```powershell
-Get-FileHash .\rand-wallet-0.8.7-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
+Get-FileHash .\rand-wallet-0.8.8-windows-x64.msi -Algorithm SHA256   # Windows: compare with the line in SHA256SUMS
 ```
 
 A matching sum says the file is the one that was published. It does not say the file was built
@@ -110,7 +110,7 @@ STARK proof, keys are Poseidon2 hashes, envelopes are ML-KEM-768 + ChaCha20-Poly
 primitives exist only in the fullnode's Rust crates, and a wallet that re-implemented them in
 Swift, Java or JavaScript would have to be byte-identical to the node or every transfer is
 refused. So `core/` vendors the fullnode crates (`core/vendor/fullnode`,
-a submodule at fullnode's `v0.8.7` tag `bf5aabdf` (**constraint set 11**, new Poseidon2 constants, so every commitment, nullifier, key and genesis hash moves; chain 22 only; before it `v0.8.5` `d8efd47`, constraint set 9, chain 21), with the `randprotocol-msig` signer checks with the payee check a signer runs, and the verified fold in the verify cache: **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key; **BIND-1**, a transaction bound to its chain's genesis; program state and the `Invoke` action (RPL-2); and the chain's bridge fee) and exposes one JSON entry point, `call(method, params)`, that each
+a submodule at fullnode's `v0.8.8` tag `abef4490` (**constraint set 11**, new Poseidon2 constants, so every commitment, nullifier, key and genesis hash moves; chain 22 only; v0.8.8 adds the open validator mint from chain 22 block 140 000 over `v0.8.7` `bf5aabdf`, with the same proof guests; before it `v0.8.5` `d8efd47`, constraint set 9, chain 21), with the `randprotocol-msig` signer checks with the payee check a signer runs, and the verified fold in the verify cache: **split authorisation**, where a transaction carries a bundle proof made from the viewing key and a small authorisation proof the wallet always makes itself from the spend key; **BIND-1**, a transaction bound to its chain's genesis; program state and the `Invoke` action (RPL-2); and the chain's bridge fee) and exposes one JSON entry point, `call(method, params)`, that each
 client wraps: an XCFramework on iOS, a `.so` on Android, WebAssembly in the browser. Everything
 above that line — the RPC client, note store, scan and send flow, key storage and the UI — is
 Swift, Java and JavaScript.
@@ -199,10 +199,10 @@ The first build of any client compiles the prover and takes several minutes.
 ```bash
 git clone --recurse-submodules https://github.com/randprotocol/clients.git
 cd clients
-git checkout v0.8.7 && git submodule update --init   # the newest clients release, rather than main
+git checkout v0.8.8 && git submodule update --init   # the newest clients release, rather than main
 ```
 
-`v0.8.7` is the newest clients release tag: wallet 0.8.7 on fullnode `v0.8.7` (constraint set 11, chain 22). `v0.8.4` and `v0.8.5` are fullnode tags, not clients tags; wallet 0.8.3 (`v0.8.3`) is the last release for chain 21.
+`v0.8.8` is the newest clients release tag: wallet 0.8.8 on fullnode `v0.8.8` (constraint set 11, chain 22; wallet 0.8.7 on fullnode `v0.8.7` before it). `v0.8.4` and `v0.8.5` are fullnode tags, not clients tags; wallet 0.8.3 (`v0.8.3`) is the last release for chain 21.
 
 **A `v0.8.x` tag on this repository is not always a wallet release.** At a node release every
 repository of the project is tagged with the node's version, as a snapshot of the whole at that
@@ -211,11 +211,11 @@ released, on a commit whose manifests say wallet 0.8.3 and whose vendored node i
 no wallet version, nothing was built from it, and it is not what to check out to build a wallet.
 The wallet releases are the tags that have a
 [GitHub release](https://github.com/randprotocol/clients/releases) with its installers and
-`SHA256SUMS` — the newest is `v0.8.7` — and a tag matching no wallet version in the manifests is a
+`SHA256SUMS` — the newest is `v0.8.8` — and a tag matching no wallet version in the manifests is a
 snapshot tag.
 
 or unpack `rand-wallet-<v>-source.tar.gz` from a release, which has the submodule in it already.
-The submodule is the full node (`core/vendor/fullnode`, at its `v0.8.7` tag `bf5aabdf`, constraint set 11 for chain 22): the wallet's
+The submodule is the full node (`core/vendor/fullnode`, at its `v0.8.8` tag `abef4490`, constraint set 11 for chain 22): the wallet's
 cryptography is the node's own code.
 
 ### 3. Test the core (optional, about a minute)
