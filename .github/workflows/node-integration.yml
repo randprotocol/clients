@@ -43,7 +43,7 @@ env:
   # fullnode v0.8.7: the first release on constraint set 11 (chain 22), which this core proves
   # for. Until it was tagged this was empty and the real-node job built rand-node and rand-prover
   # from the vendored fullnode (core/vendor/fullnode); emptying it again restores that path.
-  FULLNODE_TAG: v0.8.7
+  FULLNODE_TAG: v0.8.8
 
 jobs:
   real-node:
