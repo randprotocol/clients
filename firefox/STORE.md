@@ -7,6 +7,13 @@ stores': one document, so that what the four listings say about the wallet canno
 The file to upload is `rand-wallet-firefox-<version>.zip`, built by `firefox/pack.sh` and
 attached to every [release](https://github.com/randprotocol/clients/releases/latest).
 
+## Version 0.8.8
+
+For Rand testnet chain 22: the wallet core vendors fullnode v0.8.8 (the open validator mint, a
+node-side rule from chain 22 block 140 000). Nothing changes for the wallet's users: the same
+addresses, keys and notes. The permissions, the hosts and the content scripts are the same as in
+0.8.7.
+
 ## Version 0.8.7
 
 For Rand testnet chain 22 (fullnode v0.8.7, constraint set 11): every address and key moves, so the

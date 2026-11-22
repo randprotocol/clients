@@ -58,8 +58,13 @@ pub const ADDRESS_HRP: &str = randprotocol_core::notes::ADDRESS_PREFIX;
 pub use randprotocol_core::UNITS_PER_RAND;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode
-/// `feat/cs11-revendor` `60a7d03` (PR #194, the v0.8.7 candidate for chain 22): **constraint set
+/// The fullnode commit the vendored chain crates come from (core/vendor/fullnode): fullnode's
+/// tag `v0.8.8` `abef4490` (PR #202): the open validator mint, a height-activated ledger rule on
+/// chain 22 from block 140 000 (a registered validator may mint to any recipient; the genesis
+/// `faucet_recipients` / `faucet_minters` lists stop applying), plus chain 22's constraint-set
+/// row; node and ledger only, the proof guests, keys and wire are v0.8.7's. Before it: fullnode's
+/// tag `v0.8.7` `bf5aabdf`, and before that `feat/cs11-revendor` `60a7d03` (PR #194, the v0.8.7
+/// candidate for chain 22; `CHAIN_BUILD` stayed `60a7d03` through wallet 0.8.7): **constraint set
 /// 11**, circuits `76a48dca` — new Poseidon2 round constants (Grain), so every note commitment,
 /// nullifier, scan key, Merkle and state root and the genesis hash move; the proof header declares
 /// its Poseidon2 height; bundle guest v3 `hc_bundle` `00782b22…`, `hc_auth` `8373994c…`,
@@ -111,7 +116,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// set 7 — the delegated prover, `randprotocol-prover`'s sealed job wire, unchanged since),
 /// `e6d1327`, `109f47d`, `1a13359` (`feat/address-sharing` on v0.5.9: the address fingerprint,
 /// `randpay:` links and the encrypted memo), `9c142c1` (v0.5.1).
-pub const CHAIN_BUILD: &str = "60a7d03";
+pub const CHAIN_BUILD: &str = "abef449";
 /// The chain the defaults below describe: chain 22 (fullnode v0.8.7, constraint set 11), cut from
 /// chain 21's state. A wallet built against it refuses a node on any other chain until 22 is up,
 /// then adopts 22's genesis on its first scan. Before it, chain 21 (fullnode v0.8.0, constraint
@@ -6313,7 +6318,7 @@ mod tests {
         fn version_reports_chain_fourteen() {
             let v = constants();
             assert_eq!(v["default_chain_id"], 22);
-            assert_eq!(v["chain_build"], "60a7d03");
+            assert_eq!(v["chain_build"], "abef449");
             assert_eq!(v["rpl_transfer"], true);
             assert_eq!(v["bridge_burn"], true);
             assert_eq!(v["bridge_burn_proofs"], 1);
