@@ -369,6 +369,7 @@
     <string name="prover_none_shipped">이 빌드에는 사용할 프루버가 포함되어 있지 않습니다.</string>
     <string name="prover_not_json_rpc">%1$s의 프루버가 JSON-RPC로 응답하지 않았습니다(HTTP %2$s)</string>
     <string name="prover_not_pairing_link">페어링 링크가 아닙니다.</string>
+    <string name="prover_key_retired">이 프루버의 키는 폐기되어 더 이상 사용되지 않습니다. 설정에서 다른 프루버를 페어링하거나 Rand Wallet을 최신 버전으로 업데이트하세요.</string>
     <string name="prover_paired_unavailable">이 기기에는 이 증명에 필요한 메모리가 부족합니다. 페어링된 프루버를 사용할 수 없습니다: %1$s.</string>
     <string name="prover_pairing_unreadable">프루버의 페어링 정보를 열 수 없습니다. 설정에서 프루버를 다시 페어링하세요.</string>
     <string name="prover_pool_name">%1$s 프루버</string>

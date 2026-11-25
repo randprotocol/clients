@@ -104,6 +104,16 @@ prover paired as your own (a link made with `rand-prover pair --own`). The pendi
 (~2.8 MB of hex with the auth proof inside) lives in memory on the proving service's thread for
 the length of the call; nothing writes it to preferences or a file, and there is no resume.
 
+**Retired prover keys are refused** (VK-9; `../docs/retired-prover-keys.md`). `RetiredProverKeys`
+is the Java twin of the engine's `RETIRED_PROVER_KEYS` — the same fingerprints, held to the engine's
+by `../ui/test/native-retired-keys.test.mjs`. A listed key is never paired (`ProverPairing.pair`
+refuses the link before the prover is asked), never probed (`ProverPairing.probe`: "Not answering:
+This prover's key was retired…"), never routed to or sent a job (`RemoteSend.route` reads the
+vault record's fingerprint and refuses before the probe; `RemoteSend.prove` refuses before anything
+is built), and never a pool member (`ProverPairing.builtInPool` leaves it out). A stored pairing
+that is refused stays in Settings until the user forgets it. When a key is retired, add its line
+here, in the Swift twin and in the engine, in one change. `RetiredProverKeysTest` covers it.
+
 **The RandProtocol provers are the default** (wallet 0.6.8; per-member keys since 0.6.9, audit v7
 VK-9; `../docs/prover.md` §8): the build pins a descriptor of members — the core's
 `version.trusted_prover_pool`, data in `core/crates/wallet-core/src/trusted-prover-pool.json` —

@@ -57,6 +57,17 @@ verifies the proof that comes back before anything is submitted. A pairing link 
 saying what it can read. This build pays no prover fee: a prover quoting one is refused before
 the auth proof is made.
 
+**Retired prover keys are refused** (VK-9; `../docs/retired-prover-keys.md`). `RetiredProverKeys`
+(in `Services/ProverPairingService.swift`) is the Swift twin of the engine's `RETIRED_PROVER_KEYS`
+— the same fingerprints, held to the engine's by `../ui/test/native-retired-keys.test.mjs`. A
+listed key is never paired (`ProverPairingService.pair` refuses the link before the prover is
+asked), never probed (`probe`: "Not answering: This prover's key was retired…"), never routed to
+or sent a job (`route` reads the Keychain record's fingerprint and refuses before the probe;
+`checkJob` refuses before the prover is asked or anything is built), and never a pool member
+(`builtInPool` leaves it out). A stored pairing that is refused stays in Settings until the user
+forgets it. When a key is retired, add its line here, in the Java twin and in the engine, in one
+change. `ProverTests` covers it.
+
 **The RandProtocol provers are the default** (wallet 0.6.8; per-member keys since 0.6.9, audit v7
 VK-9; `../docs/prover.md` §8): the build pins a descriptor of members — the core's
 `version.trusted_prover_pool` (`TrustedProverPool`), data in

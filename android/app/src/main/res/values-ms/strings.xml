@@ -372,6 +372,7 @@
     <string name="prover_none_shipped">Binaan ini tidak disertakan dengan pembukti untuk digunakan.</string>
     <string name="prover_not_json_rpc">pembukti di %1$s tidak menjawab dengan JSON-RPC (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">Itu bukan pautan pasangan.</string>
+    <string name="prover_key_retired">Kunci pembukti ini telah dibersarakan dan tidak lagi digunakan. Pasangkan pembukti lain dalam Tetapan, atau kemas kini Rand Wallet ke versi terkini.</string>
     <string name="prover_paired_unavailable">Peranti ini tidak mempunyai memori untuk bukti ini. Pembukti yang dipasangkan tidak tersedia: %1$s.</string>
     <string name="prover_pairing_unreadable">Pasangan pembukti anda tidak dapat dibuka. Pasangkan pembukti semula dalam Tetapan.</string>
     <string name="prover_pool_name">Pembukti %1$s</string>

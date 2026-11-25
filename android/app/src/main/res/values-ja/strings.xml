@@ -369,6 +369,7 @@
     <string name="prover_none_shipped">このビルドには使えるプルーバーが含まれていません。</string>
     <string name="prover_not_json_rpc">%1$s のプルーバーが JSON-RPC で応答しませんでした（HTTP %2$s）</string>
     <string name="prover_not_pairing_link">ペアリングリンクではありません。</string>
+    <string name="prover_key_retired">このプルーバーの鍵は廃止され、もう使われていません。設定で別のプルーバーをペアリングするか、Rand Wallet を最新バージョンに更新してください。</string>
     <string name="prover_paired_unavailable">この端末にはこの証明に必要なメモリがありません。ペアリング済みのプルーバーを利用できません: %1$s。</string>
     <string name="prover_pairing_unreadable">プルーバーのペアリング情報を開けませんでした。設定でプルーバーをもう一度ペアリングしてください。</string>
     <string name="prover_pool_name">%1$s のプルーバー</string>

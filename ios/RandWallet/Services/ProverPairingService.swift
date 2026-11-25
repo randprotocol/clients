@@ -59,11 +59,42 @@ struct ProverPairing: Codable, Equatable {
     var own: Bool
 }
 
+/// RandProtocol prover keys that were retired (VK-9, randprotocol/monorepo#18) — the Swift twin of
+/// `ui/engine/backend-shared.js`'s `RETIRED_PROVER_KEYS`: the key every pool machine shared until
+/// wallet 0.6.9, and the four members wallets 0.6.9 to 0.8.0 pinned. A wallet released before a key
+/// was retired still pins it and cannot be told otherwise; this list is what every release after
+/// the retirement carries. A listed key is never paired, never probed, never sent a job and never
+/// used as a pool member, whatever a link, a stored pairing or the pinned descriptor says.
+///
+/// The list is the engine's, entry for entry: `ui/test/native-retired-keys.test.mjs` fails when
+/// this file, the Java twin (`RetiredProverKeys.java`) and the engine disagree. Add an entry — one
+/// per line, in exactly this shape — in the change that retires a key; never remove one.
+enum RetiredProverKeys {
+    static let fingerprints: [String] = [
+        "RGTF-7HKJ-XZFV-GQ1J", // retired 2026-10-01
+        "ZEXQ-1JHV-ZT60-KFB5", // retired 2026-10-22
+        "D2XV-WXVT-PZRC-D7G8", // retired 2026-10-22
+        "SR28-MYT0-GR6A-03DE", // retired 2026-10-22
+        "GMNX-Q1QD-FEXG-JHJM", // retired 2026-10-22
+    ]
+
+    /// The keys this build refuses: `fingerprints` — or a test's own list (the engine's
+    /// `proverOptions.retiredKeys` seam); a screen never sets it.
+    static var keys: Set<String> = Set(fingerprints)
+
+    /// Whether `fingerprint` is a retired prover key.
+    static func isRetired(_ fingerprint: String) -> Bool { keys.contains(fingerprint) }
+
+    /// What a refusal says, in every shell's words (the engine's `retiredProverText`).
+    static var text: String { String(localized: "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.") }
+}
+
 /// Pairing, probing and forgetting a prover — the Swift twin of `ui/engine/backend-shared.js`'s
 /// `prover` group. The link is read by the core (`parse_prover_link`); the prover's key is asked of
 /// the prover itself and must be the one the link names, the fingerprint recomputed by the core
 /// from that key (the prover's own `kem_fingerprint` is its word, not evidence). Only then is
-/// anything stored.
+/// anything stored. A key on the retired list (`RetiredProverKeys`) is refused before any of that:
+/// not paired, not probed, not a pool member, not sent a job.
 enum ProverPairingService {
     /// What a prover learns from a viewing-key job (delegated proving, Phase 2 — split
     /// authorisation): the core's sentence, `version`'s `prover_history_warning`, so every shell
@@ -139,6 +170,8 @@ enum ProverPairingService {
     /// (and port).
     static func pair(_ link: String, session: URLSession? = nil, name: String? = nil) async throws -> (pairing: ProverPairing, token: String) {
         let p = try parse(link)
+        // Before any network: a link that names a retired key is not paired (VK-9).
+        if RetiredProverKeys.isRetired(p.fingerprint) { throw ProverRefusal(message: RetiredProverKeys.text) }
         let url = try checkedURL(p.url)
         let info: ProverInfo
         do {
@@ -207,6 +240,8 @@ enum ProverPairingService {
 
     /// Whether the paired prover answers with the pairing's key.
     static func probe(_ pairing: ProverPairing, session: URLSession? = nil) async -> Probe {
+        // A retired key is not asked anything (VK-9).
+        if RetiredProverKeys.isRetired(pairing.fingerprint) { return .unavailable(RetiredProverKeys.text) }
         let info: ProverInfo
         do {
             info = try await ProverClient(url: pairing.url, session: session).info()
@@ -308,6 +343,8 @@ enum ProverPairingService {
                              poll: (PoolMember, String, Any) async throws -> R) async throws -> R {
         var whys: [PoolWhy] = []
         for m in members {
+            // builtInPool leaves a retired member out; one that reached a route some other way is still never asked (VK-9).
+            if RetiredProverKeys.isRetired(m.pairing.fingerprint) { continue }
             let answer = await probe(m.pairing)
             if let why = notReady(m, answer) { whys.append(why); continue }
             guard case .ok(let info) = answer else { continue }
@@ -361,6 +398,8 @@ enum ProverPairingService {
         let name = trusted(from: .some(t))?.name ?? "RandProtocol"
         var out: [PoolMember] = []
         for m in t.members where !m.link.isEmpty && !m.own {
+            // A pinned member whose key was retired is no member: left out, never asked (VK-9).
+            if RetiredProverKeys.isRetired(m.fingerprint) { continue }
             guard let parsed = try? parse(m.link), !m.fingerprint.isEmpty, parsed.fingerprint == m.fingerprint, !parsed.own,
                   let url = try? checkedURL(parsed.url), url == (try? checkedURL(m.url)) else { continue }
             out.append(PoolMember(pairing: ProverPairing(name: "\(name) (\(m.name))", url: url, kemEk: parsed.kemEk.lowercased(),
@@ -410,6 +449,9 @@ enum ProverPairingService {
         guard let s = secret(), !s.token.isEmpty else {
             throw ProverRefusal(message: String(localized: "Your prover's pairing could not be opened. Pair the prover again in Settings."))
         }
+        // A pairing stored before its key was retired: nothing is asked of it, built for it or sent
+        // to it (VK-9). The Keychain record's fingerprint decides, never the display copy's.
+        if RetiredProverKeys.isRetired(s.fingerprint) { throw ProverRefusal(message: RetiredProverKeys.text) }
         let p = ProverPairing(name: d.name, url: s.url, kemEk: s.kemEk, fingerprint: s.fingerprint, own: s.own)
         let reason = String(localized: "This device does not have the memory for this proof.")
         let why: String?
@@ -473,6 +515,8 @@ enum ProverPairingService {
 
     static func checkJob(route: Route, hcBundle: String?, hcAuth: String?,
                          info: () async throws -> ProverInfo) async throws -> JobCheck {
+        // The one point a job is made: a retired key is sent nothing, however the route was come by (VK-9).
+        if RetiredProverKeys.isRetired(route.pairing.fingerprint) { throw ProverRefusal(message: RetiredProverKeys.text) }
         let guests: ChainGuests
         do {
             guests = try RandCore.chainGuests(hcBundle: hcBundle, hcAuth: hcAuth)

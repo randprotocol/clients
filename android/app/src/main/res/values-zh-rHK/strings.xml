@@ -369,6 +369,7 @@
     <string name="prover_none_shipped">此版本沒有內置可用的證明器。</string>
     <string name="prover_not_json_rpc">%1$s 的證明器沒有以 JSON-RPC 回應（HTTP %2$s）</string>
     <string name="prover_not_pairing_link">這不是配對連結。</string>
+    <string name="prover_key_retired">此證明器的密鑰已停用，不再使用。請在設定中配對另一個證明器，或將 Rand Wallet 更新至最新版本。</string>
     <string name="prover_paired_unavailable">此裝置的記憶體不足以生成此證明。你已配對的證明器無法使用：%1$s。</string>
     <string name="prover_pairing_unreadable">無法打開你的證明器配對資料。請在設定中重新配對該證明器。</string>
     <string name="prover_pool_name">%1$s 證明器</string>

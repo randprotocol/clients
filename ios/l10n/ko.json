@@ -285,6 +285,7 @@
     "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.": "이 프루버는 수수료를 받는데, 이 버전의 지갑은 프루버 수수료를 지불하지 않습니다. 요금이 없는 프루버를 페어링하거나 rand 명령줄 지갑에서 보내세요.",
     "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet.": "이 프루버는 이런 종류의 작업을 받지 않습니다%@. 설정에서 다른 프루버를 페어링하거나 rand 명령줄 지갑에서 보내세요.",
     "This prover does not know this pairing. Pair it again in Settings.": "이 프루버는 이 페어링을 알지 못합니다. 설정에서 다시 페어링하세요.",
+    "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "이 프루버의 키는 폐기되어 더 이상 사용되지 않습니다. 설정에서 다른 프루버를 페어링하거나 Rand Wallet을 최신 버전으로 업데이트하세요.",
     "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.": "이 프루버는 이 지갑의 전체 내역 — 오늘 이전과 이후에 받고 보낸 모든 결제 — 을 읽을 수 있게 됩니다. 지출은 할 수 없습니다. 내역을 비공개로 유지하려면 직접 프루버를 운영하세요.",
     "This wallet cannot prove for this chain.": "이 지갑은 이 체인용 증명을 만들 수 없습니다.",
     "To": "받는 곳",

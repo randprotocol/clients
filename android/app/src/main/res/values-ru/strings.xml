@@ -378,6 +378,7 @@
     <string name="prover_none_shipped">В этой сборке нет прувера.</string>
     <string name="prover_not_json_rpc">прувер %1$s не ответил по JSON-RPC (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">Это не ссылка для сопряжения.</string>
+    <string name="prover_key_retired">Ключ этого прувера выведен из обращения и больше не используется. Подключите другой прувер в настройках или обновите Rand Wallet до последней версии.</string>
     <string name="prover_paired_unavailable">Этому устройству не хватает памяти для этого доказательства. Ваш подключённый прувер недоступен: %1$s.</string>
     <string name="prover_pairing_unreadable">Не удалось открыть сопряжение с вашим прувером. Подключите прувер заново в настройках.</string>
     <string name="prover_pool_name">Пруверы %1$s</string>

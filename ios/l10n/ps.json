@@ -300,6 +300,7 @@
     "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.": "دا ثبوت جوړوونکی فیس اخلي، چې د والټ دا نسخه یې نه ورکوي. یو ثبوت جوړوونکی جوړه کړئ چې هېڅ نه اخلي، یا د rand له کمانډ لاین والټ څخه ولېږئ.",
     "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet.": "دا ثبوت جوړوونکی دا ډول دنده نه مني%@. په امستنو کې بل ثبوت جوړوونکی جوړه کړئ، یا د rand له کمانډ لاین والټ څخه ولېږئ.",
     "This prover does not know this pairing. Pair it again in Settings.": "دا ثبوت جوړوونکی دا جوړه نه پېژني. په امستنو کې یې بیا جوړه کړئ.",
+    "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "د دې ثبوت جوړوونکي کیلي له کاره ایستل شوې او نوره نه کارول کېږي. په امستنو کې بل ثبوت جوړوونکی جوړه کړئ، یا Rand Wallet وروستۍ نسخې ته تازه کړئ.",
     "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.": "دا ثبوت جوړوونکی به د دې والټ ټوله تاریخچه ولوستلی شي — هره ترلاسه شوې او لېږل شوې تادیه، له نن مخکې او وروسته. لګښت نشي کولی. د خپلې تاریخچې د پټ ساتلو لپاره، خپل یو وچلوئ.",
     "This wallet cannot prove for this chain.": "دا والټ د دې زنځیر لپاره ثبوت نشي جوړولی.",
     "To": "ته",

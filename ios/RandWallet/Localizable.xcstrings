@@ -35895,6 +35895,131 @@
         }
       }
     },
+    "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version." : {
+      "comment" : "A refusal: the prover's key is on the wallet's list of retired RandProtocol prover keys (a link, a stored pairing or a pinned member). Shown on its own, and after \"Not answering: \" in Settings.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version."
+          }
+        },
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أُوقف العمل بمفتاح هذا المُثبِت ولم يعد مستخدمًا. اقرن مُثبِتًا آخر في الإعدادات، أو حدّث Rand Wallet إلى أحدث إصدار."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Schlüssel dieses Provers wurde außer Betrieb genommen und wird nicht mehr verwendet. Kopple in den Einstellungen einen anderen Prover oder aktualisiere Rand Wallet auf die neueste Version."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La clave de este probador fue retirada y ya no se usa. Vincula otro probador en Ajustes o actualiza Rand Wallet a la última versión."
+          }
+        },
+        "fa" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "کلید این اثبات‌گر بازنشسته شده و دیگر استفاده نمی‌شود. اثبات‌گر دیگری را در تنظیمات جفت کنید، یا Rand Wallet را به آخرین نسخه به‌روزرسانی کنید."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La clé de ce prouveur a été retirée et n'est plus utilisée. Associez un autre prouveur dans les Paramètres, ou mettez à jour Rand Wallet vers la dernière version."
+          }
+        },
+        "id" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunci prover ini telah dipensiunkan dan tidak lagi digunakan. Pasangkan prover lain di Pengaturan, atau perbarui Rand Wallet ke versi terbaru."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La chiave di questo prover è stata ritirata e non è più in uso. Associa un altro prover nelle Impostazioni, oppure aggiorna Rand Wallet all'ultima versione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このプルーバーの鍵は廃止され、もう使われていません。設定で別のプルーバーをペアリングするか、Rand Wallet を最新バージョンに更新してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 프루버의 키는 폐기되어 더 이상 사용되지 않습니다. 설정에서 다른 프루버를 페어링하거나 Rand Wallet을 최신 버전으로 업데이트하세요."
+          }
+        },
+        "ms" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kunci pembukti ini telah dibersarakan dan tidak lagi digunakan. Pasangkan pembukti lain dalam Tetapan, atau kemas kini Rand Wallet ke versi terkini."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klucz tego provera został wycofany i nie jest już używany. Sparuj inny prover w Ustawieniach lub zaktualizuj Rand Wallet do najnowszej wersji."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A chave deste provador foi aposentada e não é mais usada. Pareie outro provador em Configurações ou atualize o Rand Wallet para a versão mais recente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ключ этого прувера выведен из обращения и больше не используется. Подключите другой прувер в настройках или обновите Rand Wallet до последней версии."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此证明器的密钥已停用，不再使用。请在设置中配对另一个证明器，或将 Rand Wallet 更新到最新版本。"
+          }
+        },
+        "zh-Hant-HK" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此證明器的密鑰已停用，不再使用。請在設定中配對另一個證明器，或將 Rand Wallet 更新至最新版本。"
+          }
+        },
+        "hi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "इस प्रूवर की की हटा दी गई है और अब इस्तेमाल नहीं होती। सेटिंग्स में कोई दूसरा प्रूवर पेयर करें, या Rand Wallet को नवीनतम संस्करण में अपडेट करें।"
+          }
+        },
+        "ps" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "د دې ثبوت جوړوونکي کیلي له کاره ایستل شوې او نوره نه کارول کېږي. په امستنو کې بل ثبوت جوړوونکی جوړه کړئ، یا Rand Wallet وروستۍ نسخې ته تازه کړئ."
+          }
+        },
+        "ta" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "இந்த நிரூபிப்பானின் விசை நீக்கப்பட்டது, இனி பயன்படுத்தப்படாது. அமைப்புகளில் வேறொரு நிரூபிப்பானை இணைக்கவும், அல்லது Rand Wallet ஐச் சமீபத்திய பதிப்புக்குப் புதுப்பிக்கவும்."
+          }
+        },
+        "ur" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اس پروور کی کی ختم کر دی گئی ہے اور اب استعمال نہیں ہوتی۔ ترتیبات میں کوئی دوسرا پروور جوڑیں، یا Rand Wallet کو تازہ ترین ورژن پر اپ ڈیٹ کریں۔"
+          }
+        }
+      }
+    },
     "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own." : {
       "localizations" : {
         "en" : {

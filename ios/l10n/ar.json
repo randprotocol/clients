@@ -292,6 +292,7 @@
     "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.": "يتقاضى هذا المُثبِت رسومًا، وهذا الإصدار من المحفظة لا يدفعها. اقرن مُثبِتًا لا يتقاضى شيئًا، أو أرسل من محفظة سطر الأوامر rand.",
     "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet.": "لا يقبل هذا المُثبِت هذا النوع من المهام%@. اقرن مُثبِتًا آخر في الإعدادات، أو أرسل من محفظة سطر الأوامر rand.",
     "This prover does not know this pairing. Pair it again in Settings.": "لا يعرف هذا المُثبِت هذا الإقران. اقرنه مرة أخرى في الإعدادات.",
+    "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "أُوقف العمل بمفتاح هذا المُثبِت ولم يعد مستخدمًا. اقرن مُثبِتًا آخر في الإعدادات، أو حدّث Rand Wallet إلى أحدث إصدار.",
     "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.": "سيتمكن هذا المُثبِت من قراءة سجل هذه المحفظة كاملًا — كل دفعة مستلمة ومرسلة، قبل اليوم وبعده. لا يمكنه الإنفاق. للحفاظ على خصوصية سجلك، شغّل مُثبِتك الخاص.",
     "This wallet cannot prove for this chain.": "لا تستطيع هذه المحفظة الإثبات لهذه السلسلة.",
     "To": "إلى",

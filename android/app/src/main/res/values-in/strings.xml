@@ -369,6 +369,7 @@
     <string name="prover_none_shipped">Build ini tidak menyertakan prover untuk digunakan.</string>
     <string name="prover_not_json_rpc">prover di %1$s tidak menjawab dengan JSON-RPC (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">Itu bukan tautan pemasangan.</string>
+    <string name="prover_key_retired">Kunci prover ini telah dipensiunkan dan tidak lagi digunakan. Pasangkan prover lain di Pengaturan, atau perbarui Rand Wallet ke versi terbaru.</string>
     <string name="prover_paired_unavailable">Perangkat ini tidak memiliki cukup memori untuk bukti ini. Prover yang dipasangkan tidak tersedia: %1$s.</string>
     <string name="prover_pairing_unreadable">Pemasangan prover Anda tidak dapat dibuka. Pasangkan prover lagi di Pengaturan.</string>
     <string name="prover_pool_name">Prover %1$s</string>

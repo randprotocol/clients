@@ -375,6 +375,7 @@
     <string name="prover_none_shipped">Cette version n\'inclut aucun prouveur utilisable.</string>
     <string name="prover_not_json_rpc">le prouveur à %1$s n\'a pas répondu en JSON-RPC (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">Ce n\'est pas un lien d\'association.</string>
+    <string name="prover_key_retired">La clé de ce prouveur a été retirée et n\'est plus utilisée. Associez un autre prouveur dans les Paramètres, ou mettez à jour Rand Wallet vers la dernière version.</string>
     <string name="prover_paired_unavailable">Cet appareil n\'a pas la mémoire nécessaire pour cette preuve. Votre prouveur associé n\'est pas disponible : %1$s.</string>
     <string name="prover_pairing_unreadable">L\'association de votre prouveur n\'a pas pu être ouverte. Associez de nouveau le prouveur dans les Paramètres.</string>
     <string name="prover_pool_name">Prouveurs %1$s</string>

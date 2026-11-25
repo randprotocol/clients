@@ -285,6 +285,7 @@
     "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.": "此证明器收取费用，而此版本的钱包不支付该费用。请配对一个免费的证明器，或使用 rand 命令行钱包发送。",
     "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet.": "此证明器不接受这类任务%@。请在设置中配对另一个证明器，或使用 rand 命令行钱包发送。",
     "This prover does not know this pairing. Pair it again in Settings.": "此证明器不认识这个配对。请在设置中重新配对。",
+    "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "此证明器的密钥已停用，不再使用。请在设置中配对另一个证明器，或将 Rand Wallet 更新到最新版本。",
     "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.": "此证明器将能读取此钱包的全部历史记录——今天之前和之后收到和发出的每一笔付款。它不能花费资金。如要让历史记录保持私密，请运行你自己的证明器。",
     "This wallet cannot prove for this chain.": "此钱包无法为这条链生成证明。",
     "To": "发往",

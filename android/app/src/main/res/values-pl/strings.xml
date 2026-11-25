@@ -378,6 +378,7 @@
     <string name="prover_none_shipped">Ta wersja nie zawiera provera do użycia.</string>
     <string name="prover_not_json_rpc">prover pod adresem %1$s nie odpowiedział przez JSON-RPC (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">To nie jest link parowania.</string>
+    <string name="prover_key_retired">Klucz tego provera został wycofany i nie jest już używany. Sparuj inny prover w Ustawieniach lub zaktualizuj Rand Wallet do najnowszej wersji.</string>
     <string name="prover_paired_unavailable">To urządzenie nie ma pamięci na ten dowód. Twój sparowany prover jest niedostępny: %1$s.</string>
     <string name="prover_pairing_unreadable">Nie udało się otworzyć parowania twojego provera. Sparuj prover ponownie w Ustawieniach.</string>
     <string name="prover_pool_name">Provery %1$s</string>
