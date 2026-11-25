@@ -391,6 +391,7 @@
     <string name="prover_none_shipped">இந்த build பயன்படுத்துவதற்கு எந்த நிரூபிப்பானையும் கொண்டிருக்கவில்லை.</string>
     <string name="prover_not_json_rpc">%1$s-இல் உள்ள நிரூபிப்பான் JSON-RPC மூலம் பதிலளிக்கவில்லை (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">அது இணைத்தல் இணைப்பு அல்ல.</string>
+    <string name="prover_key_retired">இந்த நிரூபிப்பானின் விசை நீக்கப்பட்டது, இனி பயன்படுத்தப்படாது. அமைப்புகளில் வேறொரு நிரூபிப்பானை இணைக்கவும், அல்லது Rand Wallet ஐச் சமீபத்திய பதிப்புக்குப் புதுப்பிக்கவும்.</string>
     <string name="prover_paired_unavailable">இந்த நிரூபணத்துக்குத் தேவையான நினைவகம் இந்தச் சாதனத்தில் இல்லை. உங்கள் இணைக்கப்பட்ட நிரூபிப்பான் கிடைக்கவில்லை: %1$s.</string>
     <string name="prover_pairing_unreadable">உங்கள் நிரூபிப்பானின் இணைத்தல் விவரங்களைத் திறக்க முடியவில்லை. அமைப்புகளில் நிரூபிப்பானை மீண்டும் இணைக்கவும்.</string>
     <string name="prover_pool_name">%1$s நிரூபிப்பான்கள்</string>

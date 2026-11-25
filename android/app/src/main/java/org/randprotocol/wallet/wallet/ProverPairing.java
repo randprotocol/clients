@@ -15,7 +15,9 @@ import java.util.Locale;
  * the Java twin of {@code ui/engine/backend-shared.js}'s {@code prover} group. The link is read by
  * the core ({@code parse_prover_link}); the prover's key is asked of the prover itself and must be
  * the one the link names, the fingerprint recomputed by the core from that key (the prover's own
- * {@code kem_fingerprint} is its word, not evidence). Only then is anything stored.
+ * {@code kem_fingerprint} is its word, not evidence). Only then is anything stored. A key on the
+ * retired list ({@link RetiredProverKeys}) is refused before any of that: not paired, not probed,
+ * not a pool member.
  */
 public final class ProverPairing {
     /**
@@ -191,6 +193,8 @@ public final class ProverPairing {
             try {
                 JSONObject p = parse(core, m.link);
                 if (!p.getString("fingerprint").equals(m.fingerprint)) continue;
+                // A pinned member whose key was retired is no member: left out, never asked (VK-9).
+                if (RetiredProverKeys.isRetired(m.fingerprint)) continue;
                 if (p.optBoolean("own", false)) continue;
                 String url = ProverClient.checkUrl(p.getString("url"));
                 if (!url.equals(ProverClient.checkUrl(m.url))) continue;
@@ -212,6 +216,8 @@ public final class ProverPairing {
      * prover's own key against the link's. {@code name} is the display name, the host when null.
      */
     private static Paired pairParsed(ProverCore core, JSONObject p, ProverClient.Transport transport, String name) throws Exception {
+        // Before any network: a link that names a retired key is not paired (VK-9).
+        if (RetiredProverKeys.isRetired(p.getString("fingerprint"))) throw new ProverClient.Refusal(RetiredProverKeys.text());
         String url = ProverClient.checkUrl(p.getString("url"));
         String kemEk = p.getString("kem_ek").toLowerCase(Locale.ROOT);
         String fp = p.getString("fingerprint");
@@ -231,6 +237,8 @@ public final class ProverPairing {
     }
 
     public static Probe probe(ProverCore core, ProverPairing pairing, ProverClient.Transport transport) {
+        // A retired key is not asked anything (VK-9).
+        if (RetiredProverKeys.isRetired(pairing.fingerprint)) return new Probe(null, RetiredProverKeys.text(), false);
         ProverClient.Info info;
         try {
             info = new ProverClient(pairing.url, transport).info();

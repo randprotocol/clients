@@ -288,6 +288,7 @@
     "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.": "یہ پروور فیس لیتا ہے، جو والیٹ کا یہ ورژن ادا نہیں کرتا۔ ایسا پروور جوڑیں جو کوئی فیس نہ لے، یا rand کمانڈ لائن والیٹ سے بھیجیں۔",
     "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet.": "یہ پروور اس قسم کا کام قبول نہیں کرتا%@۔ ترتیبات میں کوئی اور پروور جوڑیں، یا rand کمانڈ لائن والیٹ سے بھیجیں۔",
     "This prover does not know this pairing. Pair it again in Settings.": "یہ پروور اس جوڑ کو نہیں جانتا۔ ترتیبات میں اسے دوبارہ جوڑیں۔",
+    "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "اس پروور کی کی ختم کر دی گئی ہے اور اب استعمال نہیں ہوتی۔ ترتیبات میں کوئی دوسرا پروور جوڑیں، یا Rand Wallet کو تازہ ترین ورژن پر اپ ڈیٹ کریں۔",
     "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.": "یہ پروور اس والیٹ کی پوری تاریخ پڑھ سکے گا — ہر وصول اور بھیجی گئی ادائیگی، آج سے پہلے اور بعد کی۔ یہ خرچ نہیں کر سکتا۔ اپنی تاریخ نجی رکھنے کے لیے اپنا پروور چلائیں۔",
     "This wallet cannot prove for this chain.": "یہ والیٹ اس چین کے لیے پروف نہیں بنا سکتا۔",
     "To": "بنام",

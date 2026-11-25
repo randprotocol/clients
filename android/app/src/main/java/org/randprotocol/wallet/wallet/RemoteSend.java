@@ -193,6 +193,9 @@ public final class RemoteSend {
         if (s == null || s.token == null || s.token.isEmpty()) {
             throw new ProverClient.Refusal(L10n.t(R.string.prover_pairing_unreadable, "Your prover's pairing could not be opened. Pair the prover again in Settings."));
         }
+        // A pairing stored before its key was retired: nothing is asked of it, built for it or sent
+        // to it (VK-9). The vault record's fingerprint decides, never the display copy's.
+        if (RetiredProverKeys.isRetired(s.fingerprint)) throw new ProverClient.Refusal(RetiredProverKeys.text());
         ProverPairing p = new ProverPairing(display.name, s.url, s.kemEk, s.fingerprint, s.own);
         ProverPairing.Probe answer = probe.apply(p);
         if (!answer.ok()) throw new ProverClient.Refusal(pairedUnavailable(answer.reason));
@@ -279,6 +282,8 @@ public final class RemoteSend {
         }
         List<String> whys = new java.util.ArrayList<>();
         for (ProverPairing.Paired m : route.members) {
+            // builtInPool leaves a retired member out; one that reached a route some other way is still never asked (VK-9).
+            if (RetiredProverKeys.isRetired(m.pairing.fingerprint)) continue;
             RemoteProver prover = proverFor.apply(m.pairing.url);
             ProverPairing.Probe answer;
             try {
@@ -409,6 +414,8 @@ public final class RemoteSend {
     /** {@link #prove} for a job of {@code kind} ({@link #KIND_TRANSFER} or {@link #KIND_INVOKE}). */
     public static JSONObject prove(ProverCore core, RemoteProver prover, String kind, JSONObject request, Route route,
                                    Integer maxProofBytes, RemoteProver.PhaseListener onPhase) throws Exception {
+        // The one point a job is made: a retired key is sent nothing, however the route was come by (VK-9).
+        if (RetiredProverKeys.isRetired(route.pairing.fingerprint)) throw new ProverClient.Refusal(RetiredProverKeys.text());
         JSONObject guests = guestsOf(core, request);
         String wants = guests.optString("witness_kind", "");
         if ("spend_key".equals(wants) && !route.pairing.own) {

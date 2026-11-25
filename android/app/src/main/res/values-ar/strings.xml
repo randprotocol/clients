@@ -384,6 +384,7 @@
     <string name="prover_none_shipped">هذا الإصدار لا يتضمّن مُثبِتًا للاستخدام.</string>
     <string name="prover_not_json_rpc">لم يُجب المُثبِت على %1$s بـ JSON-RPC (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">هذا ليس رابط إقران.</string>
+    <string name="prover_key_retired">أُوقف العمل بمفتاح هذا المُثبِت ولم يعد مستخدمًا. اقرن مُثبِتًا آخر في الإعدادات، أو حدّث Rand Wallet إلى أحدث إصدار.</string>
     <string name="prover_paired_unavailable">لا يملك هذا الجهاز الذاكرة اللازمة لهذا الإثبات. مُثبِتك المقترن غير متاح: %1$s.</string>
     <string name="prover_pairing_unreadable">تعذّر فتح إقران مُثبِتك. اقرن المُثبِت مجددًا في الإعدادات.</string>
     <string name="prover_pool_name">مُثبِتات %1$s</string>

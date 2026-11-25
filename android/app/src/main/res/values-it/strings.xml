@@ -375,6 +375,7 @@
     <string name="prover_none_shipped">Questa build non include alcun prover da usare.</string>
     <string name="prover_not_json_rpc">il prover su %1$s non ha risposto in JSON-RPC (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">Non è un link di associazione.</string>
+    <string name="prover_key_retired">La chiave di questo prover è stata ritirata e non è più in uso. Associa un altro prover nelle Impostazioni, oppure aggiorna Rand Wallet all\'ultima versione.</string>
     <string name="prover_paired_unavailable">Questo dispositivo non ha la memoria per questa prova. Il tuo prover associato non è disponibile: %1$s.</string>
     <string name="prover_pairing_unreadable">Impossibile aprire l\'associazione del tuo prover. Associa di nuovo il prover nelle Impostazioni.</string>
     <string name="prover_pool_name">Prover di %1$s</string>

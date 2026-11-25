@@ -372,6 +372,7 @@
     <string name="prover_none_shipped">دا جوړښت د کارولو لپاره کوم ثبوت جوړوونکی نه لري.</string>
     <string name="prover_not_json_rpc">په %1$s کې ثبوت جوړوونکي په JSON-RPC ځواب ونه ورکړ (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">دا د جوړې کولو لینک نه دی.</string>
+    <string name="prover_key_retired">د دې ثبوت جوړوونکي کیلي له کاره ایستل شوې او نوره نه کارول کېږي. په امستنو کې بل ثبوت جوړوونکی جوړه کړئ، یا Rand Wallet وروستۍ نسخې ته تازه کړئ.</string>
     <string name="prover_paired_unavailable">دا وسیله د دې ثبوت لپاره حافظه نه لري. ستاسو جوړه شوی ثبوت جوړوونکی شتون نه لري: %1$s.</string>
     <string name="prover_pairing_unreadable">ستاسو د ثبوت جوړوونکي جوړه خلاصه نه شوه. په امستنو کې ثبوت جوړوونکی بیا جوړه کړئ.</string>
     <string name="prover_pool_name">%1$s ثبوت جوړوونکي</string>

@@ -285,6 +285,7 @@
     "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.": "این اثبات‌گر کارمزد می‌گیرد که این نسخه از کیف پول آن را نمی‌پردازد. اثبات‌گری را جفت کنید که هزینه‌ای نمی‌گیرد، یا از کیف پول خط فرمان rand ارسال کنید.",
     "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet.": "این اثبات‌گر این نوع کار را نمی‌پذیرد%@. اثبات‌گر دیگری را در تنظیمات جفت کنید، یا از کیف پول خط فرمان rand ارسال کنید.",
     "This prover does not know this pairing. Pair it again in Settings.": "این اثبات‌گر این جفت‌سازی را نمی‌شناسد. آن را دوباره در تنظیمات جفت کنید.",
+    "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "کلید این اثبات‌گر بازنشسته شده و دیگر استفاده نمی‌شود. اثبات‌گر دیگری را در تنظیمات جفت کنید، یا Rand Wallet را به آخرین نسخه به‌روزرسانی کنید.",
     "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.": "این اثبات‌گر خواهد توانست کل تاریخچه‌ی این کیف پول را بخواند — هر پرداخت دریافتی و ارسالی، پیش و پس از امروز. نمی‌تواند خرج کند. برای خصوصی نگه داشتن تاریخچه‌تان، اثبات‌گر خودتان را اجرا کنید.",
     "This wallet cannot prove for this chain.": "این کیف پول نمی‌تواند برای این شبکه اثبات کند.",
     "To": "به",

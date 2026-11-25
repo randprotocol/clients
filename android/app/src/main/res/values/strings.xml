@@ -406,6 +406,7 @@
     <string name="prover_none_shipped">This build ships no prover to use.</string>
     <string name="prover_not_json_rpc">the prover at %1$s did not answer with JSON-RPC (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">That is not a pairing link.</string>
+    <string name="prover_key_retired">This prover\'s key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.</string>
     <string name="prover_paired_unavailable">This device does not have the memory for this proof. Your paired prover is not available: %1$s.</string>
     <string name="prover_pairing_unreadable">Your prover\'s pairing could not be opened. Pair the prover again in Settings.</string>
     <string name="prover_pool_name">%1$s provers</string>

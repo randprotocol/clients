@@ -375,6 +375,7 @@
     <string name="prover_none_shipped">Esta versión no incluye ningún probador para usar.</string>
     <string name="prover_not_json_rpc">el probador en %1$s no respondió con JSON-RPC (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">Eso no es un enlace de vinculación.</string>
+    <string name="prover_key_retired">La clave de este probador fue retirada y ya no se usa. Vincula otro probador en Ajustes o actualiza Rand Wallet a la última versión.</string>
     <string name="prover_paired_unavailable">Este dispositivo no tiene memoria suficiente para esta prueba. Tu probador vinculado no está disponible: %1$s.</string>
     <string name="prover_pairing_unreadable">No se pudo abrir la vinculación de tu probador. Vuelve a vincular el probador en Ajustes.</string>
     <string name="prover_pool_name">Probadores de %1$s</string>

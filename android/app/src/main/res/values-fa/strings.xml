@@ -372,6 +372,7 @@
     <string name="prover_none_shipped">این نسخه هیچ اثبات‌گری برای استفاده همراه ندارد.</string>
     <string name="prover_not_json_rpc">اثبات‌گر در %1$s با JSON-RPC پاسخ نداد (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">این لینک جفت‌سازی نیست.</string>
+    <string name="prover_key_retired">کلید این اثبات‌گر بازنشسته شده و دیگر استفاده نمی‌شود. اثبات‌گر دیگری را در تنظیمات جفت کنید، یا Rand Wallet را به آخرین نسخه به‌روزرسانی کنید.</string>
     <string name="prover_paired_unavailable">این دستگاه حافظه‌ی لازم برای این اثبات را ندارد. اثبات‌گر جفت‌شده‌ی شما در دسترس نیست: %1$s.</string>
     <string name="prover_pairing_unreadable">جفت‌سازی اثبات‌گر شما باز نشد. اثبات‌گر را دوباره در تنظیمات جفت کنید.</string>
     <string name="prover_pool_name">اثبات‌گرهای %1$s</string>

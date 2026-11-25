@@ -372,6 +372,7 @@
     <string name="prover_none_shipped">Diese Version liefert keinen Prover mit.</string>
     <string name="prover_not_json_rpc">der Prover unter %1$s hat nicht mit JSON-RPC geantwortet (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">Das ist kein Kopplungslink.</string>
+    <string name="prover_key_retired">Der Schlüssel dieses Provers wurde außer Betrieb genommen und wird nicht mehr verwendet. Kopple in den Einstellungen einen anderen Prover oder aktualisiere Rand Wallet auf die neueste Version.</string>
     <string name="prover_paired_unavailable">Dieses Gerät hat nicht genug Arbeitsspeicher für diesen Beweis. Dein gekoppelter Prover ist nicht verfügbar: %1$s.</string>
     <string name="prover_pairing_unreadable">Die Kopplung deines Provers konnte nicht geöffnet werden. Kopple den Prover in den Einstellungen erneut.</string>
     <string name="prover_pool_name">%1$s-Prover</string>

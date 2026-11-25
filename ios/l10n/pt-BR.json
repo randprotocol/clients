@@ -289,6 +289,7 @@
     "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.": "Este provador cobra uma taxa, que esta versão da carteira não paga. Pareie um provador que não cobre nada ou envie pela carteira de linha de comando rand.",
     "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet.": "Este provador não aceita este tipo de trabalho%@. Pareie outro provador em Configurações ou envie pela carteira de linha de comando rand.",
     "This prover does not know this pairing. Pair it again in Settings.": "Este provador não reconhece este pareamento. Pareie-o de novo em Configurações.",
+    "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "A chave deste provador foi aposentada e não é mais usada. Pareie outro provador em Configurações ou atualize o Rand Wallet para a versão mais recente.",
     "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.": "Este provador poderá ler todo o histórico desta carteira — cada pagamento recebido e enviado, antes e depois de hoje. Ele não pode gastar. Para manter seu histórico privado, rode o seu próprio.",
     "This wallet cannot prove for this chain.": "Esta carteira não consegue provar para esta cadeia.",
     "To": "Para",

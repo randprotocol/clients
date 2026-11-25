@@ -372,6 +372,7 @@
     <string name="prover_none_shipped">اس بلڈ کے ساتھ استعمال کے لیے کوئی پروور نہیں آتا۔</string>
     <string name="prover_not_json_rpc">%1$s پر موجود پروور نے JSON-RPC کے ساتھ جواب نہیں دیا (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">یہ جوڑنے کا لنک نہیں ہے۔</string>
+    <string name="prover_key_retired">اس پروور کی کی ختم کر دی گئی ہے اور اب استعمال نہیں ہوتی۔ ترتیبات میں کوئی دوسرا پروور جوڑیں، یا Rand Wallet کو تازہ ترین ورژن پر اپ ڈیٹ کریں۔</string>
     <string name="prover_paired_unavailable">اس ڈیوائس میں اس پروف کے لیے کافی میموری نہیں۔ آپ کا جوڑا گیا پروور دستیاب نہیں: %1$s۔</string>
     <string name="prover_pairing_unreadable">آپ کے پروور کا جوڑ کھولا نہیں جا سکا۔ ترتیبات میں پروور کو دوبارہ جوڑیں۔</string>
     <string name="prover_pool_name">%1$s پروور</string>

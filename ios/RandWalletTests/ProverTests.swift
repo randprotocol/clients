@@ -42,6 +42,7 @@ final class ProverTests: XCTestCase {
         StubProver.handler = nil
         StubProver.requests = []
         StubProver.hosts = []
+        RetiredProverKeys.keys = Set(RetiredProverKeys.fingerprints)
         super.tearDown()
     }
 
@@ -597,6 +598,143 @@ final class ProverTests: XCTestCase {
         let withFee = try RemoteSendParams.build(request: req, route: Self.notOwnRoute, maxProofBytes: nil, fee: quoted)
         XCTAssertEqual((withFee["prover"] as? [String: Any])?["own"] as? Bool, false)
         XCTAssertEqual(JSONValue((withFee["prover"] as? [String: Any])?["fee"]), quoted)
+    }
+
+    // MARK: retired prover keys (VK-9, monorepo#18) — the twin of `ui/test/prover.test.mjs`'s
+
+    static let retiredText = "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version."
+
+    /// A prover that would pair and take a job; `asked("prover.example")` says whether it was asked.
+    static func willing() -> (String, Any) -> StubProver.Reply {
+        { _, _ in .result(["kem_ek": Self.kemEk, "witness_kinds": ["viewing_key"], "queue": ["depth": 0, "max": 8, "proving": 0]]) }
+    }
+
+    func testTheRetiredPoolKeysAreListedAndThePinnedPoolNamesNoneOfThem() throws {
+        XCTAssertEqual(RetiredProverKeys.fingerprints, [
+            "RGTF-7HKJ-XZFV-GQ1J", "ZEXQ-1JHV-ZT60-KFB5", "D2XV-WXVT-PZRC-D7G8", "SR28-MYT0-GR6A-03DE", "GMNX-Q1QD-FEXG-JHJM",
+        ])
+        XCTAssertEqual(RetiredProverKeys.keys, Set(RetiredProverKeys.fingerprints))
+        for fp in RetiredProverKeys.fingerprints { XCTAssertTrue(RetiredProverKeys.isRetired(fp), fp) }
+        XCTAssertFalse(RetiredProverKeys.isRetired(Self.fingerprint))
+        XCTAssertFalse(RetiredProverKeys.isRetired(""))
+        XCTAssertEqual(RetiredProverKeys.text, Self.retiredText)
+        // The descriptor this build's REAL core pins: no member is a retired key, and none is left out.
+        let pool = try Self.realPool()
+        for m in pool.members { XCTAssertFalse(RetiredProverKeys.isRetired(m.fingerprint), "pinned member \(m.name) is a retired key") }
+        XCTAssertEqual(try ProverPairingService.builtInPool(pool: pool).count, pool.members.count)
+    }
+
+    func testALinkThatNamesARetiredKeyIsNotPairedAndNothingIsAskedOfIt() async throws {
+        StubProver.handler = Self.willing()
+        RetiredProverKeys.keys = [Self.fingerprint]
+        do {
+            _ = try await ProverPairingService.pair(Self.link(), session: StubProver.session())
+            XCTFail("paired a retired key")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, Self.retiredText)
+        }
+        XCTAssertEqual(Self.asked("prover.example"), [], "the retired key was asked")
+        // The control: the same link, on a build whose list does not name its key, pairs.
+        RetiredProverKeys.keys = Set(RetiredProverKeys.fingerprints)
+        let (pairing, _) = try await ProverPairingService.pair(Self.link(), session: StubProver.session())
+        XCTAssertEqual(pairing.fingerprint, Self.fingerprint)
+    }
+
+    func testAPairingStoredBeforeItsKeyWasRetiredIsSentNothingAfterTheUpdate() async throws {
+        // Paired on a build that did not know the key was retired: the Settings copy and the Keychain record…
+        let stored = Self.notOwnRoute.pairing
+        StubProver.handler = Self.willing()
+        // …then the wallet is updated: the same stored pairing, a build whose list names the key.
+        RetiredProverKeys.keys = [Self.fingerprint]
+
+        // The route: refused in the sentence itself, before the prover is probed.
+        var probed = 0
+        let okProbe: (ProverPairing) async -> ProverPairingService.Probe = { _ in probed += 1; return .ok(try! Self.info(["viewing_key"])) }
+        do {
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: stored, probe: okProbe, secret: { Self.notOwnSecret })
+            XCTFail("a retired key was given a route")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, Self.retiredText)
+        }
+        // The Keychain record decides: a display copy naming another fingerprint changes nothing.
+        var display = stored
+        display.fingerprint = "0000-0000-0000-0000"
+        do {
+            _ = try await ProverPairingService.route(deviceCanProve: false, pairing: display, probe: okProbe, secret: { Self.notOwnSecret })
+            XCTFail("the display copy's fingerprint hid a retired key")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, Self.retiredText)
+        }
+        XCTAssertEqual(probed, 0, "the retired key was probed")
+        // A device that proves for itself never uses the pairing, so nothing is refused.
+        let device = try await ProverPairingService.route(deviceCanProve: true, pairing: stored, probe: okProbe, secret: { Self.notOwnSecret })
+        XCTAssertNil(device)
+
+        // The probe (Settings' status line): not answering, in the same words, and nothing asked.
+        let probe = await ProverPairingService.probe(stored, session: StubProver.session())
+        XCTAssertEqual(probe, .unavailable(Self.retiredText))
+        XCTAssertEqual(ProverPairingService.statusLine(probe), "Not answering: \(Self.retiredText)")
+
+        // The job itself, for a route come by before the update: the prover is not asked, nothing is built.
+        var asked = 0
+        do {
+            _ = try await ProverPairingService.checkJob(route: Self.notOwnRoute, hcBundle: Self.v3, hcAuth: Self.auth,
+                                                        info: { asked += 1; return try Self.info(["viewing_key"]) })
+            XCTFail("a job was checked for a retired key")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, Self.retiredText)
+        }
+        XCTAssertEqual(asked, 0, "the retired key was asked")
+        XCTAssertEqual(Self.asked("prover.example"), [], "a request reached the retired key")
+
+        // The control: the same pairing, on a build whose list does not name its key, is used.
+        RetiredProverKeys.keys = Set(RetiredProverKeys.fingerprints)
+        let route = try await ProverPairingService.route(deviceCanProve: false, pairing: stored, probe: okProbe, secret: { Self.notOwnSecret })
+        XCTAssertEqual(route?.token, Self.token)
+        XCTAssertEqual(probed, 1)
+        let check = try await ProverPairingService.checkJob(route: Self.notOwnRoute, hcBundle: Self.v3, hcAuth: Self.auth,
+                                                            info: { asked += 1; return try Self.info(["viewing_key"]) })
+        XCTAssertEqual(check.guests.witnessKind, "viewing_key")
+        XCTAssertEqual(asked, 1)
+    }
+
+    func testAPoolMemberWhoseKeyIsOnTheRetiredListIsNeverAskedTheOthersStillAre() async throws {
+        let pool = try Self.realPool()
+        let all = try ProverPairingService.builtInPool(pool: pool)
+        XCTAssertEqual(all.count, 2, "the pinned pool is two members")
+        let (a, b) = (all[0], all[1])
+        RetiredProverKeys.keys = [a.pairing.fingerprint]
+        XCTAssertEqual(try ProverPairingService.builtInPool(pool: pool).map { $0.pairing.url }, [b.pairing.url])
+
+        var probed: [String] = []
+        let probe: (ProverPairing) async -> ProverPairingService.Probe = { p in
+            probed.append(p.url)
+            return Self.answer(all.first { $0.pairing.url == p.url }!)
+        }
+        let r = try await ProverPairingService.route(deviceCanProve: false, pairing: nil, probe: probe, secret: { nil },
+                                                     defaultProver: { try ProverPairingService.builtInPool(pool: pool) })
+        let route = try XCTUnwrap(r)
+        XCTAssertTrue(route.isDefault)
+        XCTAssertEqual(route.members.map { $0.pairing.url }, [b.pairing.url])
+        XCTAssertEqual(probed, [b.pairing.url], "the retired member was asked")
+
+        // A route made before the update still names the member: provePool passes it over unasked.
+        probed = []
+        var submitted: [String] = []
+        let out: String = try await ProverPairingService.provePool(
+            members: all, poolName: "RandProtocol", probe: probe,
+            seal: { m, _ in ("sealed-\(m.member)", m.member) },
+            submit: { m, _ in submitted.append(m.pairing.url); return "job-\(m.member)" },
+            poll: { _, job, _ in job })
+        XCTAssertEqual(out, "job-\(b.member)")
+        XCTAssertEqual(probed, [b.pairing.url], "the retired member was asked")
+        XCTAssertEqual(submitted, [b.pairing.url])
+
+        // Every member retired: the pool is no pool, said as a mismatch with the pins.
+        RetiredProverKeys.keys = Set(all.map { $0.pairing.fingerprint })
+        XCTAssertThrowsError(try ProverPairingService.builtInPool(pool: pool)) { e in
+            XCTAssertTrue(e.localizedDescription.hasPrefix("None of the built-in RandProtocol prover links"), e.localizedDescription)
+        }
     }
 
     // MARK: Phase 2 — the job checks made before anything is built (`proveHookFor` in the JS)

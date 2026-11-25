@@ -31,9 +31,12 @@ test('no shipped source names the 0.6.8 shared prover key or its link', () => {
       seen += 1;
       // A test that asserts the key's ABSENCE may name it (core's inline tests).
       // …and so may the one list of RETIRED keys (VK-9), whose entries are refused, never paired:
-      // a line of exactly that shape, `{ fingerprint: '…', retiredOn: '…' },`.
+      // a line of exactly that shape, `{ fingerprint: '…', retiredOn: '…' },` — and its twin in
+      // the Android and iOS wallets, `"…", // retired YYYY-MM-DD` (native-retired-keys.test.mjs
+      // holds those two lists to the engine's, and to one file each).
       const text = readFileSync(f, 'utf8').split('\n')
-        .filter((l) => !/assert/.test(l) && !/^\s*\{ fingerprint: '[A-Z0-9-]+', retiredOn: '\d{4}-\d{2}-\d{2}' \},\s*$/.test(l)).join('\n');
+        .filter((l) => !/assert/.test(l) && !/^\s*\{ fingerprint: '[A-Z0-9-]+', retiredOn: '\d{4}-\d{2}-\d{2}' \},\s*$/.test(l)
+          && !/^\s*"[A-Z0-9-]+", \/\/ retired \d{4}-\d{2}-\d{2}$/.test(l)).join('\n');
       assert.equal(text.includes(SHARED_KEY), false, `${f.slice(ROOT.length)} names the shared key ${SHARED_KEY}`);
       assert.equal(text.includes(SHARED_LINK), false, `${f.slice(ROOT.length)} carries the shared key's link`);
     }

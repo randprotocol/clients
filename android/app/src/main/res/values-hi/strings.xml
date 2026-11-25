@@ -372,6 +372,7 @@
     <string name="prover_none_shipped">इस बिल्ड में इस्तेमाल के लिए कोई प्रूवर शामिल नहीं है।</string>
     <string name="prover_not_json_rpc">%1$s पर मौजूद प्रूवर ने JSON-RPC से जवाब नहीं दिया (HTTP %2$s)</string>
     <string name="prover_not_pairing_link">यह पेयरिंग लिंक नहीं है।</string>
+    <string name="prover_key_retired">इस प्रूवर की की हटा दी गई है और अब इस्तेमाल नहीं होती। सेटिंग्स में कोई दूसरा प्रूवर पेयर करें, या Rand Wallet को नवीनतम संस्करण में अपडेट करें।</string>
     <string name="prover_paired_unavailable">इस डिवाइस में इस प्रूफ़ के लिए पर्याप्त मेमोरी नहीं है। आपका पेयर किया गया प्रूवर उपलब्ध नहीं है: %1$s।</string>
     <string name="prover_pairing_unreadable">आपके प्रूवर की पेयरिंग खोली नहीं जा सकी। सेटिंग्स में प्रूवर को फिर से पेयर करें।</string>
     <string name="prover_pool_name">%1$s प्रूवर</string>

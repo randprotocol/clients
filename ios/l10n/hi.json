@@ -294,6 +294,7 @@
     "This prover charges a fee, which this version of the wallet does not pay. Pair a prover that charges nothing, or send from the rand command-line wallet.": "यह प्रूवर शुल्क लेता है, जिसे वॉलेट का यह संस्करण नहीं चुकाता। ऐसा प्रूवर पेयर करें जो कोई शुल्क न ले, या rand कमांड-लाइन वॉलेट से भेजें।",
     "This prover does not accept this kind of job%@. Pair another prover in Settings, or send from the rand command-line wallet.": "यह प्रूवर इस प्रकार का जॉब%@ स्वीकार नहीं करता। सेटिंग्स में कोई दूसरा प्रूवर पेयर करें, या rand कमांड-लाइन वॉलेट से भेजें।",
     "This prover does not know this pairing. Pair it again in Settings.": "यह प्रूवर इस पेयरिंग को नहीं पहचानता। सेटिंग्स में इसे फिर से पेयर करें।",
+    "This prover's key was retired and is no longer used. Pair another prover in Settings, or update Rand Wallet to the latest version.": "इस प्रूवर की की हटा दी गई है और अब इस्तेमाल नहीं होती। सेटिंग्स में कोई दूसरा प्रूवर पेयर करें, या Rand Wallet को नवीनतम संस्करण में अपडेट करें।",
     "This prover will be able to read this wallet's whole history — every payment received and sent, before and after today. It cannot spend. To keep your history private, run your own.": "यह प्रूवर इस वॉलेट का पूरा इतिहास पढ़ सकेगा — हर प्राप्त और भेजा गया भुगतान, आज से पहले और बाद का। यह खर्च नहीं कर सकता। अपना इतिहास निजी रखने के लिए, अपना खुद का प्रूवर चलाएँ।",
     "This wallet cannot prove for this chain.": "यह वॉलेट इस चेन के लिए प्रूफ़ नहीं बना सकता।",
     "To": "प्रति",
